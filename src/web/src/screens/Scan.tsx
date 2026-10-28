@@ -253,7 +253,14 @@ function NewCodeResult({ r, onIdentified }: { r: Extract<IdentifyResult, { kind:
           <div className="src">{external && <span className="pill p-ok">{external.provider}</span>}{external?.quantityText && <span>{external.quantityText}</span>}<code>{r.code}</code></div>
         </div>
       </div>
-      {r.kind === 'unknown' && <p className="small muted">{r.providersTried.length ? `${r.providersTried.join(', ')} ${r.providersTried.length === 1 ? "doesn't" : "don't"} know this barcode.` : "Larder doesn't know this code yet."} Name it once and Larder will remember it.</p>}
+      {r.kind === 'unknown' && (
+        <p className="small muted">
+          {r.providersTried.length ? `${r.providersTried.join(', ')} ${r.providersTried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
+          {r.providersFailed.length ? `Couldn't reach ${r.providersFailed.join(', ')} just now. ` : ''}
+          {!r.providersTried.length && !r.providersFailed.length ? "Larder doesn't know this code yet. " : ''}
+          Name it once and Larder will remember it.
+        </p>
+      )}
       <label className="field"><span>{external ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external} /></label>
       <div className="field"><span>Is it a brand of something you already have?</span>
         <div className="stack" style={{ gap: 8 }}>

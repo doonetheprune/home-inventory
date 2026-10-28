@@ -366,6 +366,13 @@ export const IdentifyResult = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('product'), code: z.string(), product: ProductSummary, variant: Variant.nullable() }),
   z.object({ kind: z.literal('place'), code: z.string(), place: Place, path: z.string() }),
   z.object({ kind: z.literal('external'), code: z.string(), result: LookupResult, suggestions: z.array(ProductSummary) }),
-  z.object({ kind: z.literal('unknown'), code: z.string(), providersTried: z.array(z.string()) }),
+  z.object({
+    kind: z.literal('unknown'),
+    code: z.string(),
+    /** Providers that answered "not found". */
+    providersTried: z.array(z.string()),
+    /** Providers that couldn't be reached or timed out (the answer isn't cached, so it's tried again next time). */
+    providersFailed: z.array(z.string()).default([]),
+  }),
 ]);
 export type IdentifyResult = z.infer<typeof IdentifyResult>;

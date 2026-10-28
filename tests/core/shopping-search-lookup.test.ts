@@ -178,8 +178,31 @@ describe('lookup', () => {
     expect(r2.kind === 'product' && r2.product.product.id).toBe(product.product.id);
 
     await core.modules.setEnabled('fake-lookup', false);
+    expect(await core.lookup.identify('9999999999998')).toMatchObject({ kind: 'unknown', providersTried: [], providersFailed: [] });
     expect((await core.lookup.identify('9999999999999')).kind).toBe('unknown');
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe('lookup when providers are down', () => {
+  it("says they couldn't be reached and doesn't cache the miss", async () => {
+    let up = false;
+    const core = await makeCore({
+      modules: [
+        defineModule({
+          id: 'flaky', name: 'Flaky', description: 'Test', version: '1.0.0',
+          setup(ctx) {
+            ctx.addLookupProvider({ id: 'flaky', name: 'Flaky Facts', async lookup() {
+              if (!up) throw new Error('offline');
+              return { name: 'Beans', brand: null, quantityText: null, imageUrl: null, categories: [] };
+            } });
+          },
+        }),
+      ],
+    });
+    expect(await core.lookup.identify('5000157024671')).toMatchObject({ kind: 'unknown', providersTried: [], providersFailed: ['Flaky Facts'] });
+    up = true;
+    expect((await core.lookup.identify('5000157024671')).kind).toBe('external');
   });
 });
 

@@ -49,23 +49,25 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
       .map((x) => x.s);
   }
 
-  async function askProviders(barcode: string): Promise<{ result: LookupResult | null; tried: string[] }> {
+  async function askProviders(barcode: string): Promise<{ result: LookupResult | null; tried: string[]; failed: string[] }> {
     const tried: string[] = [];
+    const failed: string[] = [];
     for (const p of providers) {
       if (!isEnabled(p.id)) continue;
-      tried.push(p.name);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ctx.lookupTimeoutMs);
       try {
         const found = await p.lookup(barcode, { signal: controller.signal });
-        if (found?.name) return { result: { ...found, provider: p.id, barcode }, tried };
+        tried.push(p.name);
+        if (found?.name) return { result: { ...found, provider: p.id, barcode }, tried, failed };
       } catch {
         // A provider being down or slow shouldn't stop the others.
+        failed.push(p.name);
       } finally {
         clearTimeout(timer);
       }
     }
-    return { result: null, tried };
+    return { result: null, tried, failed };
   }
 
   return {
@@ -107,7 +109,7 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
         if (r) return r;
       }
 
-      if (!BARCODE.test(code)) return { kind: 'unknown', code, providersTried: [] };
+      if (!BARCODE.test(code)) return { kind: 'unknown', code, providersTried: [], providersFailed: [] };
 
       const cached = await ctx.storage.lookups.get(code);
       const fresh = cached && Date.parse(ctx.now()) - Date.parse(cached.fetchedAt) < MISS_TTL_DAYS * 86_400_000;
@@ -115,15 +117,18 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
         const result: LookupResult = { provider: cached.provider ?? 'cache', barcode: code, name: cached.name, brand: cached.brand, quantityText: cached.quantityText, imageUrl: cached.imageUrl, categories: cached.categories };
         return { kind: 'external', code, result, suggestions: await suggestionsFor(result.name) };
       }
-      if ((cached && fresh) || options.offline) return { kind: 'unknown', code, providersTried: [] };
+      if ((cached && fresh) || options.offline) return { kind: 'unknown', code, providersTried: [], providersFailed: [] };
 
-      const { result, tried } = await askProviders(code);
-      const record: LookupRecord = {
-        barcode: code, found: !!result, provider: result?.provider ?? null, name: result?.name ?? null, brand: result?.brand ?? null,
-        quantityText: result?.quantityText ?? null, imageUrl: result?.imageUrl ?? null, categories: result?.categories ?? [], fetchedAt: ctx.now(),
-      };
-      await ctx.storage.lookups.put(record);
-      if (!result) return { kind: 'unknown', code, providersTried: tried };
+      const { result, tried, failed } = await askProviders(code);
+      // Only remember a miss when every provider actually answered.
+      if (result || !failed.length) {
+        const record: LookupRecord = {
+          barcode: code, found: !!result, provider: result?.provider ?? null, name: result?.name ?? null, brand: result?.brand ?? null,
+          quantityText: result?.quantityText ?? null, imageUrl: result?.imageUrl ?? null, categories: result?.categories ?? [], fetchedAt: ctx.now(),
+        };
+        await ctx.storage.lookups.put(record);
+      }
+      if (!result) return { kind: 'unknown', code, providersTried: tried, providersFailed: failed };
       return { kind: 'external', code, result, suggestions: await suggestionsFor(result.name) };
     },
 

@@ -1749,6 +1749,13 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "providersFailed": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -3610,12 +3617,20 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "providersFailed": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
               "kind",
               "code",
-              "providersTried"
+              "providersTried",
+              "providersFailed"
             ],
             "additionalProperties": false
           }
