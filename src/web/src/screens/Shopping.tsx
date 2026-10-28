@@ -115,7 +115,7 @@ export function Shopping() {
               </div>
             </div>
           ))}
-          {!anywhere && <AddToList />}
+          {!anywhere && <AddToList shopId={shopId} />}
         </div>
         {(panels.length > 0 && list.data) ? (
           <aside className={desktop ? 'side' : 'section'}>{panels.map((P, idx) => <P key={idx} list={list.data!} />)}</aside>
@@ -128,7 +128,7 @@ export function Shopping() {
   );
 }
 
-function AddToList() {
+function AddToList({ shopId }: { shopId: string }) {
   const [q, setQ] = useState('');
   const dq = useDebounced(q.trim(), 200);
   const { run } = useAction();
@@ -148,7 +148,7 @@ function AddToList() {
         </div>
       )}
       {dq.length > 1 && !hits.length && (
-        <button type="button" className="btn small" onClick={() => run(async () => { await api.products.create({ name: dq, onShoppingList: true }); }, `${dq} is on the list`).then(() => setQ(''))}><Icon name="plus" size="sm" />Add “{dq}” as a new item on the list</button>
+        <button type="button" className="btn small" onClick={() => run(async () => { await api.products.create({ name: dq, onShoppingList: true, preferredShopIds: [shopId] }); }, `${dq} is on the list`).then(() => setQ(''))}><Icon name="plus" size="sm" />Add “{dq}” as a new item on the list</button>
       )}
     </div>
   );

@@ -43,3 +43,12 @@ export function byName<T extends { name: string; sortOrder?: number }>(a: T, b: 
 export function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
 }
+
+/** "shelf" → "shelves", "box" → "boxes", "roll" → "rolls". */
+export function pluralWord(word: string, n: number): string {
+  if (n === 1) return word;
+  if (/[^f]f$/i.test(word)) return `${word.slice(0, -1)}ves`;
+  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  return `${word}s`;
+}

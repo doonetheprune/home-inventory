@@ -19,7 +19,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p src/web/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build:web && playwright test",
     "openapi": "tsx scripts/export-openapi.ts",
     "check": "npm run typecheck && npm test"
   },

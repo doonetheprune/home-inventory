@@ -1,6 +1,6 @@
 /** Unit pricing UI: a price panel on product pages and a pack checker on shopping lists. */
 import { useState } from 'react';
-import { api, defineWebModule, money, useAction, useQuery, type ProductDetail, type ShoppingList } from '@larder/web-sdk';
+import { api, defineWebModule, money, plural, useAction, useQuery, type ProductDetail, type ShoppingList } from '@larder/web-sdk';
 
 interface PricingFields { usualUnitPrice: number | null; priceUnit: string | null; basedOn: string; updatedAt: string | null }
 interface Check { unitPrice: number; usualUnitPrice: number | null; verdict: 'cheaper' | 'dearer' | 'same' | 'no_usual_price'; message: string; priceUnit: string }
@@ -31,7 +31,7 @@ function PackChecker({ productId, unit, onUpdated }: { productId: string; unit: 
   return (
     <div className="stack">
       <div className="inputrow">
-        <label className="field" style={{ flex: 1 }}><span>{unit === 'each' ? 'How many in the pack' : `${unit}s in the pack`}</span><input className="input" inputMode="decimal" value={quantity} onChange={(e) => { setQuantity(e.target.value); setCheck(null); }} placeholder="24" /></label>
+        <label className="field" style={{ flex: 1 }}><span>{unit === 'each' ? 'How many in the pack' : `${plural(unit, 2)} in the pack`}</span><input className="input" inputMode="decimal" value={quantity} onChange={(e) => { setQuantity(e.target.value); setCheck(null); }} placeholder="24" /></label>
         <label className="field" style={{ flex: 1 }}><span>Pack price</span><input className="input" inputMode="decimal" value={price} onChange={(e) => { setPrice(e.target.value); setCheck(null); }} placeholder="8.00" /></label>
       </div>
       <button type="button" className="btn small" style={{ justifySelf: 'start' }} disabled={!valid || busy} onClick={doCheck}>Check the price</button>

@@ -5,7 +5,7 @@ const MEASURES = new Set(['l', 'ml', 'kg', 'g', 'm', 'cm', 'mm', 'oz', 'lb']);
 const FRACTIONS: Record<string, string> = { '0.25': '¼', '0.5': '½', '0.75': '¾', '0.33': '⅓', '0.67': '⅔' };
 
 export function plural(unit: string, n: number): string {
-  if (n === 1 || MEASURES.has(unit.toLowerCase())) return unit;
+  if ((n > 0 && n <= 1) || MEASURES.has(unit.toLowerCase())) return unit;
   if (/(s|x|z|ch|sh)$/i.test(unit)) return `${unit}es`;
   if (/[^aeiou]y$/i.test(unit)) return `${unit.slice(0, -1)}ies`;
   return `${unit}s`;

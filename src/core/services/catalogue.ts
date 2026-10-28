@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Category, Place, Shop, type PlaceContents, type PlaceNodeT, type PlaceRef } from '../model';
 import { CategoryCreate, CategoryPatch, GridCreate, PlaceCreate, PlacePatch, ShopCreate, ShopPatch } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { byName, newId } from '../util';
+import { byName, newId, pluralWord } from '../util';
 import type { CoreContext } from './context';
 import { loadWorld, placePath, placeRef, summarise } from './world';
 
@@ -295,7 +295,7 @@ export function createPlaceService(ctx: CoreContext) {
       const now = ctx.now();
       const container = Place.parse({
         id: newId(), name: g.name, parentId: g.parentId, code: null,
-        notes: `${g.rows} ${g.rowLabel.toLowerCase()}${g.rows === 1 ? '' : 's'}, ${g.columns} ${g.columnLabel.toLowerCase()}${g.columns === 1 ? '' : 'es'} each. Codes ${codes[0]} to ${codes[codes.length - 1]}.`,
+        notes: `${g.rows} ${pluralWord(g.rowLabel.toLowerCase(), g.rows)}, ${g.columns} ${pluralWord(g.columnLabel.toLowerCase(), g.columns)} each. Codes ${codes[0]} to ${codes[codes.length - 1]}.`,
         createdAt: now, updatedAt: now,
       });
       const places: Place[] = [];
