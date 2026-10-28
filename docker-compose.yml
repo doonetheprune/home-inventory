@@ -15,5 +15,7 @@ services:
       LARDER_AUTH: local
       # Your HTTPS address, used in QR labels. Cameras need HTTPS to scan.
       # LARDER_BASE_URL: https://larder.example.com
+      # Behind a reverse proxy or Tailscale on this machine, trust it (Docker's network):
+      # LARDER_TRUST_PROXY: 172.16.0.0/12
       # Load the example household into an empty Larder:
       # LARDER_DEMO: "true"
