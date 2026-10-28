@@ -57,7 +57,9 @@ export function ProductPage() {
           <div className="card pad">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div className="big-qty">
-                {p.product.rechargeable ? <><b>{num(p.charged ?? 0)}</b><span className="muted">charged · {num(p.flat ?? 0)} flat</span></> : <><b>{num(p.inStock)}</b><span className="muted">{qty(p.inStock, unit).replace(/^[\d.,¼½¾⅓⅔]+\s?/, '') || 'in the house'}</span></>}
+                {renewal ? (
+                  p.daysToExpiry !== null ? <><b>{Math.max(0, p.daysToExpiry)}</b><span className="muted">{p.daysToExpiry < 0 ? 'days: renewal is overdue' : `day${p.daysToExpiry === 1 ? '' : 's'} until it renews`}</span></> : <><b>—</b><span className="muted">No renewal date yet</span></>
+                ) : p.product.rechargeable ? <><b>{num(p.charged ?? 0)}</b><span className="muted">charged · {num(p.flat ?? 0)} flat</span></> : <><b>{num(p.inStock)}</b><span className="muted">{qty(p.inStock, unit).replace(/^[\d.,¼½¾⅓⅔]+\s?/, '') || 'in the house'}</span></>}
               </div>
               <StatusPills s={p} />
             </div>
@@ -71,12 +73,15 @@ export function ProductPage() {
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
             <div className="btnrow">
-              {renewal && <button type="button" className="btn small primary" disabled={busy} onClick={() => run(() => api.products.renew(p.product.id), 'Renewed. The clock starts again from today.')}><Icon name="undo" size="sm" />Renewed</button>}
               {p.product.rechargeable && (p.flat ?? 0) > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.charge({ productId: p.product.id, quantity: p.flat ?? 0 }), 'All charged')}><Icon name="zap" size="sm" />Charged {num(p.flat ?? 0)}</button>}
-              <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.products.setOnList(p.product.id, !p.product.onShoppingList), p.product.onShoppingList ? 'Taken off the shopping list' : 'Put on the shopping list')}>
-                <Icon name="cart" size="sm" />{p.product.onShoppingList ? 'Take off the list' : 'Put on the list'}
-              </button>
-              <button type="button" className="btn small" onClick={() => setSheet('expect')}><Icon name="truck" size="sm" />Expect a delivery</button>
+              {!renewal && (
+                <>
+                  <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.products.setOnList(p.product.id, !p.product.onShoppingList), p.product.onShoppingList ? 'Taken off the shopping list' : 'Put on the shopping list')}>
+                    <Icon name="cart" size="sm" />{p.product.onShoppingList ? 'Take off the list' : 'Put on the list'}
+                  </button>
+                  <button type="button" className="btn small" onClick={() => setSheet('expect')}><Icon name="truck" size="sm" />Expect a delivery</button>
+                </>
+              )}
             </div>
           </div>
 
@@ -132,11 +137,18 @@ export function ProductPage() {
           )}
         </div>
       </div>
+      {renewal ? (
+        <div className="dock">
+          <Link className="btn" to={`/products/${p.product.id}/edit`}><Icon name="edit" />Edit</Link>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => run(() => api.products.renew(p.product.id), 'Renewed. The clock starts again from today.')}><Icon name="undo" />Renewed</button>
+        </div>
+      ) : (
       <div className="dock">
         <button className="btn" type="button" onClick={() => setSheet('use')} disabled={p.inStock <= 0}><Icon name="minus" />{p.product.rechargeable ? 'Went flat' : 'Use'}</button>
         <button className="btn" type="button" onClick={() => setSheet('move')} disabled={p.inStock <= 0}><Icon name="move" />Move</button>
         <button className="btn primary" type="button" onClick={() => setSheet('add')}><Icon name="plus" />Add</button>
       </div>
+      )}
       {sheet === 'add' && <AddSheet p={p} onClose={() => setSheet(null)} />}
       {sheet === 'use' && <UseSheet p={p} onClose={() => setSheet(null)} />}
       {sheet === 'move' && <MoveSheet p={p} onClose={() => setSheet(null)} />}
@@ -154,7 +166,7 @@ function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {
   const at = e.currentPlaceId ?? e.placeId ?? undefined;
   return (
     <div className="loc-row" style={{ flexWrap: 'wrap' }}>
-      <span className="code">{e.place?.code ?? (e.place ? e.place.name.slice(0, 3) : '—')}</span>
+      {e.place?.code ? <span className="code">{e.place.code}</span> : <span className="tile" style={{ width: 32, height: 32, borderRadius: 9 }}><Icon name="pin" size="sm" /></span>}
       <span className="item-main">
         <span className="item-name">{e.place ? <PlaceText p={e.place} /> : 'No place set'}</span>
         <span className="item-meta">

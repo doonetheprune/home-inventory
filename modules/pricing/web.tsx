@@ -52,6 +52,7 @@ function PackChecker({ productId, unit, onUpdated }: { productId: string; unit: 
 
 function ProductPricePanel({ product }: { product: ProductDetail }) {
   const currency = useCurrency();
+  if (product.category?.name === 'Renewals' || product.product.wish) return null;
   const f = fieldsOf(product.product);
   const unit = f.priceUnit ?? product.product.unit;
   return (
@@ -73,6 +74,7 @@ function ProductPricePanel({ product }: { product: ProductDetail }) {
 }
 
 function ShoppingPriceCheck({ list }: { list: ShoppingList }) {
+  const currency = useCurrency();
   const items = list.groups.flatMap((g) => g.items);
   const [id, setId] = useState(items[0]?.summary.product.id ?? '');
   const item = items.find((i) => i.summary.product.id === id);
@@ -84,7 +86,7 @@ function ShoppingPriceCheck({ list }: { list: ShoppingList }) {
       <select className="input" value={id} onChange={(e) => setId(e.target.value)} aria-label="Which item">
         {items.map((i) => <option key={i.summary.product.id} value={i.summary.product.id}>{i.summary.product.name}</option>)}
       </select>
-      {item && <p className="small muted" style={{ marginTop: -4 }}>{f?.usualUnitPrice !== null && f ? <>Usually <b className="mono" style={{ color: 'var(--ink)' }}>{money(f.usualUnitPrice, 'GBP')}</b> a {f.priceUnit ?? item.summary.product.unit}.</> : 'No usual price yet.'}</p>}
+      {item && <p className="small muted" style={{ marginTop: -4 }}>{f?.usualUnitPrice !== null && f ? <>Usually <b className="mono" style={{ color: 'var(--ink)' }}>{money(f.usualUnitPrice, currency)}</b> a {f.priceUnit ?? item.summary.product.unit}.</> : 'No usual price yet.'}</p>}
       {item && <PackChecker key={id} productId={id} unit={f?.priceUnit ?? item.summary.product.unit} />}
     </div>
   );
