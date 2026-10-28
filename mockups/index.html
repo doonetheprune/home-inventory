@@ -155,6 +155,7 @@ a.item:hover, button.item:hover { background: var(--surface-2); }
 .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .chip .n { font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 600; }
 .chip.on .n { color: inherit; opacity: .7; }
+.chip.sm { padding: 5px 10px; font-size: 13px; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); padding: 11px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
@@ -427,7 +428,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             </a>
             <div class="chips" style="margin-inline:0;padding-inline:0">
               <a class="chip" href="#shop" data-shop="tesco">Tesco <span class="n">9</span></a>
-              <a class="chip" href="#shop" data-shop="toolstation">Toolstation <span class="n">2</span></a>
+              <a class="chip" href="#shop" data-shop="toolstation">Toolstation <span class="n">3</span></a>
               <a class="chip" href="#shop" data-shop="pets">Pets at Home <span class="n">1</span></a>
             </div>
           </div>
@@ -507,7 +508,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
           <div class="section">
             <div class="label">Where it is</div>
             <div class="list">
-              <div class="loc-row"><span class="code">U2</span><span class="item-main"><span class="item-name">Utility › Shelf</span><span class="item-meta">Home location</span></span>
+              <div class="loc-row"><span class="code">U2</span><span class="item-main"><span class="item-name">Utility › Shelf</span><span class="item-meta">Where it lives</span></span>
                 <div class="stepper"><button aria-label="Use one" data-step="-1" data-for="s1"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="s1">3</output><button aria-label="Add one" data-step="1" data-for="s1"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
               <div class="loc-row"><span class="code">B1</span><span class="item-main"><span class="item-name">Bathroom › Cabinet</span><span class="item-meta">Top-up spot</span></span>
                 <div class="stepper"><button aria-label="Use one" data-step="-1" data-for="s2"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="s2">1</output><button aria-label="Add one" data-step="1" data-for="s2"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
@@ -859,6 +860,15 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
         </div>
       </section>
 
+      <!-- ============ SHOPS ============ -->
+      <section class="view" id="v-shops" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Shops</h1><button class="iconbtn" aria-label="Add a shop" data-toast="Name the shop, then pick what it sells"><svg class="i"><use href="#i-plus"/></svg></button></header>
+        <div class="content">
+          <p class="muted small" style="margin:0">Items set to “Any shop” only show up at shops that sell that kind of thing. Tap a category to change what a shop sells.</p>
+          <div id="shopsList" class="section" style="gap:12px"></div>
+        </div>
+      </section>
+
       <!-- ============ MORE ============ -->
       <section class="view" id="v-more" data-tab="more" hidden>
         <header class="hdr"><h1>More</h1></header>
@@ -869,7 +879,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             <a href="#wishlist"><span class="tile"><svg class="i"><use href="#i-heart"/></svg></span><b>Wish list</b><span class="muted">5 things</span></a>
             <a href="#labels"><span class="tile"><svg class="i"><use href="#i-print"/></svg></span><b>Labels &amp; printing</b><span class="muted">QR sheets, pages</span></a>
             <a href="#more" data-toast="Saved recipes arrive in Phase 4"><span class="tile"><svg class="i"><use href="#i-book"/></svg></span><b>Recipes</b><span class="soon-tag">Phase 4</span></a>
-            <a href="#more" data-toast="Shops and their opening order"><span class="tile"><svg class="i"><use href="#i-store"/></svg></span><b>Shops</b><span class="muted">6 shops</span></a>
+            <a href="#shops"><span class="tile"><svg class="i"><use href="#i-store"/></svg></span><b>Shops</b><span class="muted">4 shops, what each sells</span></a>
             <a href="#stock" data-filter="Renewals"><span class="tile"><svg class="i"><use href="#i-shield"/></svg></span><b>Renewals</b><span class="muted">Insurance, MOT</span></a>
             <a href="#more" data-toast="Modules, lookup sources, MQTT, MCP"><span class="tile"><svg class="i"><use href="#i-sliders"/></svg></span><b>Set-up</b><span class="muted">Modules &amp; links</span></a>
           </div>
@@ -907,15 +917,17 @@ const SCREENS = [
     ['product', 'Product detail', 'One generic product (toilet roll) with two brands under it, stock split across two places, an expected delivery and a usual unit price.',
       ['Is the expected delivery shown clearly enough? It counts towards stock, so toilet roll is not on any shopping list.', 'Quick +/− per place for fast use. Is that enough, or do you want a “use from…” step?', 'Photos and links would sit in Details. Left out here to keep it short.']],
     ['scan', 'Scanning', 'Pick what a scan does (add, use, move, put away, look up), then point the camera. The three states below the camera show a recognised barcode, an unknown one, and a shelf QR label.',
-      ['Should scanning default to “Add”, or ask after each scan?', 'Put-away is two scans: item, then shelf. Does that match how you’d use it?', '“Keep scanning” after each add, so you can unpack a whole shop quickly?']],
+      ['Decided: scanning always starts in Add. Switch mode before scanning to use, move or put away.', 'Put-away is two scans: item, then shelf. Does that match how you’d use it?', '“Keep scanning” after each add, so you can unpack a whole shop quickly?']],
     ['add', 'Add by name', 'For things with no barcode: tools, fuel, batteries. Typing suggests what you already have first, so you don’t create duplicates.',
       ['Is this too many fields? Everything except the name is optional.', 'Should “Rechargeable” appear automatically when the category is Batteries?']],
-    ['shop', 'Shopping by shop', 'Pick a shop and see everything low that can come from there: that shop’s favourites plus anything with no preference. Tick items as you go; ticked items go into stock. The price checker compares a different pack with the usual price per unit.',
-      ['Open question: should “any shop” mean any shop that sells that kind of thing? Otherwise kitchen roll appears on the Toolstation list. Here Toolstation only shows its own items.', 'Try the price checker: 24 rolls for £8 against the usual £0.36 a roll.', 'Should ticked items go into stock straight away, or only when you tap Done?']],
+    ['shop', 'Shopping by shop', 'Pick a shop and see everything low that can come from there: that shop’s favourites plus “Any shop” items in the categories it sells. Tick items as you go; ticked items go into stock. The price checker compares a different pack with the usual price per unit.',
+      ['Decided: “Any shop” items only appear at shops that sell their category. Cable ties show at Toolstation; kitchen roll shows at Aldi and Tesco but not Toolstation.', 'Try the price checker: 24 rolls for £8 against the usual £0.36 a roll.', 'Should ticked items go into stock straight away, or only when you tap Done?']],
   ]],
   ['Organise', [
     ['locations', 'Places', 'The nested place list: room › furniture › shelf or box. Codes like G2-4 come from the grid set-up and match the printed labels.',
-      ['Do you want “Places” or “Locations” as the word in the app?', 'Each place can have a photo, QR label and NFC tag.']],
+      ['Decided: the app says “Places” throughout.', 'Each place can have a photo, QR label and NFC tag.']],
+    ['shops', 'Shops', 'Each shop has a list of what it sells. “Any shop” items only appear on the lists of shops that sell their category.',
+      ['Are these the right categories for your shops?', 'When two shops tie on the home screen, should one you pick as a favourite win?']],
     ['location', 'Place contents', 'What scanning a shelf QR shows: what lives here, including things that belong here but are elsewhere right now.',
       ['Is “Put away here” the right main action on this screen?']],
     ['grid', 'Grid set-up', 'Step 2 of the guided set-up for racking or box storage. Change shelves and boxes and the preview and codes update.',
@@ -966,6 +978,7 @@ function show(id) {
   if (id === 'shop') { if (pendingShop) { shopState.shop = pendingShop; pendingShop = null; } renderShop(); }
   if (id === 'scan' && pendingMode) { setScanMode(pendingMode); pendingMode = null; }
   if (id === 'labels') renderLabels();
+  if (id === 'shops') renderShops();
   requestAnimationFrame(() => $$('canvas[data-qr]', view).forEach(drawQR));
 }
 window.addEventListener('hashchange', () => show(location.hash.slice(1)));
@@ -1078,33 +1091,47 @@ $('#homeSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { sto
 
 /* ---------- shop ---------- */
 const SHOPS = {
-  aldi: { name: 'Aldi', note: 'Your Aldi favourites, plus anything that can come from any shop.', groups: [
+  aldi: { name: 'Aldi', sells: ['Food', 'Household', 'Batteries'], groups: [
     ['Fresh', [['Bananas', '1 bunch', 'None left', '£0.89'], ['Mature cheddar', '400 g', '100 g left · min 200 g', '£2.39 · £0.60/100 g'], ['Free-range eggs', '12', '2 left · min 6', '£2.65 · £0.22 each'], ['Butter', '250 g', '1 left · min 2', '£1.99'], ['Greek yoghurt', '1 kg', 'None left', '£1.79']]],
     ['Cupboard', [['Penne', '500 g × 2', '1 left · min 3', '£0.49 · £0.10/100 g'], ['Chopped tomatoes', '4 tins', '8 left · min 10', '£0.39 · £0.10/100 g'], ['Porridge oats', '1 kg', 'Nearly empty', '£0.89 · £0.09/100 g']]],
     ['Household', [['Washing-up liquid', '1 bottle', '¼ bottle · min 1', '£0.79'], ['Kitchen roll', '4 pack', '1 left · min 2', '£2.29 · £0.57/roll', true], ['Bin bags', '1 roll', '3 left · min 10', '£1.49', true], ['Sandwich bags', '1 box', 'None left', '£0.99', true]]],
     ['Kids & other', [['Orange squash', '1 L', 'None left', '£0.85'], ['AAA batteries', '8 pack', '3 left · min 8', '£2.49 · £0.31 each', true]]],
   ] },
-  tesco: { name: 'Tesco', note: 'Your Tesco favourites, plus anything that can come from any shop.', groups: [
+  tesco: { name: 'Tesco', sells: ['Food', 'Household', 'Pets', 'Batteries'], groups: [
     ['Fresh', [['Oatly Barista', '1 L × 2', '1 left · min 3', '£2.10 · £2.10/L'], ['Fish fingers', '20 pack', 'None left', '£3.50']]],
     ['Cupboard', [['Cheerios', '600 g', 'Nearly empty', '£3.00 · £0.50/100 g'], ['Heinz ketchup', '910 g', 'None spare', '£3.75']]],
     ['Household', [['Fairy non-bio liquid', '1.33 L', '¼ bottle · min 1', '£7.00 · £0.18/wash'], ['Kitchen roll', '4 pack', '1 left · min 2', '£2.75 · £0.69/roll', true], ['Bin bags', '1 roll', '3 left · min 10', '£1.75', true], ['Sandwich bags', '1 box', 'None left', '£1.10', true]]],
     ['Other', [['AAA batteries', '8 pack', '3 left · min 8', '£4.00 · £0.50 each', true]]],
   ] },
-  toolstation: { name: 'Toolstation', note: 'Items set to Toolstation. Codes match the Toolstation app for reordering.', groups: [
-    ['DIY & outdoor', [['Camping gas', '2 × CV 470', '1 left · min 3', '£7.98 · code 76043'], ['Silicone sealant, white', '1 tube', 'None left', '£4.98 · code 31867']]],
+  toolstation: { name: 'Toolstation', sells: ['Tools', 'Fuel'], extra: 'Codes match the Toolstation app for reordering.', groups: [
+    ['DIY & outdoor', [['Camping gas', '2 × CV 470', '1 left · min 3', '£7.98 · code 76043'], ['Silicone sealant, white', '1 tube', 'None left', '£4.98 · code 31867'], ['Cable ties, 300 mm', '100 pack', 'None left', '£3.49', true]]],
   ] },
-  pets: { name: 'Pets at Home', note: 'Items set to Pets at Home.', groups: [
+  pets: { name: 'Pets at Home', sells: ['Pets'], groups: [
     ['Dog', [['Harringtons lamb & rice', '15 kg', '2 kg left · min 4 kg', '£32.00 · £2.13/kg']]],
   ] },
 };
 const shopState = { shop: 'aldi', done: new Set() };
+const shopCount = k => SHOPS[k].groups.reduce((n, g) => n + g[1].length, 0);
+const SHOP_CATS = Object.keys(CAT_ICON).filter(c => c !== 'Renewals');
+function renderShops() {
+  $('#shopsList').innerHTML = Object.entries(SHOPS).map(([k, s]) => `<div class="card" style="padding:14px 16px;display:grid;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><b style="font-family:var(--f-display);font-size:17px">${s.name}</b><a class="small" href="#shop" data-shop="${k}" style="color:var(--accent);font-weight:600">${shopCount(k)} on the list</a></div>
+    <div class="chips wrap">${SHOP_CATS.map(c => `<button class="chip sm ${s.sells.includes(c) ? 'on' : ''}" data-shopk="${k}" data-cat="${c}" aria-pressed="${s.sells.includes(c)}">${c}</button>`).join('')}</div></div>`).join('');
+}
+$('#shopsList').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]'); if (!b) return;
+  const s = SHOPS[b.dataset.shopk], c = b.dataset.cat, has = s.sells.includes(c);
+  s.sells = has ? s.sells.filter(x => x !== c) : [...s.sells, c];
+  renderShops(); toast(`${s.name} ${has ? 'no longer sells' : 'now sells'} ${c}`);
+});
 function renderShop() {
   const s = SHOPS[shopState.shop];
-  const count = k => SHOPS[k].groups.reduce((n, g) => n + g[1].length, 0);
   $('#shopTitle').textContent = `At ${s.name}`;
-  $('#shopChips').innerHTML = Object.keys(SHOPS).map(k => `<button class="chip ${k === shopState.shop ? 'on' : ''}" data-s="${k}">${SHOPS[k].name} <span class="n">${count(k)}</span></button>`).join('')
+  $('#shopChips').innerHTML = Object.keys(SHOPS).map(k => `<button class="chip ${k === shopState.shop ? 'on' : ''}" data-s="${k}">${SHOPS[k].name} <span class="n">${shopCount(k)}</span></button>`).join('')
     + `<button class="chip" data-toast="Shows things that can come from anywhere">Somewhere else</button>`;
-  $('#shopNote').textContent = s.note + ' Toilet roll is covered by Thursday\'s delivery, so it\'s not here.';
+  $('#shopNote').textContent = `Your ${s.name} favourites, plus “Any shop” items in what ${s.name} sells: ${s.sells.join(', ')}.`
+    + (s.extra ? ' ' + s.extra : '') + (s.sells.includes('Household') ? ' Toilet roll is covered by Thursday’s delivery, so it’s not here.' : '');
+  $('.pricecheck').hidden = !s.sells.includes('Household');
   $('#shopList').innerHTML = s.groups.map(([g, items]) => `<div class="section"><div class="label">${g}</div><div class="list">${items.map(([n, q, why, price, any]) => {
     const id = shopState.shop + ':' + n, done = shopState.done.has(id);
     return `<div class="item ${done ? 'done' : ''}" data-id="${esc(id)}"><button class="check" aria-label="Got ${esc(n)}" aria-pressed="${done}">${ic('check', 'sm')}</button>
