@@ -9,6 +9,10 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
 - **Runs on its own** (Docker, one data folder, SQLite) and will run as a Home Assistant add-on. A documented REST API underneath everything.
 
+![Larder on a laptop: search across the top, with ↑ pressed three times to add three AAA batteries](docs/images/desktop-search.jpg)
+
+![Larder on a phone: home, shopping at Aldi, and what's in box G2-4](docs/images/phone.jpg)
+
 ## Status
 
 | Phase | | |
