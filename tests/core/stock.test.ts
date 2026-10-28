@@ -160,4 +160,39 @@ describe('stock', () => {
     s = await core.stock.removeEntry(e!.id);
     expect(s.inStock).toBe(0);
   });
+
+  it('lets flat batteries be used once a product stops being rechargeable', async () => {
+    const aa = await core.products.create({ name: 'AA batteries', rechargeable: true });
+    await core.stock.add({ productId: aa.id, quantity: 4 });
+    await core.stock.use({ productId: aa.id, quantity: 3 });
+    await core.products.update(aa.id, { rechargeable: false });
+    const s = await core.stock.use({ productId: aa.id, quantity: 4 });
+    expect(s.inStock).toBe(0);
+  });
+
+  it('renewing records what it replaced and keeps the count', async () => {
+    const filters = await core.products.create({ name: 'Water filter', shelfLifeDays: 60 });
+    await core.stock.add({ productId: filters.id, quantity: 2, expiresOn: '2026-11-01' });
+    const s = await core.stock.renew(filters.id);
+    expect([s.inStock, s.nextExpiry]).toEqual([2, '2026-12-27']);
+    const kinds = (await core.products.get(filters.id)).history.map((h) => [h.kind, h.quantity]);
+    expect(kinds).toEqual(expect.arrayContaining([['remove', -2], ['add', 2]]));
+  });
+
+  it('keeps separate orders from the same shop apart', async () => {
+    const ink = await core.products.create({ name: 'Printer ink', unit: 'cartridge' });
+    await core.stock.expect({ productId: ink.id, quantity: 2, source: 'Amazon', reference: 'ORDER-1', eta: '2026-11-02' });
+    await core.stock.expect({ productId: ink.id, quantity: 3, source: 'Amazon', reference: 'ORDER-2', eta: '2026-11-02' });
+    const refs = (await core.products.get(ink.id)).entries.map((e) => e.expected?.reference).sort();
+    expect(refs).toEqual(['ORDER-1', 'ORDER-2']);
+  });
+
+  it('asks which product when only part of a delivery has arrived', async () => {
+    const beans = await core.products.create({ name: 'Beans', unit: 'tin' });
+    const rice = await core.products.create({ name: 'Rice', unit: 'kg' });
+    await core.stock.expect({ productId: beans.id, quantity: 4, source: 'Tesco' });
+    await core.stock.expect({ productId: rice.id, quantity: 3, source: 'Tesco' });
+    await expect(core.stock.arrive({ source: 'Tesco', quantity: 1 })).rejects.toThrow('which product');
+    expect((await core.products.summary(beans.id)).expected).toBe(4);
+  });
 });

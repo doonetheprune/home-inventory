@@ -92,15 +92,23 @@ export function registerMiscRoutes(app: ZodApp, { core, config, backup }: { core
   }, async (request) => {
     const file = await request.file();
     if (!file) throw new ValidationError('Attach an image in a field called "file".');
-    if (!file.mimetype.startsWith('image/')) throw new ValidationError('Only images can be uploaded.');
-    const data = await file.toBuffer();
-    return core.adapters.files.put({ data: new Uint8Array(data), contentType: file.mimetype, name: file.filename });
+    const data = new Uint8Array(await file.toBuffer());
+    // Trust the bytes, not the browser's label: an "image" that is really SVG or HTML could run scripts.
+    const contentType = photoType(data);
+    if (!contentType) throw new ValidationError('Only photos can be uploaded (JPEG, PNG, WebP, GIF, HEIC or AVIF).');
+    return core.adapters.files.put({ data, contentType, name: file.filename });
   });
 
   app.get('/files/:id', { schema: { tags: ['Products'], summary: 'Download a photo', params: IdParams } }, async (request, reply) => {
     const file = await core.adapters.files.get(request.params.id);
     if (!file) return reply.code(404).send({ error: 'not_found', message: 'That photo no longer exists.' });
-    return reply.type(file.contentType).header('Cache-Control', 'private, max-age=31536000, immutable').send(Buffer.from(file.data));
+    const type = photoType(file.data);
+    if (!type) reply.header('Content-Disposition', 'attachment');
+    return reply
+      .type(type ?? 'application/octet-stream')
+      .header('Content-Security-Policy', "default-src 'none'; sandbox")
+      .header('Cache-Control', 'private, max-age=31536000, immutable')
+      .send(Buffer.from(file.data));
   });
 
   /* Live updates */
@@ -118,4 +126,19 @@ export function registerMiscRoutes(app: ZodApp, { core, config, backup }: { core
       unsubscribe();
     });
   });
+}
+
+/** The photo format, judged from the file's first bytes, or null if it isn't one we accept. */
+export function photoType(d: Uint8Array): string | null {
+  const ascii = (from: number, to: number) => String.fromCharCode(...d.subarray(from, to));
+  if (d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff) return 'image/jpeg';
+  if (ascii(0, 8) === '\x89PNG\r\n\x1a\n') return 'image/png';
+  if (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a') return 'image/gif';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(4, 8) === 'ftyp') {
+    const brand = ascii(8, 12);
+    if (brand === 'avif' || brand === 'avis') return 'image/avif';
+    if (['heic', 'heix', 'heim', 'heis', 'mif1', 'msf1'].includes(brand)) return 'image/heic';
+  }
+  return null;
 }

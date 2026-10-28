@@ -226,7 +226,7 @@ export function GlobalSearch() {
                         <span className="item-name">{row.result.title}</span>
                         <span className="item-meta">
                           {row.result.subtitle}
-                          {p && row.kind !== 'stepper' && row.section !== 'shopping' ? ` · ${stockText(p)}` : ''}
+                          {p && row.kind !== 'stepper' && row.section !== 'shopping' && row.section !== 'wish' ? ` · ${stockText(p)}` : ''}
                           {p && p.status.low && row.section === 'stock' ? <span style={{ color: 'var(--low)' }}> · Low</span> : null}
                         </span>
                       </span>

@@ -48,7 +48,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   registerSchemas();
   const app = Fastify({
     logger: deps.logger ?? { level: config.logLevel },
-    trustProxy: config.trustProxy,
+    // A number means "this many proxies in front of Larder": believe that many hops.
+    trustProxy: typeof config.trustProxy === 'number' ? ((hops: number) => (_address: string, hop: number) => hop < hops)(config.trustProxy) : config.trustProxy,
     // Request-by-request logs only at debug level; a household server doesn't need them.
     logController: new LogController({ disableRequestLogging: config.logLevel !== 'debug' && config.logLevel !== 'trace' }),
     bodyLimit: 2 * 1024 * 1024,
@@ -91,6 +92,10 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
 
   const auth = createAuth(core, config);
   app.decorateRequest('user', null);
+
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+  });
 
   app.addHook('onRequest', async (request) => {
     // Decide by the route that matched, not the raw URL: the router decodes

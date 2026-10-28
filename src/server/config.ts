@@ -17,8 +17,11 @@ export interface Config {
   /** Module ids that are always off. */
   disabledModules: string[];
   logLevel: string;
-  /** Trust X-Forwarded-* headers from a reverse proxy. */
-  trustProxy: boolean;
+  /**
+   * Which reverse proxies to believe about the caller's address and https:
+   * false (none), true (any), a number of hops, or addresses and ranges.
+   */
+  trustProxy: boolean | number | string;
   /** Load example data into an empty database on start. */
   demo: boolean;
   /** Hours between automatic backups (0 turns them off). */
@@ -30,6 +33,13 @@ export interface Config {
 }
 
 const bool = (v: string | undefined, fallback: boolean) => (v === undefined || v === '' ? fallback : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()));
+const proxies = (v: string | undefined): boolean | number | string => {
+  const t = (v ?? '').trim().toLowerCase();
+  if (['', '0', 'false', 'no', 'off'].includes(t)) return false;
+  if (['true', 'yes', 'on'].includes(t)) return true;
+  if (/^\d+$/.test(t)) return Number(t);
+  return t;
+};
 const num = (v: string | undefined, fallback: number) => {
   const n = Number(v);
   return v === undefined || v === '' || Number.isNaN(n) ? fallback : n;
@@ -49,7 +59,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     baseUrl: env.LARDER_BASE_URL?.replace(/\/+$/, '') || null,
     disabledModules: (env.LARDER_MODULES_DISABLED ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     logLevel: env.LARDER_LOG_LEVEL ?? 'info',
-    trustProxy: bool(env.LARDER_TRUST_PROXY, true),
+    trustProxy: proxies(env.LARDER_TRUST_PROXY),
     demo: bool(env.LARDER_DEMO, false),
     backupEveryHours: num(env.LARDER_BACKUP_EVERY_HOURS, 24),
     backupsToKeep: num(env.LARDER_BACKUPS_TO_KEEP, 7),

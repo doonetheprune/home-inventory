@@ -62,6 +62,18 @@ describe('shopping lists', () => {
     expect(core.events.log.some((e) => e.type === 'shopping.purchased')).toBe(true);
   });
 
+  it('a shopping trip goes into stock all at once, or not at all', async () => {
+    const list = await core.shopping.forShop(aldi);
+    const bananas = list.groups[0]!.items[0]!.summary.product.id;
+    await expect(core.shopping.purchase({ shopId: aldi, items: [{ productId: bananas, quantity: 2 }, { productId: '00000000-0000-4000-8000-000000000000', quantity: 1 }] })).rejects.toThrow();
+    expect((await core.products.summary(bananas)).inStock).toBe(0);
+    expect(core.events.log.some((e) => e.type === 'shopping.purchased')).toBe(false);
+
+    const bought = await core.shopping.purchase({ shopId: aldi, items: [{ productId: bananas, quantity: 2 }, { productId: bananas, quantity: 1 }] });
+    expect(bought).toHaveLength(1);
+    expect(bought[0]?.inStock).toBe(3);
+  });
+
   it('includes things put on the list by hand', async () => {
     const food = await category(core, 'Food');
     const p = await core.products.create({ name: 'Ketchup', categoryId: food.id });
@@ -99,6 +111,13 @@ describe('search', () => {
     expect(await titles('S2-3')).toEqual(['Cordless drill']);
     expect(await sectionIds('power')).toEqual(['wish']);
     expect(await sectionIds('aldi')).toEqual(['shops']);
+  });
+
+  it('names every shop a list item is on', async () => {
+    await core.shops.addPreset('Tesco');
+    await core.shops.addPreset("Sainsbury's");
+    const loo = (await core.search.query('toilet')).find((s) => s.id === 'shopping')?.results[0];
+    expect(loo?.subtitle).toBe("On your Aldi, Tesco and Sainsbury's lists");
   });
 
   it('notices changes without a manual rebuild', async () => {

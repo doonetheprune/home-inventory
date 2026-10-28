@@ -52,3 +52,8 @@ export function pluralWord(word: string, n: number): string {
   if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
   return `${word}s`;
 }
+
+/** "Aldi", "Aldi and Tesco", "Aldi, Tesco and Toolstation". */
+export function andList(items: string[]): string {
+  return items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}

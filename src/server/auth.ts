@@ -63,14 +63,33 @@ export function createAuth(core: CoreApi, config: Config) {
     });
   }
 
-  function throttle(key: string) {
-    const a = attempts.get(key);
-    if (a && a.until > Date.now() && a.count >= 10) throw new LarderError('Too many sign-in attempts. Wait five minutes and try again.', 429, 'too_many');
+  /**
+   * Sign-in throttling, in memory. Each username gets its own limit whatever
+   * address the attempts come from, so changing X-Forwarded-For doesn't
+   * reset it; each address plus username gets a tighter one.
+   */
+  const LIMITS = { address: { max: 10, ms: 5 * 60_000 }, account: { max: 30, ms: 15 * 60_000 } };
+  const keys = (request: FastifyRequest, username: string) => {
+    const name = username.trim().toLowerCase();
+    return [{ key: `address:${request.ip}:${name}`, ...LIMITS.address }, { key: `account:${name}`, ...LIMITS.account }];
+  };
+  function throttle(request: FastifyRequest, username: string) {
+    const now = Date.now();
+    for (const k of keys(request, username)) {
+      const a = attempts.get(k.key);
+      if (a && a.until > now && a.count >= k.max) {
+        const minutes = Math.ceil((a.until - now) / 60_000);
+        throw new LarderError(`Too many sign-in attempts. Wait ${minutes} minute${minutes === 1 ? '' : 's'} and try again.`, 429, 'too_many');
+      }
+    }
   }
-  function failed(key: string) {
-    const a = attempts.get(key);
-    const until = Date.now() + 5 * 60_000;
-    attempts.set(key, a && a.until > Date.now() ? { count: a.count + 1, until } : { count: 1, until });
+  function failed(request: FastifyRequest, username: string) {
+    const now = Date.now();
+    if (attempts.size > 1000) for (const [k, a] of attempts) if (a.until <= now) attempts.delete(k);
+    for (const k of keys(request, username)) {
+      const a = attempts.get(k.key);
+      attempts.set(k.key, a && a.until > now ? { count: a.count + 1, until: now + k.ms } : { count: 1, until: now + k.ms });
+    }
   }
 
   return {
@@ -110,14 +129,13 @@ export function createAuth(core: CoreApi, config: Config) {
     },
 
     async login(request: FastifyRequest, reply: FastifyReply, input: { username: string; password: string }) {
-      const key = `${request.ip}:${input.username.toLowerCase()}`;
-      throttle(key);
+      throttle(request, input.username);
       const user = await storage.users.findByUsername(input.username);
       if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
-        failed(key);
+        failed(request, input.username);
         throw new LarderError("That username and password don't match. Check them and try again.", 401, 'bad_login');
       }
-      attempts.delete(key);
+      for (const k of keys(request, input.username)) attempts.delete(k.key);
       await startSession(reply, request, user);
       await storage.sessions.removeExpired(new Date().toISOString());
       return publicUser(user, 'session');

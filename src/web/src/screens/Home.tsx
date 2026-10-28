@@ -80,9 +80,6 @@ export function Home() {
             ))}
           </div>
         ) : <p className="muted small">Nothing's about to go off.</p>}
-        {d.expiringSoon.some((s) => s.category?.name === 'Food') && (
-          <div className="card hint"><Icon name="sparkle" size="sm" /><span>Ask Claude <i>“what can I cook with the {d.expiringSoon.filter((s) => s.category?.name === 'Food').slice(0, 2).map((s) => s.product.name.toLowerCase()).join(' and ')}?”</i> It sees your stock (from Phase 3).</span></div>
-        )}
       </div>
 
       <div className="section h-coming">

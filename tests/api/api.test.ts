@@ -61,6 +61,27 @@ describe('auth', () => {
     expect((await app.inject({ method: 'GET', url: '/%61pi/v1/products' })).statusCode).toBe(401);
   });
 
+  it("doesn't let a made-up X-Forwarded-For reset the sign-in limit", async () => {
+    const { call, clearAuth } = await makeApp();
+    await call('POST', '/api/v1/auth/setup', { username: 'shaun', password: 'correct horse' });
+    clearAuth();
+    const wrong = (i: number) => call('POST', '/api/v1/auth/login', { username: 'shaun', password: 'wrong password' }, { 'x-forwarded-for': `10.0.0.${i}` });
+    const statuses = [];
+    for (let i = 0; i < 12; i++) statuses.push((await wrong(i)).status);
+    expect(statuses).toEqual([...Array(10).fill(401), 429, 429]);
+    expect((await call('POST', '/api/v1/auth/login', { username: 'shaun', password: 'correct horse' })).status).toBe(429);
+  });
+
+  it('limits sign-ins per account even through a trusted proxy', async () => {
+    const { call, clearAuth } = await makeApp({ env: { LARDER_TRUST_PROXY: 'true' } });
+    await call('POST', '/api/v1/auth/setup', { username: 'shaun', password: 'correct horse' });
+    clearAuth();
+    const statuses = [];
+    for (let i = 0; i < 31; i++) statuses.push((await call('POST', '/api/v1/auth/login', { username: 'shaun', password: 'nope nope' }, { 'x-forwarded-for': `10.0.${i}.1` })).status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(30);
+    expect(statuses.at(-1)).toBe(429);
+  });
+
   it('can run with no login', async () => {
     const { call } = await makeApp({ auth: 'none' });
     expect((await call<Any>('GET', '/api/v1/auth/status')).body).toMatchObject({ mode: 'none', setupNeeded: false, user: { role: 'admin' } });
@@ -153,6 +174,19 @@ describe('API', () => {
     const down = await app.inject({ method: 'GET', url: `/api/v1/files/${id}` });
     expect(down.headers['content-type']).toBe('image/png');
     expect(down.rawPayload.equals(png)).toBe(true);
+    expect(down.headers['x-content-type-options']).toBe('nosniff');
+    expect(down.headers['content-security-policy']).toContain('sandbox');
+
+    // An SVG (which can carry scripts) is refused whatever type the browser claims.
+    for (const type of ['image/svg+xml', 'image/png']) {
+      const svg = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.svg"\r\nContent-Type: ${type}\r\n\r\n`),
+        Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+      const r = await app.inject({ method: 'POST', url: '/api/v1/files', payload: svg, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+      expect(r.statusCode).toBe(400);
+    }
   });
 
   it('loads example data into an empty Larder', async () => {

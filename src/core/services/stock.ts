@@ -17,7 +17,7 @@ import { loadWorld, summarise, type World } from './world';
 const EPS = 1e-9;
 
 function entryKey(e: StockEntry): string {
-  return [e.status, e.placeId, e.currentPlaceId, e.expiresOn, e.variantId, e.charge, e.expected?.source, e.expected?.eta].join('|');
+  return [e.status, e.placeId, e.currentPlaceId, e.expiresOn, e.variantId, e.charge, e.expected?.source, e.expected?.reference, e.expected?.eta].join('|');
 }
 
 /** Merge identical batches and drop empty ones. */
@@ -58,12 +58,18 @@ function plural(n: number, unit: string): string {
 }
 
 export function createStockService(ctx: CoreContext) {
-  async function begin(productId: string) {
-    const world = await loadWorld(ctx);
+  type Txn = { world: World; product: Product; original: StockEntry[]; before: ProductSummary };
+  type Change = { t: Txn; next: StockEntry[]; movements: Movement[]; kind: string; productUpdate?: Partial<Product> };
+
+  function txn(world: World, productId: string): Txn {
     const product = world.productById.get(productId);
     if (!product) throw new NotFoundError('Product', productId);
     const original = (world.entriesByProduct.get(productId) ?? []).map((e) => ({ ...e }));
     return { world, product, original, before: summarise(world, product) };
+  }
+
+  async function begin(productId: string) {
+    return txn(await loadWorld(ctx), productId);
   }
 
   async function assertPlace(id: string | null | undefined) {
@@ -74,25 +80,34 @@ export function createStockService(ctx: CoreContext) {
     return { id: newId(), productId: product.id, entryId: null, kind, quantity: roundQty(quantity), fromPlaceId: null, toPlaceId: null, note: '', userId: null, at: ctx.now(), ...extra };
   }
 
-  async function commit(
-    t: { product: Product; original: StockEntry[]; before: ProductSummary },
-    next: StockEntry[],
-    movements: Movement[],
-    kind: string,
-    productUpdate?: Partial<Product>,
-  ): Promise<ProductSummary> {
-    const tidied = tidy(next);
-    const { put, remove } = diff(t.original, tidied);
-    const product = productUpdate ? { ...t.product, ...productUpdate, updatedAt: ctx.now() } : null;
-    await ctx.storage.applyStockChanges({ put, remove, movements, products: product ? [product] : undefined });
+  async function commit(t: Txn, next: StockEntry[], movements: Movement[], kind: string, productUpdate?: Partial<Product>): Promise<ProductSummary> {
+    return (await commitAll([{ t, next, movements, kind, productUpdate }]))[0]!;
+  }
+
+  /** Write changes to any number of products in one atomic call, then announce them. */
+  async function commitAll(changes: Change[]): Promise<ProductSummary[]> {
+    const put: StockEntry[] = [];
+    const remove: string[] = [];
+    const movements: Movement[] = [];
+    const products: Product[] = [];
+    for (const c of changes) {
+      const d = diff(c.t.original, tidy(c.next));
+      put.push(...d.put);
+      remove.push(...d.remove);
+      movements.push(...c.movements);
+      if (c.productUpdate) products.push({ ...c.t.product, ...c.productUpdate, updatedAt: ctx.now() });
+    }
+    await ctx.storage.applyStockChanges({ put, remove, movements, products: products.length ? products : undefined });
     const world = await loadWorld(ctx);
-    const after = summarise(world, world.productById.get(t.product.id)!);
-    const data = { productId: t.product.id, name: t.product.name, kind, inStock: after.inStock, expected: after.expected, unit: t.product.unit, low: after.status.low };
-    ctx.publish('stock.changed', data);
-    if (!t.before.status.low && after.status.low) ctx.publish('stock.low', data);
-    if (t.before.status.low && !after.status.low) ctx.publish('stock.restocked', data);
-    if (product) ctx.publish('product.updated', { id: product.id, name: product.name });
-    return after;
+    return changes.map((c) => {
+      const after = summarise(world, world.productById.get(c.t.product.id)!);
+      const data = { productId: c.t.product.id, name: c.t.product.name, kind: c.kind, inStock: after.inStock, expected: after.expected, unit: c.t.product.unit, low: after.status.low };
+      ctx.publish('stock.changed', data);
+      if (!c.t.before.status.low && after.status.low) ctx.publish('stock.low', data);
+      if (c.t.before.status.low && !after.status.low) ctx.publish('stock.restocked', data);
+      if (c.productUpdate) ctx.publish('product.updated', { id: c.t.product.id, name: c.t.product.name });
+      return after;
+    });
   }
 
   function defaultPlace(world: World, product: Product): string | null {
@@ -108,19 +123,43 @@ export function createStockService(ctx: CoreContext) {
     return { wish: false, onShoppingList: false };
   }
 
+  async function newEntry(t: Txn, input: ReturnType<typeof In.StockAdd.parse>): Promise<{ entry: StockEntry; move: Movement }> {
+    const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
+    await assertPlace(placeId);
+    if (input.variantId && !(await ctx.storage.variants.get(input.variantId))) throw new NotFoundError('Variant', input.variantId);
+    const expiresOn = input.expiresOn !== undefined ? input.expiresOn : t.product.shelfLifeDays ? addDays(ctx.today(), t.product.shelfLifeDays) : null;
+    const entry: StockEntry = StockEntrySchema.parse({
+      id: newId(), productId: t.product.id, variantId: input.variantId ?? null, quantity: input.quantity, placeId,
+      expiresOn, addedAt: ctx.now(), status: 'in_stock', charge: t.product.rechargeable ? (input.charge ?? 'charged') : null,
+    });
+    return { entry, move: movement(t.product, 'add', input.quantity, { entryId: entry.id, toPlaceId: placeId, note: input.note ?? '' }) };
+  }
+
   const service = {
     async add(raw: StockAdd): Promise<ProductSummary> {
       const input = In.StockAdd.parse(raw);
       const t = await begin(input.productId);
-      const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
-      await assertPlace(placeId);
-      if (input.variantId && !(await ctx.storage.variants.get(input.variantId))) throw new NotFoundError('Variant', input.variantId);
-      const expiresOn = input.expiresOn !== undefined ? input.expiresOn : t.product.shelfLifeDays ? addDays(ctx.today(), t.product.shelfLifeDays) : null;
-      const entry: StockEntry = StockEntrySchema.parse({
-        id: newId(), productId: t.product.id, variantId: input.variantId ?? null, quantity: input.quantity, placeId,
-        expiresOn, addedAt: ctx.now(), status: 'in_stock', charge: t.product.rechargeable ? (input.charge ?? 'charged') : null,
-      });
-      return commit(t, [...t.original, entry], [movement(t.product, 'add', input.quantity, { entryId: entry.id, toPlaceId: placeId, note: input.note ?? '' })], 'add', clearFlags(t.product));
+      const { entry, move } = await newEntry(t, input);
+      return commit(t, [...t.original, entry], [move], 'add', clearFlags(t.product));
+    },
+
+    /** Several additions (a shopping trip) that all happen, or none do. */
+    async addMany(raw: StockAdd[]): Promise<ProductSummary[]> {
+      const inputs = raw.map((r) => In.StockAdd.parse(r));
+      const world = await loadWorld(ctx);
+      const changes = new Map<string, Change>();
+      for (const input of inputs) {
+        let c = changes.get(input.productId);
+        if (!c) {
+          const t = txn(world, input.productId);
+          c = { t, next: [...t.original], movements: [], kind: 'add', productUpdate: clearFlags(t.product) };
+          changes.set(input.productId, c);
+        }
+        const { entry, move } = await newEntry(c.t, input);
+        c.next.push(entry);
+        c.movements.push(move);
+      }
+      return commitAll([...changes.values()]);
     },
 
     async use(raw: StockUse): Promise<ProductSummary> {
@@ -128,7 +167,7 @@ export function createStockService(ctx: CoreContext) {
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
       const usable = work
-        .filter((e) => e.status === 'in_stock' && e.quantity > 0 && e.charge !== 'flat')
+        .filter((e) => e.status === 'in_stock' && e.quantity > 0 && (e.charge !== 'flat' || !t.product.rechargeable))
         .filter((e) => !input.placeId || e.placeId === input.placeId || e.currentPlaceId === input.placeId)
         .sort(useOrder);
       const available = roundQty(usable.reduce((n, e) => n + e.quantity, 0));
@@ -261,6 +300,7 @@ export function createStockService(ctx: CoreContext) {
     /** Expected stock arrived: it becomes real stock. */
     async arrive(raw: StockArrive): Promise<{ arrived: number; products: ProductSummary[] }> {
       const input = In.StockArrive.parse(raw);
+      if (input.quantity !== undefined && !input.productId) throw new ValidationError('Say which product arrived when only part of a delivery is here.');
       const all = (await ctx.storage.stock.list()).filter((e) => e.status === 'expected');
       let chosen: Array<{ entry: StockEntry; quantity: number }>;
       if (input.entryIds?.length) chosen = all.filter((e) => input.entryIds!.includes(e.id)).map((entry) => ({ entry, quantity: entry.quantity }));
@@ -279,9 +319,10 @@ export function createStockService(ctx: CoreContext) {
 
       const byProduct = new Map<string, typeof chosen>();
       for (const c of chosen) byProduct.set(c.entry.productId, [...(byProduct.get(c.entry.productId) ?? []), c]);
-      const products: ProductSummary[] = [];
+      const world = await loadWorld(ctx);
+      const changes: Change[] = [];
       for (const [productId, items] of byProduct) {
-        const t = await begin(productId);
+        const t = txn(world, productId);
         const work = t.original.map((e) => ({ ...e }));
         const movements: Movement[] = [];
         for (const { entry, quantity } of items) {
@@ -295,8 +336,9 @@ export function createStockService(ctx: CoreContext) {
           } else Object.assign(e, arrived);
           movements.push(movement(t.product, 'arrive', quantity, { entryId: e.id, toPlaceId: e.placeId, note: entry.expected?.source ?? '' }));
         }
-        products.push(await commit(t, work, movements, 'arrive', clearFlags(t.product)));
+        changes.push({ t, next: work, movements, kind: 'arrive', productUpdate: clearFlags(t.product) });
       }
+      const products = await commitAll(changes);
       return { arrived: chosen.length, products };
     },
 
@@ -304,12 +346,19 @@ export function createStockService(ctx: CoreContext) {
     async renew(productId: string): Promise<ProductSummary> {
       const t = await begin(productId);
       if (!t.product.shelfLifeDays) throw new ValidationError(`Set how often ${t.product.name} renews (its shelf life in days) first.`);
+      const replaced = t.original.filter((e) => e.status === 'in_stock');
       const kept = t.original.filter((e) => e.status !== 'in_stock');
+      const quantity = Math.max(1, roundQty(replaced.reduce((n, e) => n + e.quantity, 0)));
+      const placeId = replaced[0]?.placeId ?? defaultPlace(t.world, t.product);
       const entry = StockEntrySchema.parse({
-        id: newId(), productId, quantity: 1, placeId: defaultPlace(t.world, t.product), addedAt: ctx.now(), status: 'in_stock',
+        id: newId(), productId, quantity, placeId, addedAt: ctx.now(), status: 'in_stock',
         expiresOn: addDays(ctx.today(), t.product.shelfLifeDays),
       });
-      return commit(t, [...kept, entry], [movement(t.product, 'add', 1, { entryId: entry.id, note: 'Renewed' })], 'renew', clearFlags(t.product));
+      const movements = [
+        ...replaced.map((e) => movement(t.product, 'remove', -e.quantity, { entryId: e.id, fromPlaceId: where(e), note: 'Replaced by renewal' })),
+        movement(t.product, 'add', quantity, { entryId: entry.id, toPlaceId: placeId, note: 'Renewed' }),
+      ];
+      return commit(t, [...kept, entry], movements, 'renew', clearFlags(t.product));
     },
 
     async deliveries() {

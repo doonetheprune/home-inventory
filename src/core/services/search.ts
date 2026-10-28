@@ -9,6 +9,7 @@
 import type { SearchResult, SearchSectionResult } from '../model';
 import type { SearchDoc, SearchHit } from '../ports';
 import type { CoreContext } from './context';
+import { andList } from '../util';
 import { eligibleShops, loadWorld, needsBuying, placePath, summarise, type World } from './world';
 
 export interface SearchSection {
@@ -94,7 +95,7 @@ export function createSearchService(ctx: CoreContext) {
         const shops = eligibleShops(s.product, world.shops);
         return {
           type: 'shopping', id: s.product.id, title: s.product.name,
-          subtitle: shops.length ? `On your ${shops.map((x) => x.name).join(' and ')} list${shops.length > 1 ? 's' : ''}` : 'On the list, no shop set',
+          subtitle: shops.length ? `On your ${andList(shops.map((x) => x.name))} list${shops.length > 1 ? 's' : ''}` : 'On the list, no shop set',
           href: shops[0] ? `/shop/${shops[0].id}` : '/shop', product: s, shopIds: shops.map((x) => x.id),
         };
       });
