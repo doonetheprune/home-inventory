@@ -23,3 +23,17 @@ Choices made with the user that aren't in the original brief. Newest last within
 - **One data folder:** SQLite database, photos and scheduled backups all live in one folder, so a backup is a copy of that folder.
 - **Swappable back end (ports and adapters):** core services never touch the database directly. Storage, files, search, events and login are each behind a small documented interface, with SQLite, local disk and in-app search as the defaults and an in-memory storage adapter for tests. Every storage adapter must pass one shared contract test suite. The core avoids SQL-only features: IDs are app-generated strings, queries are named store methods rather than joins, and multi-step changes are single storage operations. The UI, integration and MCP use only the REST API, so a whole replacement back end that implements the OpenAPI spec (and passes the API test suite) would also work.
 - **Testing Home Assistant parts:** the integration gets unit tests with `pytest-homeassistant-custom-component`, end-to-end tests against a real Home Assistant running in Docker, and `hassfest` and HACS validation in CI.
+- **Language:** TypeScript throughout (server, web app, MCP server). Python only for the Home Assistant integration.
+
+## Phase 1: how it was built
+
+These follow from the decisions above; the owner can change any of them.
+
+- **Runtime:** Node.js 22.13 or newer (Docker image uses Node 24). SQLite comes from Node's built-in `node:sqlite`, so there are no native add-ons and the same image runs on ARM (Raspberry Pi) and x86.
+- **Storage format:** each SQLite table holds whole JSON documents plus a few indexed columns, mirroring a document database so a Firestore adapter is a straight swap.
+- **Server:** Fastify with zod schemas; the OpenAPI spec is generated from them and committed as `docs/openapi.json` (a test fails if it's stale).
+- **Login:** `LARDER_AUTH=local` (default) gives household accounts with cookie sessions and hashed bearer tokens for integrations; `none` is for trusted networks. Home Assistant ingress login is Phase 2.
+- **Web app:** React with hash routing and relative paths so it works behind Home Assistant ingress and reverse proxies. Fonts are bundled, so nothing loads from the internet.
+- **Shopping ticks** are kept on the phone until "Done", then sent in one go.
+- **Barcode lookups** ask Open Food Facts, Open Beauty Facts and Open Products Facts in turn (4 seconds each). Answers and misses are cached; misses are retried after 7 days.
+- **Licence:** not chosen yet (`UNLICENSED` in package.json). The owner should pick one before the repo is made public.

@@ -1,0 +1,19 @@
+# Run Larder on its own:   docker compose up -d   then open http://localhost:8080
+# Everything Larder keeps (database, photos, backups) is in ./larder-data.
+services:
+  larder:
+    image: ghcr.io/doonetheprune/home-inventory:latest
+    build: .
+    container_name: larder
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./larder-data:/data
+    environment:
+      # "local" = household accounts and access tokens (recommended).
+      LARDER_AUTH: local
+      # Your HTTPS address, used in QR labels. Cameras need HTTPS to scan.
+      # LARDER_BASE_URL: https://larder.example.com
+      # Load the example household into an empty Larder:
+      # LARDER_DEMO: "true"

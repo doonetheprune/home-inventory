@@ -10,7 +10,8 @@ import multipart from '@fastify/multipart';
 import staticFiles from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { hasZodFastifySchemaValidationErrors, jsonSchemaTransform, serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
+import { hasZodFastifySchemaValidationErrors, jsonSchemaTransform, jsonSchemaTransformObject, serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
+import { registerSchemas } from './openapi';
 import { LarderError, type CoreApi } from '@larder/core';
 import { createAuth, type Auth } from './auth';
 import type { Config } from './config';
@@ -36,9 +37,11 @@ const PUBLIC = new Set(['/api/health', '/api/v1/auth/status', '/api/v1/auth/logi
 
 export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth }> {
   const { core, config } = deps;
+  registerSchemas();
   const app = Fastify({
     logger: deps.logger ?? { level: config.logLevel },
     trustProxy: config.trustProxy,
+    disableRequestLogging: config.logLevel !== 'debug' && config.logLevel !== 'trace',
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
 
@@ -72,6 +75,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       ],
     },
     transform: jsonSchemaTransform,
+    transformObject: jsonSchemaTransformObject,
   });
   await app.register(swaggerUi, { routePrefix: '/api/docs' });
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
