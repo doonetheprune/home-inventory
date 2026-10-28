@@ -1,0 +1,59 @@
+/**
+ * Server settings, all from environment variables so Larder runs the same way
+ * in Docker, as a Home Assistant add-on, or on a laptop. See docs/running.md.
+ */
+import { resolve } from 'node:path';
+
+export interface Config {
+  port: number;
+  host: string;
+  /** Holds the database, photos and backups. Back this folder up. */
+  dataDir: string;
+  /** "local": household login and access tokens. "none": no login (trusted networks only). */
+  auth: 'local' | 'none';
+  storage: 'sqlite' | 'memory';
+  /** Public address, used in QR labels and links, e.g. https://larder.example.com */
+  baseUrl: string | null;
+  /** Module ids that are always off. */
+  disabledModules: string[];
+  logLevel: string;
+  /** Trust X-Forwarded-* headers from a reverse proxy. */
+  trustProxy: boolean;
+  /** Load example data into an empty database on start. */
+  demo: boolean;
+  /** Hours between automatic backups (0 turns them off). */
+  backupEveryHours: number;
+  backupsToKeep: number;
+  /** Folder with the built web app. */
+  webDir: string;
+  version: string;
+}
+
+const bool = (v: string | undefined, fallback: boolean) => (v === undefined || v === '' ? fallback : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()));
+const num = (v: string | undefined, fallback: number) => {
+  const n = Number(v);
+  return v === undefined || v === '' || Number.isNaN(n) ? fallback : n;
+};
+
+export function loadConfig(env: Record<string, string | undefined> = process.env, defaults: { webDir?: string; version?: string } = {}): Config {
+  const auth = (env.LARDER_AUTH ?? 'local').toLowerCase();
+  if (auth !== 'local' && auth !== 'none') throw new Error(`LARDER_AUTH must be "local" or "none", not "${auth}".`);
+  const storage = (env.LARDER_STORAGE ?? 'sqlite').toLowerCase();
+  if (storage !== 'sqlite' && storage !== 'memory') throw new Error(`LARDER_STORAGE must be "sqlite" or "memory", not "${storage}".`);
+  return {
+    port: num(env.LARDER_PORT ?? env.PORT, 8080),
+    host: env.LARDER_HOST ?? '0.0.0.0',
+    dataDir: resolve(env.LARDER_DATA_DIR ?? './data'),
+    auth,
+    storage,
+    baseUrl: env.LARDER_BASE_URL?.replace(/\/+$/, '') || null,
+    disabledModules: (env.LARDER_MODULES_DISABLED ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    logLevel: env.LARDER_LOG_LEVEL ?? 'info',
+    trustProxy: bool(env.LARDER_TRUST_PROXY, true),
+    demo: bool(env.LARDER_DEMO, false),
+    backupEveryHours: num(env.LARDER_BACKUP_EVERY_HOURS, 24),
+    backupsToKeep: num(env.LARDER_BACKUPS_TO_KEEP, 7),
+    webDir: resolve(env.LARDER_WEB_DIR ?? defaults.webDir ?? './dist/web'),
+    version: defaults.version ?? env.npm_package_version ?? '0.0.0',
+  };
+}
