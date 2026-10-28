@@ -83,7 +83,7 @@ describe('API', () => {
     expect((await call<Any>('POST', '/api/v1/stock/use', { productId: loo.id, quantity: 10 })).body.message).toContain('only 3 rolls');
 
     const bought = (await call<Any[]>('POST', '/api/v1/shopping/purchase', { shopId: aldi.id, items: [{ productId: loo.id, quantity: 24 }] })).body;
-    expect(bought[0].inStock).toBe(27);
+    expect(bought[0]!.inStock).toBe(27);
 
     const detail = (await call<Any>('GET', `/api/v1/products/${loo.id}`)).body;
     expect(detail.entries[0].place.path).toBe('Utility › Shelf');
@@ -99,7 +99,7 @@ describe('API', () => {
 
     const home = (await call<Any>('GET', '/api/v1/home')).body;
     expect(home.counts.products).toBe(1);
-    expect((await call<Any[]>('GET', '/api/v1/places/tree')).body[0].itemCount).toBe(1);
+    expect((await call<Any[]>('GET', '/api/v1/places/tree')).body[0]!.itemCount).toBe(1);
   });
 
   it('returns readable validation and not-found errors', async () => {
