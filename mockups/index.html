@@ -333,6 +333,147 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
 .more-grid a b { font-family: var(--f-display); font-size: 16px; }
 .more-grid a span.muted { font-size: 12.5px; margin-top: -6px; }
 .soon-tag { font-size: 11px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 2px 6px; justify-self: start; }
+
+/* ---------- desktop preview + layout ---------- */
+.side-brand, .side-add, .side-group, .side-label, .desk-only, .col-place, .d-inline, .stock-head { display: none; }
+.col-a, .col-b, .stock-main { display: contents; }
+.stock-pane { display: none; }
+.app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.phone { container: app / inline-size; }
+[hidden] { display: none !important; }
+.paper { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.lbl canvas { max-width: 55%; }
+.viewtoggle { margin-bottom: 6px; }
+.reviewbar .seg { flex: none; }
+.subloc.cur { background: var(--accent-soft); font-weight: 600; }
+.pane { padding: 18px; display: grid; gap: 14px; }
+.pane-qty { font: 800 28px/1.1 var(--f-display); letter-spacing: -.02em; }
+
+.stage.desk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+.stage.desk .index, .stage.desk .notes { display: none; }
+.stage.desk .reviewbar { display: flex; width: 100%; max-width: 1360px; justify-self: center; }
+.stage.desk .phone { width: 100%; max-width: 1360px; max-height: none; justify-self: center; border-radius: 20px; }
+.stage.desk .notes.open { display: block; position: fixed; z-index: 30; left: auto; right: max(24px, env(safe-area-inset-right, 0px)); top: calc(70px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100% - 32px)); }
+.stage.desk .notes.open .panel { box-shadow: 0 20px 60px rgb(0 0 0 / .3); }
+@media (max-width: 520px) { .stage.desk { gap: 0; } .stage.desk .phone { border-radius: 0; } .viewtoggle { display: none !important; } }
+
+@container app (min-width: 900px) {
+  .app { flex-direction: row; --gl: 32px; --gr: 32px; }
+  .tabbar { order: -1; width: 232px; flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 20px 14px; border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
+  .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
+  .side-brand .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+  .side-brand b { font: 800 22px/1 var(--f-display); letter-spacing: -.03em; }
+  .tab { order: 3; display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 9px 12px; border-radius: 10px; }
+  .tab:hover { background: var(--surface-2); color: var(--ink); }
+  .tab.on { background: var(--accent-soft); color: var(--accent); }
+  .tab[data-t="more"] { display: none; }
+  .tab.scan { order: 1; margin: 0 0 8px; padding: 0; }
+  .tab.scan:hover { background: none; }
+  .tab.scan span.fab { width: 100%; height: 48px; border: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 15px/1 var(--f-body); }
+  .tab.scan span.fab .i { width: 22px; height: 22px; }
+  .side-label { display: inline; }
+  .side-add { order: 2; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); font-weight: 700; font-size: 14px; }
+  .side-group { order: 4; display: flex; flex-direction: column; gap: 2px; }
+  .side-group .tab { order: 0; }
+  .side-head { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); padding: 18px 12px 6px; }
+  .hdr { min-height: 76px; padding-block: 18px 12px; }
+  .hdr h1 { font-size: 28px; }
+  .content { gap: 24px; padding-bottom: 40px; }
+  .chips { flex-wrap: wrap; overflow: visible; }
+  .toast { bottom: 28px; }
+  .dock { justify-content: flex-end; }
+  .dock .btn { flex: none; min-width: 140px; }
+  .photo { max-height: 260px; }
+  .d-inline { display: inline; }
+
+  /* home: three columns */
+  #v-home .hdr { display: none; }
+  #v-home .content { padding-top: 28px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello search" "actions shop stats" "soon coming away"; align-items: start; }
+  #v-home .hello { grid-area: hello; }
+  #v-home .hello h2 { font-size: 36px; }
+  .today-desk { display: block; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  #v-home .h-search { grid-area: search; align-self: end; }
+  #v-home .actions { grid-area: actions; }
+  #v-home .shopcard { grid-area: shop; align-self: stretch; align-content: start; }
+  #v-home .stats { grid-area: stats; grid-template-columns: 1fr; align-self: stretch; }
+  #v-home .stat { display: flex; align-items: center; gap: 14px; }
+  #v-home .h-soon { grid-area: soon; }
+  #v-home .h-coming { grid-area: coming; }
+  #v-home .h-away { grid-area: away; }
+
+  /* stock: table + detail pane */
+  #v-stock .content { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  .stock-main { display: grid; gap: 22px; min-width: 0; }
+  .stock-pane { display: block; position: sticky; top: 92px; }
+  .stock-head, #stockList .item { display: grid; grid-template-columns: 40px minmax(0, 1.5fr) minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
+  .stock-head { padding: 0 14px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+  .stock-head span:last-child { text-align: right; }
+  #stockList .col-place { display: block; font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #stockList .m-place { display: none; }
+  #stockList .item.sel { background: var(--accent-soft); }
+
+  /* product: two columns */
+  #v-product .content { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+  .col-a, .col-b { display: grid; gap: 22px; min-width: 0; }
+
+  /* scan: camera left, result right */
+  #v-scan .content { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "mode state" "vf sheet" "hint sheet"; grid-template-rows: auto auto 1fr; align-items: start; }
+  #scanMode { grid-area: mode; }
+  #scanState { grid-area: state; }
+  #v-scan .viewfinder { grid-area: vf; }
+  #v-scan .sheet { grid-area: sheet; }
+  #v-scan .hint { grid-area: hint; }
+
+  #v-add .content { max-width: 760px; }
+
+  /* shop: list + price checker */
+  #v-shop .content { grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "chips chips" "note note" "list side"; align-items: start; }
+  #shopChips { grid-area: chips; }
+  #shopNote { grid-area: note; }
+  #shopList { grid-area: list; }
+  #v-shop .pricecheck { grid-area: side; position: sticky; top: 92px; }
+
+  /* places */
+  #v-locations .content { grid-template-columns: minmax(0, 1fr) 360px; grid-template-areas: "search search" "tree side"; align-items: start; }
+  #v-locations .search { grid-area: search; }
+  #locTree { grid-area: tree; }
+  #v-locations .content > a.card { grid-area: side; }
+  #v-location .content { grid-template-columns: 320px minmax(0, 1fr); grid-template-areas: "side top" "side photo" "side btns" "side list"; grid-template-rows: auto auto auto 1fr; align-items: start; }
+  #locTree2 { display: block; grid-area: side; }
+  #v-location .loc-top { grid-area: top; }
+  #v-location .content > .photo { grid-area: photo; }
+  #v-location .content > .btnrow { grid-area: btns; justify-content: flex-start; }
+  #v-location .content > .btnrow > .btn { flex: none; }
+  #v-location .content > .section { grid-area: list; }
+  #v-grid .content { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: "steps steps" "form preview" "toggle preview" "btn preview"; grid-template-rows: auto auto auto 1fr; align-items: start; }
+  #v-grid .wizard-steps { grid-area: steps; }
+  #v-grid .content > div:nth-of-type(2) { grid-area: form; }
+  #v-grid .content > div:nth-of-type(3) { grid-area: preview; }
+  #v-grid .content > div:nth-of-type(4) { grid-area: toggle; }
+  #gCreate { grid-area: btn; }
+
+  /* cards in two columns */
+  #v-scenarios .list, #wishList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; background: none; border: 0; overflow: visible; }
+  #v-scenarios .list > .item, #wishList > .item { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  #v-scenario .content { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #v-scenario .content > .stats, #v-scenario .content > .btn { grid-column: 1 / -1; }
+  #v-scenario .content > .btn { justify-self: start; width: auto; }
+  #shopsList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .more-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  /* printables: controls left, paper right */
+  #v-labels .content, #v-print-scenario .content { grid-template-columns: 340px minmax(0, 1fr); align-items: start; }
+  #v-labels .content { grid-template-areas: "src paper" "tpl paper" "info paper" "btn paper"; grid-template-rows: auto auto auto 1fr; }
+  #v-labels .content > .section { grid-area: src; }
+  #v-labels .content > .field { grid-area: tpl; }
+  #lblInfo { grid-area: info; }
+  #v-labels .content > .btn { grid-area: btn; }
+  #v-labels .paperwrap, #v-print-scenario .paperwrap { grid-area: paper; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 24px; }
+  #v-labels .paper, #v-print-scenario .paper { width: min(100%, 560px); }
+  #v-print-scenario .content { grid-template-areas: "toggle paper" "btn paper"; grid-template-rows: auto 1fr; }
+  #v-print-scenario .content > .list { grid-area: toggle; }
+  #v-print-scenario .content > .btn { grid-area: btn; }
+}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -387,16 +528,19 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   <aside class="index" aria-label="Mock-up screens">
     <h2><span class="tile" style="width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-ink)"><svg class="i sm"><use href="#i-jar"/></svg></span>Larder</h2>
     <p class="sub">Phase 0 mock-ups. Everything is clickable; data is made up.</p>
+    <div class="seg viewtoggle" role="group" aria-label="Preview size"><button class="on" data-vm="phone">Phone</button><button data-vm="desk">Desktop</button></div>
     <nav id="indexNav"></nav>
   </aside>
 
   <div class="reviewbar">
     <span class="tag">Mock-up</span>
     <select id="screenSelect" aria-label="Jump to screen"></select>
+    <div class="seg viewtoggle" role="group" aria-label="Preview size"><button class="on" data-vm="phone">Phone</button><button data-vm="desk">Desktop</button></div>
     <button id="notesBtn" type="button" aria-expanded="false">Notes</button>
   </div>
 
   <div class="phone" id="phone">
+    <div class="app">
     <main class="screen" id="screen">
 
       <!-- ============ HOME ============ -->
@@ -407,9 +551,10 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
         </header>
         <div class="content">
           <div class="hello">
+            <span class="today-desk desk-only">Wednesday 28 October</span>
             <h2>Evening. 5 things to use soon, and Aldi’s the shop to hit.</h2>
           </div>
-          <label class="search" for="homeSearch">
+          <label class="search h-search" for="homeSearch">
             <svg class="i"><use href="#i-search"/></svg>
             <input id="homeSearch" type="search" placeholder="Find anything… “bog roll”, “drill”, “G2-4”" autocomplete="off">
           </label>
@@ -439,7 +584,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             <a class="stat away" href="#stock" data-filter="away"><b>2</b><span>Away from home</span></a>
           </div>
 
-          <div class="section">
+          <div class="section h-soon">
             <div class="label">Use soon <a href="#stock" data-filter="soon">All</a></div>
             <div class="list">
               <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-apple"/></svg></span><span class="item-main"><span class="item-name">Baby spinach</span><span class="item-meta">Kitchen › Fridge</span></span><span class="pill p-soon">Today</span></a>
@@ -449,7 +594,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             <div class="card hint"><svg class="i sm" style="color:var(--accent);margin-top:2px"><use href="#i-sparkle"/></svg><span>Ask Claude <i>“what can I cook with the spinach and chicken?”</i> It sees your stock and saves recipes you like here.</span></div>
           </div>
 
-          <div class="section">
+          <div class="section h-coming">
             <div class="label">On the way</div>
             <div class="list">
               <div class="item"><span class="tile"><svg class="i"><use href="#i-truck"/></svg></span><span class="item-main"><span class="item-name">Tesco delivery · 23 items</span><span class="item-meta">Thu 29 Oct, 7–8pm</span></span><button class="btn small" data-toast="23 items moved from expected into stock">Arrived</button></div>
@@ -457,7 +602,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             </div>
           </div>
 
-          <div class="section">
+          <div class="section h-away">
             <div class="label">Away from home <a href="#stock" data-filter="away">All</a></div>
             <div class="list">
               <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-wrench"/></svg></span><span class="item-main"><span class="item-name">Cordless drill</span><span class="item-meta">In Kitchen · lives in Shed <code>S2-3</code></span></span><span class="pill p-away">4 days</span></a>
@@ -471,6 +616,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
       <section class="view" id="v-stock" data-tab="stock" hidden>
         <header class="hdr"><h1>Stock</h1><a class="iconbtn" href="#add" aria-label="Add item"><svg class="i"><use href="#i-plus"/></svg></a></header>
         <div class="content">
+          <div class="stock-main">
           <label class="search" for="stockSearch">
             <svg class="i"><use href="#i-search"/></svg>
             <input id="stockSearch" type="search" placeholder="Search names, aliases, notes, places" autocomplete="off">
@@ -481,6 +627,8 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
             <div class="seg" id="stockGroup" role="group" aria-label="Group by"><button class="on" data-g="cat">Category</button><button data-g="loc">Place</button></div>
           </div>
           <div id="stockList" class="section" style="gap:18px"></div>
+          </div>
+          <aside class="stock-pane" id="stockPane" aria-label="Selected item"></aside>
         </div>
       </section>
 
@@ -488,6 +636,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
       <section class="view" id="v-product" data-tab="stock" hidden>
         <header class="hdr"><a class="iconbtn ghost" href="#stock" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1></h1><button class="iconbtn" aria-label="Edit" data-toast="Edit opens the full product form"><svg class="i"><use href="#i-edit"/></svg></button></header>
         <div class="content">
+          <div class="col-a">
           <div class="hero">
             <span class="tile lg"><svg class="i lg"><use href="#i-sparkle"/></svg></span>
             <div style="display:grid;gap:6px;min-width:0">
@@ -517,6 +666,17 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
           </div>
 
           <div class="section">
+            <div class="label">Brands &amp; barcodes</div>
+            <div class="list">
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Andrex Classic Clean, 9 rolls</span><span class="item-meta"><code>5029053038889</code> · Tesco <code>254331802</code></span></span></div>
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Saxon Soft, 24 rolls</span><span class="item-meta"><code>4088600261401</code> · Aldi</span></span></div>
+              <button class="item" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:none;color:var(--accent);font-weight:600" data-toast="Scan or type the new barcode"><svg class="i"><use href="#i-plus"/></svg>Add a brand or barcode</button>
+            </div>
+          </div>
+
+          </div>
+          <div class="col-b">
+          <div class="section">
             <div class="label">Price</div>
             <div class="card" style="padding:14px 16px">
               <dl class="kv">
@@ -524,15 +684,6 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
                 <dt>Based on</dt><dd>Andrex 9 pack, £3.25 at Tesco</dd>
                 <dt>Shops</dt><dd>Aldi, Tesco</dd>
               </dl>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="label">Brands &amp; barcodes</div>
-            <div class="list">
-              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Andrex Classic Clean, 9 rolls</span><span class="item-meta"><code>5029053038889</code> · Tesco <code>254331802</code></span></span></div>
-              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Saxon Soft, 24 rolls</span><span class="item-meta"><code>4088600261401</code> · Aldi</span></span></div>
-              <button class="item" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:none;color:var(--accent);font-weight:600" data-toast="Scan or type the new barcode"><svg class="i"><use href="#i-plus"/></svg>Add a brand or barcode</button>
             </div>
           </div>
 
@@ -548,6 +699,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
               </dl>
             </div>
             <div class="card" style="padding:14px 16px;font-size:14px"><b>Notes</b><br><span class="muted">Kids get through these fast in winter. Aldi 24 pack is usually the best value.</span></div>
+          </div>
           </div>
         </div>
         <div class="dock">
@@ -694,7 +846,8 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
       <section class="view" id="v-location" data-tab="more" hidden>
         <header class="hdr"><a class="iconbtn ghost" href="#locations" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Garage racking</h1><a class="iconbtn" href="#labels" aria-label="Print label"><svg class="i"><use href="#i-print"/></svg></a></header>
         <div class="content">
-          <div style="display:flex;gap:14px;align-items:center">
+          <div class="list desk-only" id="locTree2" aria-label="All places"></div>
+          <div class="loc-top" style="display:flex;gap:14px;align-items:center">
             <div style="display:grid;gap:4px;flex:1;min-width:0"><span class="bigcode">G2-4</span><span class="muted small">Garage › Garage racking › Shelf 2</span></div>
             <canvas data-qr="G2-4" style="width:64px;height:64px;border-radius:6px" aria-label="QR label for G2-4"></canvas>
           </div>
@@ -889,12 +1042,26 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
     </main>
 
     <nav class="tabbar" aria-label="Main">
+      <div class="side-brand"><span class="mark"><svg class="i"><use href="#i-jar"/></svg></span><b>Larder</b></div>
       <a class="tab" href="#home" data-t="home"><svg class="i"><use href="#i-home"/></svg>Home</a>
       <a class="tab" href="#stock" data-t="stock"><svg class="i"><use href="#i-box"/></svg>Stock</a>
-      <a class="tab scan" href="#scan" data-t="scan" aria-label="Scan"><span class="fab"><svg class="i"><use href="#i-scan"/></svg></span></a>
+      <a class="tab scan" href="#scan" data-t="scan" aria-label="Scan"><span class="fab"><svg class="i"><use href="#i-scan"/></svg><span class="side-label">Scan</span></span></a>
+      <a class="side-add" href="#add"><svg class="i sm"><use href="#i-plus"/></svg>Add by name</a>
       <a class="tab" href="#shop" data-t="shop"><svg class="i"><use href="#i-cart"/></svg>Shop</a>
       <a class="tab" href="#more" data-t="more"><svg class="i"><use href="#i-more"/></svg>More</a>
+      <div class="side-group">
+        <span class="side-head">Organise</span>
+        <a class="tab" href="#locations" data-v="locations location grid"><svg class="i"><use href="#i-pin"/></svg>Places</a>
+        <a class="tab" href="#shops" data-v="shops"><svg class="i"><use href="#i-store"/></svg>Shops</a>
+        <a class="tab" href="#scenarios" data-v="scenarios scenario print-scenario"><svg class="i"><use href="#i-layers"/></svg>Scenarios</a>
+        <a class="tab" href="#wishlist" data-v="wishlist"><svg class="i"><use href="#i-heart"/></svg>Wish list</a>
+        <span class="side-head">Print</span>
+        <a class="tab" href="#labels" data-v="labels"><svg class="i"><use href="#i-print"/></svg>Label sheets</a>
+        <span class="side-head">More</span>
+        <a class="tab" href="#more" data-v="more"><svg class="i"><use href="#i-more"/></svg>Recipes, renewals, set-up</a>
+      </div>
     </nav>
+    </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </div>
 
@@ -957,11 +1124,41 @@ $('#screenSelect').innerHTML = SCREENS.map(([g, items]) => `<optgroup label="${g
 $('#screenSelect').addEventListener('change', e => { location.hash = e.target.value; });
 $('#notesBtn').addEventListener('click', () => { const n = $('#notes'); const open = n.classList.toggle('open'); $('#notesBtn').setAttribute('aria-expanded', open); $('#notesBtn').textContent = open ? 'Close' : 'Notes'; });
 
+const DESK = {
+  home: 'Three columns. Greeting and search across the top, then the main actions, shop suggestion and counts, then use soon, on the way and away from home side by side.',
+  stock: 'A table with a detail pane. Click a row to preview it on the right; “Open full page” shows everything.',
+  product: 'Two columns: stock and brands on the left, price and details on the right. Use, Move and Add stay along the bottom.',
+  scan: 'Camera on the left, result on the right. On a laptop a USB scanner is the likelier input, and it works on any screen.',
+  add: 'The same form, kept to a comfortable width.',
+  shop: 'The list on the left with the price checker beside it.',
+  locations: 'The place tree with set-up alongside.',
+  location: 'The place tree stays on the left while you look inside a box.',
+  grid: 'Settings on the left, a live preview of the codes on the right.',
+  shops: 'Shops as cards in two columns.',
+  scenarios: 'Scenarios as cards in two columns.',
+  scenario: 'Places side by side in two columns.',
+  wishlist: 'Wish list items as cards in two columns.',
+  labels: 'Controls on the left, a full sheet preview on the right.',
+  'print-scenario': 'Options on the left, the page preview on the right.',
+  more: 'On a big screen these links live in the sidebar, so this page is rarely needed.',
+};
 function renderNotes(id) {
   const s = FLAT.find(x => x.id === id); if (!s) return;
+  const desk = $('.stage').classList.contains('desk') && DESK[id];
   $('#notesPanel').innerHTML = `<div class="eyebrow">${s.g} · Review notes</div><h3>${s.title}</h3><p>${s.desc}</p>
+    ${desk ? `<div class="qhead">On a big screen</div><p>${DESK[id]}</p>` : ''}
     <div class="qhead">Questions for you</div><ul>${s.q.map(q => `<li>${q}</li>`).join('')}</ul>`;
 }
+
+/* ---------- phone / desktop preview ---------- */
+const isDesk = () => $('#phone').clientWidth >= 900;
+function setViewMode(m) {
+  $('.stage').classList.toggle('desk', m === 'desk');
+  $$('[data-vm]').forEach(b => b.classList.toggle('on', b.dataset.vm === m));
+  $('#notes').classList.remove('open'); $('#notesBtn').textContent = 'Notes'; $('#notesBtn').setAttribute('aria-expanded', 'false');
+  try { localStorage.setItem('larder-mock-view', m); } catch (e) { /* storage unavailable */ }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-vm]'); if (b) { setViewMode(b.dataset.vm); show(location.hash.slice(1) || 'home'); } });
 
 /* ---------- routing ---------- */
 let pendingFilter = null, pendingShop = null, pendingMode = null;
@@ -969,7 +1166,8 @@ function show(id) {
   if (!document.getElementById('v-' + id)) id = 'home';
   $$('.view').forEach(v => v.hidden = v.id !== 'v-' + id);
   const view = $('#v-' + id);
-  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.t === view.dataset.tab));
+  $$('.tab[data-t]').forEach(t => t.classList.toggle('on', t.dataset.t === view.dataset.tab));
+  $$('.tabbar [data-v]').forEach(t => t.classList.toggle('on', t.dataset.v.split(' ').includes(id)));
   $$('#indexNav a').forEach(a => a.classList.toggle('on', a.dataset.i === id));
   $('#screenSelect').value = id;
   $('#screen').scrollTop = 0;
@@ -1047,7 +1245,7 @@ const STOCK = [
   { n: 'Car MOT', sub: 'Skoda Octavia', a: ['mot', 'car'], c: 'Renewals', q: 'Valid', l: 'Study › Filing box', s: [['ok', 'Due 3 Feb']] },
 ];
 const FILTERS = [['all', 'All'], ['low', 'Low'], ['soon', 'Use soon'], ['away', 'Away'], ['coming', 'On the way'], ...Object.keys(CAT_ICON).map(c => [c, c])];
-const stockState = { filter: 'all', group: 'cat', q: '' };
+const stockState = { filter: 'all', group: 'cat', q: '', sel: 'Toilet roll' };
 
 function lev(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 9;
@@ -1065,9 +1263,23 @@ function fuzzy(p, q) {
 }
 function rowHTML(p) {
   const pills = p.s.map(([k, t]) => `<span class="pill p-${k}">${esc(t)}</span>`).join('');
-  return `<a class="item" href="#product"><span class="tile">${ic(CAT_ICON[p.c])}</span>
-    <span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${p.sub ? esc(p.sub) + ' · ' : ''}${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}</span></span>
+  const place = `${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}`;
+  return `<a class="item ${p.n === stockState.sel ? 'sel' : ''}" href="#product" data-n="${esc(p.n)}"><span class="tile">${ic(CAT_ICON[p.c])}</span>
+    <span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${p.sub ? esc(p.sub) : `<span class="d-inline">${p.c}</span>`}<span class="m-place">${p.sub ? ' · ' : ''}${place}</span></span></span>
+    <span class="col-place">${place}</span>
     <span class="item-side"><span class="qty">${esc(p.q)}</span>${pills}</span></a>`;
+}
+function renderPane() {
+  const p = STOCK.find(x => x.n === stockState.sel) || STOCK[0];
+  const pills = p.s.map(([k, t]) => `<span class="pill p-${k}">${esc(t)}</span>`).join('');
+  $('#stockPane').innerHTML = `<div class="card pane">
+    <div class="hero"><span class="tile lg">${ic(CAT_ICON[p.c], 'lg')}</span><div style="display:grid;gap:4px;min-width:0"><h2 style="font-size:22px">${esc(p.n)}</h2>${p.sub ? `<span class="muted small">${esc(p.sub)}</span>` : ''}</div></div>
+    <div class="aliases">${p.a.map(x => `<span class="pill p-plain">${esc(x)}</span>`).join('')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><b class="pane-qty">${esc(p.q)}</b><span style="display:flex;gap:6px">${pills}</span></div>
+    <dl class="kv"><dt>Category</dt><dd>${p.c}</dd><dt>Place</dt><dd>${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}</dd></dl>
+    ${p.note ? `<p class="small muted" style="margin:0">${esc(p.note)}</p>` : ''}
+    <div class="btnrow"><button class="btn small" data-toast="Used 1 · stock updated">${ic('minus', 'sm')}Use</button><a class="btn small" href="#scan" data-mode="move">${ic('move', 'sm')}Move</a><button class="btn small primary" data-toast="Added 1 · stock updated">${ic('plus', 'sm')}Add</button></div>
+    <a class="btn block" href="#product">Open full page${ic('chev', 'sm')}</a></div>`;
 }
 function renderStock() {
   $('#stockFilters').innerHTML = FILTERS.map(([k, t]) => {
@@ -1080,13 +1292,18 @@ function renderStock() {
   const groups = {};
   items.forEach(p => (groups[key(p)] ||= []).push(p));
   $('#stockCount').textContent = `${items.length} of 312 items (sample)`;
-  $('#stockList').innerHTML = items.length ? Object.entries(groups).map(([g, ps]) =>
+  renderPane();
+  $('#stockList').innerHTML = items.length ? '<div class="stock-head"><span></span><span>Item</span><span>Place</span><span>Stock</span></div>' + Object.entries(groups).map(([g, ps]) =>
     `<div class="section"><div class="label">${esc(g)} <span style="font-weight:600">${ps.length}</span></div><div class="list">${ps.map(rowHTML).join('')}</div></div>`).join('')
     : `<div class="card" style="padding:18px;display:grid;gap:10px"><b>Nothing matches “${esc(stockState.q)}”</b><span class="muted small">Check the spelling, or add it as a new item.</span><a class="btn small" href="#add" style="justify-self:start">${ic('plus', 'sm')}Add “${esc(stockState.q)}”</a></div>`;
 }
 $('#stockFilters').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) { stockState.filter = b.dataset.f; renderStock(); } });
 $('#stockGroup').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; stockState.group = b.dataset.g; $$('#stockGroup button').forEach(x => x.classList.toggle('on', x === b)); renderStock(); });
 $('#stockSearch').addEventListener('input', e => { stockState.q = e.target.value; renderStock(); });
+$('#stockList').addEventListener('click', e => {
+  const a = e.target.closest('a.item[data-n]'); if (!a || !isDesk()) return;
+  e.preventDefault(); stockState.sel = a.dataset.n; renderStock();
+});
 $('#homeSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { stockState.q = e.target.value; stockState.filter = 'all'; $('#stockSearch').value = e.target.value; location.hash = 'stock'; } });
 
 /* ---------- shop ---------- */
@@ -1201,7 +1418,9 @@ const PLACES = [
 ];
 $('#locTree').innerHTML = PLACES.map(([n, c, i, kids], idx) => `<details class="loc" ${idx === 1 ? 'open' : ''}><summary><span class="tile">${ic(i)}</span><span class="item-main"><span class="item-name">${n}</span><span class="item-meta">${c} items · ${kids.length} spots</span></span>${ic('chev', 'chev')}</summary>
   ${kids.map(([k, code, cnt]) => `<a class="subloc" href="${code.startsWith('G') ? '#location' : '#locations'}"><span class="grow">${k}</span>${code ? `<span class="code">${code}</span>` : ''}<span class="muted small" style="min-width:24px;text-align:right">${cnt}</span></a>`).join('')}</details>`).join('');
-$('#locTree').addEventListener('click', e => { const a = e.target.closest('a.subloc'); if (a && a.getAttribute('href') === '#locations') { e.preventDefault(); toast('Each spot opens its contents, like G2-4'); } });
+$('#locTree2').innerHTML = $('#locTree').innerHTML;
+$$('#locTree2 .subloc').forEach(a => a.classList.toggle('cur', a.textContent.includes('Garage racking')));
+['#locTree', '#locTree2'].forEach(s => $(s).addEventListener('click', e => { const a = e.target.closest('a.subloc'); if (a && a.getAttribute('href') === '#locations') { e.preventDefault(); toast('Each spot opens its contents, like G2-4'); } }));
 
 /* ---------- grid wizard ---------- */
 let gFrom = 'top';
@@ -1262,5 +1481,8 @@ function drawQR(cv) {
 
 /* ---------- boot ---------- */
 renderGrid(); priceCheck();
+let savedView = 'phone';
+try { savedView = localStorage.getItem('larder-mock-view') || 'phone'; } catch (e) { /* storage unavailable */ }
+setViewMode(savedView);
 show(location.hash.slice(1) || 'home');
 </script>
