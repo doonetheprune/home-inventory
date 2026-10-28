@@ -3,7 +3,7 @@
  * live updates at /api/v1/events, and the web app at /.
  */
 import { existsSync } from 'node:fs';
-import Fastify, { type FastifyBaseLogger, type FastifyInstance, type RawServerDefault } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type RawServerDefault } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
@@ -32,6 +32,14 @@ export interface AppDeps {
   logger?: boolean | object;
 }
 
+const safeDecode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
 /** Routes anyone can call without signing in. */
 const PUBLIC = new Set(['/api/health', '/api/v1/auth/status', '/api/v1/auth/login', '/api/v1/auth/setup', '/api/openapi.json']);
 
@@ -41,7 +49,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   const app = Fastify({
     logger: deps.logger ?? { level: config.logLevel },
     trustProxy: config.trustProxy,
-    disableRequestLogging: config.logLevel !== 'debug' && config.logLevel !== 'trace',
+    // Request-by-request logs only at debug level; a household server doesn't need them.
+    logController: new LogController({ disableRequestLogging: config.logLevel !== 'debug' && config.logLevel !== 'trace' }),
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
 
@@ -84,8 +93,11 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   app.decorateRequest('user', null);
 
   app.addHook('onRequest', async (request) => {
-    const path = request.url.split('?')[0]!;
-    if (!path.startsWith('/api/')) return;
+    // Decide by the route that matched, not the raw URL: the router decodes
+    // %-escapes, so "/%61pi/v1/…" reaches /api/v1/… and must still be checked.
+    const raw = request.url.split('?')[0]!;
+    const path = request.routeOptions.url ?? safeDecode(raw);
+    if (!path.startsWith('/api/') && !safeDecode(raw).toLowerCase().startsWith('/api/')) return;
     request.user = await auth.identify(request);
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
     if (!request.user) throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
@@ -127,8 +139,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     await app.register(staticFiles, {
       root: config.webDir,
       prefix: '/',
-      setHeaders(res, path) {
-        res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      setHeaders(reply, path) {
+        reply.header('Cache-Control', /[\\/]assets[\\/]/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
       },
     });
   } else {

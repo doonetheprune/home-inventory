@@ -51,6 +51,16 @@ describe('auth', () => {
     expect((await call('GET', '/api/v1/home')).status).toBe(200);
   });
 
+  it("can't be bypassed with encoded or odd paths", async () => {
+    const { app } = await makeApp();
+    for (const url of ['/api/v1/products', '/%61pi/v1/products', '/api/v1/%70roducts', '/%61%70%69/v1/home', '/api/v1/modules', '/api/v1/events', '/api/v1/export', '/api/v1/files/x']) {
+      const r = await app.inject({ method: 'GET', url });
+      expect([401, 404], url).toContain(r.statusCode);
+      expect(r.statusCode === 404 && r.body.startsWith('[')).toBe(false);
+    }
+    expect((await app.inject({ method: 'GET', url: '/%61pi/v1/products' })).statusCode).toBe(401);
+  });
+
   it('can run with no login', async () => {
     const { call } = await makeApp({ auth: 'none' });
     expect((await call<Any>('GET', '/api/v1/auth/status')).body).toMatchObject({ mode: 'none', setupNeeded: false, user: { role: 'admin' } });
