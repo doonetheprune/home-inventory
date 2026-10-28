@@ -12,4 +12,6 @@ Choices made with the user that aren't in the original brief. Newest last within
 - **Wording:** the app says **Places**, not Locations.
 - **Desktop:** the same app adapts to wide screens with a sidebar and multi-column layouts, rather than being a separate design.
 - **Search first:** search is the main way in. It runs across the top of every screen on desktop and is the first thing on Home on a phone. Results carry + and − buttons to add or use stock directly; if nothing matches, the first option is to add it as a new item.
+- **Search keys:** Enter opens the highlighted result. ↑ and ↓ count up or down on a stock result, then Enter adds or uses that many. Tab moves between results. Esc cancels a count, then closes.
+- **Search scope:** search covers everything, with results in sections: stock, shopping lists, places, scenarios, wish list, shops and saved recipes.
 - **Out of place:** an item has a usual place and, optionally, a place it is in right now (usually in the Garage, now in the Shed). The app calls these items **Out of place**, not "away from home".

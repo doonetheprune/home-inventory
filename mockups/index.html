@@ -356,7 +356,12 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   box-shadow: 0 18px 50px rgb(0 0 0 / .2); max-height: min(64vh, 560px); overflow-y: auto; padding: 6px 0 8px; }
 .gs-head { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); padding: 10px 16px 4px; }
 .gs-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 16px; }
-.gs-row:hover { background: var(--surface-2); }
+.gs-row.hl { background: var(--accent-soft); }
+.gs-row.hl .tile { background: var(--surface); }
+.gs-pending { font: 700 12px/1 var(--f-mono); color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 6px 8px; }
+.stepper output.preview { color: var(--accent); }
+.gs-keys { display: none; position: sticky; bottom: -8px; margin-top: 6px; padding: 9px 16px; border-top: 1px solid var(--line); background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.gs-keys kbd { font: 600 11px/1 var(--f-mono); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 2px 5px; margin-right: 3px; }
 .gs-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .gs-acts { display: flex; align-items: center; gap: 6px; flex: none; }
 .stepper.sm button { width: 34px; height: 34px; }
@@ -395,6 +400,7 @@ a.gs-wish { color: var(--accent); }
   .tb-date { justify-self: end; }
   .gs-box { height: 54px; }
   .gs-kbd { display: inline-block; }
+  .gs-keys { display: block; }
   .screen { grid-column: 2; grid-row: 2; }
   .tabbar { grid-column: 1; grid-row: 2; width: 232px; flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 20px 14px; border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
   .tab { order: 3; display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 9px 12px; border-radius: 10px; }
@@ -1111,8 +1117,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 /* ---------- screens + review notes ---------- */
 const SCREENS = [
   ['Everyday', [
-    ['search', 'Search', 'Search is the main way in. It sits across the top on a big screen and first on Home on a phone. Results have + and − buttons, so you can add or use stock without opening anything. If nothing matches, “Add as a new item” is right there.',
-      ['Try typing “bog rol”, “kerosene”, “G2-4” or something new like “cable ties” or “head torch”.', 'Should pressing Enter open the top result, or add one of it?', 'Should search also cover the shopping list, e.g. “milk” offering “Add to the Tesco list”?']],
+    ['search', 'Search', 'Search is the main way in and covers everything, with results in sections: stock, shopping lists, places, scenarios, wish list, shops and saved recipes. Stock results have + and − buttons. If nothing matches, “Add as a new item” is right there.',
+      ['Decided: Enter opens the highlighted result. ↑ and ↓ count up or down, then Enter adds or uses that many. Tab moves to the next result. Try it on a laptop: type “batt”, press ↑ three times, then Enter.', 'Decided: search covers everything, grouped into sections.', 'Try “torch”, “milk”, “aldi”, “chicken” or something new like “cable ties”.', 'Is this the right order of sections?']],
     ['home', 'Home', 'The dashboard. Scan is the biggest thing on the screen, the shop with the most of your list is suggested, and anything that needs attention sits underneath.',
       ['Decided: “Out of place” means an item isn’t in its usual place, e.g. it usually lives in the Garage but is now in the Shed.', 'Is “the shop with the most items” the right suggestion, or should it also think about day of the week (e.g. Aldi on Saturdays)?', 'Is the one-line greeting useful, or would you rather go straight to the buttons?', 'Anything missing here? Battery warnings from Home Assistant devices could also live on this screen.']],
     ['stock', 'Stock list', 'Everything in the house in one list. Search is fuzzy and checks aliases, notes and places, so “bog rol” or “battries” still work. Filter chips and the Category/Place switch change the view.',
@@ -1161,7 +1167,7 @@ $('#screenSelect').addEventListener('change', e => { location.hash = e.target.va
 $('#notesBtn').addEventListener('click', () => { const n = $('#notes'); const open = n.classList.toggle('open'); $('#notesBtn').setAttribute('aria-expanded', open); $('#notesBtn').textContent = open ? 'Close' : 'Notes'; });
 
 const DESK = {
-  search: 'The search bar runs across the top of every screen, with the results dropping down under it. Press / to jump to it from anywhere.',
+  search: 'The search bar runs across the top of every screen, with results dropping down under it. Press / to jump to it from anywhere. The strip at the bottom of the results shows which keys do what.',
   home: 'Search across the very top, then three columns: the main actions, shop suggestion and counts, then use soon, on the way and out of place side by side.',
   stock: 'A table with a detail pane. Click a row to preview it on the right; “Open full page” shows everything.',
   product: 'Two columns: stock and brands on the left, price and details on the right. Use, Move and Add stay along the bottom.',
@@ -1300,7 +1306,7 @@ function fuzzy(p, q) {
   const hay = [p.n, p.sub || '', ...p.a, p.c, p.l, p.code || '', p.note || ''].join(' ').toLowerCase();
   const words = hay.split(/[\s,›·&()]+/).filter(Boolean);
   return q.toLowerCase().split(/\s+/).filter(Boolean).every(t =>
-    hay.includes(t) || words.some(w => (w.startsWith(t.slice(0, -1)) && t.length > 3) || lev(w.slice(0, t.length + 1), t) <= (t.length > 5 ? 2 : 1) || lev(w, t) <= (t.length > 5 ? 2 : 1)));
+    hay.includes(t) || words.some(w => (w.startsWith(t.slice(0, -1)) && t.length > 4) || lev(w.slice(0, t.length + 1), t) <= (t.length > 5 ? 2 : 1) || lev(w, t) <= (t.length > 5 ? 2 : 1)));
 }
 function rowHTML(p) {
   const pills = p.s.map(([k, t]) => `<span class="pill p-${k}">${esc(t)}</span>`).join('');
@@ -1349,7 +1355,19 @@ $('#stockList').addEventListener('click', e => {
 const PLACE_CODES = [['G2-4', 'Garage racking · shelf 2, box 4', '#location'], ['G1-2', 'Garage racking · shelf 1, box 2', '#location'], ['S2-3', 'Shed shelves · shelf 2, box 3', '#locations'],
   ['U2', 'Utility › Shelf', '#locations'], ['H1', 'Hall › Drawer', '#locations'], ['P3', 'Kitchen › Pantry', '#locations'], ['CF-2', 'Garage › Chest freezer, middle', '#locations']];
 const RECENT = ['Toilet roll', 'Semi-skimmed milk', 'AA batteries', 'Cordless drill'];
+const SCEN = [
+  ['Power cut', ['AA batteries', 'Head torch', 'Torch', 'Candles', 'Matches', 'Camping stove', 'Camping gas', 'Bottled water', 'UHT milk', 'Power bank', 'Wind-up radio']],
+  ['Emergency food', ['Baked beans', 'UHT milk', 'Bottled water', 'Chopped tomatoes', 'Penne', 'Porridge oats']],
+  ['Christmas', ['Fairy lights', 'Wrapping paper', 'Sellotape', 'Kids’ head torches', 'Mince pies']],
+  ['Camping', ['Camping stove', 'Camping gas', 'Tent pegs', 'Head torch', 'Bungee cords']],
+];
+const WISH = [['Power bank, 20,000 mAh', 'Power cut'], ['Wind-up radio', 'Power cut · Emergency food'], ['Kids’ head torches × 2', 'Christmas'], ['Wet & dry vacuum', 'Toolstation 93542'], ['Dog car harness', 'Pets at Home']];
+const RECIPES = [['Chicken & spinach traybake', ['Chicken thighs', 'Baby spinach'], 'you have everything'], ['Cheesy beans on toast', ['Baked beans', 'Mature cheddar'], 'missing cheddar (on the Aldi list)']];
 const qparse = q => { const m = q.match(/^(\d+(?:\.\d+)?)(\s?.*)$/); return m ? [parseFloat(m[1]), m[2]] : null; };
+const fzText = (t, q) => fuzzy({ n: t, a: [], c: '', l: '' }, q);
+const canCount = p => !!p && !!qparse(p.q) && p.c !== 'Renewals' && !p.a.includes('double a');
+const gs = { sel: 0, count: 0 };
+
 function gsActions(p) {
   const nm = esc(p.n);
   if (p.c === 'Renewals') return `<button class="btn small" data-gs="renew" data-n="${nm}">Renewed</button>`;
@@ -1358,34 +1376,108 @@ function gsActions(p) {
   return `<div class="stepper sm"><button aria-label="Use one ${nm}" data-gs="use" data-n="${nm}">${ic('minus', 'sm')}</button><output>${esc(p.q)}</output><button aria-label="Add one ${nm}" data-gs="add" data-n="${nm}">${ic('plus', 'sm')}</button></div>`;
 }
 function gsRow(p) {
-  const stepper = qparse(p.q) && p.c !== 'Renewals' && !p.a.includes('double a');
-  const pill = (stepper ? '' : ` · ${esc(p.q)}`) + (p.s[0] ? ` · <span style="color:var(--${p.s[0][0]})">${esc(p.s[0][1])}</span>` : '');
-  return `<div class="gs-row"><a class="gs-main" href="#product"><span class="tile">${ic(CAT_ICON[p.c])}</span><span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}${pill}</span></span></a><div class="gs-acts">${gsActions(p)}</div></div>`;
+  const pill = (canCount(p) ? '' : ` · ${esc(p.q)}`) + (p.s[0] ? ` · <span style="color:var(--${p.s[0][0]})">${esc(p.s[0][1])}</span>` : '');
+  return `<div class="gs-row" data-stock="${esc(p.n)}"><a class="gs-main" href="#product"><span class="tile">${ic(CAT_ICON[p.c])}</span><span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}${pill}</span></span></a><div class="gs-acts">${gsActions(p)}</div></div>`;
 }
-function renderSearch() {
-  const q = $('#gq').value.trim(), box = $('#gsResults');
+const gsSimple = (icon, name, meta, action, href, attr = '') => `<div class="gs-row"><a class="gs-main" href="${href}"${attr}><span class="tile">${ic(icon)}</span><span class="item-main"><span class="item-name">${name}</span><span class="item-meta">${meta}</span></span></a><div class="gs-acts">${action}</div></div>`;
+const gsSection = (title, rows) => rows.length ? `<div class="gs-head">${title} · ${rows.length}</div>${rows.join('')}` : '';
+
+function renderSearch(keep) {
+  const q = $('#gq').value.trim(), ql = q.toLowerCase(), box = $('#gsResults');
+  if (keep !== true) { gs.sel = 0; gs.count = 0; }
   let html = '';
   if (!q) {
     html = `<div class="gs-head">Recent</div>${RECENT.map(n => gsRow(STOCK.find(p => p.n === n))).join('')}
-      <div class="gs-tip">Type to find anything by name, nickname, note or place. Try “bog rol”, “kerosene” or “G2-4”.</div>`;
+      <div class="gs-tip">Search covers everything: stock, shopping lists, places, scenarios, the wish list, shops and recipes. Try “batt”, “torch”, “milk” or “G2-4”.</div>`;
   } else {
-    const items = STOCK.filter(p => fuzzy(p, q)).slice(0, 6);
-    const places = PLACE_CODES.filter(([c, n]) => c.toLowerCase().startsWith(q.toLowerCase()) || n.toLowerCase().includes(q.toLowerCase())).slice(0, 3);
-    if (items.length) html += `<div class="gs-head">In your stock · ${items.length}</div>${items.map(gsRow).join('')}`;
-    if (places.length) html += `<div class="gs-head">Places</div>${places.map(([c, n, href]) => `<div class="gs-row"><a class="gs-main" href="${href}"><span class="tile">${ic('pin')}</span><span class="item-main"><span class="item-name"><code>${c}</code></span><span class="item-meta">${esc(n)}</span></span></a><div class="gs-acts"><a class="btn small" href="#scan" data-mode="putaway">Put away here</a></div></div>`).join('')}`;
-    if (!items.length && !places.length) html += `<div class="gs-empty"><b>Nothing called “${esc(q)}” yet</b><br><span class="small muted">Add it now. You can scan a barcode for it later.</span></div>`;
+    const items = STOCK.filter(p => fuzzy(p, q)).slice(0, 5);
+    const onList = {};
+    Object.entries(SHOPS).forEach(([k, s]) => s.groups.forEach(([, its]) => its.forEach(([n, , why]) => { if (fzText(n, q)) (onList[n] ||= { why, shops: [] }).shops.push([k, s.name]); })));
+    const listRows = Object.entries(onList).slice(0, 3).map(([n, o]) => gsSimple('cart', esc(n), `On your ${o.shops.map(s => s[1]).join(' and ')} list${o.shops.length > 1 ? 's' : ''} · ${esc(o.why)}`,
+      `<a class="btn small" href="#shop" data-shop="${o.shops[0][0]}">Open list</a>`, '#shop', ` data-shop="${o.shops[0][0]}"`));
+    const top = items[0];
+    if (top && top.c !== 'Renewals' && !Object.keys(onList).some(n => n.toLowerCase().includes(top.n.toLowerCase().split(' ')[0]))) {
+      const shop = Object.values(SHOPS).find(s => s.sells.includes(top.c));
+      if (shop) listRows.push(gsSimple('cart', `Put ${esc(top.n.toLowerCase())} on the list`, `Goes on the ${shop.name} list`, `<button class="btn small" data-tolist="${esc(top.n)}" data-shopname="${shop.name}">Add to list</button>`, '#shop'));
+    }
+    const placeRows = [
+      ...PLACE_CODES.filter(([c, n]) => c.toLowerCase().startsWith(ql) || n.toLowerCase().includes(ql)).map(([c, n, href]) => gsSimple('pin', `<code>${c}</code>`, esc(n), `<a class="btn small" href="#scan" data-mode="putaway">Put away here</a>`, href)),
+      ...PLACES.filter(([n]) => n.toLowerCase().startsWith(ql)).map(([n, c, i, kids]) => gsSimple(i, esc(n), `${c} items · ${kids.length} spots`, `<a class="btn small" href="#locations">Open</a>`, '#locations')),
+    ].slice(0, 3);
+    const scenRows = SCEN.map(([n, its]) => [n, its.filter(i => fzText(i, q))]).filter(([n, hits]) => fzText(n, q) || hits.length).slice(0, 3)
+      .map(([n, hits]) => gsSimple('layers', esc(n), hits.length ? `Includes ${hits.slice(0, 3).map(esc).join(', ')}` : 'Scenario', `<a class="btn small" href="#scenario">Open</a>`, '#scenario'));
+    const wishRows = WISH.filter(([n]) => fzText(n, q)).slice(0, 3).map(([n, m]) => gsSimple('heart', esc(n), `Wish list · ${esc(m)}`, `<button class="btn small" data-bought-wish="${esc(n)}">Bought it</button>`, '#wishlist'));
+    const shopRows = Object.entries(SHOPS).filter(([, s]) => fzText(s.name, q)).map(([k, s]) => gsSimple('store', s.name, `${shopCount(k)} on the list · sells ${s.sells.join(', ')}`,
+      `<a class="btn small" href="#shop" data-shop="${k}">Open list</a>`, '#shop', ` data-shop="${k}"`));
+    const recipeRows = RECIPES.filter(([n, uses]) => fzText(n, q) || uses.some(u => fzText(u, q))).map(([n, , have]) => gsSimple('book', esc(n), `Saved recipe · ${esc(have)}`,
+      `<a class="btn small" href="#more" data-toast="Saved recipes arrive in Phase 4">Open</a>`, '#more', ' data-toast="Saved recipes arrive in Phase 4"'));
+    html = gsSection('Stock', items.map(gsRow)) + gsSection('Shopping lists', listRows) + gsSection('Places', placeRows) + gsSection('Scenarios', scenRows)
+      + gsSection('Wish list', wishRows) + gsSection('Shops', shopRows) + gsSection('Saved recipes', recipeRows);
+    if (!html) html = `<div class="gs-empty"><b>Nothing called “${esc(q)}” yet</b><br><span class="small muted">Add it now. You can scan a barcode for it later.</span></div>`;
     if (items.length) html += `<a class="gs-wish" href="#add" data-newname="${esc(q)}">${ic('plus', 'sm')}Not what you meant? Add “${esc(q)}” as a new item</a>`;
     else html += `<a class="gs-new" href="#add" data-newname="${esc(q)}">${ic('plus')}<span>Add “${esc(q)}” as a new item<br><span class="small" style="font-weight:500">Name it, say how many and where it goes</span></span></a>`
       + `<button class="gs-wish" data-wish="${esc(q)}">${ic('heart', 'sm')}Add “${esc(q)}” to the wish list instead</button>`;
   }
-  box.innerHTML = html; box.hidden = false;
+  box.innerHTML = html + '<div class="gs-keys" id="gsKeys"></div>'; box.hidden = false;
+  highlight();
 }
-function closeSearch() { $('#gsResults').hidden = true; }
+
+/* keyboard: Tab picks a result, ↑/↓ count, Enter opens it or applies the count */
+const K = k => `<kbd>${k}</kbd>`;
+function keysHint(row, p) {
+  if (!row) return `${K('Enter')} add as a new item · ${K('Esc')} close`;
+  const name = esc(row.querySelector('.item-name').textContent);
+  if (canCount(p) && gs.count) return `${K('Enter')} ${gs.count > 0 ? 'add' : 'use'} ${Math.abs(gs.count)} · ${K('↑')}${K('↓')} change amount · ${K('Esc')} cancel`;
+  if (canCount(p)) return `${K('Enter')} open ${name} · ${K('↑')} add · ${K('↓')} use · ${K('Tab')} next result`;
+  return `${K('Enter')} open ${name} · ${K('Tab')} next result`;
+}
+function highlight() {
+  const rows = $$('#gsResults .gs-row');
+  $$('#gsResults .gs-pending').forEach(x => x.remove());
+  $$('#gsResults output.preview').forEach(o => { o.textContent = o.dataset.q; o.classList.remove('preview'); });
+  if (!rows.length) { $('#gsKeys').innerHTML = keysHint(null); return; }
+  gs.sel = (gs.sel + rows.length) % rows.length;
+  rows.forEach((r, i) => r.classList.toggle('hl', i === gs.sel));
+  const row = rows[gs.sel], p = STOCK.find(x => x.n === row.dataset.stock);
+  if (canCount(p) && gs.count) {
+    const [n, rest] = qparse(p.q), o = row.querySelector('output');
+    o.dataset.q = p.q; o.textContent = Math.max(0, Math.round((n + gs.count) * 10) / 10) + rest; o.classList.add('preview');
+    row.querySelector('.gs-acts').insertAdjacentHTML('afterbegin', `<span class="gs-pending">${gs.count > 0 ? '+' : '−'}${Math.abs(gs.count)}</span>`);
+  }
+  $('#gsKeys').innerHTML = keysHint(row, p);
+  row.scrollIntoView({ block: 'nearest' });
+}
+function closeSearch() { $('#gsResults').hidden = true; gs.count = 0; }
 $('#gq').addEventListener('focus', renderSearch);
 $('#gq').addEventListener('input', renderSearch);
 $('#gq').addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeSearch(); e.target.blur(); }
-  if (e.key === 'Enter') { const a = $('#gsResults .gs-new'); if (a && !$('#gsResults .gs-row')) a.click(); }
+  const rows = $$('#gsResults .gs-row'), row = rows[gs.sel], p = row && STOCK.find(x => x.n === row.dataset.stock);
+  if (e.key === 'Escape') { if (gs.count) { gs.count = 0; highlight(); } else { closeSearch(); e.target.blur(); } return; }
+  if ($('#gsResults').hidden) return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!canCount(p)) return;
+    const d = e.key === 'ArrowUp' ? 1 : -1;
+    if (qparse(p.q)[0] + gs.count + d < 0) return;
+    gs.count += d; highlight(); return;
+  }
+  if (e.key === 'Tab' && rows.length) { e.preventDefault(); gs.sel += e.shiftKey ? -1 : 1; gs.count = 0; highlight(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!rows.length) { const a = $('#gsResults .gs-new'); if (a) a.click(); return; }
+    if (canCount(p) && gs.count) {
+      const [n, rest] = qparse(p.q);
+      p.q = Math.max(0, Math.round((n + gs.count) * 10) / 10) + rest;
+      toast(`${gs.count > 0 ? 'Added' : 'Used'} ${Math.abs(gs.count)} · ${p.n}: ${p.q}`);
+      gs.count = 0; renderSearch(true); return;
+    }
+    row.querySelector('.gs-main').click();
+  }
+});
+$('#gsResults').addEventListener('mousemove', e => {
+  const r = e.target.closest('.gs-row'); if (!r) return;
+  const i = $$('#gsResults .gs-row').indexOf(r);
+  if (i !== gs.sel) { gs.sel = i; gs.count = 0; highlight(); }
 });
 document.addEventListener('keydown', e => { if (e.key === '/' && !e.target.closest('input, select, textarea') && $('#topbar').offsetParent) { e.preventDefault(); $('#gq').focus(); } });
 document.addEventListener('click', e => { if (e.target.isConnected && !e.target.closest('#gsearch')) closeSearch(); });
@@ -1399,8 +1491,12 @@ $('#gsResults').addEventListener('click', e => {
       const [n, rest] = qparse(p.q), next = Math.max(0, Math.round((n + (b.dataset.gs === 'add' ? 1 : -1)) * 10) / 10);
       p.q = next + rest; toast(`${p.n}: ${p.q}`);
     }
-    renderSearch(); return;
+    gs.count = 0; renderSearch(true); return;
   }
+  const tl = e.target.closest('[data-tolist]');
+  if (tl) { toast(`${tl.dataset.tolist} added to the ${tl.dataset.shopname} list`); closeSearch(); return; }
+  const bw = e.target.closest('[data-bought-wish]');
+  if (bw) { toast(`${bw.dataset.boughtWish} moved into stock. Where did you put it?`); closeSearch(); return; }
   const nw = e.target.closest('[data-newname]');
   if (nw) { $('#addName').value = nw.dataset.newname; renderAdd(); closeSearch(); return; }
   const w = e.target.closest('[data-wish]');
