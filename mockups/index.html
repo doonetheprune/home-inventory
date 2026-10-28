@@ -7,24 +7,24 @@
 <style>
 /* Layout: phone-width app frame in the middle; on wide screens a screen index on the left and review notes on the right. */
 :root {
-  --canvas: #E8E5EC;
-  --bg: #F5F4F7;
+  --canvas: #E4E8EE;
+  --bg: #F4F6F9;
   --surface: #FFFFFF;
-  --surface-2: #EDEAF0;
-  --ink: #1F1A23;
-  --ink-2: #625A69;
-  --line: #E0DBE5;
-  --accent: #6A2C5B;        /* damson */
+  --surface-2: #EAEEF3;
+  --ink: #161B24;
+  --ink-2: #576172;
+  --line: #DBE1E9;
+  --accent: #1F4E8C;        /* deep cobalt */
   --accent-ink: #FFFFFF;
-  --accent-soft: #F2E6EF;
+  --accent-soft: #E3EBF6;
   --low: #B23A1E;   --low-bg: #FBE6DF;
   --soon: #8F5E00;  --soon-bg: #FAEFD3;
-  --away: #2A5BA6;  --away-bg: #E2EBF9;
+  --away: #6A47B8;  --away-bg: #EEE8FA;
   --coming: #0D6F6B; --coming-bg: #DAF1EE;
   --ok: #2D7547;    --ok-bg: #E1F1E5;
-  --cam: #17131A; --cam-ink: #F5F0F7;
-  --paper: #FFFFFF; --paper-ink: #161316; --paper-line: #C9C4CC;
-  --shadow: 0 1px 2px rgb(31 26 35 / .06), 0 8px 28px rgb(31 26 35 / .08);
+  --cam: #11151C; --cam-ink: #F2F5F9;
+  --paper: #FFFFFF; --paper-ink: #131619; --paper-line: #C4CAD2;
+  --shadow: 0 1px 2px rgb(22 27 36 / .06), 0 8px 28px rgb(22 27 36 / .08);
   --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -34,18 +34,18 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --canvas: #0B090D; --bg: #141117; --surface: #1D1921; --surface-2: #27222C; --ink: #F3EFF5; --ink-2: #A9A0B0; --line: #332D39;
-    --accent: #E0A6D0; --accent-ink: #2B0F24; --accent-soft: #3A2236;
-    --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #9FC1FF; --away-bg: #1B2741;
+    --canvas: #090B0F; --bg: #11151B; --surface: #181D25; --surface-2: #212833; --ink: #EEF2F7; --ink-2: #9DA7B6; --line: #2B3340;
+    --accent: #9DBEF5; --accent-ink: #0D1F3A; --accent-soft: #1B2A42;
+    --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #C7B5FF; --away-bg: #2A2242;
     --coming: #7DD7CD; --coming-bg: #11302D; --ok: #92D9A7; --ok-bg: #15301E;
     --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --canvas: #0B090D; --bg: #141117; --surface: #1D1921; --surface-2: #27222C; --ink: #F3EFF5; --ink-2: #A9A0B0; --line: #332D39;
-  --accent: #E0A6D0; --accent-ink: #2B0F24; --accent-soft: #3A2236;
-  --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #9FC1FF; --away-bg: #1B2741;
+  --canvas: #090B0F; --bg: #11151B; --surface: #181D25; --surface-2: #212833; --ink: #EEF2F7; --ink-2: #9DA7B6; --line: #2B3340;
+  --accent: #9DBEF5; --accent-ink: #0D1F3A; --accent-soft: #1B2A42;
+  --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #C7B5FF; --away-bg: #2A2242;
   --coming: #7DD7CD; --coming-bg: #11302D; --ok: #92D9A7; --ok-bg: #15301E;
   --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
   color-scheme: dark;
@@ -238,7 +238,7 @@ a.item:hover, button.item:hover { background: var(--surface-2); }
 
 /* ---------- scan ---------- */
 .viewfinder { position: relative; border-radius: 22px; overflow: hidden; aspect-ratio: 4 / 3.4; max-width: 100%; background: var(--cam); color: var(--cam-ink);
-  background-image: radial-gradient(120% 80% at 30% 20%, rgb(255 255 255 / .10), transparent 60%), linear-gradient(160deg, #3a2f3d, #18131b 70%); }
+  background-image: radial-gradient(120% 80% at 30% 20%, rgb(255 255 255 / .10), transparent 60%), linear-gradient(160deg, #2c3443, #11151c 70%); }
 .viewfinder .pack { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1 / 1.25; transform: translate(-50%, -50%) rotate(-4deg); border-radius: 10px;
   background: linear-gradient(170deg, #d7542d, #a83418); box-shadow: 0 20px 40px rgb(0 0 0 / .5); }
 .viewfinder .pack::before { content: ""; position: absolute; left: 18%; right: 18%; bottom: 14%; height: 28%; background: #fff; border-radius: 3px; }
@@ -249,7 +249,7 @@ a.item:hover, button.item:hover { background: var(--surface-2); }
     linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 3px 28px no-repeat,
     linear-gradient(var(--cam-ink), var(--cam-ink)) bottom left / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) bottom left / 3px 28px no-repeat,
     linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 3px 28px no-repeat; }
-.viewfinder .line { position: absolute; left: 16%; right: 16%; height: 2px; top: 50%; background: #ff8fd6; box-shadow: 0 0 14px 2px #ff8fd6; animation: sweep 2.4s ease-in-out infinite alternate; }
+.viewfinder .line { position: absolute; left: 16%; right: 16%; height: 2px; top: 50%; background: #7db4ff; box-shadow: 0 0 14px 2px #7db4ff; animation: sweep 2.4s ease-in-out infinite alternate; }
 @keyframes sweep { from { top: 24%; } to { top: 76%; } }
 @media (prefers-reduced-motion: reduce) { .viewfinder .line { animation: none; } .toast { transition: none; } }
 .viewfinder .vf-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; gap: 8px; }
