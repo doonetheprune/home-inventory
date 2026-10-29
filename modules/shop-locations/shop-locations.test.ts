@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { HomeAssistantPort, HomeAssistantZone } from '@larder/core';
 import { makeCore } from '../../tests/helpers';
 import shopLocations, { AUTOMATION_ID, type Branch } from './index';
-import { namePattern, overpassQuery } from './osm';
+import { findBranches, namePattern, overpassQuery } from './osm';
 import { scalar, toYaml } from './yaml';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
@@ -12,14 +12,16 @@ const call = <T = unknown>(core: Core, method: string, path: string, opts: { bod
 
 const HOME = { latitude: 53.44321, longitude: -2.22187 };
 
-/** A pretend Overpass and Nominatim. Records what was sent. */
+/** Pretend Overpass, Nominatim and Photon. Records what was sent; `busy` turns every one away that many times. */
 function maps() {
   const sent: string[] = [];
+  const state = { busy: 0 };
   const fake = (async (url: string, init?: RequestInit) => {
     const u = new URL(url);
     if (u.hostname === 'overpass.test') {
       const query = new URLSearchParams(String(init?.body)).get('data')!;
       sent.push(query);
+      if (state.busy > 0) return new Response('<h1>502 Bad Gateway</h1>', { status: 502 });
       const aldi = { type: 'node', id: 1, lat: 53.4452, lon: -2.219, tags: { shop: 'supermarket', name: 'Aldi', brand: 'Aldi', 'addr:street': 'Wilmslow Road', 'addr:housenumber': '12', 'addr:suburb': 'Rusholme', 'addr:postcode': 'M14 5TQ' } };
       return Response.json({
         elements: [
@@ -33,11 +35,21 @@ function maps() {
     }
     if (u.hostname === 'nominatim.test') {
       sent.push(url);
+      if (u.searchParams.get('layer') === 'poi') return new Response('Service unavailable', { status: 503 });
       return Response.json(u.searchParams.get('q') === 'M14 5TQ' ? [{ lat: '53.4433', lon: '-2.2219', display_name: 'M14 5TQ, Rusholme, Manchester, Greater Manchester, England, United Kingdom' }] : []);
+    }
+    if (u.hostname === 'photon.test') {
+      sent.push(url);
+      // The last to be asked: each search that gets this far uses up one "busy".
+      if (state.busy > 0) {
+        state.busy--;
+        return new Response('<h1>502 Bad Gateway</h1>', { status: 502 });
+      }
+      return Response.json({ features: [] });
     }
     throw new Error(`No network in tests (${url})`);
   }) as unknown as typeof fetch;
-  return { fetch: fake, sent };
+  return { fetch: fake, sent, state };
 }
 
 /** A pretend Home Assistant: zones and automations in memory. */
@@ -74,18 +86,40 @@ function homeAssistant(o: { refuse?: boolean; loads?: boolean; home?: { latitude
   return { port, zones, automations };
 }
 
-async function setup(o: { ha?: ReturnType<typeof homeAssistant> } = {}) {
+async function setup(o: { ha?: ReturnType<typeof homeAssistant>; env?: Record<string, string> } = {}) {
   const m = maps();
-  const core = await makeCore({ modules: [shopLocations], fetch: m.fetch, homeAssistant: o.ha?.port, env: { LARDER_MODULE_SHOP_LOCATIONS_OVERPASS_URL: 'https://overpass.test/api/interpreter', LARDER_MODULE_SHOP_LOCATIONS_NOMINATIM_URL: 'https://nominatim.test/search' } });
+  const core = await makeCore({
+    modules: [shopLocations], fetch: m.fetch, homeAssistant: o.ha?.port,
+    env: {
+      LARDER_MODULE_SHOP_LOCATIONS_OVERPASS_URL: 'https://overpass.test/api/interpreter',
+      LARDER_MODULE_SHOP_LOCATIONS_NOMINATIM_URL: 'https://nominatim.test/search',
+      LARDER_MODULE_SHOP_LOCATIONS_PHOTON_URL: 'https://photon.test/api/',
+      ...o.env,
+    },
+  });
   const aldi = await core.shops.addPreset('Aldi');
-  return { core, aldi, sent: m.sent };
+  return { core, aldi, sent: m.sent, maps: m.state };
 }
 
-interface Nearby { home: { source: string }; results: Array<{ osmId: string; name: string; street: string; address: string; latitude: number; longitude: number; distance: number; saved: boolean }> }
+interface Found { osmId: string; name: string; street: string; address: string; latitude: number; longitude: number; distance: number; saved: boolean }
+interface Search { status: string; attempts: number; nextTryAt: string | null; problem: string | null; unseen: boolean; results: Found[] }
+interface Nearby { home: { source: string }; search: Search }
+
+const nearby = (core: Core, shopId: string, extra: Record<string, unknown> = {}) => call<Nearby>(core, 'POST', '/nearby', { body: { shopId, within: 5000, ...extra } });
 
 async function saveNearby(core: Core, shopId: string) {
-  const found = await call<Nearby>(core, 'GET', '/nearby', { query: { shopId, within: 5000 } });
-  return call<Branch[]>(core, 'POST', '/branches', { body: { shopId, branches: found.results } });
+  const found = await nearby(core, shopId);
+  return call<Branch[]>(core, 'POST', '/branches', { body: { shopId, branches: found.search.results } });
+}
+
+/** Waits for a background search to stop being busy. */
+async function settled(core: Core, shopId: string): Promise<Search> {
+  for (let i = 0; i < 200; i++) {
+    const { search } = await call<{ search: Search }>(core, 'GET', '/nearby', { query: { shopId } });
+    if (search.status !== 'searching' && search.status !== 'waiting') return search;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error('The search never finished');
 }
 
 describe('shop locations: the map', () => {
@@ -106,33 +140,148 @@ describe('shop locations: the map', () => {
     expect(q).not.toContain('53.443');
   });
 
+  it('asks the next map server when one is busy, then Nominatim and Photon, and says what each said when none could', async () => {
+    const aldi = { type: 'node', id: 1, lat: 53.4452, lon: -2.219, tags: { name: 'Aldi', 'addr:street': 'Wilmslow Road' } };
+    const answers: Record<string, (u: URL) => Response | Promise<Response>> = {
+      'a.test': () => new Response('<html><body><h1>502 Bad Gateway</h1></body></html>', { status: 502, headers: { 'content-type': 'text/html' } }),
+      'b.test': () => Response.json({ elements: [], remark: 'runtime error: Query timed out in "query" at line 3 after 16 seconds.' }),
+      'c.test': () => new Promise<Response>(() => {}),
+      'd.test': () => Response.json({ elements: [aldi] }),
+      'e.test': () => new Response('<html>Rate limited</html>', { status: 200 }),
+      'bad.test': () => new Response('<p><strong style="color:#FF0000">Error</strong>: line 3: parse error: Unknown type &quot;nwrx&quot; </p>', { status: 400 }),
+      'down.test': () => new Response('', { status: 503 }),
+      'nominatim.test': () => Response.json([
+        { osm_type: 'node', osm_id: 1, lat: '53.4452', lon: '-2.219', name: 'Aldi', category: 'shop', type: 'supermarket', address: { house_number: '12', road: 'Wilmslow Road', suburb: 'Rusholme', postcode: 'M14 5TQ' } },
+        { osm_type: 'way', osm_id: 9, lat: '53.4440', lon: '-2.2200', name: 'Aldi Road', category: 'highway', type: 'residential' },
+        { osm_type: 'node', osm_id: 8, lat: '53.4450', lon: '-2.2190', name: 'Waldis Cafe', category: 'amenity', type: 'cafe' },
+      ]),
+      'photon.test': () => Response.json({ features: [
+        { geometry: { coordinates: [-2.23, 53.46] }, properties: { osm_type: 'W', osm_id: 2, osm_key: 'shop', name: 'ALDI', street: 'Oxford Road', postcode: 'M13 9PL' } },
+        { geometry: { coordinates: [-2.22, 53.9] }, properties: { osm_type: 'N', osm_id: 3, osm_key: 'shop', name: 'Aldi' } },
+      ] }),
+    };
+    const asked: string[] = [];
+    const fetch = (async (url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      asked.push(u.host);
+      const r = answers[u.host]!(u);
+      // A server that never answers still gives up when Larder stops waiting.
+      return init?.signal ? Promise.race([r, new Promise<Response>((_, no) => init.signal!.addEventListener('abort', () => no(init.signal!.reason)))]) : r;
+    }) as unknown as typeof globalThis.fetch;
+    const servers = (overpass: string[], nominatim = 'down.test', photon = 'down.test') => ({ overpass: overpass.map((h) => `https://${h}/api/interpreter`), nominatim: `https://${nominatim}/search`, photon: `https://${photon}/api/` });
+
+    expect((await findBranches(fetch, 'Aldi', HOME, 5000, servers(['a.test', 'b.test', 'c.test', 'd.test']), 100)).map((b) => b.name)).toEqual(['Aldi']);
+    expect(asked).toEqual(['a.test', 'b.test', 'c.test', 'd.test']);
+
+    // Overpass all busy: Nominatim, keeping only shops called Aldi.
+    asked.length = 0;
+    const viaNominatim = await findBranches(fetch, 'Aldi', HOME, 5000, servers(['a.test'], 'nominatim.test'), 100);
+    expect(viaNominatim).toMatchObject([{ osmId: 'node/1', name: 'Aldi', street: 'Wilmslow Road', address: '12 Wilmslow Road, Rusholme, M14 5TQ' }]);
+
+    // Then Photon, keeping only those within range; and a search Overpass can't read skips the other Overpass servers.
+    asked.length = 0;
+    const viaPhoton = await findBranches(fetch, 'Aldi', HOME, 5000, servers(['bad.test', 'd.test'], 'down.test', 'photon.test'), 100);
+    expect(viaPhoton).toMatchObject([{ osmId: 'way/2', name: 'ALDI', address: 'Oxford Road, M13 9PL' }]);
+    expect(asked).toEqual(['bad.test', 'down.test', 'photon.test']);
+
+    await expect(findBranches(fetch, 'Aldi', HOME, 5000, servers(['a.test', 'b.test', 'c.test', 'e.test']), 100)).rejects.toThrow(
+      'OpenStreetMap\'s map servers are busy (a.test answered 502; b.test: runtime error: Query timed out in "query" at line 3 after 16 seconds.; c.test didn\'t answer in time; e.test sent a page instead of map data; down.test answered 503; down.test answered 503).',
+    );
+    await expect(findBranches(fetch, 'Aldi', HOME, 5000, servers(['bad.test']), 100)).rejects.toThrow('bad.test didn\'t understand the search: Error : line 3: parse error: Unknown type "nwrx"');
+  });
+
+  it('sends Nominatim and Photon a box around home rounded to about 1 km', async () => {
+    const urls: string[] = [];
+    const fetch = (async (url: string) => {
+      urls.push(url);
+      return new Response('', { status: 503 });
+    }) as unknown as typeof globalThis.fetch;
+    await findBranches(fetch, 'Aldi', HOME, 32187, { overpass: [], nominatim: 'https://n.test/search', photon: 'https://p.test/api/' }, 100).catch(() => {});
+    const [n, p] = urls.map((u) => new URL(u).searchParams);
+    expect(n!.get('viewbox')).toBe('-2.7205,53.7381,-1.7195,53.1419');
+    expect(n!.get('bounded')).toBe('1');
+    expect(p!.get('bbox')).toBe('-2.7205,53.1419,-1.7195,53.7381');
+    expect(p!.get('osm_tag')).toBe('shop');
+    expect(urls.join(' ')).not.toContain('53.443');
+  });
+
   it('finds branches near Home Assistant\'s home, nearest first, and saves them once', async () => {
     const { core, aldi, sent } = await setup({ ha: homeAssistant() });
-    const found = await call<Nearby>(core, 'GET', '/nearby', { query: { shopId: aldi.id, within: 5000 } });
+    const found = await nearby(core, aldi.id);
     expect(sent[0]).toContain('53.44,-2.22');
     expect(found.home.source).toBe('home-assistant');
-    expect(found.results.map((r) => [r.osmId, r.name, r.address, r.saved])).toEqual([
+    expect(found.search).toMatchObject({ status: 'done', attempts: 1, unseen: false });
+    expect(found.search.results.map((r) => [r.osmId, r.name, r.address, r.saved])).toEqual([
       ['node/1', 'Aldi', '12 Wilmslow Road, Rusholme, M14 5TQ', false],
       ['way/2', 'ALDI', 'Oxford Road', false],
     ]);
-    expect(found.results[0]!.distance).toBeGreaterThan(150);
-    expect(found.results[0]!.distance).toBeLessThan(400);
+    expect(found.search.results[0]!.distance).toBeGreaterThan(150);
+    expect(found.search.results[0]!.distance).toBeLessThan(400);
 
     const saved = await saveNearby(core, aldi.id);
     expect(saved.map((b) => [b.name, b.radius, b.zoneId])).toEqual([['ALDI, Oxford Road', 150, null], ['Aldi, Wilmslow Road', 150, null]]);
-    // Finding them again marks them saved, and saving again doesn't add them twice.
-    expect((await call<Nearby>(core, 'GET', '/nearby', { query: { shopId: aldi.id, within: 5000 } })).results.every((r) => r.saved)).toBe(true);
+    // Looking again answers from the same search (without asking the map), marking them saved; saving again doesn't add them twice.
+    expect((await nearby(core, aldi.id)).search.results.every((r) => r.saved)).toBe(true);
+    expect(sent.filter((q) => q.includes('out:json'))).toHaveLength(1);
     expect(await saveNearby(core, aldi.id)).toHaveLength(2);
+    await nearby(core, aldi.id, { again: true });
+    expect(sent.filter((q) => q.includes('out:json'))).toHaveLength(2);
   });
 
   it('looks up a postcode when Home Assistant isn\'t there to say where home is', async () => {
     const { core, aldi } = await setup();
-    await expect(call(core, 'GET', '/nearby', { query: { shopId: aldi.id, within: 5000 } })).rejects.toMatchObject({ code: 'no_home' });
+    await expect(nearby(core, aldi.id)).rejects.toMatchObject({ code: 'no_home' });
     await expect(call(core, 'PUT', '/home', { body: { query: 'Atlantis' } })).rejects.toThrow('The map doesn\'t know "Atlantis". Try a postcode.');
     const home = await call<{ label: string; source: string }>(core, 'PUT', '/home', { body: { query: 'M14 5TQ' } });
     expect(home).toMatchObject({ label: 'M14 5TQ, Rusholme, Manchester', source: 'search' });
-    expect((await call<Nearby>(core, 'GET', '/nearby', { query: { shopId: aldi.id, within: 5000 } })).results).toHaveLength(2);
+    expect((await nearby(core, aldi.id)).search.results).toHaveLength(2);
     expect(await call(core, 'GET', '/status')).toMatchObject({ home: { source: 'search' }, homeAssistant: { connected: false }, branches: 0 });
+  });
+});
+
+describe('shop locations: searching in the background', () => {
+  it('keeps trying while the map servers are busy, then says it found them', async () => {
+    const { core, aldi, maps } = await setup({ ha: homeAssistant(), env: { LARDER_MODULE_SHOP_LOCATIONS_RETRY_MINUTES: '0.0005' } });
+    maps.busy = 2;
+    const first = await nearby(core, aldi.id);
+    expect(first.search).toMatchObject({ status: 'waiting', attempts: 1, results: [] });
+    expect(first.search.problem).toBe('OpenStreetMap\'s map servers are busy (overpass.test answered 502; nominatim.test answered 503; photon.test answered 502).');
+    expect(first.search.nextTryAt).not.toBeNull();
+
+    const done = await settled(core, aldi.id);
+    expect(done).toMatchObject({ status: 'done', attempts: 3, problem: null, unseen: true });
+    expect(done.results).toHaveLength(2);
+    expect(core.events.log.find((e) => e.type === 'shop-locations.found')?.data).toMatchObject({ shopId: aldi.id, shop: 'Aldi', count: 2, message: 'Found 2 Aldi branches near home. Choose yours on the Shops page.' });
+    expect(await call(core, 'GET', '/searches')).toMatchObject([{ shopId: aldi.id, status: 'done', found: 2, unsaved: 2, unseen: true }]);
+
+    // Opening the sheet shows them and stops the card saying so.
+    expect((await nearby(core, aldi.id)).search).toMatchObject({ status: 'done', unseen: false });
+    expect(await call(core, 'GET', '/searches')).toMatchObject([{ unseen: false }]);
+  });
+
+  it('tries straight away when asked, and gives up after a day', async () => {
+    const { core, aldi, maps } = await setup({ ha: homeAssistant(), env: { LARDER_MODULE_SHOP_LOCATIONS_RETRY_MINUTES: '60' } });
+    maps.busy = 1;
+    expect((await nearby(core, aldi.id)).search).toMatchObject({ status: 'waiting', attempts: 1 });
+    // Asking again while it waits doesn't hit the map servers; "now" does.
+    expect((await nearby(core, aldi.id)).search).toMatchObject({ status: 'waiting', attempts: 1 });
+    expect((await nearby(core, aldi.id, { now: true })).search).toMatchObject({ status: 'done', attempts: 2 });
+
+    maps.busy = 100;
+    expect((await nearby(core, aldi.id, { again: true })).search).toMatchObject({ status: 'waiting', attempts: 1 });
+    core.clock.set('2026-10-29T09:30:00.000Z');
+    expect((await nearby(core, aldi.id, { now: true })).search).toMatchObject({ status: 'gave_up', attempts: 2, nextTryAt: null, problem: expect.stringContaining('busy') });
+  });
+
+  it('keeps one search per shop: a new distance replaces the old one', async () => {
+    const { core, aldi, maps } = await setup({ ha: homeAssistant(), env: { LARDER_MODULE_SHOP_LOCATIONS_RETRY_MINUTES: '60' } });
+    maps.busy = 1;
+    await nearby(core, aldi.id);
+    await call(core, 'POST', '/nearby', { body: { shopId: aldi.id, within: 32187 } });
+    expect(await call(core, 'GET', '/searches')).toMatchObject([{ within: 32187, status: 'done' }]);
+    await core.shops.remove(aldi.id);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await call(core, 'GET', '/searches')).toEqual([]);
   });
 });
 

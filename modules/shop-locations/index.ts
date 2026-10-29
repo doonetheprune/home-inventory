@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import { defineModule, LarderError, newId, ValidationError, type CoreApi, type HomeAssistantPerson, type HomeAssistantPhone, type HomeAssistantPort, type Shop } from '@larder/core';
-import { findBranches, geocode, NOMINATIM_URL, OVERPASS_URL, type FoundBranch } from './osm';
+import { findBranches, geocode, MAP_SERVERS, type FoundBranch, type MapServers } from './osm';
 import { toYaml } from './yaml';
 
 export const AUTOMATION_ID = 'larder_shop_arrivals';
@@ -69,6 +69,31 @@ const AlertsView = z.object({
   automation: z.object({ entityId: z.string().nullable(), savedAt: z.string().nullable() }).nullable(),
 });
 const Done = z.object({ message: z.string() });
+
+const FoundBranchData = Found.omit({ saved: true });
+/**
+ * A search for a shop's branches, kept so it can carry on in the background:
+ * when the map servers are busy, Larder tries again later, for up to a day.
+ */
+const Search = z.object({
+  id: z.string(),
+  shopId: z.string(),
+  within: z.number(),
+  home: z.object({ latitude: z.number(), longitude: z.number() }),
+  /** searching: asking now. waiting: the map servers were busy, trying again at nextTryAt. done: results in. gave_up: busy all day. */
+  status: z.enum(['searching', 'waiting', 'done', 'gave_up']),
+  attempts: z.number().int(),
+  startedAt: z.string(),
+  nextTryAt: z.string().nullable().default(null),
+  problem: z.string().nullable().default(null),
+  finishedAt: z.string().nullable().default(null),
+  /** Found after the first try failed, and nobody has looked yet: the shop's card says so. */
+  unseen: z.boolean().default(false),
+  results: z.array(FoundBranchData).default([]),
+});
+type Search = z.infer<typeof Search>;
+const SearchView = Search.omit({ home: true, results: true }).extend({ results: z.array(Found) }).meta({ id: 'ShopBranchSearch' });
+const active = (s: Pick<Search, 'status'>) => s.status === 'searching' || s.status === 'waiting';
 
 // Routes that change Home Assistant are for household admins: as the add-on, Larder acts there as the Supervisor.
 const NOT_CONNECTED = 'Larder isn\'t connected to Home Assistant, so it can\'t make zones or automations itself. Copy the YAML below into Home Assistant instead. (As a Home Assistant add-on Larder connects by itself; elsewhere, set LARDER_HA_URL and LARDER_HA_TOKEN.)';
@@ -145,8 +170,17 @@ export default defineModule({
     const core: CoreApi = ctx.core;
     const branches = ctx.collection<Branch>('branches');
     const settings = ctx.collection<Record<string, unknown>>('settings');
-    const overpassUrl = ctx.config.overpass_url || OVERPASS_URL;
-    const nominatimUrl = ctx.config.nominatim_url || NOMINATIM_URL;
+    const searches = ctx.collection<Search>('searches');
+    // Your own map servers instead of the public ones; Overpass can be several, comma-separated.
+    const servers: MapServers = {
+      overpass: ctx.config.overpass_url ? ctx.config.overpass_url.split(',').map((u) => u.trim()).filter(Boolean) : MAP_SERVERS.overpass,
+      nominatim: ctx.config.nominatim_url || MAP_SERVERS.nominatim,
+      photon: ctx.config.photon_url || MAP_SERVERS.photon,
+    };
+    const nominatimUrl = servers.nominatim;
+    // Minutes between tries while the map servers are busy (the last repeats), and when to stop.
+    const retryMinutes = (ctx.config.retry_minutes ?? '1,2,5,10,15,30').split(',').map(Number).filter((n) => n > 0);
+    const giveUpMs = Number(ctx.config.give_up_hours ?? 24) * 3_600_000;
 
     const allBranches = async () => (await branches.list()).map((b) => Branch.parse(b.data)).sort((a, b) => a.name.localeCompare(b.name));
     const alerts = async (): Promise<Alerts> => Alerts.parse((await settings.get('alerts')) ?? {});
@@ -241,6 +275,7 @@ export default defineModule({
         if (gone) {
           const theirs = (await allBranches()).filter((b) => b.shopId === id);
           for (const b of theirs) await branches.remove(b.id);
+          for (const s of await searches.list()) if (s.data.shopId === id) await searches.remove(s.id);
           const zones = theirs.flatMap((b) => (b.zoneId ? [b.zoneId] : []));
           if (zones.length && core.homeAssistant) await core.homeAssistant.removeZones(zones);
         }
@@ -293,21 +328,132 @@ export default defineModule({
       },
     });
 
+    /* ------------------------- searching in the background ------------------------ */
+
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const running = new Map<string, Promise<void>>();
+
+    function later(id: string, ms: number) {
+      clearTimeout(timers.get(id));
+      const t = setTimeout(() => {
+        timers.delete(id);
+        void attempt(id);
+      }, ms);
+      // Never keeps Larder running on its own.
+      (t as { unref?: () => void }).unref?.();
+      timers.set(id, t);
+    }
+
+    /** One try at the map servers; on failure, the next try is booked. */
+    function attempt(id: string): Promise<void> {
+      const busy = running.get(id);
+      if (busy) return busy;
+      const run = (async () => {
+        const s = await searches.get(id);
+        if (!s || !active(s) || !ctx.isEnabled()) return;
+        const shop = await core.shops.get(s.shopId).catch(() => null);
+        if (!shop) return searches.remove(id);
+        const tries = s.attempts + 1;
+        await searches.put(id, { ...s, status: 'searching', attempts: tries, nextTryAt: null });
+        try {
+          const results = await findBranches(ctx.fetch, shop.name, s.home, s.within, servers);
+          await searches.put(id, { ...s, status: 'done', attempts: tries, results, problem: null, nextTryAt: null, finishedAt: core.now(), unseen: tries > 1 });
+          if (tries > 1) {
+            ctx.publish('shop-locations.found', { shopId: shop.id, shop: shop.name, count: results.length, message: results.length ? `Found ${results.length} ${shop.name} branch${results.length === 1 ? '' : 'es'} near home. Choose yours on the Shops page.` : `The map has no ${shop.name} near home.` });
+          }
+        } catch (err) {
+          const problem = err instanceof Error ? err.message : String(err);
+          if (Date.parse(core.now()) - Date.parse(s.startedAt) >= giveUpMs) {
+            await searches.put(id, { ...s, status: 'gave_up', attempts: tries, problem, nextTryAt: null, finishedAt: core.now() });
+            return;
+          }
+          const ms = (retryMinutes[Math.min(tries - 1, retryMinutes.length - 1)] ?? 30) * 60_000;
+          await searches.put(id, { ...s, status: 'waiting', attempts: tries, problem, nextTryAt: new Date(Date.parse(core.now()) + ms).toISOString() });
+          later(id, ms);
+        }
+      })()
+        .catch((err: unknown) => ctx.log.warn('Searching for branches failed', { err: err instanceof Error ? err.message : String(err) }))
+        .finally(() => running.delete(id));
+      running.set(id, run);
+      return run;
+    }
+
+    // Carry on with searches that were waiting when Larder stopped.
+    setTimeout(() => {
+      void (async () => {
+        for (const { id, data } of await searches.list()) {
+          if (active(data)) later(id, Math.max(0, Date.parse(data.nextTryAt ?? core.now()) - Date.parse(core.now())));
+        }
+      })().catch(() => {});
+    }, 5000).unref?.();
+
+    async function view(s: Search): Promise<z.infer<typeof SearchView>> {
+      const saved = new Set((await allBranches()).filter((b) => b.shopId === s.shopId).map((b) => b.osmId));
+      const { home: _home, results, ...rest } = s;
+      return { ...rest, results: results.map((f) => ({ ...f, saved: saved.has(f.osmId) })) };
+    }
+
     ctx.addRoute({
-      method: 'GET', path: '/nearby', summary: 'Branches of a shop near home, from OpenStreetMap, nearest first',
-      description: 'Home\'s position is rounded to about 1 km before it is sent.',
-      query: z.object({ shopId: z.string().min(1), within: z.coerce.number().int().min(500).max(50_000).default(5000).describe('Metres from home') }),
-      response: z.object({ home: Home, results: z.array(Found) }),
-      async handler({ query }) {
-        const q = query as { shopId: string; within: number };
-        const shop = await shopFor(q.shopId);
+      method: 'POST', path: '/nearby', summary: 'Look for a shop\'s branches near home on OpenStreetMap',
+      description: 'Answers within about 10 seconds with what it has. If the map servers are busy, Larder keeps trying in the background (after 1, 2, 5, 10, 15 minutes, then every 30, for up to a day) and publishes `shop-locations.found` when it gets an answer. A recent search is answered from what it found unless `again` is set; `now` tries a waiting search straight away. Home\'s position is rounded to about 1 km before it is sent.',
+      body: z.object({ shopId: z.string().min(1), within: z.number().int().min(500).max(50_000).default(4828).describe('Metres from home'), again: z.boolean().optional(), now: z.boolean().optional() }),
+      response: z.object({ home: Home, search: SearchView }),
+      async handler({ body }) {
+        const b = body as { shopId: string; within?: number; again?: boolean; now?: boolean };
+        const within = b.within ?? 4828;
+        const shop = await shopFor(b.shopId);
         const h = await home();
         if (!h) throw new LarderError('Larder doesn\'t know where home is yet. Set it on the Shop locations page.', 409, 'no_home');
-        const found = await findBranches(ctx.fetch, shop.name, h, q.within, overpassUrl).catch((err: unknown) => {
-          throw new LarderError(`Couldn't search the map. ${err instanceof Error ? err.message : ''}`.trim(), 502, 'map_unavailable');
-        });
-        const saved = new Set((await allBranches()).filter((b) => b.shopId === shop.id).map((b) => b.osmId));
-        return { home: h, results: found.map((f) => ({ ...f, saved: saved.has(f.osmId) })) };
+        const id = `${shop.id}:${within}`;
+        const cur = await searches.get(id);
+        const sameHome = !!cur && cur.home.latitude === h.latitude && cur.home.longitude === h.longitude;
+        const fresh = !!cur?.finishedAt && Date.parse(core.now()) - Date.parse(cur.finishedAt) < 86_400_000;
+        let s: Search;
+        if (cur && sameHome && !b.again && (active(cur) || (cur.status === 'done' && fresh))) {
+          s = cur.status === 'done' && cur.unseen ? { ...cur, unseen: false } : cur;
+          if (s !== cur) await searches.put(id, s);
+          // Left half-done (the module was off, or Larder stopped mid-try): pick it up.
+          if (active(cur) && !running.has(id) && !timers.has(id) && !b.now) later(id, 0);
+          if (cur.status === 'waiting' && b.now) {
+            clearTimeout(timers.get(id));
+            await Promise.race([attempt(id), new Promise((r) => setTimeout(r, 10_000))]);
+            s = (await searches.get(id)) ?? s;
+          }
+          return { home: h, search: await view(s) };
+        }
+        // One search per shop: a new distance or home replaces the old one.
+        for (const other of await searches.list()) {
+          if (other.data.shopId === shop.id && other.id !== id) {
+            clearTimeout(timers.get(other.id));
+            await searches.remove(other.id);
+          }
+        }
+        clearTimeout(timers.get(id));
+        await searches.put(id, Search.parse({ id, shopId: shop.id, within, home: { latitude: h.latitude, longitude: h.longitude }, status: 'searching', attempts: 0, startedAt: core.now() }));
+        await Promise.race([attempt(id), new Promise((r) => setTimeout(r, 10_000))]);
+        return { home: h, search: await view((await searches.get(id))!) };
+      },
+    });
+
+    ctx.addRoute({
+      method: 'GET', path: '/nearby', summary: 'How a shop\'s branch search is going, and what it found',
+      query: z.object({ shopId: z.string().min(1) }),
+      response: z.object({ search: SearchView.nullable() }),
+      async handler({ query }) {
+        const { shopId } = query as { shopId: string };
+        const s = (await searches.list()).map((x) => x.data).find((x) => x.shopId === shopId);
+        return { search: s ? await view(s) : null };
+      },
+    });
+
+    ctx.addRoute({
+      method: 'GET', path: '/searches', summary: 'Every shop\'s latest branch search, for showing progress on the Shops page',
+      response: z.array(SearchView.omit({ results: true }).extend({ found: z.number(), unsaved: z.number() })),
+      async handler() {
+        return Promise.all((await searches.list()).map(async ({ data }) => {
+          const { results, ...rest } = await view(data);
+          return { ...rest, found: results.length, unsaved: results.filter((r) => !r.saved).length };
+        }));
       },
     });
 
