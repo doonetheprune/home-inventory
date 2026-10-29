@@ -3,7 +3,7 @@
  * live updates at /api/v1/events, and the web app at /.
  */
 import { existsSync } from 'node:fs';
-import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type RawServerDefault } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type FastifyRequest, type RawServerDefault } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
@@ -42,6 +42,24 @@ const safeDecode = (s: string) => {
     return s;
   }
 };
+
+/**
+ * Did a browser send this from another website? Browsers say so in
+ * Sec-Fetch-Site; older ones only send Origin, which must then be Larder's.
+ * Requests without either come from scripts and apps, not web pages.
+ */
+function fromOtherSite(request: FastifyRequest, baseUrl: string | null): boolean {
+  const site = request.headers['sec-fetch-site'];
+  if (typeof site === 'string') return site === 'cross-site' || site === 'same-site';
+  const origin = request.headers.origin;
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).host;
+    return host !== request.host && (!baseUrl || host !== new URL(baseUrl).host);
+  } catch {
+    return true;
+  }
+}
 
 /** Routes anyone can call without signing in. */
 const PUBLIC = new Set(['/api/health', '/api/v1/auth/status', '/api/v1/auth/login', '/api/v1/auth/setup', '/api/openapi.json']);
@@ -95,8 +113,6 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
 
   const auth = createAuth(core, config);
   const oauth = createOAuth({ core, config, auth });
-  // OAuth's token endpoint takes form posts.
-  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))));
   app.decorateRequest('user', null);
 
   app.addHook('onSend', async (_request, reply) => {
@@ -111,6 +127,14 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     const decoded = safeDecode(raw).toLowerCase();
     const guarded = (p: string) => p.startsWith('/api/') || p === MCP_PATH || p.startsWith(`${MCP_PATH}/`);
     if (!guarded(path) && !guarded(decoded)) return;
+    // No changes from other websites (a hidden form on another site posting to Larder),
+    // whatever the sign-in mode: with LARDER_AUTH=none, and for sign-in and first-run
+    // setup, nothing else would stop them. An access token or Larder's own header
+    // can't be sent from another site without Larder allowing it, so those pass.
+    const writes = request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS';
+    if (writes && !request.headers.authorization && !request.headers['x-larder-client'] && fromOtherSite(request, config.baseUrl)) {
+      throw new LarderError('Larder doesn\'t take changes from other websites.', 403, 'forbidden');
+    }
     request.user = await auth.identify(request);
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
     if (!request.user) {

@@ -25,7 +25,7 @@ function serverFor(core: CoreApi, config: Config, userId: string | null): McpSer
         title: tool.title,
         description: tool.description,
         inputSchema: tool.input,
-        annotations: { title: tool.title, readOnlyHint: tool.readOnly, destructiveHint: false, openWorldHint: false },
+        annotations: { title: tool.title, readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, openWorldHint: false },
       },
       async (args: unknown) => {
         try {

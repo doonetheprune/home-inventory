@@ -9,7 +9,7 @@
  * `ctx.addTool` (pricing adds check_price; scenarios and recipes add theirs).
  */
 import { z } from 'zod';
-import { LarderError, ValidationError } from '../errors';
+import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import type { Automation } from './automation';
 import type { createCategoryService } from './catalogue';
@@ -37,6 +37,11 @@ export interface AssistantTool<I extends z.ZodObject = z.ZodObject> {
   input: I;
   /** True for tools that only read. */
   readOnly?: boolean;
+  /**
+   * True when it changes or takes away what's there (uses stock, moves things,
+   * overwrites a value), not only adds. MCP clients may ask the person first.
+   */
+  destructive?: boolean;
   run(input: z.output<I>, caller: { userId: string | null }): Promise<ToolResult>;
 }
 
@@ -45,6 +50,7 @@ export interface ToolInfo {
   title: string;
   description: string;
   readOnly: boolean;
+  destructive: boolean;
   module: string | null;
   input: z.ZodObject;
 }
@@ -126,11 +132,11 @@ export function createAssistant(deps: {
   }
 
   /** A tool that runs one of the Home Assistant actions, so both say the same thing. */
-  function fromAction(name: string, actionId: string, title: string, description: string) {
+  function fromAction(name: string, actionId: string, title: string, description: string, destructive = false) {
     const def = automation.definition(actionId);
     if (!def) throw new Error(`No action ${actionId}`);
     addTool({
-      name, title, description, input: def.input,
+      name, title, description, input: def.input, destructive,
       async run(input, caller) {
         const { message, ...data } = await automation.run(actionId, input, caller);
         return { text: message, data };
@@ -200,6 +206,9 @@ export function createAssistant(deps: {
       const place = i.usual_place ? await resolve.place(i.usual_place) : null;
       const shop = i.shop ? await resolve.shop(i.shop) : null;
       if (i.shop_code && !shop) throw new ValidationError('A shop code needs the shop it belongs to.');
+      // Check the barcode before creating anything, so a clash doesn't leave a half-made item.
+      const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
+      if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
@@ -212,10 +221,10 @@ export function createAssistant(deps: {
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first.');
-  fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.');
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first.', true);
+  fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
-  fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.');
+  fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
   fromAction('add_to_shopping_list', 'add_to_shopping_list', 'Put on the shopping list', 'Put an item on the shopping list even though it isn\'t low.');
 
   addTool({
@@ -259,7 +268,7 @@ export function createAssistant(deps: {
     addTool,
 
     list(): ToolInfo[] {
-      return tools.filter((t) => t.enabled()).map(({ tool, module }) => ({ name: tool.name, title: tool.title, description: tool.description, readOnly: !!tool.readOnly, module, input: tool.input }));
+      return tools.filter((t) => t.enabled()).map(({ tool, module }) => ({ name: tool.name, title: tool.title, description: tool.description, readOnly: !!tool.readOnly, destructive: !tool.readOnly && !!tool.destructive, module, input: tool.input }));
     },
 
     async call(name: string, input: unknown, caller: { userId: string | null } = { userId: null }): Promise<ToolResult> {

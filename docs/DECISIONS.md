@@ -59,7 +59,10 @@ These follow from the decisions above; the owner can change any of them.
 - **Few, plain tools** (13 with pricing): search, get_item, add_item, add_stock, use_stock, move_item, add_expected, mark_arrived, add_to_shopping_list, shopping_list, expiring, check_price, set_usual_price. They answer in short readable text, because small local models handle that better than JSON. Write tools reuse the Home Assistant actions' wording.
 - **Stateless Streamable HTTP with JSON answers** at `/mcp` (official MCP SDK 1.32): no sessions or open streams, so it passes through Home Assistant, proxies and tunnels.
 - **Three ways in:** a Larder token on `/mcp`; a Home Assistant token on `/api/larder/mcp` (for Nabu Casa); connector sign-in (OAuth with PKCE and dynamic registration) when Larder has a public https address.
-- **Connector tokens are ordinary Larder tokens** named after the assistant ("Claude (connected)"), revocable in Settings. They don't expire.
+- **Connector tokens are ordinary Larder tokens** named after the assistant and where it signed in from ("Claude (via claude.ai)"), revocable in Settings. They don't expire.
+- **Guard rails on open registration** (after review): anyone can register a client, so Larder caps registrations per address (30 an hour) and in all (200, making room only by forgetting clients that never signed in), caps sign-ins waiting for approval, shows its own error page instead of redirecting, and the approval page says to check the address.
+- **No changes from other websites**, in every sign-in mode: a write that a browser marks as coming from another site (Sec-Fetch-Site, or a foreign Origin) is refused unless it carries an access token or the web app's header. Only `/oauth/token` reads form posts.
+- **MCP hints:** tools that take away or overwrite (use_stock, move_item, mark_arrived, set_usual_price) are marked destructive, so clients can ask first.
 - **Version 0.3.0.**
 
 ## Phase 4: how it was built

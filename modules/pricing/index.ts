@@ -128,7 +128,7 @@ export default defineModule({
     });
 
     ctx.addTool({
-      name: 'set_usual_price', title: 'Set the usual price',
+      name: 'set_usual_price', title: 'Set the usual price', destructive: true,
       description: 'Make a pack price the usual price for an item (only after the person agrees). Give the pack size and price; the price per unit is worked out.',
       input: z.object({
         item: z.string().min(1).max(200).describe('The item, e.g. "toilet roll"'),

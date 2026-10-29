@@ -24,7 +24,7 @@ Menus move between versions; if one has, the client's own docs say where MCP ser
 claude mcp add --transport http larder http://larder.local:8080/mcp --header "Authorization: Bearer lrd_…"
 ```
 
-**Claude.ai, and Claude's desktop and mobile apps (custom connectors).** These connect from Anthropic's servers, so Larder needs a public https address. Set `LARDER_BASE_URL` to it, then add a custom connector with `https://<larder address>/mcp`. Claude opens Larder's approval page: sign in and press **Allow**. The connection appears in Larder under Settings → Access tokens as "Claude (connected)". (With the add-on, approve with a Larder account from Settings → Accounts, since the public address isn't reached through Home Assistant.)
+**Claude.ai, and Claude's desktop and mobile apps (custom connectors).** These connect from Anthropic's servers, so Larder needs a public https address. Set `LARDER_BASE_URL` to it, then add a custom connector with `https://<larder address>/mcp`. Claude opens Larder's approval page: sign in and press **Allow**. The connection appears in Larder under Settings → Access tokens as "Claude (via claude.ai)". (With the add-on, approve with a Larder account from Settings → Accounts, since the public address isn't reached through Home Assistant.)
 
 **Claude Desktop on the same network, without a public address.** Use `mcp-remote` in `claude_desktop_config.json`:
 
