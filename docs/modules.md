@@ -40,6 +40,7 @@ export default defineModule({
 | `ctx.isEnabled()` | Whether the module is on right now |
 | `ctx.addSensor({ id, name, description, icon?, unit?, read })` | A sensor for Home Assistant (and MQTT). `id` is snake_case and starts with your module id (`batteries_low` for `batteries`). `read()` returns `{ state, attributes? }`; keep attributes small. The integration creates the entity without any change on its side. Hidden while the module is off |
 | `ctx.addAction({ id, name, description, input, run })` | An action for Home Assistant and Node-RED (`larder.<id>`). `input` is a `z.object` with snake_case fields and `.describe()`d fields (shown in Home Assistant). `run(input, { userId })` returns `{ message, ... }`. Use `ctx.core.resolve.product(name)` to accept names. Same id rule as sensors; run `npm run ha:services` afterwards |
+| `ctx.addTool({ name, title, description, input, readOnly?, run })` | A tool for AI assistants over MCP. Name it plainly (`check_price`): names are shared with the core and must be unique. Describe when to use it in a sentence (small models rely on it), take names via `ctx.core.resolve`, and return `{ text, data? }` with short readable text. Hidden while the module is off |
 | `ctx.publish(type, data)` | Publish your own event, e.g. `batteries.low`. The type must start with your module id and a dot. It reaches the web app, other modules and Home Assistant (as `larder_batteries_low`) |
 | `ctx.log.info/warn/error` | Log with the module's name |
 

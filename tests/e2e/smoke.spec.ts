@@ -119,3 +119,19 @@ test('links an NFC tag scanned on a phone to a place', async ({ page }, info) =>
   await expect(page.locator('.toast')).toContainText('Tag linked');
   await expect(page.getByRole('button', { name: 'Unlink' })).toBeVisible();
 });
+
+test('approves an AI assistant that asks to connect', async ({ page }) => {
+  await signIn(page);
+  const callback = 'http://localhost:33418/callback';
+  const client = (await (await page.request.post('oauth/register', { data: { client_name: 'Claude', redirect_uris: [callback] } })).json()) as { client_id: string };
+  const qs = new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: callback, code_challenge: 'x'.repeat(43), code_challenge_method: 'S256', state: 'abc' });
+  const start = await page.request.get(`oauth/authorize?${qs}`, { maxRedirects: 0 });
+  // The assistant's callback isn't running in the test; answer it here.
+  await page.route(`${callback}**`, (route) => route.fulfill({ body: 'connected' }));
+  await page.goto(start.headers().location!);
+  await expect(page.getByRole('heading', { name: 'Connect Claude?' })).toBeVisible();
+  await expect(page.getByText('localhost:33418')).toBeVisible();
+  await page.getByRole('button', { name: 'Allow', exact: true }).click();
+  await page.waitForURL(/localhost:33418\/callback\?.*code=/);
+  expect(new URL(page.url()).searchParams.get('state')).toBe('abc');
+});

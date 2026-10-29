@@ -1,7 +1,7 @@
 # Home Assistant add-on for Larder. Uses the same image as the standalone
 # Docker install, published by .github/workflows/release.yml.
 name: Larder
-version: "0.2.0"
+version: "0.3.0"
 slug: larder
 description: What you've got, and where. A home inventory for everything in the house.
 url: https://github.com/doonetheprune/home-inventory

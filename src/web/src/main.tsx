@@ -28,6 +28,7 @@ import { GridWizard } from './screens/GridWizard';
 import { Shops } from './screens/Shops';
 import { WishList } from './screens/WishList';
 import { Settings } from './screens/Settings';
+import { Connect } from './screens/Connect';
 import { More } from './screens/More';
 import { ModulePage } from './screens/ModulePage';
 
@@ -53,6 +54,7 @@ function App() {
   return (
     <HashRouter>
       <Routes>
+        <Route path="connect" element={<Connect />} />
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="stock" element={<Stock />} />

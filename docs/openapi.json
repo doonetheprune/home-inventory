@@ -8561,6 +8561,104 @@
         }
       }
     },
+    "/api/v1/oauth/requests/{request}": {
+      "get": {
+        "summary": "What is asking to connect (for the approval page)",
+        "tags": [
+          "Auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "request",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "client": {
+                      "type": "string"
+                    },
+                    "redirectHost": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "client",
+                    "redirectHost"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Approve or deny a connection",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "approve": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "approve"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "request",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "redirect": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "redirect"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules": {
       "get": {
         "summary": "Feature modules and whether they are on",

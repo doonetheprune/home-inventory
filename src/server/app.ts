@@ -23,6 +23,7 @@ import { registerMiscRoutes } from './routes/misc';
 import { registerModuleRoutes } from './routes/modules';
 import { registerAutomationRoutes } from './routes/automation';
 import { MCP_PATH, registerMcp } from './mcp';
+import { createOAuth, resourceMetadataUrl } from './oauth';
 
 export type ZodApp = FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse, FastifyBaseLogger, ZodTypeProvider>;
 
@@ -93,13 +94,16 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   const auth = createAuth(core, config);
+  const oauth = createOAuth({ core, config, auth });
+  // OAuth's token endpoint takes form posts.
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))));
   app.decorateRequest('user', null);
 
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
   });
 
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
     // Decide by the route that matched, not the raw URL: the router decodes
     // %-escapes, so "/%61pi/v1/…" reaches /api/v1/… and must still be checked.
     const raw = request.url.split('?')[0]!;
@@ -110,7 +114,11 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     request.user = await auth.identify(request);
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
     if (!request.user) {
-      if (path === MCP_PATH) throw new LarderError('Send a Larder access token: Authorization: Bearer lrd_… (make one in Larder under Settings → Access tokens).', 401, 'unauthorised');
+      if (path === MCP_PATH) {
+        // Tells OAuth-capable connectors (Claude.ai, ChatGPT) where to sign in.
+        reply.header('WWW-Authenticate', `Bearer resource_metadata="${resourceMetadataUrl(config, request)}"`);
+        throw new LarderError('Send a Larder access token: Authorization: Bearer lrd_… (make one in Larder under Settings → Access tokens).', 401, 'unauthorised');
+      }
       throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
     }
     // Cookie sessions must come from the web app (blocks cross-site form posts).
@@ -144,12 +152,14 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       registerStockRoutes(z, { core });
       registerMiscRoutes(z, { core, config, backup: deps.backup });
       registerAutomationRoutes(z, { core });
+      oauth.registerApi(z);
       registerModuleRoutes(z, { core });
     },
     { prefix: '/api/v1' },
   );
 
   registerMcp(app, { core, config });
+  oauth.registerPublic(app);
 
   if (existsSync(config.webDir)) {
     await app.register(staticFiles, {

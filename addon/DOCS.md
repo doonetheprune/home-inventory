@@ -25,6 +25,10 @@ Cameras need an https address. Opening Larder through Home Assistant (the compan
 
 The **Network** section can open port 8080 for MCP clients, scripts and Node-RED outside Home Assistant. They need an access token from Larder's Settings.
 
+## AI assistants
+
+Larder's MCP server lets Claude, ChatGPT, Gemini or a local model look things up and update stock. Through Home Assistant the address is `https://<home-assistant>/api/larder/mcp`, with a Home Assistant long-lived access token. Setup for each assistant: <https://github.com/doonetheprune/home-inventory/blob/main/docs/mcp.md>
+
 ## More
 
 Sensors, actions, events, NFC tags and battery linking: <https://github.com/doonetheprune/home-inventory/blob/main/docs/home-assistant.md>

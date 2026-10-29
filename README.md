@@ -8,6 +8,7 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 - **Shopping by shop.** "I'm going to Aldi" lists everything low that Aldi can supply. Deliveries on the way count, so you don't buy twice. Tick items off and they go into stock.
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
 - **Home Assistant**: an add-on that opens from the sidebar, and an integration with sensors (running low, use soon, out of place), actions for automations and Node-RED, events, NFC tags, and batteries linked to the devices that use them.
+- **AI assistants**: an MCP server, so Claude, ChatGPT, Gemini or a local model can answer "have we got AA batteries?" or "what should I cook with what's about to go off?", and update stock when you tell them.
 - **Runs on its own** too (Docker, one data folder, SQLite). A documented REST API underneath everything.
 
 ![Larder on a laptop: search across the top, with ↑ pressed three times to add three AAA batteries](docs/images/desktop-search.jpg)
@@ -21,8 +22,8 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 | 0 | Interface design | Done: [`mockups/index.html`](mockups/index.html) |
 | 1 | Core: data model, REST API, web app, scanning, lookups, places, search, shops and shopping lists, running on its own | **Done** |
 | 2 | Home Assistant add-on and HACS integration: sensors, actions, events, NFC, battery linking | **Done**: [docs/home-assistant.md](docs/home-assistant.md) |
-| 3 | MCP server for Claude and other AI assistants | Next |
-| 4 | Scenarios and printing, QR label sheets, recipes, MQTT | |
+| 3 | MCP server for Claude and other AI assistants | **Done**: [docs/mcp.md](docs/mcp.md) |
+| 4 | Scenarios and printing, QR label sheets, recipes, MQTT | Next |
 
 ## Try it
 
@@ -44,6 +45,7 @@ Start with [AGENTS.md](AGENTS.md). Then:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the pieces fit
 - [docs/home-assistant.md](docs/home-assistant.md): the add-on and integration
+- [docs/mcp.md](docs/mcp.md): connecting AI assistants
 - [docs/modules.md](docs/modules.md): adding features as modules
 - [docs/adapters.md](docs/adapters.md): swapping SQLite for another back end
 - [docs/api.md](docs/api.md) and [docs/openapi.json](docs/openapi.json): the REST API

@@ -53,6 +53,15 @@ These follow from the decisions above; the owner can change any of them.
 - **Own backups off in the add-on:** Home Assistant backups already include `/data`; Larder's daily copies can be turned on in the options.
 - **Version 0.2.0:** app, add-on and integration versions move together (a test checks).
 
+## Phase 3: how it was built
+
+- **Tools live in the core** (`core.assistant`), the MCP server only serves them, so the same tools could be offered another way later. Modules add theirs with `ctx.addTool`.
+- **Few, plain tools** (13 with pricing): search, get_item, add_item, add_stock, use_stock, move_item, add_expected, mark_arrived, add_to_shopping_list, shopping_list, expiring, check_price, set_usual_price. They answer in short readable text, because small local models handle that better than JSON. Write tools reuse the Home Assistant actions' wording.
+- **Stateless Streamable HTTP with JSON answers** at `/mcp` (official MCP SDK 1.32): no sessions or open streams, so it passes through Home Assistant, proxies and tunnels.
+- **Three ways in:** a Larder token on `/mcp`; a Home Assistant token on `/api/larder/mcp` (for Nabu Casa); connector sign-in (OAuth with PKCE and dynamic registration) when Larder has a public https address.
+- **Connector tokens are ordinary Larder tokens** named after the assistant ("Claude (connected)"), revocable in Settings. They don't expire.
+- **Version 0.3.0.**
+
 ## For review
 
 Bigger calls made while the owner was away, with the alternative. Say if any should change.
@@ -62,3 +71,6 @@ Bigger calls made while the owner was away, with the alternative. Say if any sho
 3. **The integration forwards every NFC tag scan to Larder.** Tags used only for other automations are sent too (harmless, but visible in Larder's recent scans). *Alternative:* only forward tags Larder knows, plus a "link next tag" button. It can be turned off in the integration's options.
 4. **Sensors and actions are defined by Larder, not the integration.** Easier to extend. The actions of the bundled Larder version ship with the integration too (`actions.json`), so automations load even when Larder is down; a module's extra actions appear once Larder is reachable. *Alternative:* a fixed list in the integration.
 5. **Add-on architectures: aarch64 and amd64 only** (Raspberry Pi 4/5 on Home Assistant OS, and x86). *Alternative:* add armv7 for older Pis, which needs a separate build.
+6. **Connector tokens never expire** (until revoked in Settings). *Alternative:* expiring access tokens with refresh tokens, which some connectors handle and some don't.
+7. **Any Home Assistant user can use Larder's MCP tools through `/api/larder/mcp`**, not just admins. *Alternative:* admins only.
+8. **Not yet tried with Claude.ai or ChatGPT connectors, Gemini CLI, Open WebUI or LM Studio.** Tested with Claude Code, both official SDKs and the SDK's OAuth sign-in. The connectors need Larder on a public https address to try.
