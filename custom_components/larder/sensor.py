@@ -38,6 +38,8 @@ class LarderSensor(CoordinatorEntity[LarderCoordinator], SensorEntity):
     """One of Larder's sensors."""
 
     _attr_has_entity_name = True
+    # Lists of items change all the time; don't record them in history.
+    _unrecorded_attributes = frozenset({"items", "devices", "deliveries", "shops"})
 
     def __init__(self, coordinator: LarderCoordinator, info: dict[str, Any], version: str | None) -> None:
         super().__init__(coordinator)
@@ -48,8 +50,6 @@ class LarderSensor(CoordinatorEntity[LarderCoordinator], SensorEntity):
         self._attr_icon = info.get("icon")
         self._attr_native_unit_of_measurement = info.get("unit")
         self._attr_device_info = device_info(coordinator, version)
-        # Lists of items change all the time; don't record them in history.
-        self._unrecorded_attributes = frozenset({"items", "devices", "deliveries", "shops"})
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property

@@ -19,6 +19,8 @@ export interface AddonOptions {
   backups?: boolean;
   base_url?: string;
   demo?: boolean;
+  /** Home Assistant usernames who are Larder admins; everyone else is a member. Empty: everyone is an admin. */
+  admins?: string[];
   /** Advanced: any other LARDER_* setting, e.g. a module's settings. */
   env_vars?: Array<{ name: string; value: string }>;
 }
@@ -45,6 +47,7 @@ export function addonEnv(env: Record<string, string | undefined>, read: (file: s
   if (options.disabled_modules?.length) out.LARDER_MODULES_DISABLED = options.disabled_modules.join(',');
   if (options.base_url) out.LARDER_BASE_URL = options.base_url;
   if (options.demo) out.LARDER_DEMO = 'true';
+  if (options.admins?.length) out.LARDER_HA_ADMINS = options.admins.join(',');
   for (const v of options.env_vars ?? []) {
     if (/^LARDER_[A-Z0-9_]+$/.test(v.name) && v.name !== 'LARDER_AUTH') out[v.name] = v.value;
   }

@@ -10,7 +10,7 @@
  * id, a name and a level, so any other system could send the same thing.
  */
 import { z } from 'zod';
-import { amount, defineModule, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
+import { amount, defineModule, LarderError, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
 
 export const Device = z.object({
   /** The device's id in Home Assistant (or whatever sent it). */
@@ -98,9 +98,16 @@ export default defineModule({
     async function findDevice(ref: string): Promise<Device> {
       const all = await allDevices();
       const q = ref.trim().toLowerCase();
-      const d = all.find((x) => x.id === ref) ?? all.find((x) => x.name.toLowerCase() === q);
-      if (!d) throw new ValidationError(`Larder hasn't heard of a device called "${ref}". The Home Assistant integration sends the list of battery devices.`);
-      return d;
+      const byId = all.find((x) => x.id === ref);
+      if (byId) return byId;
+      const named = all.filter((x) => x.name.toLowerCase() === q);
+      if (named.length === 1) return named[0]!;
+      if (named.length > 1) {
+        // Home Assistant often gives several devices the same default name.
+        const which = named.map((d) => `${d.name}${d.area ? ` in ${d.area}` : ''} (${d.id})`);
+        throw new LarderError(`More than one device is called "${ref}": ${which.join('; ')}. Use the device id.`, 409, 'ambiguous');
+      }
+      throw new ValidationError(`Larder hasn't heard of a device called "${ref}". The Home Assistant integration sends the list of battery devices.`);
     }
 
     async function view(): Promise<z.infer<typeof DeviceView>[]> {

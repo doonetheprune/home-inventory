@@ -20,13 +20,32 @@ describe('resolving names', () => {
     await core.products.create({ name: 'Cordless drill' });
   });
 
-  it('finds items by name, alias, plural, barcode, id and typo', async () => {
+  it('finds items by name, alias, plural, barcode and id', async () => {
     expect((await core.resolve.product('toilet roll')).name).toBe('Toilet roll');
     expect((await core.resolve.product('Loo Rolls')).name).toBe('Toilet roll');
     expect((await core.resolve.product('5029053038889')).name).toBe('Toilet roll');
     const drill = await core.resolve.product('cordless drill');
     expect((await core.resolve.product(drill.id)).id).toBe(drill.id);
-    expect((await core.resolve.product('cordles dril')).name).toBe('Cordless drill');
+    expect((await core.resolve.product('drill')).name).toBe('Cordless drill');
+  });
+
+  it('never acts on a near miss: typos and look-alikes are offered back instead', async () => {
+    await expect(core.resolve.product('cordles dril')).rejects.toMatchObject({ code: 'ambiguous', candidates: ['Cordless drill'], message: 'Larder doesn\'t have an item called "cordles dril". Did you mean "Cordless drill"?' });
+    const strict = await makeCore();
+    const shed = await strict.places.create({ name: 'Shed' });
+    await strict.places.create({ name: 'Left cupboard' });
+    for (const name of ['AAA batteries', 'Malt vinegar', 'Ham', 'Milk', 'Rice']) await strict.products.create({ name });
+    const wd40 = await strict.products.create({ name: 'WD-40', defaultPlaceId: shed.id });
+    await strict.stock.add({ productId: wd40.id, quantity: 1 });
+    const tonic = await strict.products.create({ name: 'Tonic' });
+    await strict.products.addVariant(tonic.id, { name: 'Fever-Tree', barcodes: ['1664'] });
+    const lager = await strict.products.create({ name: '1664' });
+    for (const wrong of ['AA batteries', 'C batteries', 'salt', 'jam', 'oat milk', 'almond milk', 'ice', 'shed']) {
+      await expect(strict.resolve.product(wrong), wrong).rejects.toMatchObject({ status: expect.any(Number) });
+    }
+    await expect(strict.resolve.place('loft')).rejects.toMatchObject({ status: expect.any(Number) });
+    // An exact name beats a barcode on something else.
+    expect((await strict.resolve.product('1664')).id).toBe(lager.id);
   });
 
   it('refuses to guess between close matches, and lists them', async () => {
@@ -42,7 +61,9 @@ describe('resolving names', () => {
     expect((await core.resolve.place('kitchen')).name).toBe('Kitchen');
     expect((await core.resolve.shop('sainsburys')).name).toBe("Sainsbury's");
     expect((await core.resolve.shop('screw')).name).toBe('Screwfix');
-    await expect(core.resolve.shop('s')).rejects.toMatchObject({ code: 'ambiguous' });
+    await expect(core.resolve.shop('s')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(core.resolve.shop('!!!')).rejects.toMatchObject({ code: 'invalid' });
+    await expect(core.resolve.shop('su')).rejects.toMatchObject({ code: 'not_found' });
   });
 });
 
@@ -128,7 +149,9 @@ describe('expiry events', () => {
     await core.stock.add({ productId: milk.id, quantity: 1 });
     await core.products.create({ name: 'Rice', shelfLifeDays: 365 });
 
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 1, expired: 0 });
+    // Two checks at once (the hourly one and a manual one) still announce it once.
+    const both = await Promise.all([core.automation.checkExpiry(), core.automation.checkExpiry()]);
+    expect(both.map((r) => r.expiring).sort()).toEqual([0, 1]);
     expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0 });
     const ev = core.events.log.find((e) => e.type === 'stock.expiring');
     expect(ev?.data).toMatchObject({ name: 'Milk', expiresOn: '2026-11-02', daysToExpiry: 5, place: 'Fridge' });

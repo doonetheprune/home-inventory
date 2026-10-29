@@ -18,6 +18,8 @@ export interface Config {
   auth: 'local' | 'none' | 'homeassistant';
   /** Addresses Home Assistant ingress requests come from (the Supervisor). */
   ingressAddresses: string[];
+  /** Home Assistant usernames (lower case) who are Larder admins. Empty: everyone arriving through Home Assistant is. */
+  haAdmins: string[];
   storage: 'sqlite' | 'memory';
   /** Public address, used in QR labels and links, e.g. https://larder.example.com */
   baseUrl: string | null;
@@ -68,6 +70,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     logLevel: env.LARDER_LOG_LEVEL ?? 'info',
     trustProxy: proxies(env.LARDER_TRUST_PROXY),
     ingressAddresses: (env.LARDER_HA_INGRESS_ADDRESSES ?? '172.30.32.2').split(',').map((s) => s.trim()).filter(Boolean),
+    haAdmins: (env.LARDER_HA_ADMINS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
     demo: bool(env.LARDER_DEMO, false),
     backupEveryHours: num(env.LARDER_BACKUP_EVERY_HOURS, 24),
     backupsToKeep: num(env.LARDER_BACKUPS_TO_KEEP, 7),

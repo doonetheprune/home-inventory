@@ -18,12 +18,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
-from homeassistant.core import CALLBACK_TYPE, CoreState, Event, HomeAssistant, callback
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
 from .api import LarderAuthError, LarderClient, LarderError
@@ -87,8 +88,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: LarderConfigEntry) -> bo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Actions follow Larder's list, which changes when modules are switched on or off.
-    async_update_actions(hass, coordinator.data.actions)
-    runtime.unsubs.append(coordinator.async_add_listener(lambda: async_update_actions(hass, coordinator.data.actions)))
+    async_update_actions(hass, coordinator.data.actions, entry.entry_id)
+    runtime.unsubs.append(coordinator.async_add_listener(lambda: async_update_actions(hass, coordinator.data.actions, entry.entry_id)))
 
     entry.async_create_background_task(hass, listen(hass, client, coordinator), f"{DOMAIN} live events")
 
@@ -107,14 +108,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: LarderConfigEntry) -> bo
             runtime.batteries = None
 
     # Battery sensors from other integrations may still be loading; wait until Home Assistant has started.
-    if hass.state is CoreState.running:
+    @callback
+    def started(_hass: HomeAssistant) -> None:
         batteries_follow_module()
-    else:
-        async def started(_event: Event) -> None:
-            batteries_follow_module()
+        runtime.unsubs.append(coordinator.async_add_listener(batteries_follow_module))
 
-        runtime.unsubs.append(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, started))
-    runtime.unsubs.append(coordinator.async_add_listener(batteries_follow_module))
+    runtime.unsubs.append(async_at_started(hass, started))
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     return True
@@ -132,7 +131,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: LarderConfigEntry) -> b
     if runtime.batteries:
         runtime.batteries.async_stop()
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    others = [e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id != entry.entry_id and e.state is ConfigEntryState.LOADED]
-    if unloaded and not others:
-        async_reset_actions(hass)
+    if unloaded:
+        async_reset_actions(hass, entry.entry_id)
     return unloaded

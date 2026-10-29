@@ -34,6 +34,8 @@ _LOGGER = logging.getLogger(__name__)
 DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 REGISTERED = f"{DOMAIN}_registered_actions"
 BUNDLED = f"{DOMAIN}_bundled_actions"
+# Each connected Larder's own list; Home Assistant gets them all together.
+PER_ENTRY = f"{DOMAIN}_actions_by_entry"
 BUNDLED_FILE = Path(__file__).parent / "actions.json"
 
 
@@ -115,11 +117,30 @@ def _entry_for(hass: HomeAssistant, call: ServiceCall) -> Any:
     return entries[0]
 
 
+def _wanted(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
+    """Every connected Larder's actions together (the first to offer one describes it), or the bundled ones."""
+    lists: dict[str, list[dict[str, Any]]] = hass.data.get(PER_ENTRY, {})
+    wanted: dict[str, dict[str, Any]] = {}
+    for actions in lists.values() if lists else [hass.data.get(BUNDLED, [])]:
+        for action in actions:
+            wanted.setdefault(action["id"], action)
+    return wanted
+
+
 @callback
-def async_update_actions(hass: HomeAssistant, actions: list[dict[str, Any]]) -> None:
-    """Make Home Assistant's Larder actions match Larder's list: add new ones, remove gone ones."""
-    registered: dict[str, list[dict[str, Any]]] = hass.data.setdefault(REGISTERED, {})
-    wanted = {a["id"]: a for a in actions}
+def async_update_actions(hass: HomeAssistant, actions: list[dict[str, Any]], entry_id: str | None = None) -> None:
+    """Record one Larder's actions (or the bundled ones) and make Home Assistant's match: add new ones, remove gone ones."""
+    if entry_id is None:
+        hass.data[BUNDLED] = actions
+    else:
+        hass.data.setdefault(PER_ENTRY, {})[entry_id] = actions
+    _apply(hass)
+
+
+@callback
+def _apply(hass: HomeAssistant) -> None:
+    registered: dict[str, dict[str, Any]] = hass.data.setdefault(REGISTERED, {})
+    wanted = _wanted(hass)
 
     for name in [n for n in registered if n not in wanted]:
         hass.services.async_remove(DOMAIN, name)
@@ -153,11 +174,11 @@ def async_update_actions(hass: HomeAssistant, actions: list[dict[str, Any]]) -> 
 async def async_setup_actions(hass: HomeAssistant) -> None:
     """Register the bundled actions when Home Assistant starts."""
     bundled = await hass.async_add_executor_job(lambda: json.loads(BUNDLED_FILE.read_text(encoding="utf-8")))
-    hass.data[BUNDLED] = bundled
     async_update_actions(hass, bundled)
 
 
 @callback
-def async_reset_actions(hass: HomeAssistant) -> None:
-    """Back to the bundled actions (when the last Larder is unloaded)."""
-    async_update_actions(hass, hass.data.get(BUNDLED, []))
+def async_reset_actions(hass: HomeAssistant, entry_id: str) -> None:
+    """A Larder was unloaded: drop its actions (back to the bundled ones when none is left)."""
+    hass.data.get(PER_ENTRY, {}).pop(entry_id, None)
+    _apply(hass)

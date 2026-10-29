@@ -23,6 +23,7 @@ While the GitHub repository is private, Home Assistant can't download the add-on
 | Larder's own backups | Off by default, because Home Assistant backups already include Larder's data. Turn on to also keep seven daily copies inside the add-on. |
 | Address for QR labels | Optional https address that reaches Larder directly, printed on QR labels. |
 | Load the example household | Fills an empty Larder with example items to try it with. |
+| Larder admins | Home Assistant usernames who can change Larder's settings, accounts and modules. Empty means everyone. Others can still use and change stock. |
 | Modules that stay off | Module ids that can't be switched on in the app. |
 | Extra settings | Advanced: any other `LARDER_` setting, such as a module's. |
 
@@ -30,7 +31,7 @@ The **Network** section can open port 8080 on your network, for MCP clients, scr
 
 ### Who's signed in
 
-People who open Larder from Home Assistant are signed in as their Home Assistant user (Larder trusts this only for connections that come from Home Assistant's Supervisor). They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
+People who open Larder from Home Assistant are signed in as their Home Assistant user (Larder trusts this only for connections that come from Home Assistant's Supervisor). They're Larder admins unless the **Larder admins** option lists who is. They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
 
 ## Add the integration by hand
 
@@ -57,7 +58,7 @@ Modules can add more; they appear without updating the integration. Larder doesn
 
 ## Actions
 
-Every action takes names the way you'd say them: an item by name, alias, barcode or id (`loo roll`), a place by name or code (`G2-4`, `Garage › Racking`), a shop by name (`aldi`). If a name could mean more than one thing, the action fails and says which ones, rather than guessing.
+Every action takes names the way you'd say them: an item by name, alias, barcode or id (`loo roll`), a place by name or code (`G2-4`, `Garage › Racking`), a shop by name (`aldi`). Only an exact name, or one that contains every word you gave ("drill" for Cordless drill), is acted on. If a name could mean more than one thing, or is only close (a typo, "AA" when there are only AAA batteries), the action fails and says which ones it could be, rather than guessing.
 
 Every action can return Larder's answer, including a `message` for a notification or a voice reply.
 
