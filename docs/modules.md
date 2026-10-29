@@ -30,7 +30,7 @@ export default defineModule({
 
 | Hook | Use it to |
 |---|---|
-| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup`, `home`, `settings`, `history`, `today()`, `now()` |
+| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup`, `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()` |
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
@@ -38,6 +38,9 @@ export default defineModule({
 | `ctx.addSearchSection({ id, title, order, documents?, results })` | Add a section to search everywhere. `documents()` feeds the shared fuzzy index (types must start with your section id); `results()` turns hits into rows. Core orders: stock 10, shopping 20, places 30, wish list 50, shops 60. Scenarios will use 40 and recipes 70 |
 | `ctx.config` | Settings from `LARDER_MODULE_<ID>_<KEY>` environment variables (keys lower-cased) |
 | `ctx.isEnabled()` | Whether the module is on right now |
+| `ctx.addSensor({ id, name, description, icon?, unit?, read })` | A sensor for Home Assistant (and MQTT). `id` is snake_case and starts with your module id (`batteries_low` for `batteries`). `read()` returns `{ state, attributes? }`; keep attributes small. The integration creates the entity without any change on its side. Hidden while the module is off |
+| `ctx.addAction({ id, name, description, input, run })` | An action for Home Assistant and Node-RED (`larder.<id>`). `input` is a `z.object` with snake_case fields and `.describe()`d fields (shown in Home Assistant). `run(input, { userId })` returns `{ message, ... }`. Use `ctx.core.resolve.product(name)` to accept names. Same id rule as sensors; run `npm run ha:services` afterwards |
+| `ctx.publish(type, data)` | Publish your own event, e.g. `batteries.low`. The type must start with your module id and a dot. It reaches the web app, other modules and Home Assistant (as `larder_batteries_low`) |
 | `ctx.log.info/warn/error` | Log with the module's name |
 
 ### Events
@@ -49,7 +52,10 @@ export default defineModule({
 | `product.created` / `product.updated` / `product.deleted` | `{ id, name }` |
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }] }` |
+| `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
+| `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |
+| `<module>.*` | anything a module publishes, e.g. `batteries.low` |
 
 ## Web side: `web.tsx` (optional)
 
@@ -76,4 +82,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 |---|---|
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes |
 | `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
+| `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `_template` | Example to copy (off by default) |

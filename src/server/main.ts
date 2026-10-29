@@ -11,20 +11,23 @@ import { createLocalFileStore } from '../adapters/files-local';
 import { createMemorySearchIndex } from '../adapters/search-memory';
 import { createMemoryEventBus } from '../adapters/events-memory';
 import { modules } from '../../modules';
+import { addonEnv, announceToHomeAssistant, isAddon } from './addon';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { seedDemo } from './demo';
 import { VERSION } from './version';
 
 async function main() {
-  const config = loadConfig(process.env, { version: VERSION });
+  // As a Home Assistant add-on, the options set in Home Assistant become settings.
+  const env = { ...process.env, ...addonEnv(process.env) };
+  const config = loadConfig(env, { version: VERSION });
   const storage: Storage = config.storage === 'memory' ? createMemoryStorage() : createSqliteStorage({ path: join(config.dataDir, 'larder.db') });
   const events = createMemoryEventBus((err, event) => console.error(`Event listener failed for ${event.type}:`, err));
 
   let log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error: (o: object, m: string) => void } = console as never;
   const core = await createCore(
     { storage, files: createLocalFileStore(join(config.dataDir, 'files')), search: createMemorySearchIndex(), events },
-    { modules, disabled: config.disabledModules, env: process.env, logger: (level, message, extra) => log[level](extra ?? {}, message) },
+    { modules, disabled: config.disabledModules, env, logger: (level, message, extra) => log[level](extra ?? {}, message) },
   );
 
   const backupDir = join(config.dataDir, 'backups');
@@ -37,7 +40,7 @@ async function main() {
       }
     : undefined;
 
-  const { app } = await buildApp({ core, config, backup });
+  const { app, auth } = await buildApp({ core, config, backup });
   log = app.log as never;
 
   if (config.demo && (await core.products.list()).length === 0 && (await core.products.list({ status: 'wish' })).length === 0) {
@@ -45,15 +48,18 @@ async function main() {
     app.log.info(`Loaded ${n} example items (LARDER_DEMO is on).`);
   }
 
-  let timer: NodeJS.Timeout | undefined;
+  const timers: NodeJS.Timeout[] = [];
   if (backup && config.backupEveryHours > 0) {
-    timer = setInterval(() => backup().then((f) => app.log.info(`Backed up to ${f}`), (err: unknown) => app.log.error({ err }, 'Backup failed')), config.backupEveryHours * 3_600_000);
-    timer.unref();
+    timers.push(setInterval(() => backup().then((f) => app.log.info(`Backed up to ${f}`), (err: unknown) => app.log.error({ err }, 'Backup failed')), config.backupEveryHours * 3_600_000));
   }
+  // Publishes stock.expiring / stock.expired for Home Assistant and modules.
+  const checkExpiry = () => core.automation.checkExpiry().catch((err: unknown) => app.log.error({ err }, 'Expiry check failed'));
+  timers.push(setTimeout(checkExpiry, 15_000), setInterval(checkExpiry, 3_600_000));
+  for (const t of timers) t.unref();
 
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received, stopping`);
-    if (timer) clearInterval(timer);
+    for (const t of timers) clearTimeout(t);
     await app.close();
     await storage.close();
     process.exit(0);
@@ -63,6 +69,11 @@ async function main() {
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(`Larder ${config.version} is running on port ${config.port} (storage: ${config.storage}, login: ${config.auth}, data: ${config.dataDir})`);
+
+  if (isAddon(process.env)) {
+    const token = await auth.integrationToken(join(config.dataDir, 'integration-token'));
+    void announceToHomeAssistant({ supervisorToken: process.env.SUPERVISOR_TOKEN!, port: config.port, token, log: app.log });
+  }
 }
 
 main().catch((err: unknown) => {

@@ -19,6 +19,260 @@
       }
     },
     "schemas": {
+      "SensorInfoInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SensorInfoInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "icon",
+          "unit",
+          "module"
+        ]
+      },
+      "ActionInfoInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ActionInfoInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The action's input as JSON Schema"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "module",
+          "schema"
+        ]
+      },
+      "SensorReadingInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SensorReadingInput",
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": [
+              "number",
+              "string",
+              "boolean",
+              "null"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "ActionResultInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ActionResultInput",
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": {}
+      },
+      "BatteryDeviceInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/BatteryDeviceInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "area": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "level": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "low": {
+            "default": false,
+            "type": "boolean"
+          },
+          "batteryType": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batteryQuantity": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "BatteryAdviceInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/BatteryAdviceInput",
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "swap",
+              "charge",
+              "spare",
+              "buy",
+              "on_the_way",
+              "unlinked"
+            ]
+          },
+          "productId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "battery": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "place": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deviceId",
+          "device",
+          "kind",
+          "productId",
+          "battery",
+          "place",
+          "message"
+        ]
+      },
       "CategoryInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/CategoryInput",
@@ -1794,6 +2048,271 @@
             "maxLength": 60
           }
         }
+      },
+      "SensorInfo": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SensorInfo",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "icon",
+          "unit",
+          "module"
+        ],
+        "additionalProperties": false
+      },
+      "ActionInfo": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ActionInfo",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The action's input as JSON Schema"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "module",
+          "schema"
+        ],
+        "additionalProperties": false
+      },
+      "SensorReading": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SensorReading",
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": [
+              "number",
+              "string",
+              "boolean",
+              "null"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "ActionResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ActionResult",
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": {}
+      },
+      "BatteryDevice": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/BatteryDevice",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "area": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "level": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "low": {
+            "default": false,
+            "type": "boolean"
+          },
+          "batteryType": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batteryQuantity": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "area",
+          "level",
+          "low",
+          "batteryType",
+          "batteryQuantity",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "BatteryAdvice": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/BatteryAdvice",
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "swap",
+              "charge",
+              "spare",
+              "buy",
+              "on_the_way",
+              "unlinked"
+            ]
+          },
+          "productId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "battery": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "place": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deviceId",
+          "device",
+          "kind",
+          "productId",
+          "battery",
+          "place",
+          "message"
+        ],
+        "additionalProperties": false
       },
       "Category": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3706,7 +4225,8 @@
                       "type": "string",
                       "enum": [
                         "local",
-                        "none"
+                        "none",
+                        "homeassistant"
                       ]
                     },
                     "setupNeeded": {
@@ -3738,7 +4258,8 @@
                               "enum": [
                                 "session",
                                 "token",
-                                "none"
+                                "none",
+                                "ingress"
                               ]
                             }
                           },
@@ -3758,13 +4279,17 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "instanceId": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "mode",
                     "setupNeeded",
                     "user",
-                    "version"
+                    "version",
+                    "instanceId"
                   ],
                   "additionalProperties": false
                 }
@@ -3839,7 +4364,8 @@
                       "enum": [
                         "session",
                         "token",
-                        "none"
+                        "none",
+                        "ingress"
                       ]
                     }
                   },
@@ -3919,7 +4445,8 @@
                       "enum": [
                         "session",
                         "token",
-                        "none"
+                        "none",
+                        "ingress"
                       ]
                     }
                   },
@@ -4063,7 +4590,8 @@
                         "enum": [
                           "session",
                           "token",
-                          "none"
+                          "none",
+                          "ingress"
                         ]
                       }
                     },
@@ -4154,7 +4682,8 @@
                       "enum": [
                         "session",
                         "token",
-                        "none"
+                        "none",
+                        "ingress"
                       ]
                     }
                   },
@@ -7607,6 +8136,431 @@
         }
       }
     },
+    "/api/v1/automation": {
+      "get": {
+        "summary": "Sensors and actions for Home Assistant, Node-RED and MQTT",
+        "tags": [
+          "Automation"
+        ],
+        "description": "The Home Assistant integration builds its entities and actions from this list. Modules add their own, so this changes when modules are switched on or off.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sensors": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SensorInfo"
+                      }
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ActionInfo"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sensors",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/automation/state": {
+      "get": {
+        "summary": "Every sensor's current reading",
+        "tags": [
+          "Automation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sensors": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "$ref": "#/components/schemas/SensorReading"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sensors"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/automation/actions/{id}": {
+      "post": {
+        "summary": "Run an action",
+        "tags": [
+          "Automation"
+        ],
+        "description": "Items, places and shops are given by name, code or id (\"loo roll\", \"G2-4\", \"Aldi\"). A name that matches more than one thing returns 409 with `candidates`. See GET /automation for each action's fields.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/automation/check-expiry": {
+      "post": {
+        "summary": "Publish stock.expiring / stock.expired events for anything newly due (the server also does this hourly)",
+        "tags": [
+          "Automation"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "expiring": {
+                      "type": "number"
+                    },
+                    "expired": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "expiring",
+                    "expired"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nfc/scanned": {
+      "post": {
+        "summary": "A tag was scanned (Home Assistant app, Android Chrome, a reader)",
+        "tags": [
+          "NFC"
+        ],
+        "description": "Returns what the tag belongs to and publishes `nfc.scanned`. Unknown tags are offered for linking for 15 minutes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tagId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "device": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "tagId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tagId": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "string",
+                      "minLength": 10
+                    },
+                    "device": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "product",
+                        "place",
+                        "unknown"
+                      ]
+                    },
+                    "id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tagId",
+                    "at",
+                    "device",
+                    "kind",
+                    "id",
+                    "name",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nfc/recent": {
+      "get": {
+        "summary": "Tags scanned in the last 15 minutes, newest first",
+        "tags": [
+          "NFC"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tagId": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "minLength": 10
+                      },
+                      "device": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "product",
+                          "place",
+                          "unknown"
+                        ]
+                      },
+                      "id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "tagId",
+                      "at",
+                      "device",
+                      "kind",
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nfc/link": {
+      "post": {
+        "summary": "Link a tag to a product or a place",
+        "tags": [
+          "NFC"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tagId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "productId": {
+                    "type": "string"
+                  },
+                  "placeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tagId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "product",
+                        "place"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nfc/tags/{tagId}": {
+      "delete": {
+        "summary": "Unlink a tag from whatever it belongs to",
+        "tags": [
+          "NFC"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "tagId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unlinked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "unlinked"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules": {
       "get": {
         "summary": "Feature modules and whether they are on",
@@ -8009,6 +8963,334 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/batteries/devices": {
+      "put": {
+        "summary": "Replace the list of devices with batteries (sent by the Home Assistant integration)",
+        "tags": [
+          "Module: batteries"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "devices": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "area": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "level": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "low": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "batteryType": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 40
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "batteryQuantity": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 50
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "devices"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Devices with batteries, low ones first, with the battery types linked to them",
+        "tags": [
+          "Module: batteries"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "area": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "level": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "low": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "batteryType": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "batteryQuantity": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "updatedAt": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "batteries": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "area",
+                      "level",
+                      "low",
+                      "batteryType",
+                      "batteryQuantity",
+                      "updatedAt",
+                      "batteries"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/batteries/low": {
+      "post": {
+        "summary": "A device's battery is low: what should be done?",
+        "tags": [
+          "Module: batteries"
+        ],
+        "description": "Publishes `batteries.low` with the advice. Puts the battery on the shopping list when there are none spare.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "level": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "deviceId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatteryAdvice"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/batteries/advice/{deviceId}": {
+      "get": {
+        "summary": "What to do about a device's battery, without changing anything",
+        "tags": [
+          "Module: batteries"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "deviceId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatteryAdvice"
                 }
               }
             }

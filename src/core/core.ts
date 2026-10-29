@@ -13,9 +13,13 @@ import { createProductService } from './services/products';
 import { createSearchService } from './services/search';
 import { createShoppingService } from './services/shopping';
 import { createStockService } from './services/stock';
+import { createAutomation, type Automation } from './services/automation';
+import { createResolver, type Resolver } from './services/resolve';
+import { createNfcService } from './services/nfc';
 import { createModuleRegistry, type ModuleOptions, type ModuleRegistry } from './modules';
 import type { EventBus, FileStore, LarderEvent, Storage } from './ports';
 import type { Movement } from './model';
+import { newId } from './util';
 
 export interface CoreApi {
   categories: ReturnType<typeof createCategoryService>;
@@ -27,10 +31,18 @@ export interface CoreApi {
   search: ReturnType<typeof createSearchService>;
   lookup: ReturnType<typeof createLookupService>;
   home: ReturnType<typeof createHomeService>;
+  /** Find things by name, code or id ("loo roll", "G2-4", "Aldi"). Refuses to guess between close matches. */
+  resolve: Resolver;
+  /** Sensors and actions for Home Assistant, Node-RED and MQTT. */
+  automation: Automation;
+  /** NFC tag scans and linking. */
+  nfc: ReturnType<typeof createNfcService>;
   settings: {
     get(): Promise<HouseholdSettings>;
     update(patch: Partial<HouseholdSettings>): Promise<HouseholdSettings>;
   };
+  /** A random id made the first time this Larder starts. Integrations use it to tell Larders apart. */
+  instanceId(): Promise<string>;
   history: {
     recent(limit?: number): Promise<Movement[]>;
   };
@@ -51,6 +63,10 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const products = createProductService(ctx, (f) => modules.validateFields(f));
   const stock = createStockService(ctx);
   const shopping = createShoppingService(ctx, stock);
+  const search = createSearchService(ctx);
+  const lookup = createLookupService(ctx, products, (id) => modules.isProviderEnabled(id));
+  const home = createHomeService(ctx, stock, shopping);
+  const resolve = createResolver(ctx, search, lookup);
 
   const core: CoreApi = {
     categories,
@@ -59,9 +75,12 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     products,
     stock,
     shopping,
-    search: createSearchService(ctx),
-    lookup: createLookupService(ctx, products, (id) => modules.isProviderEnabled(id)),
-    home: createHomeService(ctx, stock, shopping),
+    search,
+    lookup,
+    home,
+    resolve,
+    automation: createAutomation({ ctx, products, stock, shopping, resolve }),
+    nfc: createNfcService(ctx, products),
     settings: {
       get: () => ctx.household(),
       async update(patch) {
@@ -70,6 +89,13 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
         ctx.publish('settings.changed', { household: next });
         return ctx.household();
       },
+    },
+    async instanceId() {
+      const saved = await ctx.storage.settings.get<string>('instanceId');
+      if (saved) return saved;
+      const id = newId();
+      await ctx.storage.settings.set('instanceId', id);
+      return id;
     },
     history: {
       recent: (limit = 50) => ctx.storage.movements.listRecent(limit),
@@ -82,6 +108,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   };
 
   await ctx.household();
+  await core.instanceId();
   await categories.ensureDefaults();
   await modules.start(core);
   return core;

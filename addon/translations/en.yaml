@@ -1,0 +1,24 @@
+configuration:
+  log_level:
+    name: Log level
+    description: How much Larder writes to the add-on log. "debug" also logs every request.
+  backups:
+    name: Larder's own backups
+    description: Home Assistant backups already include Larder's data. Turn this on to also keep seven daily copies inside the add-on.
+  base_url:
+    name: Address for QR labels
+    description: Optional. An https address that reaches Larder directly, printed on QR labels so a phone's camera app can open them.
+  demo:
+    name: Load the example household
+    description: Fills an empty Larder with about 30 example items, places and shops to try it with.
+  admins:
+    name: Larder admins
+    description: Home Assistant usernames who can change Larder's settings, accounts and modules. Leave empty for everyone. Others can still use and change stock.
+  disabled_modules:
+    name: Modules that stay off
+    description: Module ids that can't be switched on in the app, for example "pricing".
+  env_vars:
+    name: Extra settings
+    description: Advanced. Any other LARDER_ setting, such as a module's settings (LARDER_MODULE_<ID>_<KEY>).
+network:
+  8080/tcp: Direct access for MCP clients, scripts and Node-RED. Leave empty unless you need it; callers need an access token.

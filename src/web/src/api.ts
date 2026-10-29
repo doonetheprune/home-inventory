@@ -56,9 +56,10 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
   return s ? `?${s}` : '';
 };
 
-export interface AuthUser { id: string; username: string; displayName: string; role: 'admin' | 'member'; via: 'session' | 'token' | 'none' }
-export interface AuthStatus { mode: 'local' | 'none'; setupNeeded: boolean; user: AuthUser | null; version: string }
+export interface AuthUser { id: string; username: string; displayName: string; role: 'admin' | 'member'; via: 'session' | 'token' | 'none' | 'ingress' }
+export interface AuthStatus { mode: 'local' | 'none' | 'homeassistant'; setupNeeded: boolean; user: AuthUser | null; version: string }
 export interface TokenInfo { id: string; name: string; prefix: string; userId: string; createdAt: string; lastUsedAt: string | null }
+export interface NfcScan { tagId: string; at: string; device: string | null; kind: 'product' | 'place' | 'unknown'; id: string | null; name: string | null }
 export interface ServerInfo { version: string; auth: string; storage: string; baseUrl: string | null; dataDir: string; backups: boolean; demo: boolean }
 
 export const api = {
@@ -146,6 +147,12 @@ export const api = {
     list: () => get<ModuleInfo[]>('/modules'),
     setEnabled: (id: string, enabled: boolean) => patch<ModuleInfo>(`/modules/${id}`, { enabled }),
     call: <T>(id: string, method: string, path: string, body?: unknown) => request<T>(method, `/modules/${id}${path}`, body),
+  },
+  nfc: {
+    recent: () => get<NfcScan[]>('/nfc/recent'),
+    scanned: (b: { tagId: string; device?: string }) => post<NfcScan & { path: string | null }>('/nfc/scanned', b),
+    link: (b: { tagId: string; productId?: string; placeId?: string }) => post<{ kind: 'product' | 'place' }>('/nfc/link', b),
+    unlink: (tagId: string) => del<{ unlinked: boolean }>(`/nfc/tags/${encodeURIComponent(tagId)}`),
   },
   files: {
     upload: (file: File) => {

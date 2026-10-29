@@ -12,5 +12,8 @@ export { defineModule, type ModuleContext, type ModuleDefinition, type ModuleInf
 export { HouseholdSettings, type CoreDeps } from './services/context';
 export type { LookupProvider } from './services/lookup';
 export type { SearchSection } from './services/search';
+export type { ActionDefinition, ActionInfo, ActionResult, SensorDefinition, SensorInfo, SensorReading, SensorState } from './services/automation';
+export { AmbiguousError } from './services/resolve';
+export { NfcScan } from './services/nfc';
 export { DEFAULT_CATEGORIES, SHOP_PRESETS } from './services/catalogue';
-export { addDays, daysBetween, localDate, newId, roundQty } from './util';
+export { addDays, amount, andList, daysBetween, localDate, newId, pluralWord, roundQty } from './util';

@@ -138,6 +138,13 @@ export function createSearchService(ctx: CoreContext) {
       stale = true;
     },
 
+    /** Raw index hits, best first, for code that needs to pick one thing (see resolve.ts). */
+    async hits(text: string, options: { types?: string[]; limit?: number } = {}): Promise<SearchHit[]> {
+      if (!text.trim()) return [];
+      await ready();
+      return ctx.search.query(text.trim(), options);
+    },
+
     async query(text: string): Promise<SearchSectionResult[]> {
       const q = text.trim();
       if (!q) return this.recent();

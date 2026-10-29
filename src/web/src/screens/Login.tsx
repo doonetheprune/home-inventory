@@ -35,6 +35,8 @@ export function Login({ status }: { status: AuthStatus }) {
             <h2 style={{ fontSize: 20 }}>Set up your household</h2>
             <p className="muted small">Create the first account. You can add others in Settings later. This account can change household settings.</p>
           </div>
+        ) : status.mode === 'homeassistant' ? (
+          <p className="muted">Open Larder from the Home Assistant sidebar, or sign in with a Larder account an admin made for you.</p>
         ) : (
           <p className="muted">Sign in to see what you've got, and where.</p>
         )}

@@ -1,20 +1,20 @@
 import { z } from 'zod';
-import { ApiToken, Role } from '@larder/core';
+import { ApiToken, Role, type CoreApi } from '@larder/core';
 import type { ZodApp } from '../app';
 import type { Auth } from '../auth';
 import type { Config } from '../config';
 import { IdParams, Ok, admin, user } from './common';
 
-const PublicUser = z.object({ id: z.string(), username: z.string(), displayName: z.string(), role: Role, via: z.enum(['session', 'token', 'none']) });
+const PublicUser = z.object({ id: z.string(), username: z.string(), displayName: z.string(), role: Role, via: z.enum(['session', 'token', 'none', 'ingress']) });
 const Credentials = z.object({ username: z.string().min(1).max(60), password: z.string().min(1).max(200) });
 const TokenInfo = ApiToken.omit({ tokenHash: true });
 
-export function registerAuthRoutes(app: ZodApp, { auth, config }: { auth: Auth; config: Config }) {
+export function registerAuthRoutes(app: ZodApp, { auth, config, core }: { auth: Auth; config: Config; core: CoreApi }) {
   const tags = ['Auth'];
 
   app.get('/auth/status', {
-    schema: { tags, summary: 'Login mode, whether first-time setup is needed, and who you are', response: { 200: z.object({ mode: z.enum(['local', 'none']), setupNeeded: z.boolean(), user: PublicUser.nullable(), version: z.string() }) } },
-  }, async (request) => ({ mode: auth.mode, setupNeeded: await auth.needsSetup(), user: request.user, version: config.version }));
+    schema: { tags, summary: 'Login mode, whether first-time setup is needed, and who you are', response: { 200: z.object({ mode: z.enum(['local', 'none', 'homeassistant']), setupNeeded: z.boolean(), user: PublicUser.nullable(), version: z.string(), instanceId: z.string() }) } },
+  }, async (request) => ({ mode: auth.mode, setupNeeded: await auth.needsSetup(), user: request.user, version: config.version, instanceId: await core.instanceId() }));
 
   app.post('/auth/setup', {
     schema: { tags, summary: 'Create the first (admin) account', body: Credentials.extend({ displayName: z.string().max(80).optional(), password: z.string().min(8).max(200) }), response: { 200: PublicUser } },

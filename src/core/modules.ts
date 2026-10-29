@@ -13,6 +13,7 @@ import type { DocumentCollection, LarderEvent } from './ports';
 import type { CoreContext } from './services/context';
 import type { LookupProvider } from './services/lookup';
 import type { SearchSection } from './services/search';
+import type { ActionDefinition, SensorDefinition } from './services/automation';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -55,6 +56,18 @@ export interface ModuleContext {
   addLookupProvider(provider: LookupProvider): void;
   addSearchSection(section: SearchSection): void;
   addRoute(route: ModuleRoute): void;
+  /**
+   * A sensor for Home Assistant (and MQTT). Its id must start with this module's id in
+   * snake_case, e.g. "batteries_low" for the "batteries" module. Hidden while the module is off.
+   */
+  addSensor(sensor: SensorDefinition): void;
+  /** An action for Home Assistant and Node-RED. Same id rule as sensors. */
+  addAction<I extends z.ZodObject>(action: ActionDefinition<I>): void;
+  /**
+   * Publish an event for the web app, Home Assistant and other modules. The type
+   * must start with this module's id, e.g. "batteries.low". Dropped while the module is off.
+   */
+  publish(type: string, data: Record<string, unknown>): void;
   /** Runs only while the module is switched on. `type` can end in * to match a prefix. */
   on(type: string, handler: (event: LarderEvent) => void | Promise<void>): void;
   log: ModuleLogger;
@@ -104,6 +117,12 @@ export interface ModuleOptions {
   disabled?: string[];
   env?: Record<string, string | undefined>;
   logger?: (level: 'info' | 'warn' | 'error', message: string, extra?: Record<string, unknown>) => void;
+}
+
+function prefixed<T extends { id: string }>(moduleId: string, what: string, item: T): T {
+  const prefix = moduleId.replace(/-/g, '_');
+  if (item.id !== prefix && !item.id.startsWith(`${prefix}_`)) throw new Error(`${what} "${item.id}" from module ${moduleId} must start with "${prefix}_".`);
+  return item;
 }
 
 export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): ModuleRegistry {
@@ -186,6 +205,16 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           },
           addRoute(route) {
             routes.push({ moduleId: def.id, route });
+          },
+          addSensor(sensor) {
+            core.automation.addSensor(prefixed(def.id, 'Sensor', sensor), def.id, () => enabled(def.id));
+          },
+          addAction(action) {
+            core.automation.addAction(prefixed(def.id, 'Action', action), def.id, () => enabled(def.id));
+          },
+          publish(type, data) {
+            if (!type.startsWith(`${def.id}.`)) throw new Error(`Event "${type}" from module ${def.id} must start with "${def.id}.".`);
+            if (enabled(def.id)) ctx.publish(type, data);
           },
           on(type, handler) {
             const match = type.endsWith('*') ? (t: string) => t.startsWith(type.slice(0, -1)) : (t: string) => t === type;
