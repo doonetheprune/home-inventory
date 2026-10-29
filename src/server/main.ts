@@ -1,0 +1,71 @@
+/**
+ * Starts Larder: picks adapters from the config, builds the core with all
+ * modules, and serves the API and web app.
+ */
+import { readdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createCore, type Storage } from '@larder/core';
+import { createSqliteStorage } from '../adapters/storage-sqlite';
+import { createMemoryStorage } from '../adapters/storage-memory';
+import { createLocalFileStore } from '../adapters/files-local';
+import { createMemorySearchIndex } from '../adapters/search-memory';
+import { createMemoryEventBus } from '../adapters/events-memory';
+import { modules } from '../../modules';
+import { buildApp } from './app';
+import { loadConfig } from './config';
+import { seedDemo } from './demo';
+import { VERSION } from './version';
+
+async function main() {
+  const config = loadConfig(process.env, { version: VERSION });
+  const storage: Storage = config.storage === 'memory' ? createMemoryStorage() : createSqliteStorage({ path: join(config.dataDir, 'larder.db') });
+  const events = createMemoryEventBus((err, event) => console.error(`Event listener failed for ${event.type}:`, err));
+
+  let log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error: (o: object, m: string) => void } = console as never;
+  const core = await createCore(
+    { storage, files: createLocalFileStore(join(config.dataDir, 'files')), search: createMemorySearchIndex(), events },
+    { modules, disabled: config.disabledModules, env: process.env, logger: (level, message, extra) => log[level](extra ?? {}, message) },
+  );
+
+  const backupDir = join(config.dataDir, 'backups');
+  const backup = storage.backup
+    ? async () => {
+        const file = await storage.backup!(backupDir);
+        const files = (await readdir(backupDir)).filter((f) => f.endsWith('.db')).sort();
+        for (const old of files.slice(0, Math.max(0, files.length - config.backupsToKeep))) await rm(join(backupDir, old), { force: true });
+        return file;
+      }
+    : undefined;
+
+  const { app } = await buildApp({ core, config, backup });
+  log = app.log as never;
+
+  if (config.demo && (await core.products.list()).length === 0 && (await core.products.list({ status: 'wish' })).length === 0) {
+    const n = await seedDemo(core);
+    app.log.info(`Loaded ${n} example items (LARDER_DEMO is on).`);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  if (backup && config.backupEveryHours > 0) {
+    timer = setInterval(() => backup().then((f) => app.log.info(`Backed up to ${f}`), (err: unknown) => app.log.error({ err }, 'Backup failed')), config.backupEveryHours * 3_600_000);
+    timer.unref();
+  }
+
+  const shutdown = async (signal: string) => {
+    app.log.info(`${signal} received, stopping`);
+    if (timer) clearInterval(timer);
+    await app.close();
+    await storage.close();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  await app.listen({ port: config.port, host: config.host });
+  app.log.info(`Larder ${config.version} is running on port ${config.port} (storage: ${config.storage}, login: ${config.auth}, data: ${config.dataDir})`);
+}
+
+main().catch((err: unknown) => {
+  console.error('Larder failed to start:', err instanceof Error ? err.message : err);
+  process.exit(1);
+});

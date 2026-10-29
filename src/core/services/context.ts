@@ -1,0 +1,59 @@
+import { z } from 'zod';
+import type { Clock, EventBus, FileStore, SearchIndex, Storage } from '../ports';
+import { isoNow, localDate } from '../util';
+
+export const HouseholdSettings = z.object({
+  householdName: z.string().max(80).default('Our house'),
+  /** Days before expiry to warn, unless a category says otherwise. */
+  expiryWarningDays: z.number().int().min(0).max(365).default(7),
+  currency: z.string().length(3).default('GBP'),
+  timeZone: z.string().max(60).default('Europe/London'),
+});
+export type HouseholdSettings = z.infer<typeof HouseholdSettings>;
+
+export interface CoreDeps {
+  storage: Storage;
+  files: FileStore;
+  search: SearchIndex;
+  events: EventBus;
+  clock?: Clock;
+  /** How long to wait for each barcode lookup provider. */
+  lookupTimeoutMs?: number;
+}
+
+/** Shared by every service. */
+export interface CoreContext extends Required<Omit<CoreDeps, 'clock'>> {
+  clock: Clock;
+  now(): string;
+  today(): string;
+  household(): Promise<HouseholdSettings>;
+  publish(type: string, data: Record<string, unknown>): void;
+}
+
+export function createContext(deps: CoreDeps): CoreContext {
+  const clock = deps.clock ?? { now: () => new Date() };
+  let cached: HouseholdSettings | null = null;
+  let timeZone = 'Europe/London';
+  const ctx: CoreContext = {
+    storage: deps.storage,
+    files: deps.files,
+    search: deps.search,
+    events: deps.events,
+    lookupTimeoutMs: deps.lookupTimeoutMs ?? 4000,
+    clock,
+    now: () => isoNow(clock),
+    today: () => localDate(clock.now(), timeZone),
+    async household() {
+      if (!cached) {
+        cached = HouseholdSettings.parse((await deps.storage.settings.get('household')) ?? {});
+        timeZone = cached.timeZone;
+      }
+      return cached;
+    },
+    publish(type, data) {
+      deps.events.publish({ type, at: isoNow(clock), data });
+      if (type === 'settings.changed') cached = null;
+    },
+  };
+  return ctx;
+}

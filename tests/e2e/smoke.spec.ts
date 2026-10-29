@@ -1,0 +1,106 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/** Signs in (setting up the household the first time) and loads the example data once. */
+async function signIn(page: Page) {
+  await page.goto('/');
+  const setup = page.getByRole('button', { name: 'Create account' });
+  const signInBtn = page.getByRole('button', { name: 'Sign in' });
+  await expect(setup.or(signInBtn)).toBeVisible();
+  await page.getByLabel('Username').fill('shaun');
+  await page.getByLabel('Password').fill('correct horse battery');
+  if (await setup.isVisible()) await setup.click();
+  else await signInBtn.click();
+  await expect(page.getByRole('link', { name: 'Larder home' })).toBeVisible();
+  const status = (await page.evaluate(async () => (await fetch('api/v1/home')).json())) as { counts: { products: number } };
+  if (status.counts.products === 0) {
+    await page.evaluate(async () => fetch('api/v1/settings/demo', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: '{}' }));
+    await page.reload();
+  }
+}
+
+test('home shows what needs attention', async ({ page }) => {
+  await signIn(page);
+  await expect(page.getByRole('heading', { level: 2 })).toContainText('to use soon');
+  await expect(page.getByText('Going shopping?')).toBeVisible();
+  await expect(page.getByText('Tesco delivery · 1 item')).toBeVisible();
+  await expect(page.getByText('Cordless drill').first()).toBeVisible();
+});
+
+test('search finds nicknames and counts with the keyboard', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Keyboard counting is a desktop feature');
+  await signIn(page);
+  const box = page.getByLabel('Search or add anything');
+  await box.fill('bog rol');
+  const row = page.locator('.gs-row.hl');
+  await expect(row).toContainText('Toilet roll');
+  const before = await row.locator('output').innerText();
+  await box.press('ArrowUp');
+  await box.press('ArrowUp');
+  await expect(page.locator('.gs-pending')).toHaveText('+2');
+  await box.press('Enter');
+  await expect(page.locator('.toast')).toContainText('Added 2');
+  await expect(row.locator('output')).not.toHaveText(before);
+  await box.fill('zzz unknown thing');
+  await expect(page.getByText('Add “zzz unknown thing” as a new item')).toBeVisible();
+});
+
+test('adds an item by name and uses it', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Sealant ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.getByRole('button', { name: 'Tools & DIY' }).click();
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await page.getByRole('button', { name: 'Use', exact: true }).click();
+  await page.getByRole('button', { name: /^Use 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('Used 1');
+});
+
+test('scans a known barcode by typing it and adds stock', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/scan');
+  await page.getByLabel('Barcode or code').fill('5029053038889');
+  await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  await page.getByRole('button', { name: /^Add 1 roll/ }).click();
+  await expect(page.locator('.toast')).toContainText('Ready for the next scan');
+});
+
+test('names an unknown barcode once and remembers it', async ({ page }, info) => {
+  await signIn(page);
+  await page.goto('/#/scan');
+  // Local-only code (letters), so no lookup provider is asked.
+  const code = `LOCAL-${info.project.name}-1`;
+  const name = `Chopped tomatoes ${info.project.name}`;
+  await page.getByLabel('Barcode or code').fill(code);
+  await page.getByLabel('Barcode or code').press('Enter');
+  await page.getByLabel('What is it?').fill(name);
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+  // Next time it's instant.
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByLabel('Barcode or code').fill(code);
+  await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+});
+
+test('shopping: tick, done, gone from the list', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/shop');
+  const first = page.locator('.item').filter({ has: page.locator('.check') }).first();
+  const name = (await first.locator('.item-name').innerText()).split(' · ')[0]!;
+  await first.locator('.check').click();
+  await page.getByRole('button', { name: /^Done/ }).click();
+  await expect(page.locator('.toast')).toContainText('added to stock');
+  await expect(page.locator('.item-name', { hasText: name })).toHaveCount(0);
+});
+
+test('sets up a grid of shelves', async ({ page }, info) => {
+  await signIn(page);
+  await page.goto('/#/grid');
+  const prefix = info.project.name === 'phone' ? 'P' : 'D';
+  await page.locator('input.mono').fill(prefix);
+  await page.getByRole('button', { name: 'Create 24 places' }).click();
+  await expect(page.getByText(`4 shelves, 6 boxes each. Codes ${prefix}1-1 to ${prefix}4-6.`)).toBeVisible();
+  await expect(page.locator('a.item .code', { hasText: `${prefix}2-4` })).toBeVisible();
+});
