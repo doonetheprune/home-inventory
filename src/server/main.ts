@@ -11,7 +11,7 @@ import { createLocalFileStore } from '../adapters/files-local';
 import { createMemorySearchIndex } from '../adapters/search-memory';
 import { createMemoryEventBus } from '../adapters/events-memory';
 import { modules } from '../../modules';
-import { addonSettings, announceToHomeAssistant, isAddon } from './addon';
+import { addonSettings, announceToHomeAssistant, isAddon, notifyIntegrationInstalled } from './addon';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { seedDemo } from './demo';
@@ -74,6 +74,7 @@ async function main() {
   if (isAddon(process.env)) {
     const token = await auth.integrationToken(join(config.dataDir, 'integration-token'));
     void announceToHomeAssistant({ supervisorToken: process.env.SUPERVISOR_TOKEN!, port: config.port, token, log: app.log });
+    void notifyIntegrationInstalled({ supervisorToken: process.env.SUPERVISOR_TOKEN!, dataDir: config.dataDir, log: app.log });
   }
 }
 

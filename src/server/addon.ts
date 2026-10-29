@@ -8,7 +8,9 @@
  * without anyone copying addresses or tokens.
  */
 import { readFileSync } from 'node:fs';
+import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
+import { join } from 'node:path';
 
 export const ADDON_OPTIONS_FILE = '/data/options.json';
 
@@ -23,6 +25,17 @@ export interface AddonOptions {
   admins?: string[];
   /** Advanced: any other LARDER_* setting, e.g. a module's settings. */
   env_vars?: Array<{ name: string; value: string }>;
+  /** Keep Home Assistant's Larder integration installed and up to date (default on). Off for HACS. */
+  install_integration?: boolean;
+}
+
+function readOptions(env: Record<string, string | undefined>, read: (file: string) => string): AddonOptions {
+  try {
+    return JSON.parse(read(env.LARDER_ADDON_OPTIONS ?? ADDON_OPTIONS_FILE)) as AddonOptions;
+  } catch {
+    // No options yet: the defaults are fine.
+    return {};
+  }
 }
 
 export const isAddon = (env: Record<string, string | undefined>) => !!env.SUPERVISOR_TOKEN;
@@ -30,12 +43,7 @@ export const isAddon = (env: Record<string, string | undefined>) => !!env.SUPERV
 /** Settings implied by running as an add-on, plus the person's add-on options. Empty outside an add-on. */
 export function addonEnv(env: Record<string, string | undefined>, read: (file: string) => string = (f) => readFileSync(f, 'utf8')): Record<string, string> {
   if (!isAddon(env)) return {};
-  let options: AddonOptions = {};
-  try {
-    options = JSON.parse(read(env.LARDER_ADDON_OPTIONS ?? ADDON_OPTIONS_FILE)) as AddonOptions;
-  } catch {
-    // No options yet: the defaults below are fine.
-  }
+  const options = readOptions(env, read);
   const out: Record<string, string> = {
     LARDER_AUTH: 'homeassistant',
     LARDER_DATA_DIR: env.LARDER_DATA_DIR ?? '/data',
@@ -123,5 +131,136 @@ export async function announceToHomeAssistant(options: {
     await new Promise((r) => setTimeout(r, (options.delayMs ?? 5000) * (i + 1)));
   }
   options.log.warn('Gave up telling Home Assistant about Larder. Add the integration by hand with the address and a token from Settings.');
+  return false;
+}
+
+/* ------------------------------------------------------------------ */
+/* The Home Assistant integration, installed by the add-on              */
+/* ------------------------------------------------------------------ */
+
+/** "0.10.0" is newer than "0.9.2". Missing parts count as 0. */
+export function compareVersions(a: string, b: string): number {
+  const parts = (v: string) => v.split(/[.+-]/).map((p) => Number.parseInt(p, 10) || 0);
+  const x = parts(a);
+  const y = parts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return Math.sign(d);
+  }
+  return 0;
+}
+
+async function manifestVersion(dir: string): Promise<string | null> {
+  try {
+    return (JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as { version?: string }).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type IntegrationInstall = { result: 'installed' | 'updated' | 'current' | 'newer' | 'missing'; version: string | null; previous: string | null };
+
+/**
+ * Puts the integration that matches this Larder into Home Assistant's
+ * custom_components folder: installs it when it's missing, updates it when
+ * it's older, and leaves alone one that's the same or newer (from HACS, say).
+ * The new folder is copied next to the old one and swapped in, so Home
+ * Assistant never sees half of it. Home Assistant loads it after a restart.
+ */
+export async function installIntegration(options: { source: string; configDir: string }): Promise<IntegrationInstall> {
+  const version = await manifestVersion(options.source);
+  if (!version) return { result: 'missing', version: null, previous: null };
+  const parent = join(options.configDir, 'custom_components');
+  const target = join(parent, 'larder');
+  const previous = await manifestVersion(target);
+  if (previous && compareVersions(previous, version) >= 0) return { result: compareVersions(previous, version) ? 'newer' : 'current', version, previous };
+  await mkdir(parent, { recursive: true });
+  // A dot name isn't a Python package, so Home Assistant ignores it while it's being copied.
+  const staged = join(parent, '.larder-new');
+  await rm(staged, { recursive: true, force: true });
+  await cp(options.source, staged, { recursive: true, filter: (src) => !src.includes('__pycache__') });
+  await rm(target, { recursive: true, force: true });
+  await rename(staged, target);
+  return { result: previous ? 'updated' : 'installed', version, previous };
+}
+
+/** Where the install step (run as root by the entrypoint) leaves its result for Larder to report. */
+export const integrationStatusFile = (dataDir: string) => join(dataDir, 'integration-install.json');
+
+/**
+ * The entrypoint's install step: does nothing outside an add-on or when the
+ * "install the integration" option is off. Never fails the add-on's start.
+ */
+export async function runIntegrationInstall(
+  env: Record<string, string | undefined>,
+  io: { read?: (file: string) => string; log?: (msg: string) => void } = {},
+): Promise<IntegrationInstall | null> {
+  const log = io.log ?? ((m: string) => console.log(`[larder] ${m}`));
+  if (!isAddon(env)) return null;
+  if (readOptions(env, io.read ?? ((f) => readFileSync(f, 'utf8'))).install_integration === false) {
+    log('Not installing the Home Assistant integration (turned off in the add-on options).');
+    return null;
+  }
+  try {
+    const status = await installIntegration({ source: env.LARDER_INTEGRATION_SOURCE ?? '/app/integration/larder', configDir: env.LARDER_HA_CONFIG_DIR ?? '/homeassistant' });
+    const say = {
+      installed: `Installed the Larder integration ${status.version} in Home Assistant. Restart Home Assistant to load it.`,
+      updated: `Updated the Larder integration from ${status.previous} to ${status.version}. Restart Home Assistant to load it.`,
+      current: `The Larder integration ${status.version} is already installed.`,
+      newer: `Home Assistant has a newer Larder integration (${status.previous}) than this add-on (${status.version}); leaving it.`,
+      missing: 'This image has no Larder integration to install.',
+    }[status.result];
+    log(say);
+    if (status.result === 'installed' || status.result === 'updated') await writeFile(integrationStatusFile(env.LARDER_DATA_DIR ?? '/data'), JSON.stringify(status));
+    return status;
+  } catch (err) {
+    log(`Couldn't install the Larder integration in Home Assistant (${err instanceof Error ? err.message : String(err)}). Install it by hand: see the add-on's documentation.`);
+    return null;
+  }
+}
+
+/**
+ * After the integration was installed or updated, asks the person to restart
+ * Home Assistant with a notification in Home Assistant. Retries while Home
+ * Assistant starts; forgets the status once the notification is shown.
+ */
+export async function notifyIntegrationInstalled(options: {
+  supervisorToken: string;
+  dataDir: string;
+  log: { info(msg: string): void; warn(msg: string): void };
+  fetch?: typeof fetch;
+  attempts?: number;
+  delayMs?: number;
+}): Promise<boolean> {
+  const file = integrationStatusFile(options.dataDir);
+  let status: IntegrationInstall;
+  try {
+    status = JSON.parse(await readFile(file, 'utf8')) as IntegrationInstall;
+  } catch {
+    return false;
+  }
+  const message = status.result === 'updated'
+    ? `Larder updated its Home Assistant integration from ${status.previous} to ${status.version}. Restart Home Assistant to load it (Settings → System → Restart).`
+    : `Larder installed its Home Assistant integration (${status.version}). Restart Home Assistant (Settings → System → Restart), then set it up from Settings → Devices & services, where Larder will be waiting under Discovered.`;
+  const doFetch = options.fetch ?? fetch;
+  const attempts = options.attempts ?? 10;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await doFetch('http://supervisor/core/api/services/persistent_notification/create', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${options.supervisorToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ notification_id: 'larder_integration', title: 'Larder: restart Home Assistant', message }),
+      });
+      if (res.ok) {
+        await rm(file, { force: true });
+        options.log.info('Asked Home Assistant to show a restart notification for the Larder integration.');
+        return true;
+      }
+    } catch {
+      // Home Assistant may still be starting.
+    }
+    await new Promise((r) => setTimeout(r, (options.delayMs ?? 5000) * (i + 1)));
+  }
+  options.log.warn('Couldn\'t show the restart notification. Restart Home Assistant to load the Larder integration.');
   return false;
 }

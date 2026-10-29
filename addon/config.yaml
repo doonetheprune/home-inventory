@@ -20,6 +20,12 @@ panel_title: Larder
 panel_admin: false
 # Lets Larder tell Home Assistant where it is, so the integration sets itself up.
 hassio_api: true
+# Installs and updates the Larder integration in Home Assistant's custom_components folder
+# (the "Install the Home Assistant integration" option), and asks for a restart afterwards.
+map:
+  - type: homeassistant_config
+    read_only: false
+homeassistant_api: true
 discovery:
   - larder
 # The Mosquitto broker add-on, if installed, for Larder's optional MQTT module.
@@ -37,6 +43,7 @@ options:
   admins: []
   disabled_modules: []
   env_vars: []
+  install_integration: true
 schema:
   log_level: list(trace|debug|info|warn|error)
   backups: bool
@@ -49,3 +56,4 @@ schema:
   env_vars:
     - name: match(^LARDER_[A-Z0-9_]+$)
       value: str
+  install_integration: bool

@@ -10,6 +10,11 @@ if [ "$(id -u)" = "0" ]; then
   if [ "$(stat -c %u "$DATA")" != "$(id -u node)" ]; then
     chown -R node:node "$DATA"
   fi
+  # As a Home Assistant add-on: install or update the matching Larder integration in
+  # Home Assistant's config folder, which only root can write. Never stops Larder starting.
+  if [ -n "$SUPERVISOR_TOKEN" ]; then
+    node /app/dist/server/install-integration.js || true
+  fi
   # Busybox su replaces itself with the command (same process, same environment).
   # "--" stops su reading the command's own flags (like node's --disable-warning) as its options.
   exec su -s /bin/sh -c 'exec "$0" "$@"' node -- "$@"
