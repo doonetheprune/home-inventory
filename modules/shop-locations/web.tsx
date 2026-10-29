@@ -1,11 +1,14 @@
 /** Shop locations UI: branches on each shop's card, a sheet to find nearby ones, and the page for zones, alerts and YAML. */
-import { useEffect, useState } from 'react';
-import { api, ApiError, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, Sheet, Switch, useAction, useQuery, useShops, useToast, type Shop } from '@larder/web-sdk';
+import { useEffect, useRef, useState } from 'react';
+import { api, ApiError, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, Sheet, Switch, useAction, useQuery, useQueryClient, useShops, useToast, type Shop } from '@larder/web-sdk';
 
 interface Home { latitude: number; longitude: number; label: string; source: 'home-assistant' | 'search' | 'device' }
 interface Status { home: Home | null; homeAssistant: { connected: boolean; problem: string | null }; branches: number; zones: number }
 interface Branch { id: string; shopId: string; osmId: string | null; name: string; address: string; latitude: number; longitude: number; radius: number; zoneId: string | null; zoneEntityId: string | null; zoneCurrent: boolean }
 interface Found { osmId: string; name: string; street: string; address: string; latitude: number; longitude: number; distance: number; saved: boolean }
+/** searching: asking now. waiting: the map servers were busy; Larder tries again at nextTryAt. gave_up: busy all day. */
+interface Search { shopId: string; within: number; status: 'searching' | 'waiting' | 'done' | 'gave_up'; attempts: number; nextTryAt: string | null; problem: string | null; finishedAt: string | null; unseen: boolean; results: Found[] }
+type SearchSummary = Omit<Search, 'results'> & { found: number; unsaved: number };
 interface Phone { action: string; name: string }
 interface Alerts { connected: boolean; people: Array<{ entityId: string; name: string; phone: string | null; phones: Phone[] }>; phones: Phone[]; onlyWithItems: boolean; automation: { entityId: string | null; savedAt: string | null } | null }
 interface Yaml { zones: string; automation: string; placeholders: boolean }
@@ -16,7 +19,15 @@ const useBranches = () => useQuery({ queryKey: ['shop-locations', 'branches'], q
 
 /** Distances in miles, as on UK road signs. */
 const miles = (m: number) => `${(m / 1609.344).toFixed(1)} mi`;
-const RANGES: Array<[number, string]> = [[1609, '1 mile'], [4828, '3 miles'], [8047, '5 miles'], [16093, '10 miles']];
+const RANGES: Array<[number, string]> = [[1609, '1 mile'], [4828, '3 miles'], [8047, '5 miles'], [16093, '10 miles'], [32187, '20 miles']];
+const isActive = (s?: { status: string } | null) => s?.status === 'searching' || s?.status === 'waiting';
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+/** Every shop's latest search, for the Shops page. Asks again only while one is under way. */
+const useSearches = () => useQuery({
+  queryKey: ['shop-locations', 'searches'],
+  queryFn: () => call<SearchSummary[]>('GET', '/searches'),
+  refetchInterval: (q) => (q.state.data?.some(isActive) ? 15_000 : false),
+});
 const RADII = [100, 150, 250, 400];
 // A ticked box, without the crossed-out look of a ticked shopping list item.
 const TICKED = { background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--accent-ink)' };
@@ -56,38 +67,66 @@ function HomeForm({ status, onDone }: { status: Status; onDone?: () => void }) {
   );
 }
 
-/** Finds a shop's branches near home and saves the ticked ones. */
+/** Finds a shop's branches near home and saves the ticked ones. The search carries on in the background if the map is busy. */
 function FindSheet({ shop, onClose }: { shop: Shop; onClose: () => void }) {
   const status = useStatus();
+  const qc = useQueryClient();
   const { run, busy } = useAction();
-  const [within, setWithin] = useState(4828);
-  const [results, setResults] = useState<Found[] | null>(null);
+  const key = ['shop-locations', 'search', shop.id];
+  const search = useQuery({
+    queryKey: key,
+    queryFn: () => call<{ search: Search | null }>('GET', `/nearby?shopId=${encodeURIComponent(shop.id)}`).then((r) => r.search),
+    // Only while a search is under way: once it's done or has given up, nothing more to ask.
+    refetchInterval: (q) => (isActive(q.state.data) ? 4000 : false),
+  });
+  const [within, setWithin] = useState<number | null>(null);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState<number | null>(null);
   const [changingHome, setChangingHome] = useState(false);
   const home = status.data?.home ?? null;
+  const s = search.data ?? null;
+  const range = within ?? s?.within ?? 4828;
 
-  async function search(range = within) {
-    setSearching(true);
+  async function start(opts: { within?: number; again?: boolean; now?: boolean } = {}) {
+    setStarting(true);
     setError(null);
     try {
-      const r = await call<{ results: Found[] }>('GET', `/nearby?shopId=${encodeURIComponent(shop.id)}&within=${range}`);
-      setResults(r.results);
-      // The nearest one is ticked to start with, if it isn't saved already.
-      setPicked(new Set(r.results.filter((f) => !f.saved).slice(0, 1).map((f) => f.osmId)));
+      const r = await call<{ search: Search }>('POST', '/nearby', { shopId: shop.id, within: opts.within ?? range, again: opts.again, now: opts.now });
+      qc.setQueryData(key, r.search);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn\'t search the map.');
     } finally {
-      setSearching(false);
+      setStarting(false);
     }
   }
+  // Opening the sheet starts a search, or picks up the one already going (once its distance is known).
+  const begun = useRef<string | null>(null);
   useEffect(() => {
-    if (home && !results && !searching && !error) void search();
+    const where = home ? `${home.latitude},${home.longitude}` : null;
+    if (!where || !search.isFetched || begun.current === where) return;
+    begun.current = where;
+    void start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [home?.latitude, home?.longitude]);
+  }, [home?.latitude, home?.longitude, search.isFetched]);
+  // The shop's card only asks while it knows a search is under way, so tell it when this one starts or changes.
+  useEffect(() => {
+    if (s) void qc.invalidateQueries({ queryKey: ['shop-locations', 'searches'] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s?.status, s?.within, s?.attempts]);
+  // Found while the sheet was open: say it's been seen, so the shop's card doesn't announce it too.
+  useEffect(() => {
+    if (s?.status === 'done' && s.unseen && !starting) void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s?.status, s?.unseen]);
+  // The nearest one is ticked to start with, if it isn't saved already.
+  useEffect(() => {
+    if (s?.status === 'done') setPicked(new Set(s.results.filter((f) => !f.saved).slice(0, 1).map((f) => f.osmId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s?.finishedAt]);
 
+  const results = s?.status === 'done' ? s.results : null;
   const toggle = (id: string) => setPicked((p) => {
     const n = new Set(p);
     if (n.has(id)) n.delete(id);
@@ -106,7 +145,7 @@ function FindSheet({ shop, onClose }: { shop: Shop; onClose: () => void }) {
       {status.isLoading ? <Loading /> : !home || changingHome ? (
         <div className="stack">
           <p className="small muted">{home ? 'Search from somewhere else:' : `Where should Larder look?${status.data?.homeAssistant.connected ? ' Home Assistant doesn\'t say where home is.' : ''}`}</p>
-          <HomeForm status={status.data!} onDone={() => { setChangingHome(false); setResults(null); }} />
+          <HomeForm status={status.data!} onDone={() => { setChangingHome(false); begun.current = null; }} />
         </div>
       ) : saved !== null ? (
         <SavedNext shop={shop} count={saved} connected={!!status.data?.homeAssistant.connected} onClose={onClose} />
@@ -114,14 +153,32 @@ function FindSheet({ shop, onClose }: { shop: Shop; onClose: () => void }) {
         <div className="stack">
           <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
             <span className="small muted">Around {home.label} · <button type="button" className="link small" onClick={() => setChangingHome(true)}>Change</button></span>
-            <select className="input" style={{ width: 'auto' }} value={within} onChange={(e) => { const v = Number(e.target.value); setWithin(v); void search(v); }} aria-label="How far to look">
+            <select className="input" style={{ width: 'auto' }} value={range} onChange={(e) => { const v = Number(e.target.value); setWithin(v); void start({ within: v }); }} aria-label="How far to look">
               {RANGES.map(([m, label]) => <option key={m} value={m}>Within {label}</option>)}
             </select>
           </div>
-          {searching ? <Loading /> : error ? (
+          {error ? (
             <div className="stack" style={{ gap: 8 }}>
               <div className="error">{error}</div>
-              <button type="button" className="btn small" style={{ justifySelf: 'start' }} onClick={() => void search()}>Try again</button>
+              <button type="button" className="btn small" style={{ justifySelf: 'start' }} onClick={() => void start()}>Try again</button>
+            </div>
+          ) : !s || s.status === 'searching' || (starting && !results) ? (
+            <div className="stack" style={{ gap: 4, justifyItems: 'center' }}>
+              <Loading />
+              <span className="small muted">{s && s.attempts > 1 ? 'Trying the map servers again…' : 'Searching the map…'}</span>
+            </div>
+          ) : s.status === 'waiting' ? (
+            <div className="card pad stack" style={{ gap: 8, background: 'var(--surface-2)' }}>
+              <b className="small">The map servers are busy</b>
+              <span className="small">Larder will keep trying in the background{s.nextTryAt ? `, next at ${clock(s.nextTryAt)}` : ''}. You can close this: what it finds will wait on {shop.name}’s card.</span>
+              {s.problem && <span className="small muted">{s.problem}</span>}
+              <button type="button" className="btn small" style={{ justifySelf: 'start' }} disabled={starting} onClick={() => void start({ now: true })}>Try now</button>
+            </div>
+          ) : s.status === 'gave_up' ? (
+            <div className="stack" style={{ gap: 8 }}>
+              <div className="error">Larder kept trying for a day, but the map servers were always busy.</div>
+              {s.problem && <span className="small muted">{s.problem}</span>}
+              <button type="button" className="btn small" style={{ justifySelf: 'start' }} onClick={() => void start({ again: true })}>Search again</button>
             </div>
           ) : results && !results.length ? (
             <Empty title={`No ${shop.name} found nearby`}><span className="small muted">Try further away. The map may not have every shop, or may spell it differently.</span></Empty>
@@ -144,6 +201,7 @@ function FindSheet({ shop, onClose }: { shop: Shop; onClose: () => void }) {
               {picked.size ? `Save ${picked.size} branch${picked.size === 1 ? '' : 'es'}` : 'Tick the branches you use'}
             </button>
           )}
+          {results && <button type="button" className="link small" style={{ justifySelf: 'start' }} disabled={starting} onClick={() => void start({ again: true })}>Search again</button>}
           <span className="small muted">Map data © OpenStreetMap contributors. Larder sends where home is to the nearest kilometre, never exactly.</span>
         </div>
       )}
@@ -182,14 +240,29 @@ function SavedNext({ shop, count, connected, onClose }: { shop: Shop; count: num
 function ShopBranchesPanel({ shop }: { shop: Shop }) {
   const branches = useBranches();
   const status = useStatus();
+  const searches = useSearches();
   const { run, busy } = useAction();
   const [open, setOpen] = useState(false);
   const mine = (branches.data ?? []).filter((b) => b.shopId === shop.id);
+  const search = searches.data?.find((x) => x.shopId === shop.id);
+  // What the background search is up to, until someone opens the sheet to look.
+  const searchLine = !search ? null
+    : search.status === 'searching' ? 'Looking for branches nearby…'
+      : search.status === 'waiting' ? `The map is busy, so Larder is still looking${search.nextTryAt ? ` (next try ${clock(search.nextTryAt)})` : ''}`
+        : search.status === 'gave_up' ? 'Couldn’t reach the map servers. Find nearby to try again.'
+          : search.unseen && search.unsaved ? `Found ${search.unsaved} nearby: choose yours`
+            : null;
   const connected = !!status.data?.homeAssistant.connected;
   const behind = mine.filter((b) => !b.zoneId || !b.zoneCurrent).length;
   const find = <button type="button" className="btn small" onClick={() => setOpen(true)}>{mine.length ? 'Find more' : 'Find nearby'}</button>;
   return (
     <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10, display: 'grid', gap: 8 }}>
+      {searchLine && (
+        <button type="button" className="row small" style={{ gap: 8, background: 'none', border: 0, padding: 0, color: 'var(--accent)', fontWeight: 600, textAlign: 'left', cursor: 'pointer' }} onClick={() => setOpen(true)}>
+          {isActive(search) ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} aria-hidden /> : <Icon name="search" size="sm" />}
+          {searchLine}
+        </button>
+      )}
       {mine.length ? (
         <>
           <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>

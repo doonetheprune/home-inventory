@@ -1182,6 +1182,115 @@
           "source"
         ]
       },
+      "ShopBranchSearchInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopBranchSearchInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "within": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "waiting",
+              "done",
+              "gave_up"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "nextTryAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "problem": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unseen": {
+            "default": false,
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "osmId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "latitude": {
+                  "type": "number"
+                },
+                "longitude": {
+                  "type": "number"
+                },
+                "distance": {
+                  "type": "number"
+                },
+                "saved": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "osmId",
+                "name",
+                "street",
+                "address",
+                "latitude",
+                "longitude",
+                "distance",
+                "saved"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "within",
+          "status",
+          "attempts",
+          "startedAt",
+          "results"
+        ]
+      },
       "CategoryInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/CategoryInput",
@@ -4192,6 +4301,121 @@
           "longitude",
           "label",
           "source"
+        ],
+        "additionalProperties": false
+      },
+      "ShopBranchSearch": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopBranchSearch",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "within": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "waiting",
+              "done",
+              "gave_up"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "nextTryAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "problem": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unseen": {
+            "default": false,
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "osmId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "latitude": {
+                  "type": "number"
+                },
+                "longitude": {
+                  "type": "number"
+                },
+                "distance": {
+                  "type": "number"
+                },
+                "saved": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "osmId",
+                "name",
+                "street",
+                "address",
+                "latitude",
+                "longitude",
+                "distance",
+                "saved"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "within",
+          "status",
+          "attempts",
+          "startedAt",
+          "nextTryAt",
+          "problem",
+          "finishedAt",
+          "unseen",
+          "results"
         ],
         "additionalProperties": false
       },
@@ -12481,35 +12705,44 @@
       }
     },
     "/api/v1/modules/shop-locations/nearby": {
-      "get": {
-        "summary": "Branches of a shop near home, from OpenStreetMap, nearest first",
+      "post": {
+        "summary": "Look for a shop's branches near home on OpenStreetMap",
         "tags": [
           "Module: shop-locations"
         ],
-        "description": "Home's position is rounded to about 1 km before it is sent.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "query",
-            "name": "shopId",
-            "required": true
-          },
-          {
-            "schema": {
-              "default": 5000,
-              "type": "integer",
-              "minimum": 500,
-              "maximum": 50000
-            },
-            "in": "query",
-            "name": "within",
-            "required": false,
-            "description": "Metres from home"
+        "description": "Answers within about 10 seconds with what it has. If the map servers are busy, Larder keeps trying in the background (after 1, 2, 5, 10, 15 minutes, then every 30, for up to a day) and publishes `shop-locations.found` when it gets an answer. A recent search is answered from what it found unless `again` is set; `now` tries a waiting search straight away. Home's position is rounded to about 1 km before it is sent.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "within": {
+                    "default": 4828,
+                    "description": "Metres from home",
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 50000
+                  },
+                  "again": {
+                    "type": "boolean"
+                  },
+                  "now": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "shopId"
+                ]
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "200": {
             "description": "Default Response",
@@ -12521,55 +12754,157 @@
                     "home": {
                       "$ref": "#/components/schemas/ShopLocationsHome"
                     },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "osmId": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "street": {
-                            "type": "string"
-                          },
-                          "address": {
-                            "type": "string"
-                          },
-                          "latitude": {
-                            "type": "number"
-                          },
-                          "longitude": {
-                            "type": "number"
-                          },
-                          "distance": {
-                            "type": "number"
-                          },
-                          "saved": {
-                            "type": "boolean"
-                          }
-                        },
-                        "required": [
-                          "osmId",
-                          "name",
-                          "street",
-                          "address",
-                          "latitude",
-                          "longitude",
-                          "distance",
-                          "saved"
-                        ],
-                        "additionalProperties": false
-                      }
+                    "search": {
+                      "$ref": "#/components/schemas/ShopBranchSearch"
                     }
                   },
                   "required": [
                     "home",
-                    "results"
+                    "search"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "How a shop's branch search is going, and what it found",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "search": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ShopBranchSearch"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "search"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/searches": {
+      "get": {
+        "summary": "Every shop's latest branch search, for showing progress on the Shops page",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "shopId": {
+                        "type": "string"
+                      },
+                      "within": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "searching",
+                          "waiting",
+                          "done",
+                          "gave_up"
+                        ]
+                      },
+                      "attempts": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "startedAt": {
+                        "type": "string"
+                      },
+                      "nextTryAt": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "problem": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "finishedAt": {
+                        "default": null,
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "unseen": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "found": {
+                        "type": "number"
+                      },
+                      "unsaved": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "shopId",
+                      "within",
+                      "status",
+                      "attempts",
+                      "startedAt",
+                      "nextTryAt",
+                      "problem",
+                      "finishedAt",
+                      "unseen",
+                      "found",
+                      "unsaved"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               }
             }

@@ -107,6 +107,7 @@ Larder's changes are fired in Home Assistant as `larder_<type>`:
 | `larder_shopping_purchased` | A shopping trip was ticked off | shopId, items |
 | `larder_nfc_scanned` | A tag was scanned | tagId, device, kind (product, place, unknown), id, name, path |
 | `larder_batteries_low` | A linked device's battery is low | deviceId, device, kind, battery, place, message, level |
+| `larder_shop_locations_found` | A search for a shop's branches that had to wait for the map got its answer | shopId, shop, count, message |
 | `larder_product_created`, `larder_product_updated`, `larder_place_changed`, … | Catalogue changes | ids and names |
 
 ```yaml
@@ -183,7 +184,7 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **Calling an action through Home Assistant's REST API (`/api/services/larder/...`) answers 500 when the action fails**, e.g. for an unknown item. That's how Home Assistant's REST API reports every action error; Larder's message is in the Home Assistant log. The UI, automations, scripts and Node-RED show the message itself.
 - **"Home Assistant saved the automation but hasn't loaded it":** `configuration.yaml` is missing the line `automation: !include automations.yaml` (new installs have it). Add it and restart Home Assistant.
 - **"That needs an admin's access token":** Larder runs outside Home Assistant with a token from a user who isn't an admin. Make one as an admin, or use the YAML.
-- **"OpenStreetMap's map servers are busy":** the free public servers Larder searches turned it away (they're often overloaded). Try again in a few minutes. Larder already tries three of them in turn.
+- **"The map servers are busy":** the free public map servers Larder searches turned it away (they're often overloaded). Larder tries five of them, then keeps trying in the background for up to a day; close the sheet, and the shop's card shows what it finds.
 - **No arrival alert:** check the person's phone shows them at the shop (their state is the zone's name), the companion app can send notifications, and the shop's list has something on it (or turn off "Only when there's something to get there").
 - **No `larder_batteries_low` events:** check the battery product is linked to the device under **Used in**, and that the device has a battery sensor in Home Assistant.
 
