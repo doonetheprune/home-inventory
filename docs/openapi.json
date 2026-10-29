@@ -1076,6 +1076,112 @@
           "expiresAt"
         ]
       },
+      "ShopBranchInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopBranchInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "osmId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "address": {
+            "default": "",
+            "type": "string",
+            "maxLength": 200
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "radius": {
+            "default": 150,
+            "type": "integer",
+            "minimum": 25,
+            "maximum": 2000
+          },
+          "zoneId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zoneEntityId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zoneCurrent": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "name",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "ShopLocationsHomeInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopLocationsHomeInput",
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "home-assistant",
+              "search",
+              "device"
+            ]
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "label",
+          "source"
+        ]
+      },
       "CategoryInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/CategoryInput",
@@ -3972,6 +4078,120 @@
           "items",
           "skipped",
           "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "ShopBranch": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopBranch",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "osmId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "address": {
+            "default": "",
+            "type": "string",
+            "maxLength": 200
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "radius": {
+            "default": 150,
+            "type": "integer",
+            "minimum": 25,
+            "maximum": 2000
+          },
+          "zoneId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zoneEntityId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zoneCurrent": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "osmId",
+          "name",
+          "address",
+          "latitude",
+          "longitude",
+          "radius",
+          "zoneId",
+          "zoneEntityId",
+          "zoneCurrent"
+        ],
+        "additionalProperties": false
+      },
+      "ShopLocationsHome": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/ShopLocationsHome",
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "home-assistant",
+              "search",
+              "device"
+            ]
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "label",
+          "source"
         ],
         "additionalProperties": false
       },
@@ -12085,6 +12305,878 @@
                   },
                   "required": [
                     "used"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/status": {
+      "get": {
+        "summary": "Where home is, and whether Larder can reach Home Assistant",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "home": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ShopLocationsHome"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "homeAssistant": {
+                      "type": "object",
+                      "properties": {
+                        "connected": {
+                          "type": "boolean"
+                        },
+                        "problem": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "connected",
+                        "problem"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "branches": {
+                      "type": "number"
+                    },
+                    "zones": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "home",
+                    "homeAssistant",
+                    "branches",
+                    "zones"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/home": {
+      "put": {
+        "summary": "Say where home is: a postcode or town to look up, or a position",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "Only needed when Home Assistant doesn't know, or to search from somewhere else. The search text goes to OpenStreetMap's Nominatim.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "query": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 120
+                      }
+                    },
+                    "required": [
+                      "query"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "latitude",
+                      "longitude"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopLocationsHome"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Forget the home set here and use Home Assistant's again",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "home": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ShopLocationsHome"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "home"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/nearby": {
+      "get": {
+        "summary": "Branches of a shop near home, from OpenStreetMap, nearest first",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "Home's position is rounded to about 1 km before it is sent.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": true
+          },
+          {
+            "schema": {
+              "default": 5000,
+              "type": "integer",
+              "minimum": 500,
+              "maximum": 50000
+            },
+            "in": "query",
+            "name": "within",
+            "required": false,
+            "description": "Metres from home"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "home": {
+                      "$ref": "#/components/schemas/ShopLocationsHome"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "osmId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "street": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "type": "number"
+                          },
+                          "distance": {
+                            "type": "number"
+                          },
+                          "saved": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "osmId",
+                          "name",
+                          "street",
+                          "address",
+                          "latitude",
+                          "longitude",
+                          "distance",
+                          "saved"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "home",
+                    "results"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/branches": {
+      "get": {
+        "summary": "Saved branches, for one shop or all",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShopBranch"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Save branches of a shop (from /nearby, or typed in)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "A branch found again by its OpenStreetMap id is updated rather than added twice.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branches": {
+                    "minItems": 1,
+                    "maxItems": 25,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "osmId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 40
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "street": {
+                          "type": "string",
+                          "maxLength": 120
+                        },
+                        "address": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "minimum": -90,
+                          "maximum": 90
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "minimum": -180,
+                          "maximum": 180
+                        },
+                        "radius": {
+                          "type": "integer",
+                          "minimum": 25,
+                          "maximum": 2000
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "latitude",
+                        "longitude"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "shopId",
+                  "branches"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShopBranch"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/branches/{id}": {
+      "patch": {
+        "summary": "Rename a branch or change its zone's size (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "radius": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopBranch"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Forget a branch, and remove its zone from Home Assistant if Larder made one (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/zones": {
+      "post": {
+        "summary": "Make (or update) a zone in Home Assistant for each saved branch (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "Updates the arrival automation too, once Larder has made it, so new branches send alerts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "made": {
+                      "type": "number"
+                    },
+                    "updated": {
+                      "type": "number"
+                    },
+                    "automationUpdated": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "made",
+                    "updated",
+                    "automationUpdated",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/alerts": {
+      "get": {
+        "summary": "Who gets an alert on reaching a shop, and on which phone",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "People and phones come from Home Assistant: a phone is a companion app with a notify action.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "entityId": {
+                            "type": "string",
+                            "pattern": "^person\\.[a-z0-9_]+$"
+                          },
+                          "name": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "phone": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^notify\\.[a-z0-9_]+$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "phones": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "action": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "action",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "entityId",
+                          "name",
+                          "phone",
+                          "phones"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "phones": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "onlyWithItems": {
+                      "type": "boolean"
+                    },
+                    "automation": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "entityId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "savedAt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "entityId",
+                            "savedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "people",
+                    "phones",
+                    "onlyWithItems",
+                    "automation"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Choose who gets an alert and on which phone (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "Updates the automation in Home Assistant too, once Larder has made it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "people": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "entityId": {
+                          "type": "string",
+                          "pattern": "^person\\.[a-z0-9_]+$"
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "phone": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^notify\\.[a-z0-9_]+$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "entityId",
+                        "phone"
+                      ]
+                    }
+                  },
+                  "onlyWithItems": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "people"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "automationUpdated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "automationUpdated"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/automation": {
+      "post": {
+        "summary": "Make (or replace) the arrival automation in Home Assistant (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "description": "Saved as automation id larder_shop_arrivals. Makes zones first for any branch that doesn't have one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entityId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "loaded": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "entityId",
+                    "loaded",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove the arrival automation from Home Assistant (admin)",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/shop-locations/yaml": {
+      "get": {
+        "summary": "The zones and the arrival automation as YAML, to add to Home Assistant by hand",
+        "tags": [
+          "Module: shop-locations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "string"
+                    },
+                    "automation": {
+                      "type": "string"
+                    },
+                    "placeholders": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "automation",
+                    "placeholders"
                   ],
                   "additionalProperties": false
                 }

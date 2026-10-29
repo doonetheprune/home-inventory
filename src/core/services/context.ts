@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Clock, EventBus, FileStore, SearchIndex, Storage } from '../ports';
+import type { Clock, EventBus, FileStore, HomeAssistantPort, SearchIndex, Storage } from '../ports';
 import { isoNow, localDate } from '../util';
 
 export const HouseholdSettings = z.object({
@@ -19,13 +19,16 @@ export interface CoreDeps {
   clock?: Clock;
   /** How long to wait for each barcode lookup provider (and for a lookup's photo). */
   lookupTimeoutMs?: number;
-  /** For downloading lookup photos. Defaults to the platform's fetch; tests pass their own. */
+  /** For lookups and other web services (photos, maps). Defaults to the platform's fetch; tests pass their own. */
   fetch?: typeof fetch;
+  /** Home Assistant, when Larder can reach it. */
+  homeAssistant?: HomeAssistantPort | null;
 }
 
 /** Shared by every service. */
-export interface CoreContext extends Required<Omit<CoreDeps, 'clock' | 'fetch'>> {
+export interface CoreContext extends Required<Omit<CoreDeps, 'clock' | 'fetch' | 'homeAssistant'>> {
   fetch: typeof fetch;
+  homeAssistant: HomeAssistantPort | null;
   clock: Clock;
   now(): string;
   today(): string;
@@ -52,6 +55,7 @@ export function createContext(deps: CoreDeps): CoreContext {
     events: deps.events,
     lookupTimeoutMs: deps.lookupTimeoutMs ?? 4000,
     fetch: deps.fetch ?? ((input, init) => globalThis.fetch(input, init)),
+    homeAssistant: deps.homeAssistant ?? null,
     clock,
     now: () => isoNow(clock),
     today: () => localDate(clock.now(), timeZone),

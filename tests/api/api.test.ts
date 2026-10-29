@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { defineModule } from '@larder/core';
 import { makeApp } from './helpers';
+import shopLocations from '../../modules/shop-locations';
 
 type Any = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -49,6 +50,18 @@ describe('auth', () => {
     await call('POST', '/api/v1/auth/login', { username: 'kid', password: 'abcdefgh' });
     expect((await call('PATCH', '/api/v1/settings', { expiryWarningDays: 3 })).status).toBe(403);
     expect((await call('GET', '/api/v1/home')).status).toBe(200);
+  });
+
+  it('keeps module routes marked admin for admins', async () => {
+    const { call, clearAuth } = await makeApp({ modules: [shopLocations] });
+    await call('POST', '/api/v1/auth/setup', { username: 'shaun', password: 'correct horse' });
+    await call('POST', '/api/v1/auth/users', { username: 'kid', password: 'abcdefgh' });
+    // Not connected to Home Assistant, so an admin hears that; a member is stopped first.
+    expect((await call('POST', '/api/v1/modules/shop-locations/automation', {})).status).toBe(409);
+    clearAuth();
+    await call('POST', '/api/v1/auth/login', { username: 'kid', password: 'abcdefgh' });
+    expect((await call('POST', '/api/v1/modules/shop-locations/automation', {})).status).toBe(403);
+    expect((await call('GET', '/api/v1/modules/shop-locations/yaml')).status).toBe(200);
   });
 
   it("can't be bypassed with encoded or odd paths", async () => {

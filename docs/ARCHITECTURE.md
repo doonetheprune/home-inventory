@@ -17,13 +17,13 @@ Larder is one process and one data folder. Everything talks to a small core thro
                           │ shopping · search · lookup · home        │
                           └───────────────┬──────────────────────────┘
                                           │ ports (src/core/ports.ts)
-            ┌──────────────┬──────────────┼───────────────┬──────────────┐
-         Storage        Files          Search          Events          Clock
-     SQLite / memory   local disk   MiniSearch      in-process       system
-     (Firestore…)      (S3…)        (Typesense…)    (MQTT, HA…)
+            ┌──────────────┬──────────────┼───────────────┬──────────────┬──────────────┐
+         Storage        Files          Search          Events          Clock     Home Assistant
+     SQLite / memory   local disk   MiniSearch      in-process       system      Supervisor or
+     (Firestore…)      (S3…)        (Typesense…)    (MQTT, HA…)                  URL + token
                                           │
                               Feature modules (modules/)
-                 lookup providers · pricing · batteries · scenarios · printing · recipes · MQTT · template
+        lookup providers · pricing · batteries · scenarios · printing · recipes · MQTT · shop locations · template
 ```
 
 ## Core

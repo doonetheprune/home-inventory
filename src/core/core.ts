@@ -18,7 +18,7 @@ import { createResolver, type Resolver } from './services/resolve';
 import { createNfcService } from './services/nfc';
 import { createAssistant, type Assistant } from './services/assistant';
 import { createModuleRegistry, type ModuleOptions, type ModuleRegistry } from './modules';
-import type { EventBus, FileStore, LarderEvent, Storage } from './ports';
+import type { EventBus, FileStore, HomeAssistantPort, LarderEvent, Storage } from './ports';
 import type { Movement } from './model';
 import { newId } from './util';
 
@@ -55,6 +55,8 @@ export interface CoreApi {
   };
   /** Adapters, for the server's own needs (login, files, backups). Modules should not use these. */
   adapters: { storage: Storage; files: FileStore; events: EventBus };
+  /** Home Assistant, when Larder can reach it (null otherwise). Modules may use it. */
+  homeAssistant: HomeAssistantPort | null;
   today(): string;
   now(): string;
 }
@@ -108,6 +110,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     modules,
     events: { subscribe: (h) => ctx.events.subscribe(h) },
     adapters: { storage: deps.storage, files: deps.files, events: deps.events },
+    homeAssistant: ctx.homeAssistant,
     today: () => ctx.today(),
     now: () => ctx.now(),
   };

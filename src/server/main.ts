@@ -10,6 +10,7 @@ import { createMemoryStorage } from '../adapters/storage-memory';
 import { createLocalFileStore } from '../adapters/files-local';
 import { createMemorySearchIndex } from '../adapters/search-memory';
 import { createMemoryEventBus } from '../adapters/events-memory';
+import { createHomeAssistant } from '../adapters/homeassistant';
 import { modules } from '../../modules';
 import { addonSettings, announceToHomeAssistant, isAddon, notifyIntegrationInstalled } from './addon';
 import { buildApp } from './app';
@@ -26,8 +27,13 @@ async function main() {
   const events = createMemoryEventBus((err, event) => console.error(`Event listener failed for ${event.type}:`, err));
 
   let log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error: (o: object, m: string) => void } = console as never;
+  // Home Assistant, for modules that make zones or automations there: through the
+  // Supervisor as an add-on, or by address and token when Larder runs elsewhere.
+  const homeAssistant = isAddon(env)
+    ? createHomeAssistant({ url: 'http://supervisor/core', token: env.SUPERVISOR_TOKEN!, supervisor: { url: 'http://supervisor', token: env.SUPERVISOR_TOKEN! } })
+    : config.haUrl && config.haToken ? createHomeAssistant({ url: config.haUrl, token: config.haToken }) : null;
   const core = await createCore(
-    { storage, files: createLocalFileStore(join(config.dataDir, 'files')), search: createMemorySearchIndex(), events },
+    { storage, files: createLocalFileStore(join(config.dataDir, 'files')), search: createMemorySearchIndex(), events, homeAssistant },
     { modules, disabled: config.disabledModules, env, logger: (level, message, extra) => log[level](extra ?? {}, message) },
   );
 

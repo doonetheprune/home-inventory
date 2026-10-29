@@ -29,11 +29,12 @@ Run `npm run typecheck && npm test` before every commit. Run `npm run test:e2e` 
 src/core/            The stable core. Data model, ports (interfaces), services, module system. No I/O, no Node APIs.
   model.ts           zod schemas: the single source of truth for records and API payloads
   inputs.ts          request payload schemas (create/patch/stock operations)
-  ports.ts           Storage, FileStore, SearchIndex, EventBus, Clock interfaces
+  ports.ts           Storage, FileStore, SearchIndex, EventBus, Clock, HomeAssistant interfaces
   services/          products, stock, places/shops/categories (catalogue), shopping, search, lookup, home
   modules.ts         module definition, context and registry
 src/adapters/        Implementations of the ports: storage-sqlite, storage-memory, files-local, files-memory,
-                     search-memory (MiniSearch), events-memory
+                     search-memory (MiniSearch), events-memory, homeassistant (zones and automations, via the
+                     Supervisor or an admin's token)
 src/server/          Fastify app: REST API (/api/v1), OpenAPI, login and tokens, live events (SSE), static web app
 src/web/             React web app (Vite). Mobile first; switches to a sidebar layout at 900px wide
   server/addon.ts    Running as a Home Assistant add-on: options, Supervisor discovery, installing the integration
@@ -74,7 +75,7 @@ mockups/             Phase 0 clickable mock-ups (the design reference)
    - `ctx.addLookupProvider(...)`, `ctx.addSearchSection(...)` extend scanning and search.
    - `ctx.addSensor(...)`, `ctx.addAction(...)` add Home Assistant sensors and actions; `ctx.addTool(...)` adds a tool for AI assistants; `ctx.publish('my-feature.something', data)` fires an event.
    - `productFields: z.object({...})` declares data in `product.fields['my-feature']`.
-4. Optional UI: `modules/my-feature/web.tsx` default-exports `defineWebModule({ id, productPanels, shoppingPanels, pages })` from `@larder/web-sdk`. It's found automatically and only shown while the module is on.
+4. Optional UI: `modules/my-feature/web.tsx` default-exports `defineWebModule({ id, productPanels, shoppingPanels, shopPanels, pages })` from `@larder/web-sdk`. It's found automatically and only shown while the module is on.
 5. Write `SPEC.md` (what it does, hooks, routes, data, settings) and tests (`*.test.ts`, see `modules/_template/template.test.ts` and `modules/pricing/pricing.test.ts`).
 6. `npm run typecheck && npm test && npm run openapi`.
 

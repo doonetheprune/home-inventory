@@ -31,11 +31,13 @@ export default defineModule({
 | Hook | Use it to |
 |---|---|
 | `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup`, `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()` |
-| `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off |
+| `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
 | `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files |
 | `ctx.addSearchSection({ id, title, order, documents?, results })` | Add a section to search everywhere. `documents()` feeds the shared fuzzy index (types must start with your section id); `results()` turns hits into rows. Core orders: stock 10, shopping 20, places 30, wish list 50, shops 60. Scenarios will use 40 and recipes 70 |
+| `ctx.fetch` | Reach web services (maps, lookups). Use it rather than the global `fetch`, so tests can stand in for the internet |
+| `ctx.core.homeAssistant` | Home Assistant, when Larder can reach it (the add-on always can; elsewhere `LARDER_HA_URL` and `LARDER_HA_TOKEN`), else `null`: home location, people and their phones, saving zones and automations. See `HomeAssistantPort` in `src/core/ports.ts` and the shop locations module |
 | `ctx.config` | Settings from `LARDER_MODULE_<ID>_<KEY>` environment variables (keys lower-cased) |
 | `ctx.isEnabled()` | Whether the module is on right now |
 | `ctx.addSensor({ id, name, description, icon?, unit?, read })` | A sensor for Home Assistant (and MQTT). `id` is snake_case and starts with your module id (`batteries_low` for `batteries`). `read()` returns `{ state, attributes? }`; keep attributes small. The integration creates the entity without any change on its side. Hidden while the module is off |
@@ -69,6 +71,7 @@ export default defineWebModule({
   id: 'my-feature',
   productPanels: [MyPanel],      // shown on product pages: ({ product }) => JSX
   shoppingPanels: [MyListPanel], // shown beside a shop's list: ({ list }) => JSX
+  shopPanels: [MyShopPanel],     // inside each shop's card on the Shops page: ({ shop }) => JSX
   pages: [
     { path: '/', title: 'My feature', icon: 'box', component: MyPage },        // linked from More and the sidebar (Organise)
     { path: '/print', title: 'My sheets', section: 'print', component: Sheets }, // under Print in the sidebar

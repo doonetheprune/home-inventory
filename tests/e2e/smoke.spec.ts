@@ -210,3 +210,19 @@ test('shows the usual price per 100 g or per kg, and checks a shelf price', asyn
   await expect(page.locator('.verdict')).toContainText('Cheaper than usual');
   await expect(page.locator('.verdict')).toContainText('£0.44 per 100 g');
 });
+
+test('finds a shop\'s branches from its card, and offers the zones and automation as YAML', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/shops');
+  const aldi = page.locator('.card', { has: page.getByText('Aldi', { exact: true }) }).first();
+  await aldi.getByRole('button', { name: /Find (nearby|more)/ }).click();
+  // Without Home Assistant, Larder asks where home is before searching the map.
+  await expect(page.getByRole('dialog').getByLabel('Postcode or town')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+
+  await page.goto('/#/m/shop-locations');
+  await expect(page.getByText('Larder isn’t connected to Home Assistant, so copy the YAML below')).toBeVisible();
+  await page.getByRole('button', { name: 'Show the YAML' }).click();
+  await expect(page.getByRole('textbox', { name: 'Zones (configuration.yaml)' })).toHaveValue(/zone:/);
+  await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
+});

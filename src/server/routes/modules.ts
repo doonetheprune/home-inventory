@@ -17,7 +17,7 @@ export function registerModuleRoutes(app: ZodApp, { core }: { core: CoreApi }) {
 
   // Each module's own routes, under /api/v1/modules/<id>/…
   for (const { moduleId, route } of core.modules.routes()) {
-    const schema: Record<string, unknown> = { tags: [`Module: ${moduleId}`], summary: route.summary };
+    const schema: Record<string, unknown> = { tags: [`Module: ${moduleId}`], summary: route.admin ? `${route.summary} (admin)` : route.summary };
     if (route.description) schema.description = route.description;
     if (route.body) schema.body = route.body;
     if (route.query) schema.querystring = route.query;
@@ -30,6 +30,7 @@ export function registerModuleRoutes(app: ZodApp, { core }: { core: CoreApi }) {
       schema,
       handler: async (request) => {
         if (!core.modules.isEnabled(moduleId)) throw new LarderError(`The ${moduleId} module is switched off. Turn it on in Settings → Modules.`, 404, 'module_off');
+        if (route.admin) admin(request);
         return route.handler({ body: request.body, query: request.query, params: request.params, userId: request.user?.id ?? null });
       },
     });
