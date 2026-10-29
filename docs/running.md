@@ -62,7 +62,7 @@ Set `LARDER_BASE_URL` to the https address so QR labels point to it.
 | `LARDER_BACKUP_EVERY_HOURS` | `24` | Automatic backups (0 turns them off) |
 | `LARDER_BACKUPS_TO_KEEP` | `7` | How many automatic backups to keep |
 | `LARDER_MODULES_DISABLED` | none | Comma-separated module ids that are always off |
-| `LARDER_MODULE_<ID>_<KEY>` | | Settings for a module, e.g. `LARDER_MODULE_LOOKUP_OPENFOODFACTS_URL` |
+| `LARDER_MODULE_<ID>_<KEY>` | | Settings for a module, e.g. `LARDER_MODULE_LOOKUP_OPENFOODFACTS_URL`, or for MQTT: `LARDER_MODULE_MQTT_URL` (`mqtt://host:1883`), `_USERNAME`, `_PASSWORD`, `_TOPIC` |
 | `LARDER_LOG_LEVEL` | `info` | `debug` also logs every request |
 | `LARDER_TRUST_PROXY` | off | Reverse proxies to believe about `X-Forwarded-*`: addresses or ranges (comma-separated), a number of hops, or `true` for any |
 

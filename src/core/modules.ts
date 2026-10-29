@@ -90,6 +90,13 @@ export interface ModuleDefinition {
   /** Schema for this module's data in `product.fields[id]`. */
   productFields?: z.ZodType;
   setup?(ctx: ModuleContext): void | Promise<void>;
+  /** Adds this module's part of the example household (LARDER_DEMO), given its items and places by name (and places by code). */
+  demo?(ctx: ModuleContext, seed: DemoSeed): Promise<void>;
+}
+
+export interface DemoSeed {
+  products: Record<string, string>;
+  places: Record<string, string>;
 }
 
 export function defineModule(def: ModuleDefinition): ModuleDefinition {
@@ -115,6 +122,8 @@ export interface ModuleRegistry {
   isProviderEnabled(providerId: string): boolean;
   validateFields(fields: Record<string, unknown>): Record<string, unknown>;
   start(core: CoreApi): Promise<void>;
+  /** Runs each switched-on module's `demo`, after the core's example household is in. */
+  seedDemo(seed: DemoSeed): Promise<void>;
 }
 
 export interface ModuleOptions {
@@ -143,6 +152,7 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
   const routes: Array<{ moduleId: string; route: ModuleRoute }> = [];
   const providerOwner = new Map<string, string>();
   const log = options.logger ?? (() => {});
+  const contexts = new Map<string, ModuleContext>();
 
   const enabled = (id: string) => {
     if (locked.has(id)) return false;
@@ -187,6 +197,12 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
         out[d.id] = parsed.data;
       }
       return out;
+    },
+    async seedDemo(seed) {
+      for (const def of defs) {
+        const mctx = contexts.get(def.id);
+        if (def.demo && mctx && enabled(def.id)) await def.demo(mctx, seed);
+      }
     },
     async start(core) {
       saved = (await ctx.storage.settings.get<Record<string, boolean>>('modules')) ?? {};
@@ -234,6 +250,7 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           },
           log: moduleLog,
         };
+        contexts.set(def.id, mctx);
         try {
           await def.setup?.(mctx);
         } catch (err) {

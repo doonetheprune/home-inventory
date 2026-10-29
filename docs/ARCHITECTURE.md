@@ -23,7 +23,7 @@ Larder is one process and one data folder. Everything talks to a small core thro
      (Firestore…)      (S3…)        (Typesense…)    (MQTT, HA…)
                                           │
                               Feature modules (modules/)
-                 lookup providers · pricing · batteries · template · (scenarios, printing, recipes, MQTT…)
+                 lookup providers · pricing · batteries · scenarios · printing · recipes · MQTT · template
 ```
 
 ## Core

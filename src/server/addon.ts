@@ -55,6 +55,28 @@ export function addonEnv(env: Record<string, string | undefined>, read: (file: s
 }
 
 /**
+ * The Mosquitto broker add-on's details from the Supervisor, as the MQTT
+ * module's settings, so switching MQTT on in Larder just works. Empty when
+ * there's no broker, outside an add-on, or when a broker is already set.
+ */
+export async function supervisorMqtt(env: Record<string, string | undefined>, doFetch: typeof fetch = fetch): Promise<Record<string, string>> {
+  if (!isAddon(env) || env.LARDER_MODULE_MQTT_URL) return {};
+  try {
+    const res = await doFetch('http://supervisor/services/mqtt', { headers: { authorization: `Bearer ${env.SUPERVISOR_TOKEN}` } });
+    if (!res.ok) return {};
+    const { data } = (await res.json()) as { data?: { host?: string; port?: number; ssl?: boolean; username?: string; password?: string } };
+    if (!data?.host) return {};
+    return {
+      LARDER_MODULE_MQTT_URL: `${data.ssl ? 'mqtts' : 'mqtt'}://${data.host}:${data.port ?? (data.ssl ? 8883 : 1883)}`,
+      ...(data.username ? { LARDER_MODULE_MQTT_USERNAME: data.username } : {}),
+      ...(data.password ? { LARDER_MODULE_MQTT_PASSWORD: data.password } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Tells Home Assistant "Larder is here", with the address and a token for
  * the integration. Home Assistant then offers to set up the integration.
  * Retries for a while, because the Supervisor may still be starting.

@@ -103,5 +103,13 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Power bank, 20,000 mAh', categoryId: cats.Batteries, wish: true, notes: 'For power cuts. Anker, about £25.' });
   await product({ name: 'Wind-up radio', categoryId: cats.Household, wish: true });
   await product({ name: 'Wet & dry vacuum', categoryId: cats['Tools & DIY'], wish: true, preferredShopIds: [shopIds.Toolstation!] });
+
+  // Modules add their own examples (scenarios, recipes…), by name.
+  const all = await core.products.list();
+  const wishes = await core.products.list({ status: 'wish' });
+  await core.modules.seedDemo({
+    products: Object.fromEntries([...all, ...wishes].map((s) => [s.product.name, s.product.id])),
+    places: Object.fromEntries((await core.places.list()).flatMap((p) => [[p.name, p.id], ...(p.code ? [[p.code, p.id]] : [])])),
+  });
   return count;
 }

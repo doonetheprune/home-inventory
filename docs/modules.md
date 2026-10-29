@@ -67,11 +67,24 @@ export default defineWebModule({
   id: 'my-feature',
   productPanels: [MyPanel],      // shown on product pages: ({ product }) => JSX
   shoppingPanels: [MyListPanel], // shown beside a shop's list: ({ list }) => JSX
-  pages: [{ path: '/', title: 'My feature', icon: 'box', component: MyPage }], // linked from More and the sidebar
+  pages: [
+    { path: '/', title: 'My feature', icon: 'box', component: MyPage },        // linked from More and the sidebar (Organise)
+    { path: '/print', title: 'My sheets', section: 'print', component: Sheets }, // under Print in the sidebar
+    { path: '/:id', title: 'One thing', component: Detail },                   // params: useModuleParams().id; not linked
+    { path: '/new', title: 'New thing', hidden: true, component: Editor },     // not linked
+  ],
 });
 ```
 
-Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`…) and formatting (`money`, `qty`, `plural`, dates). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`).
+Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
+
+## Example data
+
+`demo(ctx, seed)` on the module definition adds the module's part of the example household (`LARDER_DEMO`), after the core's. `seed.products` and `seed.places` map names (and place codes) to ids, so `seed.products['Head torch']` is the head torch. Scenarios and recipes use it.
+
+## Packages
+
+Modules use `@larder/core`, `@larder/web-sdk`, zod and React. If a module really needs a third-party package (a protocol client, say), add it to `package.json`, list it for that module in `MODULE_PACKAGES` in `tests/architecture.test.ts`, and say so in the module's SPEC.md. The MQTT module uses `mqtt` this way.
 
 ## Tests
 
@@ -84,4 +97,8 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes |
 | `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
+| `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |
+| `printing` | QR label sheets for places and items (Avery L7160, L7163, L7651, plain A4) |
+| `recipes` | Saved recipes, what's missing, and taking ingredients out of stock after cooking once confirmed |
+| `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `_template` | Example to copy (off by default) |

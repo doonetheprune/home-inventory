@@ -146,7 +146,7 @@ export const api = {
   modules: {
     list: () => get<ModuleInfo[]>('/modules'),
     setEnabled: (id: string, enabled: boolean) => patch<ModuleInfo>(`/modules/${id}`, { enabled }),
-    call: <T>(id: string, method: string, path: string, body?: unknown) => request<T>(method, `/modules/${id}${path}`, body),
+    call: <T>(id: string, method: string, path: string, body?: unknown) => request<T>(method, `/modules/${id}${path === '/' ? '' : path}`, body),
   },
   oauth: {
     request: (id: string) => get<{ client: string; redirectHost: string }>(`/oauth/requests/${encodeURIComponent(id)}`),

@@ -9,6 +9,15 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '..');
+
+/**
+ * Third-party packages a module may use, by module. Add one here (and to
+ * package.json, and the module's SPEC.md) only when the module can't be
+ * written without it, such as a protocol client.
+ */
+const MODULE_PACKAGES: Record<string, string[]> = {
+  mqtt: ['mqtt'],
+};
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
     const p = join(dir, f);
@@ -26,10 +35,12 @@ describe('architecture', () => {
   it('adapters use only the public core API', () => {
     expect(violations('src/adapters', (s) => s.includes('/core/') || s.includes('../core'))).toEqual([]);
   });
-  it('modules use only @larder/core, @larder/web-sdk, zod, react, _shared and their own files', () => {
+  it('modules use only @larder/core, @larder/web-sdk, zod, react, _shared, their own files and packages listed for them', () => {
     expect(
       violations('modules', (s, f) => {
         if (['@larder/core', '@larder/web-sdk', 'zod', 'react', 'react/jsx-runtime'].includes(s)) return false;
+        const owner = relative(join(root, 'modules'), f).split('/')[0]!;
+        if (MODULE_PACKAGES[owner]?.includes(s)) return false;
         if (s.startsWith('./')) return false;
         if (s.startsWith('../_shared/')) return false;
         if (relative(root, f) === 'modules/index.ts' && s.startsWith('./')) return false;

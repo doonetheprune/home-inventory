@@ -314,7 +314,13 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
 .secret { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 10px; padding: 12px; overflow-wrap: anywhere; user-select: all; }
 
 /* ---------- big screens: sidebar and columns ---------- */
+/* Two columns on wide screens (module pages use these). */
+.cols-2 { display: grid; gap: 18px; align-content: start; }
+.cols-2 > * { min-width: 0; }
+
 @container app (min-width: 900px) {
+  .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .print-layout { grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
   .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); --gl: 32px; --gr: 32px; padding-top: 0; }
   .topbar, .app:not(.at-home) > .topbar { display: grid; grid-column: 1 / -1; grid-template-columns: 232px minmax(0, 780px) 1fr; grid-template-areas: "brand search date"; gap: 0;
     padding: 14px 32px 14px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -372,3 +378,18 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   .stock-head span:last-child { text-align: right; }
   .scan-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
 }
+
+/* Print pages (modules use PrintSetup): only .print-area prints, flowing onto as many pages as it needs. */
+@media print {
+  body.printing-page *:not(:has(.print-area)):not(.print-area):not(.print-area *) { display: none !important; }
+  body.printing-page *:has(.print-area) {
+    display: block !important; position: static !important; overflow: visible !important; height: auto !important; min-height: 0 !important;
+    margin: 0 !important; padding: 0 !important; max-width: none !important; border: 0 !important; box-shadow: none !important; background: #fff !important;
+  }
+  body.printing-page { background: #fff !important; }
+  body.printing-page .print-area { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; zoom: 1 !important; }
+  body.printing-page .print-area .paper { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; }
+}
+.paper { background: #fff; color: #111; box-shadow: 0 2px 18px rgb(0 0 0 / 12%); border-radius: 4px; width: 210mm; max-width: 100%; min-height: 148mm; box-sizing: border-box; font-family: var(--f-body); }
+.paper-wrap { background: var(--surface-2); border-radius: 16px; padding: 18px; overflow-x: auto; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; min-width: 0; }
+.print-layout { display: grid; gap: 18px; }

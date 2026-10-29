@@ -8,7 +8,7 @@ export * from './inputs';
 export * from './errors';
 export type * from './ports';
 export { createCore, type CoreApi } from './core';
-export { defineModule, type ModuleContext, type ModuleDefinition, type ModuleInfo, type ModuleRoute, type ModuleRequest, type ModuleLogger, type HttpMethod } from './modules';
+export { defineModule, type DemoSeed, type ModuleContext, type ModuleDefinition, type ModuleInfo, type ModuleRoute, type ModuleRequest, type ModuleLogger, type HttpMethod } from './modules';
 export { HouseholdSettings, type CoreDeps } from './services/context';
 export type { LookupProvider } from './services/lookup';
 export type { SearchSection } from './services/search';

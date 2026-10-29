@@ -7,6 +7,8 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 - **Places.** Rooms, cupboards, shelves and boxes, with short codes (G2-4). Set up racking in one go. Things can be out of place: usually in the shed, now in the kitchen.
 - **Shopping by shop.** "I'm going to Aldi" lists everything low that Aldi can supply. Deliveries on the way count, so you don't buy twice. Tick items off and they go into stock.
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
+- **Scenarios and printing.** "Power cut": every torch, battery and candle, how many and where, printed for the cupboard door. QR label sheets for boxes and shelves.
+- **Recipes.** Save the ones you liked (an AI assistant can), see what's missing, and take the ingredients out of stock after cooking.
 - **Home Assistant**: an add-on that opens from the sidebar, and an integration with sensors (running low, use soon, out of place), actions for automations and Node-RED, events, NFC tags, and batteries linked to the devices that use them.
 - **AI assistants**: an MCP server, so Claude, ChatGPT, Gemini or a local model can answer "have we got AA batteries?" or "what should I cook with what's about to go off?", and update stock when you tell them.
 - **Runs on its own** too (Docker, one data folder, SQLite). A documented REST API underneath everything.
@@ -23,7 +25,7 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 | 1 | Core: data model, REST API, web app, scanning, lookups, places, search, shops and shopping lists, running on its own | **Done** |
 | 2 | Home Assistant add-on and HACS integration: sensors, actions, events, NFC, battery linking | **Done**: [docs/home-assistant.md](docs/home-assistant.md) |
 | 3 | MCP server for Claude and other AI assistants | **Done**: [docs/mcp.md](docs/mcp.md) |
-| 4 | Scenarios and printing, QR label sheets, recipes, MQTT | Next |
+| 4 | Scenarios and printing, QR label sheets, recipes, MQTT | **Done**: modules in [modules/](modules) |
 
 ## Try it
 

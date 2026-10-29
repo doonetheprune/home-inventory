@@ -40,7 +40,9 @@ export function Shell() {
   const location = useLocation();
   const screen = useRef<HTMLElement>(null);
   const atHome = location.pathname === '/';
-  const pages = useEnabledWebModules().flatMap((m) => (m.pages ?? []).map((p) => ({ ...p, moduleId: m.id })));
+  const pages = useEnabledWebModules().flatMap((m) => (m.pages ?? []).filter((p) => !p.path.includes(':') && !p.hidden).map((p) => ({ ...p, moduleId: m.id })));
+  const organise = pages.filter((p) => (p.section ?? 'organise') === 'organise');
+  const print = pages.filter((p) => p.section === 'print');
   useScannerWedge();
 
   useEffect(() => {
@@ -78,7 +80,9 @@ export function Shell() {
             {tab('/places', 'pin', 'Places', 'x')}
             {tab('/shops', 'store', 'Shops', 'x')}
             {tab('/wishlist', 'heart', 'Wish list', 'x')}
-            {pages.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, 'x'))}
+            {organise.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, 'x'))}
+            {print.length > 0 && <span className="side-head">Print</span>}
+            {print.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'print', p.title, 'x'))}
             <span className="side-head">Household</span>
             {tab('/settings', 'sliders', 'Settings', 'x')}
           </div>

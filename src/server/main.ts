@@ -11,15 +11,16 @@ import { createLocalFileStore } from '../adapters/files-local';
 import { createMemorySearchIndex } from '../adapters/search-memory';
 import { createMemoryEventBus } from '../adapters/events-memory';
 import { modules } from '../../modules';
-import { addonEnv, announceToHomeAssistant, isAddon } from './addon';
+import { addonEnv, announceToHomeAssistant, isAddon, supervisorMqtt } from './addon';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { seedDemo } from './demo';
 import { VERSION } from './version';
 
 async function main() {
-  // As a Home Assistant add-on, the options set in Home Assistant become settings.
-  const env = { ...process.env, ...addonEnv(process.env) };
+  // As a Home Assistant add-on, the options set in Home Assistant become settings,
+  // and the Mosquitto add-on (if there is one) becomes the MQTT module's broker.
+  const env = { ...process.env, ...(await supervisorMqtt(process.env)), ...addonEnv(process.env) };
   const config = loadConfig(env, { version: VERSION });
   const storage: Storage = config.storage === 'memory' ? createMemoryStorage() : createSqliteStorage({ path: join(config.dataDir, 'larder.db') });
   const events = createMemoryEventBus((err, event) => console.error(`Event listener failed for ${event.type}:`, err));

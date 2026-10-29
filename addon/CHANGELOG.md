@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Scenarios (Power cut, Christmas…): every item, how many and where, with a printable page.
+- QR label sheets for places and items, on Avery sheets or plain A4.
+- Saved recipes: what's missing, and taking ingredients out of stock after cooking once you confirm.
+- Optional MQTT feed, using the Mosquitto add-on automatically.
+- AI tools for scenarios and recipes.
+
 ## 0.3.0
 
 - MCP server for AI assistants (Claude, ChatGPT, Gemini CLI, Open WebUI, LM Studio) at `/mcp`, and through Home Assistant at `/api/larder/mcp`.
