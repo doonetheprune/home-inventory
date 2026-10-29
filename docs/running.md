@@ -55,7 +55,7 @@ Set `LARDER_BASE_URL` to the https address so QR labels point to it.
 | `LARDER_PORT` | `8080` | Port to listen on |
 | `LARDER_HOST` | `0.0.0.0` | Address to listen on |
 | `LARDER_DATA_DIR` | `./data` (`/data` in Docker) | Database, photos and backups |
-| `LARDER_AUTH` | `local` | `local`: household accounts and access tokens. `none`: no login, for trusted networks only |
+| `LARDER_AUTH` | `local` | `local`: household accounts and access tokens. `none`: no login, for trusted networks only. `homeassistant`: set by the add-on (Home Assistant users through ingress, tokens otherwise) |
 | `LARDER_STORAGE` | `sqlite` | `sqlite`, or `memory` (lost on restart; for testing) |
 | `LARDER_BASE_URL` | none | Your public address, used in QR labels and links |
 | `LARDER_DEMO` | `false` | Load the example household into an empty Larder on start |

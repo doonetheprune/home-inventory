@@ -132,7 +132,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   await app.register(
     async (api) => {
       const z = api.withTypeProvider<ZodTypeProvider>() as unknown as ZodApp;
-      registerAuthRoutes(z, { auth, config });
+      registerAuthRoutes(z, { auth, config, core });
       registerCatalogueRoutes(z, { core });
       registerProductRoutes(z, { core });
       registerStockRoutes(z, { core });

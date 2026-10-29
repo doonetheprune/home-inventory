@@ -104,3 +104,18 @@ test('sets up a grid of shelves', async ({ page }, info) => {
   await expect(page.getByText(`4 shelves, 6 boxes each. Codes ${prefix}1-1 to ${prefix}4-6.`)).toBeVisible();
   await expect(page.locator('a.item .code', { hasText: `${prefix}2-4` })).toBeVisible();
 });
+
+test('links an NFC tag scanned on a phone to a place', async ({ page }, info) => {
+  await signIn(page);
+  const tag = `04:E2:${info.project.name}:${Date.now()}`;
+  const place = (await page.evaluate(async (name) => (await fetch('api/v1/places', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) })).json(), `Tag box ${info.project.name}`)) as { id: string };
+  await page.goto(`/#/places/${place.id}`);
+  await page.getByRole('button', { name: 'Link a tag' }).click();
+  await expect(page.getByText('Waiting for a new tag…')).toBeVisible();
+  // What the Home Assistant integration sends when the app scans a tag; the page hears about it live.
+  await page.evaluate(async (tagId) => fetch('api/v1/nfc/scanned', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId, device: 'Pixel' }) }), tag);
+  await expect(page.getByText(tag)).toBeVisible();
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('Tag linked');
+  await expect(page.getByRole('button', { name: 'Unlink' })).toBeVisible();
+});

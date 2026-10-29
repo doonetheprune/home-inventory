@@ -3,7 +3,7 @@
 Larder is one process and one data folder. Everything talks to a small core through ports, so the parts around it can be replaced without touching the rules in the middle.
 
 ```
- Web app (React)   Home Assistant integration (Phase 2)   MCP server (Phase 3)   scripts / Node-RED
+ Web app (React)   Home Assistant integration (Python)   MCP server (Phase 3)   scripts / Node-RED
         │                      │                                │                     │
         └──────────────────────┴────────── REST API /api/v1 ────┴─────────────────────┘
                                    (OpenAPI: docs/openapi.json, /api/docs)
@@ -23,7 +23,7 @@ Larder is one process and one data folder. Everything talks to a small core thro
      (Firestore…)      (S3…)        (Typesense…)    (MQTT, HA…)
                                           │
                               Feature modules (modules/)
-                 lookup providers · pricing · template · (scenarios, printing, recipes, MQTT…)
+                 lookup providers · pricing · batteries · template · (scenarios, printing, recipes, MQTT…)
 ```
 
 ## Core
@@ -32,7 +32,9 @@ Larder is one process and one data folder. Everything talks to a small core thro
 - **Services** (`src/core/services`): all the rules. Low stock counts expected deliveries; "any shop" items go to shops that sell their category; stock is used soonest-expiring first; rechargeables split into charged and flat; renewals restart the clock; out-of-place stock keeps its usual place.
 - **World loading**: reads load everything they need at once and compute in memory (`services/world.ts`). A household has thousands of records at most, so this is fast and keeps adapters simple (no joins).
 - **Stock writes**: each operation works on a copy of one product's entries, tidies them (merging identical batches), and writes the difference in one atomic `applyStockChanges` call along with history (movements) and product flag changes.
-- **Events**: every change publishes an event (`stock.changed`, `stock.low`, `stock.restocked`, `product.*`, `place.changed`, `shop.changed`, `shopping.purchased`, `settings.changed`). The web app refreshes on them via SSE; modules subscribe; Home Assistant will too.
+- **Events**: every change publishes an event (`stock.changed`, `stock.low`, `stock.restocked`, `stock.expiring`, `stock.expired`, `product.*`, `place.changed`, `shop.changed`, `shopping.purchased`, `nfc.scanned`, `settings.changed`, and modules' own like `batteries.low`). The web app refreshes on them via SSE; modules subscribe; the Home Assistant integration fires them as `larder_*` events.
+- **Resolving names** (`services/resolve.ts`): actions and (later) MCP tools take names as people say them ("loo roll", "G2-4", "aldi"). The resolver checks ids, codes, barcodes, NFC tags, names and aliases (plural or not), then fuzzy search, and refuses to guess between close matches.
+- **Automation** (`services/automation.ts`): the sensors and actions Home Assistant shows. Core defines a stable set; modules add theirs. Served at `/api/v1/automation`, with each action's fields as JSON Schema.
 
 ## Storage
 
@@ -40,7 +42,22 @@ The default adapter is SQLite using Node's built-in `node:sqlite` (no native add
 
 ## Server
 
-Fastify with the zod type provider. Routes live in `src/server/routes`, validate with core schemas and appear in the spec automatically. Login is either household accounts (cookie sessions plus bearer tokens) or `none` for trusted networks; Home Assistant ingress login comes in Phase 2. The built web app is served from `/` with hash routing and relative paths, so it works behind Home Assistant ingress and reverse proxies.
+Fastify with the zod type provider. Routes live in `src/server/routes`, validate with core schemas and appear in the spec automatically. Login is household accounts (cookie sessions plus bearer tokens), `none` for trusted networks, or `homeassistant` for the add-on: people arriving through Home Assistant ingress are signed in from the Supervisor's `X-Remote-User-*` headers, believed only on connections from the Supervisor's address. The built web app is served from `/` with hash routing and relative paths, so it works behind Home Assistant ingress and reverse proxies.
+
+## Home Assistant
+
+```
+ Home Assistant                                Larder (add-on or anywhere)
+ ─────────────────────────────────             ───────────────────────────
+ sensor.larder_*  ◄── coordinator ── GET /api/v1/automation (+ /state)
+ larder.<action>  ──────────────────► POST /api/v1/automation/actions/<id>
+ larder_* events  ◄── live events ─── GET /api/v1/events (SSE)
+ tag_scanned      ──────────────────► POST /api/v1/nfc/scanned
+ battery sensors  ──────────────────► PUT /api/v1/modules/batteries/devices, POST …/low
+```
+
+- **Add-on** (`addon/`): the same Docker image. `src/server/addon.ts` turns the add-on options into settings, keeps a token for the integration in the data folder, and announces Larder to the Supervisor (discovery) so the integration sets itself up.
+- **Integration** (`custom_components/larder/`): builds its sensors and actions from Larder's list at runtime, so modules extend Home Assistant without touching Python. Talks only to the REST API, so it works the same with Larder running anywhere. See [home-assistant.md](home-assistant.md).
 
 ## Web app
 

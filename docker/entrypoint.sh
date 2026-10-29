@@ -10,6 +10,8 @@ if [ "$(id -u)" = "0" ]; then
   if [ "$(stat -c %u "$DATA")" != "$(id -u node)" ]; then
     chown -R node:node "$DATA"
   fi
-  exec su-exec node "$@"
+  # Busybox su replaces itself with the command (same process, same environment).
+  # "--" stops su reading the command's own flags (like node's --disable-warning) as its options.
+  exec su -s /bin/sh -c 'exec "$0" "$@"' node -- "$@"
 fi
 exec "$@"

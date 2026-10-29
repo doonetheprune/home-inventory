@@ -8,8 +8,6 @@ COPY . .
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
 FROM node:24-alpine
-# su-exec: start as root only long enough to give the data folder to the node user.
-RUN apk add --no-cache su-exec
 ENV NODE_ENV=production \
     LARDER_PORT=8080 \
     LARDER_DATA_DIR=/data \
@@ -18,6 +16,7 @@ WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# Starts as root only long enough to give the data folder to the node user.
 COPY docker/entrypoint.sh /usr/local/bin/larder-entrypoint
 RUN mkdir -p /data && chown node:node /data
 VOLUME ["/data"]

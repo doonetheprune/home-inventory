@@ -1,0 +1,359 @@
+[
+  {
+    "id": "add_stock",
+    "name": "Add stock",
+    "description": "Add some of an item to stock, e.g. after shopping.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "How many, in the item's own unit (default 1)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "place": {
+          "description": "Where it goes: a place name or code like \"G2-4\". Defaults to its usual place.",
+          "type": "string",
+          "maxLength": 200
+        },
+        "expires_on": {
+          "description": "Expiry date (YYYY-MM-DD). Defaults to today plus its shelf life.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "use_stock",
+    "name": "Use stock",
+    "description": "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "How many, in the item's own unit (default 1)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "place": {
+          "description": "Only use stock from this place",
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "move_item",
+    "name": "Move item",
+    "description": "Move an item to another place: for now (out of place) or for good (its usual place changes).",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The place it's going to: a name or code"
+        },
+        "quantity": {
+          "description": "How many (default all of it)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "permanent": {
+          "default": false,
+          "description": "True if this is its new usual place",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "item",
+        "to"
+      ]
+    }
+  },
+  {
+    "id": "put_back",
+    "name": "Put back",
+    "description": "Put an out-of-place item back in its usual place.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "add_expected",
+    "name": "Add expected delivery",
+    "description": "Record something ordered but not arrived yet. It counts towards stock, so it isn't bought twice.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "How many, in the item's own unit (default 1)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Where it's coming from, e.g. \"Tesco delivery\" or \"Amazon\""
+        },
+        "reference": {
+          "description": "Order number",
+          "type": "string",
+          "maxLength": 80
+        },
+        "eta": {
+          "description": "Expected date (YYYY-MM-DD)",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      },
+      "required": [
+        "item",
+        "source"
+      ]
+    }
+  },
+  {
+    "id": "mark_arrived",
+    "name": "Mark arrived",
+    "description": "A delivery arrived: everything from a source, or some of one item.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "The delivery, e.g. \"Tesco delivery\"",
+          "type": "string",
+          "maxLength": 80
+        },
+        "item": {
+          "description": "Or one item that arrived",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "quantity": {
+          "description": "How many of the item arrived (default all expected)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  },
+  {
+    "id": "add_to_shopping_list",
+    "name": "Add to shopping list",
+    "description": "Put an item on the shopping list even though it isn't low.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "remove_from_shopping_list",
+    "name": "Remove from shopping list",
+    "description": "Take an item that was added by hand off the shopping list.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "mark_charged",
+    "name": "Mark charged",
+    "description": "Rechargeable batteries: some flat ones have been charged.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "How many, in the item's own unit (default 1)",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "renew",
+    "name": "Renew",
+    "description": "A renewal (insurance, MOT, boiler service) has been renewed: restart its clock from today.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "find_item",
+    "name": "Find item",
+    "description": "Look up an item: how many, where, and when it expires.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    }
+  },
+  {
+    "id": "shopping_list_for",
+    "name": "Shopping list for a shop",
+    "description": "Everything to buy at a shop: its favourites plus \"any shop\" items in categories it sells.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "shop": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The shop, e.g. \"Aldi\""
+        }
+      },
+      "required": [
+        "shop"
+      ]
+    }
+  },
+  {
+    "id": "batteries_replaced",
+    "name": "Batteries replaced",
+    "description": "New batteries went into a device: takes them out of stock (rechargeables count as flat until charged).",
+    "module": "batteries",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "The device, by name or Home Assistant device id"
+        }
+      },
+      "required": [
+        "device"
+      ]
+    }
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "domain": "larder",
+  "name": "Larder",
+  "after_dependencies": [
+    "hassio",
+    "tag"
+  ],
+  "codeowners": [
+    "@doonetheprune"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "http"
+  ],
+  "documentation": "https://github.com/doonetheprune/home-inventory/blob/main/docs/home-assistant.md",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/doonetheprune/home-inventory/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

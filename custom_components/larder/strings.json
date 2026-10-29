@@ -1,0 +1,64 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Larder",
+        "description": "Using the Larder add-on? It sets itself up: look for it under Discovered. For Larder running elsewhere, enter its address and an access token made in Larder under Settings → Access tokens.",
+        "data": {
+          "url": "Address",
+          "token": "Access token"
+        },
+        "data_description": {
+          "url": "For example http://192.168.1.20:8080",
+          "token": "Starts with lrd_"
+        }
+      },
+      "hassio_confirm": {
+        "title": "Larder add-on",
+        "description": "Connect Home Assistant to the Larder add-on? You'll get sensors for what's running low, what to use soon and what's out of place, plus Larder actions and events."
+      },
+      "reauth_confirm": {
+        "title": "New access token",
+        "description": "Larder at {url} no longer accepts the access token. Make a new one in Larder under Settings → Access tokens.",
+        "data": {
+          "token": "Access token"
+        }
+      },
+      "reconfigure": {
+        "title": "Change Larder's address or token",
+        "data": {
+          "url": "Address",
+          "token": "Access token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Can't reach Larder at that address. Check it's running and the address and port are right.",
+      "invalid_auth": "Larder didn't accept that access token. Make a new one in Larder under Settings → Access tokens.",
+      "unknown": "Something unexpected went wrong. Check the Home Assistant log."
+    },
+    "abort": {
+      "already_configured": "This Larder is already connected.",
+      "cannot_connect": "Can't reach the Larder add-on. Check it's started.",
+      "invalid_auth": "The Larder add-on's token was refused. Restart the add-on to make a new one.",
+      "reauth_successful": "Larder accepts the new token.",
+      "reconfigure_successful": "Saved.",
+      "wrong_larder": "That address is a different Larder. Add it separately instead."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Larder options",
+        "data": {
+          "battery_threshold": "Battery low below (%)",
+          "forward_tags": "Send NFC tag scans to Larder"
+        },
+        "data_description": {
+          "battery_threshold": "When a device's battery drops below this, Larder says whether there's a spare.",
+          "forward_tags": "Tags scanned with the Home Assistant app are sent to Larder, which fires larder_nfc_scanned with the product or place."
+        }
+      }
+    }
+  }
+}

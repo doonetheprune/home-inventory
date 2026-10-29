@@ -4279,13 +4279,17 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "instanceId": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "mode",
                     "setupNeeded",
                     "user",
-                    "version"
+                    "version",
+                    "instanceId"
                   ],
                   "additionalProperties": false
                 }

@@ -19,6 +19,7 @@ import { createNfcService } from './services/nfc';
 import { createModuleRegistry, type ModuleOptions, type ModuleRegistry } from './modules';
 import type { EventBus, FileStore, LarderEvent, Storage } from './ports';
 import type { Movement } from './model';
+import { newId } from './util';
 
 export interface CoreApi {
   categories: ReturnType<typeof createCategoryService>;
@@ -40,6 +41,8 @@ export interface CoreApi {
     get(): Promise<HouseholdSettings>;
     update(patch: Partial<HouseholdSettings>): Promise<HouseholdSettings>;
   };
+  /** A random id made the first time this Larder starts. Integrations use it to tell Larders apart. */
+  instanceId(): Promise<string>;
   history: {
     recent(limit?: number): Promise<Movement[]>;
   };
@@ -87,6 +90,13 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
         return ctx.household();
       },
     },
+    async instanceId() {
+      const saved = await ctx.storage.settings.get<string>('instanceId');
+      if (saved) return saved;
+      const id = newId();
+      await ctx.storage.settings.set('instanceId', id);
+      return id;
+    },
     history: {
       recent: (limit = 50) => ctx.storage.movements.listRecent(limit),
     },
@@ -98,6 +108,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   };
 
   await ctx.household();
+  await core.instanceId();
   await categories.ensureDefaults();
   await modules.start(core);
   return core;
