@@ -105,7 +105,10 @@ export const Variant = z.object({
   barcodes: z.array(z.string().min(1).max(64)).default([]),
   /** Shop item numbers, e.g. a Toolstation code, for reordering and matching order emails. */
   shopCodes: z.array(ShopCode).default([]),
+  /** Where the lookup found its picture (kept for reference; Larder shows its own copy). */
   imageUrl: z.string().max(2000).nullable().default(null),
+  /** This brand's or pack's photo in Larder's own files, saved from the lookup. */
+  photoFileId: Id.nullable().default(null),
   /** Where the details came from: a lookup provider id, or "local". */
   source: z.string().max(60).default('local'),
   fields: ModuleFields.default({}),

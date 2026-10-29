@@ -1377,6 +1377,19 @@
               }
             ]
           },
+          "photoFileId": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source": {
             "default": "local",
             "type": "string",
@@ -4175,6 +4188,19 @@
               }
             ]
           },
+          "photoFileId": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source": {
             "default": "local",
             "type": "string",
@@ -4200,6 +4226,7 @@
           "barcodes",
           "shopCodes",
           "imageUrl",
+          "photoFileId",
           "source",
           "fields",
           "createdAt"
@@ -7882,6 +7909,19 @@
                       }
                     ]
                   },
+                  "photoFileId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "source": {
                     "default": "local",
                     "type": "string",
@@ -7966,6 +8006,18 @@
                       {
                         "type": "string",
                         "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "photoFileId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
                       },
                       {
                         "type": "null"

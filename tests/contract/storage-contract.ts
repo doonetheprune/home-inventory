@@ -19,7 +19,7 @@ const place = (id: string, extra: Partial<Place> = {}): Place => ({
   id, name: `Place ${id}`, parentId: null, code: null, notes: '', photoFileId: null, nfcTags: [], sortOrder: 0, createdAt: now, updatedAt: now, ...extra,
 });
 const variant = (id: string, productId: string, extra: Partial<Variant> = {}): Variant => ({
-  id, productId, name: `Variant ${id}`, barcodes: [], shopCodes: [], imageUrl: null, source: 'local', fields: {}, createdAt: now, ...extra,
+  id, productId, name: `Variant ${id}`, barcodes: [], shopCodes: [], imageUrl: null, photoFileId: null, source: 'local', fields: {}, createdAt: now, ...extra,
 });
 const entry = (id: string, productId: string, extra: Partial<StockEntry> = {}): StockEntry => ({
   id, productId, variantId: null, quantity: 1, placeId: null, currentPlaceId: null, movedAt: null, expiresOn: null, addedAt: now,
