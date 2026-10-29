@@ -31,7 +31,7 @@ The **Network** section can open port 8080 on your network, for MCP clients, scr
 
 ### Who's signed in
 
-People who open Larder from Home Assistant are signed in as their Home Assistant user (Larder trusts this only for connections that come from Home Assistant's Supervisor). They're Larder admins unless the **Larder admins** option lists who is. They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
+Larder is in every Home Assistant user's sidebar, not only admins'. People who open it are signed in as their Home Assistant user, with no second login (Larder trusts this only for connections that come from Home Assistant's Supervisor). They're Larder admins unless the **Larder admins** option lists who is. They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
 
 ## Add the integration by hand
 

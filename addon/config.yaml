@@ -15,6 +15,9 @@ ingress_port: 8080
 ingress_stream: true
 panel_icon: mdi:package-variant-closed
 panel_title: Larder
+# In everyone's sidebar, not only Home Assistant admins': the whole household uses it.
+# Who can change Larder's settings is the "Larder admins" option.
+panel_admin: false
 # Lets Larder tell Home Assistant where it is, so the integration sets itself up.
 hassio_api: true
 discovery:
