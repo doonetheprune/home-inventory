@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import { ago, expiryText, longDate, num, qty, shortDate, stockText } from '../format';
 import { useEnabledWebModules } from '../modules';
 import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, useAction, useIsDesktop, usePlaces } from '../ui';
+import { NfcTags } from '../components/NfcTags';
 
 const KIND_TEXT: Record<string, string> = { add: 'Added', use: 'Used', move: 'Moved', return: 'Put back', expect: 'Ordered', arrive: 'Arrived', adjust: 'Edited', remove: 'Removed', flat: 'Went flat', charged: 'Charged' };
 
@@ -117,7 +118,6 @@ export function ProductPage() {
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
                 <dt>Buy from</dt><dd>{p.product.preferredShopIds.length ? p.shops.map((s) => s.name).join(', ') : p.shops.length ? `Any shop (${p.shops.map((s) => s.name).join(', ')})` : <span className="muted">No shop sells this category</span>}</dd>
                 <dt>New stock goes to</dt><dd>{p.product.defaultPlaceId ? (p.places.find((x) => x.id === p.product.defaultPlaceId)?.path ?? 'Set') : <span className="muted">Where most of it is</span>}</dd>
-                {p.product.nfcTags.length > 0 && <><dt>NFC tags</dt><dd>{p.product.nfcTags.length}</dd></>}
               </dl>
             </div>
             {p.product.notes && <div className="card pad"><b>Notes</b><p className="muted" style={{ whiteSpace: 'pre-wrap' }}>{p.product.notes}</p></div>}
@@ -125,6 +125,7 @@ export function ProductPage() {
               <div className="list">{p.product.links.map((l) => <a key={l.url} className="item" href={l.url} target="_blank" rel="noreferrer"><Icon name="link" /><span className="item-main"><span className="item-name">{l.title || new URL(l.url).hostname}</span><span className="item-meta">{l.url}</span></span></a>)}</div>
             )}
           </div>
+          <NfcTags tags={p.product.nfcTags} productId={p.product.id} />
           {p.history.length > 0 && (
             <div className="section">
               <div className="label">History</div>

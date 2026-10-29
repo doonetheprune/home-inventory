@@ -63,6 +63,11 @@ export interface ModuleContext {
   addSensor(sensor: SensorDefinition): void;
   /** An action for Home Assistant and Node-RED. Same id rule as sensors. */
   addAction<I extends z.ZodObject>(action: ActionDefinition<I>): void;
+  /**
+   * Publish an event for the web app, Home Assistant and other modules. The type
+   * must start with this module's id, e.g. "batteries.low". Dropped while the module is off.
+   */
+  publish(type: string, data: Record<string, unknown>): void;
   /** Runs only while the module is switched on. `type` can end in * to match a prefix. */
   on(type: string, handler: (event: LarderEvent) => void | Promise<void>): void;
   log: ModuleLogger;
@@ -206,6 +211,10 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           },
           addAction(action) {
             core.automation.addAction(prefixed(def.id, 'Action', action), def.id, () => enabled(def.id));
+          },
+          publish(type, data) {
+            if (!type.startsWith(`${def.id}.`)) throw new Error(`Event "${type}" from module ${def.id} must start with "${def.id}.".`);
+            if (enabled(def.id)) ctx.publish(type, data);
           },
           on(type, handler) {
             const match = type.endsWith('*') ? (t: string) => t.startsWith(type.slice(0, -1)) : (t: string) => t === type;

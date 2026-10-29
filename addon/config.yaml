@@ -1,0 +1,45 @@
+# Home Assistant add-on for Larder. Uses the same image as the standalone
+# Docker install, published by .github/workflows/release.yml.
+name: Larder
+version: "0.2.0"
+slug: larder
+description: What you've got, and where. A home inventory for everything in the house.
+url: https://github.com/doonetheprune/home-inventory
+arch:
+  - aarch64
+  - amd64
+image: ghcr.io/doonetheprune/home-inventory
+startup: application
+boot: auto
+# Opened from the Home Assistant sidebar, signed in as the Home Assistant user.
+ingress: true
+ingress_port: 8080
+ingress_stream: true
+panel_icon: mdi:package-variant-closed
+panel_title: Larder
+# Lets Larder tell Home Assistant where it is, so the integration sets itself up.
+hassio_api: true
+discovery:
+  - larder
+# Off by default. Open it for MCP clients, scripts and Node-RED on your network (they need an access token).
+ports:
+  8080/tcp: null
+watchdog: http://[HOST]:[PORT:8080]/api/health
+# Home Assistant backups include Larder's data; Larder's own extra copies don't need backing up again.
+backup_exclude:
+  - backups/*
+options:
+  log_level: info
+  backups: false
+  disabled_modules: []
+  env_vars: []
+schema:
+  log_level: list(trace|debug|info|warn|error)
+  backups: bool
+  base_url: url?
+  demo: bool?
+  disabled_modules:
+    - str
+  env_vars:
+    - name: match(^LARDER_[A-Z0-9_]+$)
+      value: str

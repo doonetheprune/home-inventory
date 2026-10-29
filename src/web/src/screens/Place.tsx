@@ -6,6 +6,7 @@ import { Icon } from '../icons';
 import { qty } from '../format';
 import { ErrorBox, Header, Loading, ProductRow, useAction, useIsDesktop } from '../ui';
 import { PlaceSheet, PlaceTree } from './Places';
+import { NfcTags } from '../components/NfcTags';
 
 export function PlacePage() {
   const { id = '' } = useParams();
@@ -88,6 +89,8 @@ export function PlacePage() {
               </div>
             </div>
           )}
+
+          <NfcTags tags={c.place.nfcTags} placeId={id} />
 
           <div className="card pad">
             <b>Remove {c.place.name}</b>

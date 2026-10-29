@@ -95,6 +95,8 @@ export function useLiveUpdates(enabled: boolean) {
       timer = window.setTimeout(() => void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }), 250);
     };
     for (const t of ['stock.changed', 'product.created', 'product.updated', 'product.deleted', 'place.changed', 'shop.changed', 'category.changed', 'settings.changed']) es.addEventListener(t, refresh);
+    // A tag scanned on a phone shows up straight away on a page waiting to link it.
+    es.addEventListener('nfc.scanned', () => void qc.invalidateQueries({ queryKey: ['nfc'] }));
     return () => {
       es.close();
       window.clearTimeout(timer);
