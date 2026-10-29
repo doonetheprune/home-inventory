@@ -296,6 +296,8 @@ export function createAutomation(deps: {
   /* ----------------------------- expiry check ---------------------------- */
 
   type Notified = Record<string, { expiresOn: string; warned: boolean; expired: boolean }>;
+  // One check at a time, so a manual check during the hourly one can't announce things twice.
+  let checking: Promise<unknown> = Promise.resolve();
 
   return {
     addSensor,
@@ -343,7 +345,13 @@ export function createAutomation(deps: {
      * and `stock.expired` once on the day it expires. Safe to call as often
      * as you like; the server calls it hourly.
      */
-    async checkExpiry(): Promise<{ expiring: number; expired: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number }> {
+      const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
+      checking = run.catch(() => undefined);
+      return run;
+    },
+
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number }> {
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
       const next: Notified = {};
       let expiring = 0;

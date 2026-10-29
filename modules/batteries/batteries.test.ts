@@ -57,6 +57,10 @@ describe('batteries module', () => {
     const state = await core.automation.read();
     expect(state.batteries_low?.state).toBe(2);
 
+    // Two devices with the same name: ask which, rather than picking one.
+    await call(core, 'PUT', '/devices', { devices: [{ id: 'r1', name: 'TRADFRI remote', area: 'Lounge' }, { id: 'r2', name: 'TRADFRI remote', area: 'Bedroom' }] });
+    await expect(core.automation.run('batteries_replaced', { device: 'TRADFRI remote' })).rejects.toMatchObject({ code: 'ambiguous' });
+
     // A new list from Home Assistant replaces the old one.
     await call(core, 'PUT', '/devices', { devices: [{ id: 'remote', name: 'TV remote' }] });
     expect(((await call(core, 'GET', '/devices')) as unknown[]).length).toBe(1);

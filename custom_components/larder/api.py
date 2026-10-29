@@ -6,7 +6,7 @@ whether Larder runs as an add-on or anywhere else on the network.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 import json
 from typing import Any
 
@@ -104,8 +104,8 @@ class LarderClient:
         """A device's battery is low; Larder answers with what to do."""
         return await self._request("POST", "/v1/modules/batteries/low", {"deviceId": device_id, "level": level})
 
-    async def events(self) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        """Larder's live events (Server-Sent Events). Ends when the connection drops."""
+    async def events(self, on_open: Callable[[], Awaitable[None]] | None = None) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """Larder's live events (Server-Sent Events). Ends when the connection drops. on_open runs once connected."""
         try:
             async with self.session.get(
                 f"{self.url}/api/v1/events",
@@ -117,6 +117,8 @@ class LarderClient:
                     raise LarderAuthError("Larder refused the access token.", resp.status)
                 if resp.status >= 400:
                     raise LarderError(f"Larder answered {resp.status} for live events.", resp.status)
+                if on_open:
+                    await on_open()
                 event, data = "", ""
                 async for raw in resp.content:
                     line = raw.decode("utf-8").rstrip("\r\n")

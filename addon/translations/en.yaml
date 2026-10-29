@@ -11,6 +11,9 @@ configuration:
   demo:
     name: Load the example household
     description: Fills an empty Larder with about 30 example items, places and shops to try it with.
+  admins:
+    name: Larder admins
+    description: Home Assistant usernames who can change Larder's settings, accounts and modules. Leave empty for everyone. Others can still use and change stock.
   disabled_modules:
     name: Modules that stay off
     description: Module ids that can't be switched on in the app, for example "pricing".

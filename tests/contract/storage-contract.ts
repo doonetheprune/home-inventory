@@ -132,6 +132,10 @@ export function storageContract(name: string, makeStorage: () => Promise<Storage
       await s.users.put({ id: 'u1', username: 'Shaun', displayName: '', passwordHash: 'x', role: 'admin', createdAt: now });
       expect((await s.users.findByUsername('shaun'))?.id).toBe('u1');
       expect(await s.users.findByUsername('someone')).toBeNull();
+      // Usernames are unique whatever the case; the same account can be saved again.
+      await expect(s.users.put({ id: 'u2', username: 'SHAUN', displayName: '', passwordHash: 'x', role: 'member', createdAt: now })).rejects.toMatchObject({ code: 'conflict' });
+      await s.users.put({ id: 'u1', username: 'Shaun', displayName: 'Shaun B', passwordHash: 'x', role: 'admin', createdAt: now });
+      expect((await s.users.get('u1'))?.displayName).toBe('Shaun B');
     });
 
     it('stores sessions and removes expired ones', async () => {

@@ -14,6 +14,7 @@ import type {
   Session, Shop, StockChanges, StockCollection, StockEntry, Storage, TokenCollection, User, UserCollection, Variant, VariantCollection,
 } from '@larder/core';
 import { MIGRATIONS } from './migrations';
+import { ConflictError } from '@larder/core';
 
 type Row = Record<string, unknown>;
 type Extra<T> = (doc: T) => Record<string, string | number | null>;
@@ -140,6 +141,11 @@ class Stock extends SqlCollection<StockEntry> implements StockCollection {
 
 class Users extends SqlCollection<User> implements UserCollection {
   private byName = this.db.prepare('SELECT data FROM users WHERE username_lc = ?');
+  override async put(doc: User) {
+    const other = await this.findByUsername(doc.username);
+    if (other && other.id !== doc.id) throw new ConflictError(`There's already an account called ${doc.username}.`);
+    await super.put(doc);
+  }
   async findByUsername(username: string) {
     return this.parse(this.byName.get(username.trim().toLowerCase()) as Row | undefined);
   }

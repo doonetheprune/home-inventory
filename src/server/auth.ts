@@ -51,8 +51,12 @@ const publicUser = (u: User, via: AuthUser['via']): AuthUser => ({ id: u.id, use
 
 const NO_AUTH_USER: AuthUser = { id: 'household', username: 'household', displayName: 'Household', role: 'admin', via: 'none' };
 
-/** Owns the token the add-on hands to the Home Assistant integration. */
-const INTEGRATION_USER = { id: 'ha-integration', username: 'integration@ha', displayName: 'Home Assistant' } as const;
+/**
+ * Owns the token the add-on hands to the Home Assistant integration. Its
+ * username has a space, which neither local accounts nor Home Assistant ids
+ * can, so it never collides with a real person.
+ */
+const INTEGRATION_USER = { id: 'ha-integration', username: 'home assistant integration', displayName: 'Home Assistant' } as const;
 
 export function createAuth(core: CoreApi, config: Config) {
   const storage = core.adapters.storage;
@@ -96,13 +100,12 @@ export function createAuth(core: CoreApi, config: Config) {
     }
   }
 
-  const known = new Map<string, string>();
-
   /**
    * Home Assistant ingress: the Supervisor has already signed the person in
    * and passes who they are in X-Remote-User-* headers. Only believed when the
    * connection itself comes from the Supervisor, so nobody can send these
-   * headers to the add-on's own port and be let in.
+   * headers to the add-on's own port and be let in. The Home Assistant user id
+   * is required: without it there's no telling people apart.
    */
   async function ingressUser(request: FastifyRequest): Promise<AuthUser | null> {
     const from = request.socket.remoteAddress?.replace(/^::ffff:/, '');
@@ -112,18 +115,17 @@ export function createAuth(core: CoreApi, config: Config) {
       return (Array.isArray(v) ? v[0] : v)?.trim() ?? '';
     };
     const haId = header('x-remote-user-id').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+    if (!haId) return null;
     const name = header('x-remote-user-name').slice(0, 50) || 'homeassistant';
     const displayName = header('x-remote-user-display-name').slice(0, 80) || name;
-    const id = `ha-${haId || 'household'}`;
-    // Keep a record so tokens they create, and history, point at a real account.
-    if (known.get(id) !== displayName) {
-      const existing = await storage.users.get(id);
-      if (!existing || existing.displayName !== displayName) {
-        await storage.users.put({ id, username: `${haId ? name : 'household'}@ha`, displayName, passwordHash: '', role: 'admin', createdAt: existing?.createdAt ?? new Date().toISOString() });
-      }
-      known.set(id, displayName);
+    const role = config.haAdmins.length && !config.haAdmins.includes(name.toLowerCase()) ? 'member' : 'admin';
+    const id = `ha-${haId}`;
+    // Keep a record (keyed by the Home Assistant id, never the name) so tokens they make and history point at a real account.
+    const existing = await storage.users.get(id);
+    if (!existing || existing.displayName !== displayName || existing.role !== role) {
+      await storage.users.put({ id, username: `ha:${haId}`, displayName, passwordHash: '', role, createdAt: existing?.createdAt ?? new Date().toISOString() });
     }
-    return { id, username: name, displayName, role: 'admin', via: 'ingress' };
+    return { id, username: name, displayName, role, via: 'ingress' };
   }
 
   return {

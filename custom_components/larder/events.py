@@ -31,14 +31,14 @@ async def listen(hass: HomeAssistant, client: LarderClient, coordinator: LarderC
     """Follow Larder's events until cancelled, reconnecting with a growing pause."""
     delay = RETRY_MIN
     while True:
+        async def connected() -> None:
+            nonlocal delay
+            delay = RETRY_MIN
+            # Catch up on anything missed while disconnected.
+            await coordinator.async_request_refresh()
+
         try:
-            connected = False
-            async for kind, data in client.events():
-                if not connected:
-                    connected = True
-                    delay = RETRY_MIN
-                    # Catch up on anything missed while disconnected.
-                    await coordinator.async_request_refresh()
+            async for kind, data in client.events(on_open=connected):
                 if kind.startswith(IGNORED_EVENTS):
                     continue
                 hass.bus.async_fire(ha_event_type(kind), data)

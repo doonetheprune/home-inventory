@@ -7,6 +7,7 @@ import type {
   ApiToken, Category, Collection, DocumentCollection, LookupRecord, Movement, Place, PlaceCollection, Product, ProductCollection,
   Session, Shop, StockChanges, StockCollection, StockEntry, Storage, TokenCollection, User, UserCollection, Variant, VariantCollection,
 } from '@larder/core';
+import { ConflictError } from '@larder/core';
 
 const clone = <T>(v: T): T => structuredClone(v);
 
@@ -77,6 +78,11 @@ class Stock extends MemoryCollection<StockEntry> implements StockCollection {
 }
 
 class Users extends MemoryCollection<User> implements UserCollection {
+  override async put(doc: User) {
+    const u = doc.username.trim().toLowerCase();
+    if (this.find((x) => x.id !== doc.id && x.username.toLowerCase() === u)) throw new ConflictError(`There's already an account called ${doc.username}.`);
+    await super.put(doc);
+  }
   async findByUsername(username: string) {
     const u = username.trim().toLowerCase();
     return this.find((x) => x.username.toLowerCase() === u);

@@ -24,6 +24,29 @@ describe('Home Assistant ingress login', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/products', headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(200);
   });
 
+  it('keeps Home Assistant users apart by id, whatever their names', async () => {
+    const { app, auth } = await makeApp({ auth: 'homeassistant' });
+    const as = (id: string, name: string) => ({ ...ingress, 'x-remote-user-id': id, 'x-remote-user-name': name, 'x-remote-user-display-name': name });
+    // Same username twice (a user deleted and made again), and one called "integration" next to the add-on's own account.
+    await auth.integrationToken(join(mkdtempSync(join(tmpdir(), 'larder-ha-')), 'integration-token'));
+    for (const [id, name] of [['id1', 'shaun'], ['id2', 'shaun'], ['id3', 'integration'], ['id4', 'home assistant integration']]) {
+      const r = await app.inject({ method: 'GET', url: '/api/v1/auth/status', remoteAddress: SUPERVISOR, headers: as(id!, name!) });
+      expect(r.statusCode, name).toBe(200);
+      expect((r.json() as Any).user.id).toBe(`ha-${id}`);
+    }
+    // Without the user id there's no telling people apart, so nobody is signed in.
+    const { 'x-remote-user-id': _id, ...noId } = ingress;
+    expect((await app.inject({ method: 'GET', url: '/api/v1/products', remoteAddress: SUPERVISOR, headers: noId })).statusCode).toBe(401);
+  });
+
+  it('can make only some Home Assistant users Larder admins', async () => {
+    const { app } = await makeApp({ auth: 'homeassistant', env: { LARDER_HA_ADMINS: 'Shaun' } });
+    const as = (id: string, name: string) => ({ ...ingress, 'x-remote-user-id': id, 'x-remote-user-name': name });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/auth/status', remoteAddress: SUPERVISOR, headers: as('a', 'shaun') })).json()).toMatchObject({ user: { role: 'admin' } });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/auth/status', remoteAddress: SUPERVISOR, headers: as('b', 'kid') })).json()).toMatchObject({ user: { role: 'member' } });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/auth/users', remoteAddress: SUPERVISOR, headers: as('b', 'kid') })).statusCode).toBe(403);
+  });
+
   it('ignores ingress headers that arrive from anywhere but the Supervisor', async () => {
     const { app } = await makeApp({ auth: 'homeassistant' });
     const spoofed = await app.inject({ method: 'GET', url: '/api/v1/products', remoteAddress: '192.168.1.50', headers: { ...ingress, 'x-forwarded-for': SUPERVISOR } });

@@ -287,3 +287,79 @@ async def test_mcp_needs_home_assistant_sign_in(hass: HomeAssistant, aiohttp_cli
     client = await aiohttp_client(hass.http.app)
     resp = await client.post("/api/larder/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert resp.status == 401
+
+
+async def _battery_device(hass: HomeAssistant, name: str, level: str):
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    other = MockConfigEntry(domain="test")
+    other.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(config_entry_id=other.entry_id, identifiers={("test", uuid.uuid4().hex)}, name=name)
+    entity = er.async_get(hass).async_get_or_create("sensor", "test", uuid.uuid4().hex, device_id=device.id, original_device_class="battery")
+    hass.states.async_set(entity.entity_id, level, {"device_class": "battery", "unit_of_measurement": "%"})
+    return device, entity
+
+
+async def test_low_battery_is_reported_once_even_if_the_sensor_drops_out(hass: HomeAssistant, larder: Larder, setup_larder) -> None:
+    """A sleepy device going unavailable and coming back doesn't report the same low battery twice."""
+    device, entity = await _battery_device(hass, unique("Door sensor"), "55")
+    watcher = setup_larder.runtime_data.batteries
+    await watcher.async_sync()
+    advice = async_capture_events(hass, "larder_batteries_low")
+
+    def mine():
+        return [e for e in advice if e.data.get("deviceId") == device.id]
+
+    async def reported():
+        return mine()
+
+    hass.states.async_set(entity.entity_id, "12", {"device_class": "battery"})
+    await wait_for(reported)
+    hass.states.async_set(entity.entity_id, "unavailable", {"device_class": "battery"})
+    await hass.async_block_till_done()
+    await watcher.async_sync()
+    devices = await larder.call("GET", "/modules/batteries/devices")
+    assert next(d for d in devices if d["id"] == device.id)["low"] is True
+    hass.states.async_set(entity.entity_id, "12", {"device_class": "battery"})
+    await hass.async_block_till_done()
+    await watcher.async_sync()
+    await asyncio.sleep(0.3)
+    assert len(mine()) == 1
+
+
+async def test_a_restart_keeps_a_low_battery_low(hass: HomeAssistant, larder: Larder, setup_larder) -> None:
+    """After a restart, a device Larder knows is low stays low while it's still within the hysteresis band."""
+    from custom_components.larder.batteries import BatteryWatcher
+
+    device, _entity = await _battery_device(hass, unique("Remote"), "22")
+    await setup_larder.runtime_data.batteries.async_sync()
+    await larder.call("POST", "/modules/batteries/low", {"deviceId": device.id, "level": 15})
+    fresh = BatteryWatcher(hass, setup_larder.runtime_data.client, 20)
+    await fresh.async_sync(first=True)
+    fresh.async_stop()
+    devices = await larder.call("GET", "/modules/batteries/devices")
+    assert next(d for d in devices if d["id"] == device.id)["low"] is True
+
+
+async def test_reloading_is_clean(hass: HomeAssistant, setup_larder, caplog: pytest.LogCaptureFixture) -> None:
+    """Changing options (which reloads) leaves no errors in the log."""
+    result = await hass.config_entries.options.async_init(setup_larder.entry_id)
+    await hass.config_entries.options.async_configure(result["flow_id"], {"battery_threshold": 25, "forward_tags": True})
+    await hass.async_block_till_done()
+    assert "Unable to remove unknown" not in caplog.text
+    assert setup_larder.state is ConfigEntryState.LOADED
+
+
+async def test_actions_from_two_larders_are_combined(hass: HomeAssistant) -> None:
+    """With two Larders, one module's action doesn't come and go as each one refreshes."""
+    from custom_components.larder.services import async_reset_actions, async_update_actions
+
+    base = {"name": "x", "description": "x", "schema": {"type": "object", "properties": {}}}
+    async_update_actions(hass, [{**base, "id": "add_stock"}], "one")
+    async_update_actions(hass, [{**base, "id": "add_stock"}, {**base, "id": "batteries_replaced"}], "two")
+    async_update_actions(hass, [{**base, "id": "add_stock"}], "one")
+    assert hass.services.has_service(DOMAIN, "batteries_replaced")
+    async_reset_actions(hass, "two")
+    assert not hass.services.has_service(DOMAIN, "batteries_replaced")
+    assert hass.services.has_service(DOMAIN, "add_stock")

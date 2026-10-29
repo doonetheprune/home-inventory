@@ -20,6 +20,7 @@ Cameras need an https address. Opening Larder through Home Assistant (the compan
 - **Larder's own backups**: off by default, because Home Assistant backups already include Larder's data.
 - **Address for QR labels**: an https address printed on QR labels, so a phone's camera app can open them.
 - **Load the example household**: example items to try Larder with.
+- **Larder admins**: Home Assistant usernames who can change Larder's settings; empty means everyone.
 - **Modules that stay off**: module ids that can't be switched on in the app.
 - **Extra settings**: advanced; any other `LARDER_` setting.
 

@@ -21,13 +21,14 @@ from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.debounce import Debouncer
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 
 from .api import LarderClient, LarderError
 
 _LOGGER = logging.getLogger(__name__)
 
 RESYNC_EVERY = timedelta(hours=6)
+RETRY_AFTER = 60
 # A device counts as recovered a little above the threshold, so a level hovering around it doesn't flap.
 HYSTERESIS = 5
 
@@ -40,6 +41,8 @@ class BatteryWatcher:
         self.client = client
         self.threshold = threshold
         self._low: dict[str, bool] = {}
+        self._loaded = False
+        self._retry: CALLBACK_TYPE | None = None
         self._unsubs: list[CALLBACK_TYPE] = []
         self._track: CALLBACK_TYPE | None = None
         self._debounced = Debouncer(hass, _LOGGER, cooldown=30, immediate=False, function=self.async_sync)
@@ -60,9 +63,13 @@ class BatteryWatcher:
         if self._track:
             self._track()
             self._track = None
+        if self._retry:
+            self._retry()
+            self._retry = None
         self._debounced.async_cancel()
 
     async def _on_timer(self, _now: Any) -> None:
+        self._retry = None
         await self.async_sync()
 
     async def _on_registry(self, _event: Event) -> None:
@@ -93,14 +100,19 @@ class BatteryWatcher:
         return None
 
     def _is_low(self, device_id: str, entities: list[er.RegistryEntry], level: float | None) -> bool:
+        was_low = self._low.get(device_id, False)
+        binary_seen = False
         for entry in entities:
             if entry.domain == "binary_sensor":
                 state = self.hass.states.get(entry.entity_id)
-                if state is not None and state.state == STATE_ON:
+                if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    continue
+                if state.state == STATE_ON:
                     return True
+                binary_seen = True
         if level is None:
-            return False
-        was_low = self._low.get(device_id, False)
+            # No reading right now (a sleepy device, or just after a restart): nothing has changed.
+            return False if binary_seen else was_low
         return level < (self.threshold + HYSTERESIS if was_low else self.threshold)
 
     def _battery_notes(self, device_id: str) -> tuple[str | None, int | None]:
@@ -113,6 +125,8 @@ class BatteryWatcher:
             try:
                 count = int(state.attributes.get("battery_quantity") or 0) or None
             except (TypeError, ValueError):
+                count = None
+            if count is not None and not 1 <= count <= 50:
                 count = None
             return (str(kind)[:40] if kind else None), count
         return None, None
@@ -130,9 +144,9 @@ class BatteryWatcher:
             area = areas.async_get_area(area_id) if area_id else None
             kind, count = self._battery_notes(device_id)
             out.append({
-                "id": device_id,
+                "id": device_id[:100],
                 "name": (device.name_by_user or device.name or device_id)[:120],
-                "area": area.name if area else None,
+                "area": area.name[:120] if area else None,
                 "level": round(level) if level is not None else None,
                 "low": self._is_low(device_id, entities, level),
                 "batteryType": kind,
@@ -143,21 +157,24 @@ class BatteryWatcher:
     async def async_sync(self, first: bool = False) -> None:
         """Send the device list to Larder and report any device that has gone low."""
         grouped = self._battery_entities()
-        devices = self._devices(grouped)
+        # Follow the readings whatever happens below, so a low battery is never missed.
+        self._follow([e.entity_id for entities in grouped.values() for e in entities])
         try:
-            if first:
+            if first or not self._loaded:
                 # Larder remembers which were low, so a restart doesn't report them again.
                 known = await self.client.battery_devices()
-                self._low = {d["id"]: bool(d.get("low")) for d in known}
+                self._low = {d["id"]: bool(d.get("low")) for d in known} | self._low
+                self._loaded = True
+            devices = self._devices(grouped)
             await self.client.sync_battery_devices(devices)
         except LarderError as err:
-            _LOGGER.warning("Couldn't send the battery devices to Larder: %s", err.message)
+            _LOGGER.warning("Couldn't send the battery devices to Larder (trying again in a minute): %s", err.message)
+            self._retry = async_call_later(self.hass, RETRY_AFTER, self._on_timer)
             return
         for d in devices:
             if d["low"] and not self._low.get(d["id"], False):
                 await self._report_low(d["id"], d["level"])
             self._low[d["id"]] = d["low"]
-        self._follow([e.entity_id for entities in grouped.values() for e in entities])
 
     def _follow(self, entity_ids: list[str]) -> None:
         if self._track:

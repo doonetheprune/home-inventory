@@ -28,6 +28,7 @@ backup_exclude:
 options:
   log_level: info
   backups: false
+  admins: []
   disabled_modules: []
   env_vars: []
 schema:
@@ -35,6 +36,8 @@ schema:
   backups: bool
   base_url: url?
   demo: bool?
+  admins:
+    - str
   disabled_modules:
     - str
   env_vars:
