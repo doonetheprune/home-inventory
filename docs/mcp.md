@@ -73,8 +73,15 @@ A small set, described plainly, so small local models pick the right one. Everyt
 | `shopping_list` | What to buy at a shop, or which shop to go to |
 | `expiring` | What to use soon, and renewals coming up |
 | `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?", and making it the usual price (pricing module) |
+| `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |
+| `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house (recipes module) |
+| `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, applied only once the person agrees (recipes module) |
 
-Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)); scenarios and recipes come with Phase 4.
+Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
+
+### Recipes from what's in the house
+
+Ask "what could I cook with what needs using up?" The assistant calls `expiring` and `search`, suggests something, and if you like it, `save_recipe`. After cooking, "I made the traybake for 6" leads to `propose_cooking`; it shows what will come out of stock and asks you before `confirm_cooking`.
 
 When an assistant connects, Larder also tells it how the house works: names not ids, never guess between close matches, quantities are in each item's own unit, search before adding something new.
 

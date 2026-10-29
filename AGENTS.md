@@ -85,6 +85,6 @@ Implement the `Storage` interface from `src/core/ports.ts` in `src/adapters/stor
 
 ## Where things are decided
 
-- Requirements: `docs/BRIEF.md`. Phases: Phase 1 (core, standalone), Phase 2 (Home Assistant add-on and integration) and Phase 3 (MCP server) are done; Phase 4 is scenarios, printing, recipes, MQTT.
+- Requirements: `docs/BRIEF.md`. All four phases are built: the core (standalone), Home Assistant (add-on and integration), the MCP server, and the extras (scenarios, printing, recipes, MQTT) as modules. The brief's "future" ideas (offer tracking, usage-rate prediction) would be new modules; stock history (movements) is already kept for the second.
 - Decisions made with the owner: `docs/DECISIONS.md`. Add to it when the owner decides something.
 - Design reference: `mockups/index.html`.

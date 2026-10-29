@@ -23,7 +23,7 @@ Larder is one process and one data folder. Everything talks to a small core thro
      (Firestore…)      (S3…)        (Typesense…)    (MQTT, HA…)
                                           │
                               Feature modules (modules/)
-                 lookup providers · pricing · batteries · template · (scenarios, printing, recipes, MQTT…)
+                 lookup providers · pricing · batteries · scenarios · printing · recipes · MQTT · template
 ```
 
 ## Core
@@ -31,7 +31,7 @@ Larder is one process and one data folder. Everything talks to a small core thro
 - **Model** (`src/core/model.ts`): zod schemas for every stored record (Product, Variant, StockEntry, Place, Shop, Category, Movement, User, ApiToken…) and computed view (ProductSummary, PlaceContents, ShoppingList, Dashboard, SearchSection…). The server turns these into the OpenAPI spec; the web app imports the same types.
 - **Services** (`src/core/services`): all the rules. Low stock counts expected deliveries; "any shop" items go to shops that sell their category; stock is used soonest-expiring first; rechargeables split into charged and flat; renewals restart the clock; out-of-place stock keeps its usual place.
 - **World loading**: reads load everything they need at once and compute in memory (`services/world.ts`). A household has thousands of records at most, so this is fast and keeps adapters simple (no joins).
-- **Stock writes**: each operation works on a copy of one product's entries, tidies them (merging identical batches), and writes the difference in one atomic `applyStockChanges` call along with history (movements) and product flag changes.
+- **Stock writes**: each operation works on a copy of one product's entries, tidies them (merging identical batches), and writes the difference in one atomic `applyStockChanges` call along with history (movements) and product flag changes. Stock writes and product updates run one at a time (`ctx.exclusive`), so two at once can't both start from the same stock. That queue is per process: Larder runs as one, and a storage adapter for several instances at once would need the read and write in one database transaction instead.
 - **Events**: every change publishes an event (`stock.changed`, `stock.low`, `stock.restocked`, `stock.expiring`, `stock.expired`, `product.*`, `place.changed`, `shop.changed`, `shopping.purchased`, `nfc.scanned`, `settings.changed`, and modules' own like `batteries.low`). The web app refreshes on them via SSE; modules subscribe; the Home Assistant integration fires them as `larder_*` events.
 - **Resolving names** (`services/resolve.ts`): actions and (later) MCP tools take names as people say them ("loo roll", "G2-4", "aldi"). The resolver checks ids, codes, barcodes, NFC tags, names and aliases (plural or not), then fuzzy search, and refuses to guess between close matches.
 - **Automation** (`services/automation.ts`): the sensors and actions Home Assistant shows. Core defines a stable set; modules add theirs. Served at `/api/v1/automation`, with each action's fields as JSON Schema.

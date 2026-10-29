@@ -25,7 +25,8 @@ export function registerModuleRoutes(app: ZodApp, { core }: { core: CoreApi }) {
     if (route.response) schema.response = { 200: route.response };
     app.route({
       method: route.method,
-      url: `/modules/${moduleId}${route.path}`,
+      // A module's "/" is /api/v1/modules/<id> itself, without a trailing slash.
+      url: `/modules/${moduleId}${route.path === '/' ? '' : route.path}`,
       schema,
       handler: async (request) => {
         if (!core.modules.isEnabled(moduleId)) throw new LarderError(`The ${moduleId} module is switched off. Turn it on in Settings → Modules.`, 404, 'module_off');

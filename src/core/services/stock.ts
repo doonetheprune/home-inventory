@@ -135,6 +135,34 @@ export function createStockService(ctx: CoreContext) {
     return { entry, move: movement(t.product, 'add', input.quantity, { entryId: entry.id, toPlaceId: placeId, note: input.note ?? '' }) };
   }
 
+  /** Takes stock out of `work` (soonest-expiring first), returning the history. Throws if there isn't enough. */
+  function takeFrom(t: Txn, work: StockEntry[], input: ReturnType<typeof In.StockUse.parse>): Movement[] {
+    const usable = work
+      .filter((e) => e.status === 'in_stock' && e.quantity > 0 && (e.charge !== 'flat' || !t.product.rechargeable))
+      .filter((e) => !input.placeId || e.placeId === input.placeId || e.currentPlaceId === input.placeId)
+      .sort(useOrder);
+    const available = roundQty(usable.reduce((n, e) => n + e.quantity, 0));
+    if (input.quantity > available + EPS) {
+      const what = t.product.rechargeable ? 'charged ' : '';
+      throw new ValidationError(available ? `There ${available === 1 ? 'is' : 'are'} only ${plural(available, `${what}${t.product.unit}`)} of ${t.product.name} to use.` : what ? `None of the ${t.product.name} are charged.` : `There's no ${t.product.name} left to use.`);
+    }
+    let left = input.quantity;
+    const movements: Movement[] = [];
+    for (const e of usable) {
+      if (left <= EPS) break;
+      const take = Math.min(e.quantity, left);
+      e.quantity = roundQty(e.quantity - take);
+      left = roundQty(left - take);
+      if (t.product.rechargeable) {
+        work.push({ ...e, id: newId(), quantity: take, charge: 'flat', addedAt: ctx.now() });
+        movements.push(movement(t.product, 'flat', take, { entryId: e.id, fromPlaceId: where(e), note: input.note ?? '' }));
+      } else {
+        movements.push(movement(t.product, 'use', -take, { entryId: e.id, fromPlaceId: where(e), note: input.note ?? '' }));
+      }
+    }
+    return movements;
+  }
+
   const service = {
     async add(raw: StockAdd): Promise<ProductSummary> {
       const input = In.StockAdd.parse(raw);
@@ -166,30 +194,25 @@ export function createStockService(ctx: CoreContext) {
       const input = In.StockUse.parse(raw);
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
-      const usable = work
-        .filter((e) => e.status === 'in_stock' && e.quantity > 0 && (e.charge !== 'flat' || !t.product.rechargeable))
-        .filter((e) => !input.placeId || e.placeId === input.placeId || e.currentPlaceId === input.placeId)
-        .sort(useOrder);
-      const available = roundQty(usable.reduce((n, e) => n + e.quantity, 0));
-      if (input.quantity > available + EPS) {
-        const what = t.product.rechargeable ? 'charged ' : '';
-        throw new ValidationError(available ? `There ${available === 1 ? 'is' : 'are'} only ${plural(available, `${what}${t.product.unit}`)} to use.` : what ? `None of the ${t.product.name} are charged.` : `There's no ${t.product.name} left to use.`);
-      }
-      let left = input.quantity;
-      const movements: Movement[] = [];
-      for (const e of usable) {
-        if (left <= EPS) break;
-        const take = Math.min(e.quantity, left);
-        e.quantity = roundQty(e.quantity - take);
-        left = roundQty(left - take);
-        if (t.product.rechargeable) {
-          work.push({ ...e, id: newId(), quantity: take, charge: 'flat', addedAt: ctx.now() });
-          movements.push(movement(t.product, 'flat', take, { entryId: e.id, fromPlaceId: where(e), note: input.note ?? '' }));
-        } else {
-          movements.push(movement(t.product, 'use', -take, { entryId: e.id, fromPlaceId: where(e), note: input.note ?? '' }));
-        }
-      }
+      const movements = takeFrom(t, work, input);
       return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use');
+    },
+
+    /** Several uses (a recipe's ingredients) that all happen, or none do. */
+    async useMany(raw: StockUse[]): Promise<ProductSummary[]> {
+      const inputs = raw.map((r) => In.StockUse.parse(r));
+      const world = await loadWorld(ctx);
+      const changes = new Map<string, Change>();
+      for (const input of inputs) {
+        let c = changes.get(input.productId);
+        if (!c) {
+          const t = txn(world, input.productId);
+          c = { t, next: t.original.map((e) => ({ ...e })), movements: [], kind: t.product.rechargeable ? 'flat' : 'use' };
+          changes.set(input.productId, c);
+        }
+        c.movements.push(...takeFrom(c.t, c.next, input));
+      }
+      return commitAll([...changes.values()]);
     },
 
     /** Rechargeables: turn flat batteries back into charged ones. */
@@ -376,5 +399,12 @@ export function createStockService(ctx: CoreContext) {
         .sort((a, b) => (a.eta ?? '9999').localeCompare(b.eta ?? '9999') || a.source.localeCompare(b.source));
     },
   };
+
+  // Every change goes through the queue (they don't call each other, so none waits on itself).
+  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'arrive', 'renew'] as const;
+  for (const name of writes) {
+    const run = service[name] as (...args: unknown[]) => Promise<unknown>;
+    (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));
+  }
   return service;
 }

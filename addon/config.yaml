@@ -1,7 +1,7 @@
 # Home Assistant add-on for Larder. Uses the same image as the standalone
 # Docker install, published by .github/workflows/release.yml.
 name: Larder
-version: "0.3.0"
+version: "0.4.0"
 slug: larder
 description: What you've got, and where. A home inventory for everything in the house.
 url: https://github.com/doonetheprune/home-inventory
@@ -19,6 +19,9 @@ panel_title: Larder
 hassio_api: true
 discovery:
   - larder
+# The Mosquitto broker add-on, if installed, for Larder's optional MQTT module.
+services:
+  - mqtt:want
 # Off by default. Open it for MCP clients, scripts and Node-RED on your network (they need an access token).
 ports:
   8080/tcp: null

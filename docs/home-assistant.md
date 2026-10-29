@@ -161,6 +161,7 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **Sensors unavailable:** Larder can't be reached. Check the add-on (or container) is running and the address is right (Settings → Devices & services → Larder → ⋮ → Reconfigure).
 - **"Larder no longer accepts the access token":** the token was revoked. Make a new one in Larder and enter it when Home Assistant asks.
 - **An action says an item "could be" several things:** use a fuller name, or the item's id from its page in Larder.
+- **Calling an action through Home Assistant's REST API (`/api/services/larder/...`) answers 500 when the action fails**, e.g. for an unknown item. That's how Home Assistant's REST API reports every action error; Larder's message is in the Home Assistant log. The UI, automations, scripts and Node-RED show the message itself.
 - **No `larder_batteries_low` events:** check the battery product is linked to the device under **Used in**, and that the device has a battery sensor in Home Assistant.
 
 ## For developers

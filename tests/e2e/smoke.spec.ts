@@ -135,3 +135,30 @@ test('approves an AI assistant that asks to connect', async ({ page }) => {
   await page.waitForURL(/localhost:33418\/callback\?.*code=/);
   expect(new URL(page.url()).searchParams.get('state')).toBe('abc');
 });
+
+test('opens a scenario, its printable page, and label sheets', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/m/scenarios/');
+  await page.getByRole('link', { name: /Power cut/ }).click();
+  await expect(page.getByRole('heading', { name: 'Power cut' })).toBeVisible();
+  await expect(page.getByText('Head torch').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Print this scenario' }).click();
+  await expect(page.getByRole('heading', { name: 'Power cut page' })).toBeVisible();
+  await expect(page.locator('.print-area')).toContainText('items in');
+  await page.goto('/#/m/printing/');
+  await expect(page.getByRole('heading', { name: 'Label sheets' })).toBeVisible();
+  await expect(page.locator('.label-sheet svg').first()).toBeVisible();
+  await expect(page.locator('.print-area')).toContainText('G2-4');
+});
+
+test('cooks a saved recipe after confirming what comes out of stock', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/m/recipes/');
+  await page.getByRole('link', { name: /Cheesy beans on toast/ }).click();
+  await expect(page.getByText('Not tracked')).toBeVisible();
+  await page.getByRole('button', { name: 'Cooked it' }).click();
+  await expect(page.getByText('This is what Larder will take out of stock.')).toBeVisible();
+  await page.getByRole('button', { name: 'Take them out' }).click();
+  await expect(page.locator('.toast')).toContainText('out of stock');
+  await expect(page.getByText(/Cooked \d+ time/)).toBeVisible();
+});

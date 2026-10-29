@@ -40,7 +40,9 @@ export default defineModule({
 | `ctx.isEnabled()` | Whether the module is on right now |
 | `ctx.addSensor({ id, name, description, icon?, unit?, read })` | A sensor for Home Assistant (and MQTT). `id` is snake_case and starts with your module id (`batteries_low` for `batteries`). `read()` returns `{ state, attributes? }`; keep attributes small. The integration creates the entity without any change on its side. Hidden while the module is off |
 | `ctx.addAction({ id, name, description, input, run })` | An action for Home Assistant and Node-RED (`larder.<id>`). `input` is a `z.object` with snake_case fields and `.describe()`d fields (shown in Home Assistant). `run(input, { userId })` returns `{ message, ... }`. Use `ctx.core.resolve.product(name)` to accept names. Same id rule as sensors; run `npm run ha:services` afterwards |
-| `ctx.addTool({ name, title, description, input, readOnly?, run })` | A tool for AI assistants over MCP. Name it plainly (`check_price`): names are shared with the core and must be unique. Describe when to use it in a sentence (small models rely on it), take names via `ctx.core.resolve`, and return `{ text, data? }` with short readable text. Hidden while the module is off |
+| `ctx.addTool({ name, title, description, input, readOnly?, destructive?, run })` | A tool for AI assistants over MCP. Name it plainly (`check_price`): names are shared with the core and must be unique. Describe when to use it in a sentence (small models rely on it), take names via `ctx.core.resolve`, and return `{ text, data? }` with short readable text. Set `destructive` when it takes away or overwrites (clients may ask first). Hidden while the module is off |
+| `ctx.core.resolve.among(what, ref, list)` | Find one of your own things (`{ name }`) by name with the core's strict rules: exact, or every word; anything looser is a "did you mean" error, never a guess |
+| `ctx.core.products.updateField(id, key, change)` | Change your field on a product (`product.fields[key]`) from its current value. Use it rather than reading then `update`-ing, so two changes at once both count. `change` must not call Larder |
 | `ctx.publish(type, data)` | Publish your own event, e.g. `batteries.low`. The type must start with your module id and a dot. It reaches the web app, other modules and Home Assistant (as `larder_batteries_low`) |
 | `ctx.log.info/warn/error` | Log with the module's name |
 
@@ -67,11 +69,24 @@ export default defineWebModule({
   id: 'my-feature',
   productPanels: [MyPanel],      // shown on product pages: ({ product }) => JSX
   shoppingPanels: [MyListPanel], // shown beside a shop's list: ({ list }) => JSX
-  pages: [{ path: '/', title: 'My feature', icon: 'box', component: MyPage }], // linked from More and the sidebar
+  pages: [
+    { path: '/', title: 'My feature', icon: 'box', component: MyPage },        // linked from More and the sidebar (Organise)
+    { path: '/print', title: 'My sheets', section: 'print', component: Sheets }, // under Print in the sidebar
+    { path: '/:id', title: 'One thing', component: Detail },                   // params: useModuleParams().id; not linked
+    { path: '/new', title: 'New thing', hidden: true, component: Editor },     // not linked
+  ],
 });
 ```
 
-Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`…) and formatting (`money`, `qty`, `plural`, dates). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`).
+Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
+
+## Example data
+
+`demo(ctx, seed)` on the module definition adds the module's part of the example household (`LARDER_DEMO`), after the core's. `seed.products` and `seed.places` map names (and place codes) to ids, so `seed.products['Head torch']` is the head torch. Scenarios and recipes use it.
+
+## Packages
+
+Modules use `@larder/core`, `@larder/web-sdk`, zod and React. If a module really needs a third-party package (a protocol client, say), add it to `package.json`, list it for that module in `MODULE_PACKAGES` in `tests/architecture.test.ts`, and say so in the module's SPEC.md. The MQTT module uses `mqtt` this way.
 
 ## Tests
 
@@ -84,4 +99,8 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes |
 | `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
+| `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |
+| `printing` | QR label sheets for places and items (Avery L7160, L7163, L7651, plain A4) |
+| `recipes` | Saved recipes, what's missing, and taking ingredients out of stock after cooking once confirmed |
+| `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `_template` | Example to copy (off by default) |

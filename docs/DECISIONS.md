@@ -65,6 +65,17 @@ These follow from the decisions above; the owner can change any of them.
 - **MCP hints:** tools that take away or overwrite (use_stock, move_item, mark_arrived, set_usual_price) are marked destructive, so clients can ask first.
 - **Version 0.3.0.**
 
+## Phase 4: how it was built
+
+- **All four extras are modules**, using only the public core, the web SDK and new general hooks: module pages with parameters and a Print section, `QrCode` and `PrintSetup` in the SDK, a `demo` hook for example data, and `core.stock.useMany` (several uses at once, all or nothing).
+- **Scenarios** are tags on products (`product.fields.scenarios`), so deleting an item takes it out of every scenario. No target quantities. A scenario is grouped by where things are now, with out-of-place stock marked.
+- **Printing:** label positions use the Avery templates' measurements (L7160, L7163, L7651) plus plain A4 with cut lines; print at 100% with no margins. Only the page's `print-area` prints. Scenario pages print on A4 with 12 mm margins, with place photos if the places have them.
+- **Recipes:** ingredients link to items only when the name clearly is one (the same strict matching as actions); quantities to take are in the item's own unit. Cooking is always propose, then confirm (with changes), never automatic.
+- **MQTT:** off by default; retained stock and sensor topics, plus every event; no Home Assistant MQTT discovery (the integration is the Home Assistant link). The add-on uses the Mosquitto add-on automatically.
+- **Third-party packages in modules** are allowed only when listed for that module in the architecture test (MQTT uses `mqtt`).
+- **One change at a time** (after review): stock writes and product updates go through one queue in the core (`ctx.exclusive`), because two changes at the same moment (two automations, a double tap) could both start from the same stock and one would be lost. Modules change their own product field with `core.products.updateField`, and find their own things by name with `core.resolve.among` (the same strict rules as items). The queue is per process, which suits Larder (one process); a storage adapter for several instances would need database transactions instead (noted in ARCHITECTURE.md).
+- **Version 0.4.0.**
+
 ## For review
 
 Bigger calls made while the owner was away, with the alternative. Say if any should change.
@@ -77,3 +88,6 @@ Bigger calls made while the owner was away, with the alternative. Say if any sho
 6. **Connector tokens never expire** (until revoked in Settings). *Alternative:* expiring access tokens with refresh tokens, which some connectors handle and some don't.
 7. **Any Home Assistant user can use Larder's MCP tools through `/api/larder/mcp`**, not just admins. *Alternative:* admins only.
 8. **Not yet tried with Claude.ai or ChatGPT connectors, Gemini CLI, Open WebUI or LM Studio.** Tested with Claude Code, both official SDKs and the SDK's OAuth sign-in. The connectors need Larder on a public https address to try.
+9. **Label QR codes hold Larder's own codes (`larder:place:…`) unless `LARDER_BASE_URL` is set**, so only Larder's scanner opens them, not a phone's camera app. *Alternative:* always print links, which needs a stable address (an add-on's address through Home Assistant changes).
+10. **No Home Assistant MQTT discovery** from the MQTT module. *Alternative:* discovery for people who use MQTT without the integration.
+11. **Test tooling has new security advisories** (vitest 3 and its worker pool; development only, nothing shipped). *Alternative:* upgrade to vitest 4 or 5, which changes its configuration.

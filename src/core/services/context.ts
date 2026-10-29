@@ -28,12 +28,20 @@ export interface CoreContext extends Required<Omit<CoreDeps, 'clock'>> {
   today(): string;
   household(): Promise<HouseholdSettings>;
   publish(type: string, data: Record<string, unknown>): void;
+  /**
+   * Runs changes one at a time. Stock and product writes read, work out the
+   * change and write it back; two at once (two automations, two taps) would
+   * otherwise both start from the same stock and one would be lost. Never call
+   * it from inside itself: the inner call would wait for the outer one forever.
+   */
+  exclusive<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 export function createContext(deps: CoreDeps): CoreContext {
   const clock = deps.clock ?? { now: () => new Date() };
   let cached: HouseholdSettings | null = null;
   let timeZone = 'Europe/London';
+  let queue: Promise<unknown> = Promise.resolve();
   const ctx: CoreContext = {
     storage: deps.storage,
     files: deps.files,
@@ -53,6 +61,11 @@ export function createContext(deps: CoreDeps): CoreContext {
     publish(type, data) {
       deps.events.publish({ type, at: isoNow(clock), data });
       if (type === 'settings.changed') cached = null;
+    },
+    exclusive(fn) {
+      const run = queue.then(fn);
+      queue = run.catch(() => undefined);
+      return run;
     },
   };
   return ctx;

@@ -107,6 +107,24 @@ export function createResolver(ctx: CoreContext, search: ReturnType<typeof creat
       return pick('place', q, exact, strong, near);
     },
 
+    /**
+     * One of a module's own things (a recipe, a scenario) by name, by the same
+     * rules as items: the exact name, or one name with every word asked for.
+     * Anything looser comes back as "did you mean". `what` is how to call it
+     * in messages, e.g. "saved recipe".
+     */
+    among<T extends { name: string }>(what: string, ref: string, list: T[]): T {
+      const q = ref.trim();
+      if (!q) throw new LarderError(`Say which ${what}.`, 400, 'invalid');
+      const exact = list.filter((x) => same(x.name, q));
+      if (exact.length) return pick(what, q, exact, [], []);
+      const strong = list.filter((x) => covers(q, x.name));
+      // "Did you mean" for words that start a word of the name ("chil" → "Veggie chilli", but not "egg").
+      const asked = singular(q).filter((w) => w.length >= 3);
+      const near = strong.length ? [] : list.filter((x) => words(x.name).split(' ').some((n) => asked.some((w) => n.startsWith(w)))).map((x) => x.name);
+      return pick(what, q, exact, strong, near);
+    },
+
     /** A shop by id or name ("sainsburys" finds Sainsbury's, "screw" finds Screwfix). */
     async shop(ref: string): Promise<Shop> {
       const q = ref.trim();
