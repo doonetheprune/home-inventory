@@ -1,0 +1,1698 @@
+<title>Larder mock-ups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: phone-width app frame in the middle; on wide screens a screen index on the left and review notes on the right. */
+:root {
+  --canvas: #E4E8EE;
+  --bg: #F4F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #EAEEF3;
+  --ink: #161B24;
+  --ink-2: #576172;
+  --line: #DBE1E9;
+  --accent: #1F4E8C;        /* deep cobalt */
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3EBF6;
+  --low: #B23A1E;   --low-bg: #FBE6DF;
+  --soon: #8F5E00;  --soon-bg: #FAEFD3;
+  --away: #6A47B8;  --away-bg: #EEE8FA;
+  --coming: #0D6F6B; --coming-bg: #DAF1EE;
+  --ok: #2D7547;    --ok-bg: #E1F1E5;
+  --cam: #11151C; --cam-ink: #F2F5F9;
+  --paper: #FFFFFF; --paper-ink: #131619; --paper-line: #C4CAD2;
+  --shadow: 0 1px 2px rgb(22 27 36 / .06), 0 8px 28px rgb(22 27 36 / .08);
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --gl: max(16px, env(safe-area-inset-left, 0px));
+  --gr: max(16px, env(safe-area-inset-right, 0px));
+  --r: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #090B0F; --bg: #11151B; --surface: #181D25; --surface-2: #212833; --ink: #EEF2F7; --ink-2: #9DA7B6; --line: #2B3340;
+    --accent: #9DBEF5; --accent-ink: #0D1F3A; --accent-soft: #1B2A42;
+    --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #C7B5FF; --away-bg: #2A2242;
+    --coming: #7DD7CD; --coming-bg: #11302D; --ok: #92D9A7; --ok-bg: #15301E;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #090B0F; --bg: #11151B; --surface: #181D25; --surface-2: #212833; --ink: #EEF2F7; --ink-2: #9DA7B6; --line: #2B3340;
+  --accent: #9DBEF5; --accent-ink: #0D1F3A; --accent-soft: #1B2A42;
+  --low: #FF9E88; --low-bg: #3B1E18; --soon: #F0C66E; --soon-bg: #342913; --away: #C7B5FF; --away-bg: #2A2242;
+  --coming: #7DD7CD; --coming-bg: #11302D; --ok: #92D9A7; --ok-bg: #15301E;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 10px 30px rgb(0 0 0 / .35);
+  color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+body { height: 100%; margin: 0; background: var(--canvas); color: var(--ink); font: 15px/1.45 var(--f-body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+code, .mono { font-family: var(--f-mono); font-size: .86em; font-weight: 500; letter-spacing: -.01em; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.i.sm { width: 16px; height: 16px; }
+.i.lg { width: 26px; height: 26px; }
+
+/* ---------- stage ---------- */
+.stage { height: 100%; display: grid; grid-template-columns: 220px minmax(360px, 412px) 300px; justify-content: center; gap: 32px;
+  padding-block: 24px; padding-left: var(--gl); padding-right: var(--gr); }
+.index, .notes { overflow-y: auto; min-width: 0; }
+.index h2 { font-size: 20px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.index .sub { color: var(--ink-2); font-size: 13px; margin: 0 0 18px; }
+.index .grp { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); margin: 18px 0 6px; }
+.index a { display: block; padding: 6px 10px; border-radius: 8px; font-size: 14px; color: var(--ink-2); }
+.index a:hover { background: var(--surface-2); color: var(--ink); }
+.index a.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+.notes { align-self: start; max-height: 100%; }
+.notes .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 18px 16px; display: grid; gap: 10px; }
+.notes .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.notes h3 { font-size: 20px; }
+.notes p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.notes .qhead { font-weight: 700; font-size: 13px; margin-top: 4px; }
+
+.phone { height: 100%; max-height: 900px; align-self: center; background: var(--bg); border: 1px solid var(--line); border-radius: 34px; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: var(--shadow); position: relative; min-width: 0; }
+.reviewbar { display: none; }
+
+@media (max-width: 1099px) {
+  .stage { grid-template-columns: minmax(0, 440px); grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+  .index, .notes { display: none; }
+  .reviewbar { display: flex; gap: 8px; align-items: center; }
+  .notes.open { display: block; position: fixed; z-index: 30; left: var(--gl); right: var(--gr); top: calc(64px + env(safe-area-inset-top, 0px)); max-width: 440px; margin-inline: auto; }
+  .notes.open .panel { box-shadow: 0 20px 60px rgb(0 0 0 / .3); }
+}
+@media (max-width: 520px) {
+  .stage { padding: 0; gap: 0; grid-template-columns: minmax(0, 1fr); }
+  .phone { border-radius: 0; border: 0; max-height: none; box-shadow: none; }
+  .reviewbar { padding: 8px var(--gr) 8px var(--gl); background: var(--canvas); border-bottom: 1px solid var(--line); }
+}
+.reviewbar .tag { font: 700 11px/1 var(--f-body); letter-spacing: .09em; text-transform: uppercase; background: var(--accent); color: var(--accent-ink); padding: 6px 8px; border-radius: 6px; }
+.reviewbar select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.reviewbar button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; }
+
+/* ---------- app shell ---------- */
+.screen { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; }
+.hdr { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px var(--gr) 10px var(--gl); }
+.hdr h1 { font-size: 22px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconbtn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; border: 0; background: var(--surface-2); flex: none; }
+.iconbtn.ghost { background: transparent; }
+.content { padding: 4px var(--gr) 28px var(--gl); display: grid; gap: 22px; }
+.section { display: grid; gap: 10px; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; align-items: baseline; }
+.label a { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--accent); font-size: 13px; }
+.muted { color: var(--ink-2); }
+.small { font-size: 13px; }
+
+.tabbar { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); align-items: end; background: var(--surface); border-top: 1px solid var(--line);
+  padding: 6px var(--gr) 8px var(--gl); }
+.tab { display: grid; justify-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: var(--ink-2); padding: 6px 0; }
+.tab.on { color: var(--accent); }
+.tab.scan { margin-top: -26px; }
+.tab.scan span.fab { width: 58px; height: 58px; border-radius: 20px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent); border: 4px solid var(--surface); }
+.tab.scan span.fab .i { width: 26px; height: 26px; }
+
+/* ---------- components ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); min-width: 0; }
+.list > .item:first-child, .list > :first-child .item { border-top: 0; }
+a.item:hover, button.item:hover { background: var(--surface-2); }
+.item-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.item-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-meta { font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-side { display: grid; justify-items: end; gap: 4px; flex: none; text-align: right; }
+.qty { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+.tile { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); color: var(--accent); display: grid; place-items: center; flex: none; }
+.tile.lg { width: 56px; height: 56px; border-radius: 16px; }
+
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.p-low { color: var(--low); background: var(--low-bg); }
+.p-soon { color: var(--soon); background: var(--soon-bg); }
+.p-away { color: var(--away); background: var(--away-bg); }
+.p-coming { color: var(--coming); background: var(--coming-bg); }
+.p-ok { color: var(--ok); background: var(--ok-bg); }
+.p-plain { color: var(--ink-2); background: var(--surface-2); }
+.p-wish { color: var(--accent); background: var(--accent-soft); }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); padding-inline: var(--gl) var(--gr); }
+.chips::-webkit-scrollbar { display: none; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; margin-inline: 0; padding-inline: 0; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip .n { font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 600; }
+.chip.on .n { color: inherit; opacity: .7; }
+.chip.sm { padding: 5px 10px; font-size: 13px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); padding: 11px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.block { width: 100%; }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.btnrow { display: flex; gap: 10px; }
+.btnrow > .btn { flex: 1; }
+
+.search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; height: 48px; color: var(--ink-2); }
+.search input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; height: 100%; color: var(--ink); font-size: 16px; }
+
+.seg { display: flex; background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.seg button { flex: 1; border: 0; background: transparent; padding: 7px 10px; border-radius: 9px; font-weight: 600; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+
+.field { display: grid; gap: 6px; }
+.field > span { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.input { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 12px; font-size: 16px; }
+.inputrow { display: flex; gap: 8px; }
+.inputrow > * { min-width: 0; }
+
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; flex: none; }
+.stepper button { width: 38px; height: 38px; border: 0; background: transparent; display: grid; place-items: center; }
+.stepper output { min-width: 34px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14px; }
+.kv dt { color: var(--ink-2); }
+.kv dd { margin: 0; text-align: right; font-weight: 600; min-width: 0; }
+
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+.switch { width: 44px; height: 26px; border-radius: 999px; background: var(--line); position: relative; border: 0; flex: none; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform .2s; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); }
+
+.photo { border-radius: 14px; aspect-ratio: 16 / 9; max-width: 100%; display: grid; place-items: center; color: var(--ink-2);
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 10px, color-mix(in srgb, var(--surface-2) 70%, var(--line)) 10px 20px); }
+
+.toast { position: absolute; left: 50%; bottom: 96px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 20; width: max-content; max-width: calc(100% - 32px);
+  background: var(--ink); color: var(--bg); padding: 11px 16px; border-radius: 14px; font-weight: 600; font-size: 14px; transition: .25s; box-shadow: var(--shadow); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- home ---------- */
+.brand { display: flex; align-items: center; gap: 10px; flex: 1; }
+.brand .mark { width: 36px; height: 36px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.brand b { font: 800 24px/1 var(--f-display); letter-spacing: -.03em; }
+.today { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.hello h2 { font-size: 30px; line-height: 1.08; letter-spacing: -.03em; }
+.hello p { margin: 6px 0 0; color: var(--ink-2); }
+.actions { display: grid; grid-template-columns: 1.3fr 1fr; grid-template-rows: auto auto; gap: 10px; }
+.act { border-radius: 18px; padding: 14px; display: grid; gap: 4px; align-content: space-between; background: var(--surface); border: 1px solid var(--line); min-height: 86px; }
+.act b { font-family: var(--f-display); font-size: 17px; }
+.act span { font-size: 12.5px; color: var(--ink-2); }
+.act.big { grid-row: span 2; background: var(--accent); color: var(--accent-ink); border-color: transparent; min-height: 182px; position: relative; overflow: hidden; }
+.act.big span { color: inherit; opacity: .8; }
+.act.big b { font-size: 26px; }
+.act.big .bars { position: absolute; right: -6px; top: 14px; width: 90px; height: 70px; opacity: .22;
+  background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 6px, currentColor 6px 7px, transparent 7px 11px, currentColor 11px 15px, transparent 15px 17px); }
+.shopcard { padding: 16px; display: grid; gap: 12px; }
+.shopcard .go { display: flex; align-items: center; gap: 12px; }
+.shopcard .go .tile { background: var(--accent-soft); }
+.shopcard h3 { font-size: 20px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 2px; }
+.stat b { font: 800 28px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.stat.low b { color: var(--low); } .stat.soon b { color: var(--soon); } .stat.away b { color: var(--away); }
+
+/* ---------- product ---------- */
+.hero { display: flex; gap: 14px; align-items: center; }
+.hero h2 { font-size: 26px; line-height: 1.1; }
+.aliases { display: flex; flex-wrap: wrap; gap: 6px; }
+.big-qty { display: flex; align-items: baseline; gap: 8px; }
+.big-qty b { font: 800 44px/1 var(--f-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.meter { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; display: flex; }
+.meter i { display: block; height: 100%; }
+.loc-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.loc-row:first-child { border-top: 0; }
+.dock { position: sticky; bottom: 0; padding: 12px var(--gr) 12px var(--gl); background: linear-gradient(transparent, var(--bg) 30%); display: flex; gap: 8px; }
+.dock .btn { flex: 1; }
+
+/* ---------- scan ---------- */
+.viewfinder { position: relative; border-radius: 22px; overflow: hidden; aspect-ratio: 4 / 3.4; max-width: 100%; background: var(--cam); color: var(--cam-ink);
+  background-image: radial-gradient(120% 80% at 30% 20%, rgb(255 255 255 / .10), transparent 60%), linear-gradient(160deg, #2c3443, #11151c 70%); }
+.viewfinder .pack { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1 / 1.25; transform: translate(-50%, -50%) rotate(-4deg); border-radius: 10px;
+  background: linear-gradient(170deg, #d7542d, #a83418); box-shadow: 0 20px 40px rgb(0 0 0 / .5); }
+.viewfinder .pack::before { content: ""; position: absolute; left: 18%; right: 18%; bottom: 14%; height: 28%; background: #fff; border-radius: 3px; }
+.viewfinder .pack::after { content: ""; position: absolute; left: 23%; right: 23%; bottom: 18%; height: 18%;
+  background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px, #111 4px 5px, transparent 5px 8px, #111 8px 11px, transparent 11px 12px); }
+.viewfinder .frame { position: absolute; inset: 18% 14%; border-radius: 18px;
+  background: linear-gradient(var(--cam-ink), var(--cam-ink)) top left / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) top left / 3px 28px no-repeat,
+    linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 3px 28px no-repeat,
+    linear-gradient(var(--cam-ink), var(--cam-ink)) bottom left / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) bottom left / 3px 28px no-repeat,
+    linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 3px 28px no-repeat; }
+.viewfinder .line { position: absolute; left: 16%; right: 16%; height: 2px; top: 50%; background: #7db4ff; box-shadow: 0 0 14px 2px #7db4ff; animation: sweep 2.4s ease-in-out infinite alternate; }
+@keyframes sweep { from { top: 24%; } to { top: 76%; } }
+@media (prefers-reduced-motion: reduce) { .viewfinder .line { animation: none; } .toast { transition: none; } }
+.viewfinder .vf-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; gap: 8px; }
+.viewfinder .vf-chip { background: rgb(0 0 0 / .45); backdrop-filter: blur(6px); color: var(--cam-ink); padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; border: 0; }
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: grid; gap: 14px; }
+.sheet h3 { font-size: 20px; }
+.match { display: flex; gap: 12px; align-items: center; }
+.src { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.choice { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; width: 100%; }
+.choice.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; display: grid; place-items: center; }
+.choice.on .radio { border-color: var(--accent); }
+.choice.on .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.hint { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 12px 14px; }
+
+/* ---------- shop ---------- */
+.check { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; flex: none; background: var(--surface); padding: 0; color: transparent; }
+.item.done .check { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.item.done .item-name { text-decoration: line-through; color: var(--ink-2); }
+.pricecheck { padding: 16px; display: grid; gap: 12px; }
+.verdict { border-radius: 12px; padding: 12px 14px; font-weight: 600; display: grid; gap: 4px; }
+.verdict.cheaper { background: var(--ok-bg); color: var(--ok); }
+.verdict.dearer { background: var(--low-bg); color: var(--low); }
+.verdict.same { background: var(--surface-2); color: var(--ink-2); }
+.verdict small { font-weight: 500; color: var(--ink); opacity: .8; font-size: 13px; }
+
+/* ---------- locations ---------- */
+details.loc { border-top: 1px solid var(--line); }
+details.loc:first-child { border-top: 0; }
+details.loc > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+details.loc > summary::-webkit-details-marker { display: none; }
+details.loc > summary .chev { transition: transform .2s; color: var(--ink-2); }
+details.loc[open] > summary .chev { transform: rotate(90deg); }
+.subloc { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 66px; border-top: 1px solid var(--line); font-size: 14px; }
+.subloc .grow { flex: 1; min-width: 0; }
+.code { font-family: var(--f-mono); font-weight: 700; font-size: 12px; padding: 3px 7px; border-radius: 7px; background: var(--surface-2); color: var(--ink); white-space: nowrap; }
+.wizard-steps { display: flex; gap: 6px; }
+.wizard-steps i { height: 4px; flex: 1; border-radius: 9px; background: var(--line); }
+.wizard-steps i.on { background: var(--accent); }
+.rack { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; overflow-x: auto; }
+.shelf { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 3px solid var(--ink-2); }
+.shelf .boxes { display: grid; gap: 6px; }
+.box { border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-family: var(--f-mono); font-weight: 700; font-size: 11px; text-align: center; padding: 10px 2px; white-space: nowrap; }
+.numfield { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.numfield:first-child { border-top: 0; }
+.numfield b { font-weight: 600; }
+.numfield small { display: block; color: var(--ink-2); font-size: 12.5px; font-weight: 500; }
+.bigcode { font: 700 34px/1 var(--f-mono); letter-spacing: -.02em; }
+
+/* ---------- printables ---------- */
+.paperwrap { background: var(--surface-2); border-radius: var(--r); padding: 14px; overflow-x: auto; }
+.paper { background: var(--paper); color: var(--paper-ink); aspect-ratio: 210 / 297; width: 100%; max-width: 100%; box-shadow: 0 4px 18px rgb(0 0 0 / .18); border-radius: 3px; display: grid; }
+.sheet-grid { display: grid; height: 100%; padding: 4% 3%; gap: 0 2.5%; }
+.lbl { display: flex; align-items: center; gap: 6%; padding: 4%; overflow: hidden; min-width: 0; border-radius: 4px; outline: 1px dashed transparent; }
+.sheet-grid.cut .lbl { outline-color: var(--paper-line); border-radius: 0; }
+.lbl canvas { height: 82%; aspect-ratio: 1; flex: none; image-rendering: pixelated; }
+.lbl .t { min-width: 0; display: grid; }
+.lbl .t b { font: 700 clamp(7px, 2.6cqw, 13px)/1.1 var(--f-mono); }
+.lbl .t span { font-size: clamp(5px, 1.7cqw, 9px); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
+.sheet-grid.tiny .lbl .t span { display: none; }
+.sheet-grid.tiny .lbl { flex-direction: column; justify-content: center; gap: 2%; padding: 3%; }
+.sheet-grid.tiny .lbl canvas { height: 64%; }
+.paper { container-type: inline-size; }
+.scen-page { padding: 7% 8%; display: grid; align-content: start; gap: 3.2cqw; font-size: 2.2cqw; }
+.scen-page h4 { font: 800 5.4cqw/1 var(--f-display); margin: 0; }
+.scen-page .meta { color: #666; font-size: 2cqw; }
+.scen-page .grp { display: grid; grid-template-columns: auto 1fr; gap: 2cqw; border-top: 1px solid #ddd; padding-top: 2.4cqw; }
+.scen-page .grp .ph { width: 18cqw; aspect-ratio: 4/3; border-radius: 1cqw; background: repeating-linear-gradient(135deg, #eee 0 6px, #e2e2e2 6px 12px); }
+.scen-page .grp h5 { margin: 0 0 1cqw; font: 700 2.8cqw/1.2 var(--f-body); }
+.scen-page .grp h5 code { font-size: 2.2cqw; background: #f0f0f0; padding: .2cqw 1cqw; border-radius: .6cqw; }
+.scen-page ul { margin: 0; padding: 0; list-style: none; display: grid; gap: .8cqw; }
+.scen-page li { display: flex; gap: 2cqw; justify-content: space-between; }
+.scen-page li::before { content: ""; width: 2.2cqw; height: 2.2cqw; border: 1.5px solid #333; border-radius: .4cqw; flex: none; margin-top: .3cqw; }
+.scen-page li span { flex: 1; }
+.scen-page.nophotos .ph { display: none; }
+.scen-page.nophotos .grp { grid-template-columns: 1fr; }
+
+.more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.more-grid a { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; }
+.more-grid a b { font-family: var(--f-display); font-size: 16px; }
+.more-grid a span.muted { font-size: 12.5px; margin-top: -6px; }
+.soon-tag { font-size: 11px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 2px 6px; justify-self: start; }
+
+/* ---------- desktop preview + layout ---------- */
+.side-add, .side-group, .side-label, .desk-only, .col-place, .d-inline, .stock-head { display: none; }
+
+/* search everywhere: first thing on Home on a phone, across the top on a big screen */
+.topbar { position: relative; z-index: 8; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "brand date" "search search"; gap: 14px 10px; align-items: center;
+  padding: 14px var(--gr) 12px var(--gl); background: var(--bg); }
+.app:not(.at-home) > .topbar { display: none; }
+.tb-brand { grid-area: brand; display: flex; align-items: center; gap: 10px; }
+.tb-brand .mark { width: 36px; height: 36px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.tb-brand b { font: 800 24px/1 var(--f-display); letter-spacing: -.03em; }
+.tb-date { grid-area: date; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.gsearch { grid-area: search; position: relative; min-width: 0; }
+.gs-box { display: flex; align-items: center; gap: 10px; height: 58px; padding: 0 8px 0 16px; background: var(--surface); border: 2px solid var(--accent); border-radius: 18px; color: var(--accent);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 16%, transparent); }
+.gs-box input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 17px; font-weight: 500; }
+.gs-box input::placeholder { color: var(--ink-2); font-weight: 400; }
+.gs-kbd { display: none; font: 600 12px/1 var(--f-mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; }
+.gs-scan { width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+.gs-results { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: 0 18px 50px rgb(0 0 0 / .2); max-height: min(64vh, 560px); overflow-y: auto; padding: 6px 0 8px; }
+.gs-head { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); padding: 10px 16px 4px; }
+.gs-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 16px; }
+.gs-row.hl { background: var(--accent-soft); }
+.gs-row.hl .tile { background: var(--surface); }
+.gs-pending { font: 700 12px/1 var(--f-mono); color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 6px 8px; }
+.stepper output.preview { color: var(--accent); }
+.gs-keys { display: none; position: sticky; bottom: -8px; margin-top: 6px; padding: 9px 16px; border-top: 1px solid var(--line); background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.gs-keys kbd { font: 600 11px/1 var(--f-mono); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 2px 5px; margin-right: 3px; }
+.gs-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.gs-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.stepper.sm button { width: 34px; height: 34px; }
+.stepper.sm output { min-width: 58px; padding: 0 2px; font-size: 13px; white-space: nowrap; }
+.gs-new { display: flex; align-items: center; gap: 12px; margin: 8px 10px 4px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.gs-wish { display: flex; align-items: center; gap: 8px; margin: 2px 10px 0; padding: 8px 14px; border: 0; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+a.gs-wish { color: var(--accent); }
+.gs-empty { padding: 12px 16px 4px; }
+.gs-tip { padding: 10px 16px 6px; font-size: 13px; color: var(--ink-2); }
+.col-a, .col-b, .stock-main { display: contents; }
+.stock-pane { display: none; }
+.app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.phone { container: app / inline-size; }
+[hidden] { display: none !important; }
+.paper { min-height: 0; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.lbl canvas { max-width: 55%; }
+.viewtoggle { margin-bottom: 6px; }
+.reviewbar .seg { flex: none; }
+.subloc.cur { background: var(--accent-soft); font-weight: 600; }
+.pane { padding: 18px; display: grid; gap: 14px; }
+.pane-qty { font: 800 28px/1.1 var(--f-display); letter-spacing: -.02em; }
+
+.stage.desk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+.stage.desk .index, .stage.desk .notes { display: none; }
+.stage.desk .reviewbar { display: flex; width: 100%; max-width: 1360px; justify-self: center; }
+.stage.desk .phone { width: 100%; max-width: 1360px; max-height: none; justify-self: center; border-radius: 20px; }
+.stage.desk .notes.open { display: block; position: fixed; z-index: 30; left: auto; right: max(24px, env(safe-area-inset-right, 0px)); top: calc(70px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100% - 32px)); }
+.stage.desk .notes.open .panel { box-shadow: 0 20px 60px rgb(0 0 0 / .3); }
+@media (max-width: 520px) { .stage.desk { gap: 0; } .stage.desk .phone { border-radius: 0; } .viewtoggle { display: none !important; } }
+
+@container app (min-width: 900px) {
+  .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); --gl: 32px; --gr: 32px; }
+  .topbar, .app:not(.at-home) > .topbar { display: grid; grid-column: 1 / -1; grid-template-columns: 232px minmax(0, 780px) 1fr; grid-template-areas: "brand search date"; gap: 0;
+    padding: 14px 32px 14px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .tb-brand { padding-left: 22px; }
+  .tb-date { justify-self: end; }
+  .gs-box { height: 54px; }
+  .gs-kbd { display: inline-block; }
+  .gs-keys { display: block; }
+  .screen { grid-column: 2; grid-row: 2; }
+  .tabbar { grid-column: 1; grid-row: 2; width: 232px; flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 20px 14px; border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
+  .tab { order: 3; display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 9px 12px; border-radius: 10px; }
+  .tab:hover { background: var(--surface-2); color: var(--ink); }
+  .tab.on { background: var(--accent-soft); color: var(--accent); }
+  .tab[data-t="more"] { display: none; }
+  .tab.scan { order: 1; margin: 0 0 8px; padding: 0; }
+  .tab.scan:hover { background: none; }
+  .tab.scan span.fab { width: 100%; height: 48px; border: 0; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 15px/1 var(--f-body); }
+  .tab.scan span.fab .i { width: 22px; height: 22px; }
+  .side-label { display: inline; }
+  .side-add { order: 2; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); font-weight: 700; font-size: 14px; }
+  .side-group { order: 4; display: flex; flex-direction: column; gap: 2px; }
+  .side-group .tab { order: 0; }
+  .side-head { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); padding: 18px 12px 6px; }
+  .hdr { min-height: 76px; padding-block: 18px 12px; }
+  .hdr h1 { font-size: 28px; }
+  .content { gap: 24px; padding-bottom: 40px; }
+  .chips { flex-wrap: wrap; overflow: visible; }
+  .toast { bottom: 28px; }
+  .dock { justify-content: flex-end; }
+  .dock .btn { flex: none; min-width: 140px; }
+  .photo { max-height: 260px; }
+  .d-inline { display: inline; }
+
+  /* home: three columns */
+  #v-home .content { padding-top: 28px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello hello" "actions shop stats" "soon coming away"; align-items: start; }
+  #v-home .hello { grid-area: hello; }
+  #v-home .hello h2 { font-size: 32px; }
+  #v-home .actions { grid-area: actions; }
+  #v-home .shopcard { grid-area: shop; align-self: stretch; align-content: start; }
+  #v-home .stats { grid-area: stats; grid-template-columns: 1fr; align-self: stretch; }
+  #v-home .stat { display: flex; align-items: center; gap: 14px; }
+  #v-home .h-soon { grid-area: soon; }
+  #v-home .h-coming { grid-area: coming; }
+  #v-home .h-away { grid-area: away; }
+
+  /* stock: table + detail pane */
+  #v-stock .content { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  .stock-main { display: grid; gap: 22px; min-width: 0; }
+  .stock-pane { display: block; position: sticky; top: 92px; }
+  .stock-head, #stockList .item { display: grid; grid-template-columns: 40px minmax(0, 1.5fr) minmax(0, 1fr) 150px; gap: 12px; align-items: center; }
+  .stock-head { padding: 0 14px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+  .stock-head span:last-child { text-align: right; }
+  #stockList .col-place { display: block; font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #stockList .m-place { display: none; }
+  #stockList .item.sel { background: var(--accent-soft); }
+
+  /* product: two columns */
+  #v-product .content { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+  .col-a, .col-b { display: grid; gap: 22px; min-width: 0; }
+
+  /* scan: camera left, result right */
+  #v-scan .content { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "mode state" "vf sheet" "hint sheet"; grid-template-rows: auto auto 1fr; align-items: start; }
+  #scanMode { grid-area: mode; }
+  #scanState { grid-area: state; }
+  #v-scan .viewfinder { grid-area: vf; }
+  #v-scan .sheet { grid-area: sheet; }
+  #v-scan .hint { grid-area: hint; }
+
+  #v-add .content { max-width: 760px; }
+
+  /* shop: list + price checker */
+  #v-shop .content { grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "chips chips" "note note" "list side"; align-items: start; }
+  #shopChips { grid-area: chips; }
+  #shopNote { grid-area: note; }
+  #shopList { grid-area: list; }
+  #v-shop .pricecheck { grid-area: side; position: sticky; top: 92px; }
+
+  /* places */
+  #v-locations .content { grid-template-columns: minmax(0, 1fr) 360px; grid-template-areas: "search search" "tree side"; align-items: start; }
+  #v-locations .search { grid-area: search; }
+  #locTree { grid-area: tree; }
+  #v-locations .content > a.card { grid-area: side; }
+  #v-location .content { grid-template-columns: 320px minmax(0, 1fr); grid-template-areas: "side top" "side photo" "side btns" "side list"; grid-template-rows: auto auto auto 1fr; align-items: start; }
+  #locTree2 { display: block; grid-area: side; }
+  #v-location .loc-top { grid-area: top; }
+  #v-location .content > .photo { grid-area: photo; }
+  #v-location .content > .btnrow { grid-area: btns; justify-content: flex-start; }
+  #v-location .content > .btnrow > .btn { flex: none; }
+  #v-location .content > .section { grid-area: list; }
+  #v-grid .content { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: "steps steps" "form preview" "toggle preview" "btn preview"; grid-template-rows: auto auto auto 1fr; align-items: start; }
+  #v-grid .wizard-steps { grid-area: steps; }
+  #v-grid .content > div:nth-of-type(2) { grid-area: form; }
+  #v-grid .content > div:nth-of-type(3) { grid-area: preview; }
+  #v-grid .content > div:nth-of-type(4) { grid-area: toggle; }
+  #gCreate { grid-area: btn; }
+
+  /* cards in two columns */
+  #v-scenarios .list, #wishList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; background: none; border: 0; overflow: visible; }
+  #v-scenarios .list > .item, #wishList > .item { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+  #v-scenario .content { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #v-scenario .content > .stats, #v-scenario .content > .btn { grid-column: 1 / -1; }
+  #v-scenario .content > .btn { justify-self: start; width: auto; }
+  #shopsList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .more-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  /* printables: controls left, paper right */
+  #v-labels .content, #v-print-scenario .content { grid-template-columns: 340px minmax(0, 1fr); align-items: start; }
+  #v-labels .content { grid-template-areas: "src paper" "tpl paper" "info paper" "btn paper"; grid-template-rows: auto auto auto 1fr; }
+  #v-labels .content > .section { grid-area: src; }
+  #v-labels .content > .field { grid-area: tpl; }
+  #lblInfo { grid-area: info; }
+  #v-labels .content > .btn { grid-area: btn; }
+  #v-labels .paperwrap, #v-print-scenario .paperwrap { grid-area: paper; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 24px; }
+  #v-labels .paper, #v-print-scenario .paper { width: min(100%, 560px); }
+  #v-print-scenario .content { grid-template-areas: "toggle paper" "btn paper"; grid-template-rows: auto 1fr; }
+  #v-print-scenario .content > .list { grid-area: toggle; }
+  #v-print-scenario .content > .btn { grid-area: btn; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.6l2.4 12.2a1 1 0 0 0 1 .8h9.3a1 1 0 0 0 1-.8L21 7H6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2.5" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M6 10v4M9.5 10v4"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M2 6h11v10H2zM13 9h4.5l3.5 3.5V16h-8"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 20.5h2.5"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.2-9.4C1.7 7.3 3.9 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.3 0 5.5 3.3 4.4 6.6C19.5 15.4 12 20 12 20z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-move" viewBox="0 0 24 24"><path d="M4 8h14m-4-4 4 4-4 4M20 16H6m4-4-4 4 4 4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M3.4 7l17.2 10M3.4 17 20.6 7"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6.5 7 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10 12 3 12 3z"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M15 4a5 5 0 0 0-4.6 6.9l-6.9 6.9a1.8 1.8 0 0 0 2.6 2.6l6.9-6.9A5 5 0 0 0 20 9l-3 1-2-2 1-3z"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><circle cx="6.5" cy="9" r="1.8"/><circle cx="10" cy="5.5" r="1.8"/><circle cx="14" cy="5.5" r="1.8"/><circle cx="17.5" cy="9" r="1.8"/><path d="M12 11c-3 0-5.5 3.8-5.5 6.2 0 1.6 1.3 2.3 2.7 2.3 1.2 0 1.8-.6 2.8-.6s1.6.6 2.8.6c1.4 0 2.7-.7 2.7-2.3C17.5 14.8 15 11 12 11z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.3 7.5 9.5 4.3-1.2 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path d="M12 7.5c-1.5-1-3-1.4-4.5-1C4.8 7.2 3.6 10 4.3 13.4c.8 4 3.4 7.4 5.6 7.4 1 0 1.3-.5 2.1-.5s1.1.5 2.1.5c2.2 0 4.8-3.4 5.6-7.4.7-3.4-.5-6.2-3.2-6.9-1.5-.4-3 0-4.5 1z"/><path d="M12 7.5c0-2 1-3.5 3-4.2"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7zM19 16c.3 1.8 1 2.6 2.8 2.8-1.8.3-2.5 1-2.8 2.8-.3-1.8-1-2.5-2.8-2.8 1.8-.2 2.5-1 2.8-2.8z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M12 3v9m-4-4 4 4 4-4"/><path d="M3 13h5l1.5 3h5L16 13h5v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5z"/><path d="M4 19.5A1.5 1.5 0 0 0 5.5 21H20v-3"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9.5 4.5 4h15L21 9.5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 12v8h14v-8M10 20v-5h4v5"/></symbol>
+  <symbol id="i-nfc" viewBox="0 0 24 24"><path d="M6 8.5a5 5 0 0 1 0 7M9.5 6a8.5 8.5 0 0 1 0 12M13 3.5a12 12 0 0 1 0 17"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8S10.5 4 8 4a2 2 0 0 0 0 4M12 8s1.5-4 4-4a2 2 0 0 1 0 4"/></symbol>
+  <symbol id="i-tent" viewBox="0 0 24 24"><path d="M3 20 12 4l9 16zM12 4v16M9 20l3-5 3 5"/></symbol>
+  <symbol id="i-jar" viewBox="0 0 24 24"><path d="M8 3h8v3H8z"/><path d="M7 6h10a1 1 0 0 1 1 1v1.5a2 2 0 0 1-.6 1.4l-.4.4V19a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-8.7l-.4-.4A2 2 0 0 1 6 8.5V7a1 1 0 0 1 1-1z"/><path d="M7.2 13.5h9.6"/></symbol>
+  <symbol id="i-pound" viewBox="0 0 24 24"><path d="M17 6.5A4 4 0 0 0 9.5 8v4.5c0 3-1 5.5-3.5 7.5h12M6.5 13h8"/></symbol>
+</svg>
+
+<div class="stage">
+  <aside class="index" aria-label="Mock-up screens">
+    <h2><span class="tile" style="width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-ink)"><svg class="i sm"><use href="#i-jar"/></svg></span>Larder</h2>
+    <p class="sub">Phase 0 mock-ups. Everything is clickable; data is made up.</p>
+    <div class="seg viewtoggle" role="group" aria-label="Preview size"><button class="on" data-vm="phone">Phone</button><button data-vm="desk">Desktop</button></div>
+    <nav id="indexNav"></nav>
+  </aside>
+
+  <div class="reviewbar">
+    <span class="tag">Mock-up</span>
+    <select id="screenSelect" aria-label="Jump to screen"></select>
+    <div class="seg viewtoggle" role="group" aria-label="Preview size"><button class="on" data-vm="phone">Phone</button><button data-vm="desk">Desktop</button></div>
+    <button id="notesBtn" type="button" aria-expanded="false">Notes</button>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="app">
+    <header class="topbar" id="topbar">
+      <div class="tb-brand"><span class="mark"><svg class="i"><use href="#i-jar"/></svg></span><b>Larder</b></div>
+      <span class="tb-date">Wed 28 Oct</span>
+      <div class="gsearch" id="gsearch">
+        <div class="gs-box">
+          <svg class="i"><use href="#i-search"/></svg>
+          <input id="gq" type="search" placeholder="Search or add anything…" autocomplete="off" aria-label="Search or add anything" aria-controls="gsResults">
+          <kbd class="gs-kbd">/</kbd>
+          <a class="gs-scan" href="#scan" aria-label="Scan instead"><svg class="i"><use href="#i-scan"/></svg></a>
+        </div>
+        <div class="gs-results" id="gsResults" hidden></div>
+      </div>
+    </header>
+    <main class="screen" id="screen">
+
+      <!-- ============ HOME ============ -->
+      <section class="view" id="v-home" data-tab="home">
+        <div class="content">
+          <div class="hello">
+            <h2>Evening. 5 things to use soon, and Aldi’s the shop to hit.</h2>
+          </div>
+          <div class="actions">
+            <a class="act big" href="#scan"><span class="bars" aria-hidden="true"></span><svg class="i lg"><use href="#i-scan"/></svg><div><b>Scan</b><br><span>Add, use or move anything with a barcode, QR or NFC tag</span></div></a>
+            <a class="act" href="#add"><svg class="i"><use href="#i-plus"/></svg><div><b>Add by name</b><br><span>Tools, fuel, no barcode</span></div></a>
+            <a class="act" href="#scan" data-mode="putaway"><svg class="i"><use href="#i-inbox"/></svg><div><b>Put away</b><br><span>Scan item, then shelf</span></div></a>
+          </div>
+
+          <div class="card shopcard">
+            <div class="label" style="margin:0">Going shopping?</div>
+            <a class="go" href="#shop" data-shop="aldi">
+              <span class="tile lg"><svg class="i lg"><use href="#i-cart"/></svg></span>
+              <span class="item-main"><h3>Aldi · 14 items</h3><span class="muted small">Most of your list can come from Aldi</span></span>
+              <svg class="i muted"><use href="#i-chev"/></svg>
+            </a>
+            <div class="chips" style="margin-inline:0;padding-inline:0">
+              <a class="chip" href="#shop" data-shop="tesco">Tesco <span class="n">9</span></a>
+              <a class="chip" href="#shop" data-shop="toolstation">Toolstation <span class="n">3</span></a>
+              <a class="chip" href="#shop" data-shop="pets">Pets at Home <span class="n">1</span></a>
+            </div>
+          </div>
+
+          <div class="stats">
+            <a class="stat soon" href="#stock" data-filter="soon"><b>5</b><span>Use soon</span></a>
+            <a class="stat low" href="#stock" data-filter="low"><b>4</b><span>Running low</span></a>
+            <a class="stat away" href="#stock" data-filter="away"><b>2</b><span>Out of place</span></a>
+          </div>
+
+          <div class="section h-soon">
+            <div class="label">Use soon <a href="#stock" data-filter="soon">All</a></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-apple"/></svg></span><span class="item-main"><span class="item-name">Baby spinach</span><span class="item-meta">Kitchen › Fridge</span></span><span class="pill p-soon">Today</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-apple"/></svg></span><span class="item-main"><span class="item-name">Chicken thighs · 1 kg</span><span class="item-meta">Kitchen › Fridge</span></span><span class="pill p-soon">Tomorrow</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-shield"/></svg></span><span class="item-main"><span class="item-name">House insurance</span><span class="item-meta">Aviva · policy in notes</span></span><span class="pill p-soon">Renews 15 Nov</span></a>
+            </div>
+            <div class="card hint"><svg class="i sm" style="color:var(--accent);margin-top:2px"><use href="#i-sparkle"/></svg><span>Ask Claude <i>“what can I cook with the spinach and chicken?”</i> It sees your stock and saves recipes you like here.</span></div>
+          </div>
+
+          <div class="section h-coming">
+            <div class="label">On the way</div>
+            <div class="list">
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-truck"/></svg></span><span class="item-main"><span class="item-name">Tesco delivery · 23 items</span><span class="item-meta">Thu 29 Oct, 7–8pm</span></span><button class="btn small" data-toast="23 items moved from expected into stock">Arrived</button></div>
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-store"/></svg></span><span class="item-main"><span class="item-name">Toolstation · 2 items</span><span class="item-meta">Click &amp; collect, Sudbury</span></span><button class="btn small" data-toast="2 items moved from expected into stock">Arrived</button></div>
+            </div>
+          </div>
+
+          <div class="section h-away">
+            <div class="label">Out of place <a href="#stock" data-filter="away">All</a></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-wrench"/></svg></span><span class="item-main"><span class="item-name">Cordless drill</span><span class="item-meta">Now in Kitchen · usually Shed <code>S2-3</code></span></span><span class="pill p-away">4 days</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-wrench"/></svg></span><span class="item-main"><span class="item-name">Extension lead, 10 m</span><span class="item-meta">Now in Garden room · usually Garage <code>G1-2</code></span></span><span class="pill p-away">2 wks</span></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ STOCK ============ -->
+      <section class="view" id="v-stock" data-tab="stock" hidden>
+        <header class="hdr"><h1>Stock</h1><a class="iconbtn" href="#add" aria-label="Add item"><svg class="i"><use href="#i-plus"/></svg></a></header>
+        <div class="content">
+          <div class="stock-main">
+          <label class="search" for="stockSearch">
+            <svg class="i"><use href="#i-search"/></svg>
+            <input id="stockSearch" type="search" placeholder="Filter this list" autocomplete="off">
+          </label>
+          <div class="chips" id="stockFilters"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <span class="muted small" id="stockCount"></span>
+            <div class="seg" id="stockGroup" role="group" aria-label="Group by"><button class="on" data-g="cat">Category</button><button data-g="loc">Place</button></div>
+          </div>
+          <div id="stockList" class="section" style="gap:18px"></div>
+          </div>
+          <aside class="stock-pane" id="stockPane" aria-label="Selected item"></aside>
+        </div>
+      </section>
+
+      <!-- ============ PRODUCT ============ -->
+      <section class="view" id="v-product" data-tab="stock" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#stock" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1></h1><button class="iconbtn" aria-label="Edit" data-toast="Edit opens the full product form"><svg class="i"><use href="#i-edit"/></svg></button></header>
+        <div class="content">
+          <div class="col-a">
+          <div class="hero">
+            <span class="tile lg"><svg class="i lg"><use href="#i-sparkle"/></svg></span>
+            <div style="display:grid;gap:6px;min-width:0">
+              <h2>Toilet roll</h2>
+              <div class="aliases"><span class="pill p-plain">loo roll</span><span class="pill p-plain">toilet paper</span><span class="pill p-plain">bog roll</span></div>
+            </div>
+          </div>
+
+          <div class="card" style="padding:16px;display:grid;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+              <div class="big-qty"><b id="pQty">4</b><span class="muted">rolls in the house</span></div>
+              <span class="pill p-coming"><svg class="i sm"><use href="#i-truck"/></svg>+18 Thu</span>
+            </div>
+            <div class="meter" aria-hidden="true"><i style="width:15%;background:var(--accent)"></i><i style="width:67%;background:var(--coming);opacity:.45"></i></div>
+            <div class="small muted">Minimum 9. With the Tesco delivery you’ll have 22, so it’s <b style="color:var(--ink)">not</b> on any shopping list.</div>
+          </div>
+
+          <div class="section">
+            <div class="label">Where it is</div>
+            <div class="list">
+              <div class="loc-row"><span class="code">U2</span><span class="item-main"><span class="item-name">Utility › Shelf</span><span class="item-meta">Where it lives</span></span>
+                <div class="stepper"><button aria-label="Use one" data-step="-1" data-for="s1"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="s1">3</output><button aria-label="Add one" data-step="1" data-for="s1"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+              <div class="loc-row"><span class="code">B1</span><span class="item-main"><span class="item-name">Bathroom › Cabinet</span><span class="item-meta">Top-up spot</span></span>
+                <div class="stepper"><button aria-label="Use one" data-step="-1" data-for="s2"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="s2">1</output><button aria-label="Add one" data-step="1" data-for="s2"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+              <div class="loc-row"><span class="code" style="background:var(--coming-bg);color:var(--coming)">EXP</span><span class="item-main"><span class="item-name">Expected · Tesco delivery</span><span class="item-meta">2 × Andrex 9 pack · Thu 29 Oct</span></span><span class="qty">18</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="label">Brands &amp; barcodes</div>
+            <div class="list">
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Andrex Classic Clean, 9 rolls</span><span class="item-meta"><code>5029053038889</code> · Tesco <code>254331802</code></span></span></div>
+              <div class="item"><span class="tile"><svg class="i"><use href="#i-scan"/></svg></span><span class="item-main"><span class="item-name">Saxon Soft, 24 rolls</span><span class="item-meta"><code>4088600261401</code> · Aldi</span></span></div>
+              <button class="item" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:none;color:var(--accent);font-weight:600" data-toast="Scan or type the new barcode"><svg class="i"><use href="#i-plus"/></svg>Add a brand or barcode</button>
+            </div>
+          </div>
+
+          </div>
+          <div class="col-b">
+          <div class="section">
+            <div class="label">Price</div>
+            <div class="card" style="padding:14px 16px">
+              <dl class="kv">
+                <dt>Usual price</dt><dd><span class="mono">£0.36</span> per roll</dd>
+                <dt>Based on</dt><dd>Andrex 9 pack, £3.25 at Tesco</dd>
+                <dt>Shops</dt><dd>Aldi, Tesco</dd>
+              </dl>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="label">Details</div>
+            <div class="card" style="padding:14px 16px">
+              <dl class="kv">
+                <dt>Category</dt><dd>Household</dd>
+                <dt>Unit</dt><dd>Rolls</dd>
+                <dt>Shelf life</dt><dd class="muted">None</dd>
+                <dt>Scenarios</dt><dd><a href="#scenario" style="color:var(--accent)">Power cut</a></dd>
+                <dt>NFC tag</dt><dd class="muted">Not linked</dd>
+              </dl>
+            </div>
+            <div class="card" style="padding:14px 16px;font-size:14px"><b>Notes</b><br><span class="muted">Kids get through these fast in winter. Aldi 24 pack is usually the best value.</span></div>
+          </div>
+          </div>
+        </div>
+        <div class="dock">
+          <button class="btn" data-toast="1 roll used · 3 left"><svg class="i"><use href="#i-minus"/></svg>Use</button>
+          <a class="btn" href="#scan" data-mode="move"><svg class="i"><use href="#i-move"/></svg>Move</a>
+          <button class="btn primary" data-toast="Added to stock in Utility › Shelf U2"><svg class="i"><use href="#i-plus"/></svg>Add</button>
+        </div>
+      </section>
+
+      <!-- ============ SCAN ============ -->
+      <section class="view" id="v-scan" data-tab="scan" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#home" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></a><h1>Scan</h1><button class="iconbtn" aria-label="Type a barcode" data-toast="Type a barcode or code like G2-4"><svg class="i"><use href="#i-keyboard"/></svg></button></header>
+        <div class="content">
+          <div class="seg" id="scanMode" role="group" aria-label="What happens when you scan">
+            <button class="on" data-m="add">Add</button><button data-m="use">Use</button><button data-m="move">Move</button><button data-m="putaway">Put away</button><button data-m="look">Look up</button>
+          </div>
+          <div class="viewfinder" aria-label="Camera preview">
+            <div class="pack"></div><div class="frame"></div><div class="line"></div>
+            <div class="vf-top"><span class="vf-chip" id="modeChip"><svg class="i sm"><use href="#i-plus"/></svg>Adding to stock</span><button class="vf-chip" data-toast="Torch on">Torch</button></div>
+          </div>
+          <div class="seg" id="scanState" role="group" aria-label="Mock-up state"><button class="on" data-s="found">Recognised</button><button data-s="unknown">Unknown barcode</button><button data-s="location">Shelf QR</button></div>
+
+          <div class="sheet" id="scan-found">
+            <div class="match">
+              <span class="tile lg"><svg class="i lg"><use href="#i-apple"/></svg></span>
+              <div class="item-main">
+                <h3>Heinz Baked Beanz 415 g</h3>
+                <div class="src"><span class="pill p-ok">Open Food Facts</span><code>5000157024671</code></div>
+              </div>
+            </div>
+            <div class="small muted">Counts towards <b style="color:var(--ink)">Baked beans</b>. You have 6 tins.</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><b>How many?</b><div class="stepper"><button aria-label="Fewer" data-step="-1" data-for="scanQty"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="scanQty">4</output><button aria-label="More" data-step="1" data-for="scanQty"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+            <div class="list">
+              <button class="item" style="width:100%;border:0;background:none;text-align:left" data-toast="Pick a place, or scan its QR label"><svg class="i muted"><use href="#i-pin"/></svg><span class="item-main"><span class="item-name">Kitchen › Pantry <code>P3</code></span><span class="item-meta">Where beans usually go</span></span><svg class="i muted"><use href="#i-chev"/></svg></button>
+              <button class="item" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:none;text-align:left" data-toast="Change the expiry date for this batch"><svg class="i muted"><use href="#i-clock"/></svg><span class="item-main"><span class="item-name">Expires Oct 2028</span><span class="item-meta">Shelf life 2 years · tap to change</span></span><svg class="i muted"><use href="#i-chev"/></svg></button>
+            </div>
+            <div class="btnrow"><button class="btn" data-toast="Ready for the next scan">Skip</button><button class="btn primary" data-toast="4 tins added · ready for the next scan">Add 4 tins</button></div>
+          </div>
+
+          <div class="sheet" id="scan-unknown" hidden>
+            <div class="match">
+              <span class="tile lg"><svg class="i lg"><use href="#i-info"/></svg></span>
+              <div class="item-main"><h3>New one on us</h3><div class="src"><code>4088600214568</code></div></div>
+            </div>
+            <p class="small muted" style="margin:0">Open Food Facts, Open Beauty Facts and Open Products Facts don’t know this barcode. Name it once and Larder will remember it.</p>
+            <label class="field" for="unkName"><span>What is it?</span><input class="input" id="unkName" value="Chopped tomatoes, 400 g"></label>
+            <div class="field"><span>Is it a brand of something you already have?</span>
+              <div style="display:grid;gap:8px" id="unkChoices">
+                <button class="choice on"><span class="radio"></span><span class="item-main"><span class="item-name">Chopped tomatoes</span><span class="item-meta">8 tins · adds as an Aldi brand</span></span></button>
+                <button class="choice"><span class="radio"></span><span class="item-main"><span class="item-name">Passata</span><span class="item-meta">2 cartons</span></span></button>
+                <button class="choice"><span class="radio"></span><span class="item-main"><span class="item-name">No, it’s something new</span><span class="item-meta">Creates a new product</span></span></button>
+              </div>
+            </div>
+            <button class="btn primary block" data-toast="Saved. Next time this barcode is instant.">Save and add 1</button>
+          </div>
+
+          <div class="sheet" id="scan-location" hidden>
+            <div class="match">
+              <span class="tile lg"><svg class="i lg"><use href="#i-qr"/></svg></span>
+              <div class="item-main"><h3>Garage racking <code>G2-4</code></h3><div class="src">Shelf 2, box 4 · 5 things here</div></div>
+            </div>
+            <div class="small muted">In <b style="color:var(--ink)">Put away</b> mode this scan finishes the move: the last item you scanned goes here.</div>
+            <div class="btnrow"><a class="btn" href="#location">See what’s here</a><button class="btn primary" data-toast="Camping gas put away in G2-4">Put item here</button></div>
+          </div>
+
+          <div class="card hint"><svg class="i sm" style="margin-top:2px"><use href="#i-keyboard"/></svg><span>USB or Bluetooth scanner? Just scan on any screen and Larder picks it up. Phone NFC tags work through the Home Assistant app.</span></div>
+        </div>
+      </section>
+
+      <!-- ============ ADD BY NAME ============ -->
+      <section class="view" id="v-add" data-tab="scan" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#home" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></a><h1>Add by name</h1></header>
+        <div class="content">
+          <label class="field" for="addName"><span>What is it?</span><input class="input" id="addName" value="Head torch" autocomplete="off"></label>
+          <div class="list" id="addSuggest">
+            <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Torch</span><span class="item-meta">You have 1 · Hall › Drawer H1</span></span><span class="pill p-plain">Add 1</span></a>
+            <div class="item" style="background:var(--accent-soft)"><span class="tile" style="background:var(--surface)"><svg class="i"><use href="#i-plus"/></svg></span><span class="item-main"><span class="item-name">Create “Head torch”</span><span class="item-meta">New product, details below</span></span></div>
+          </div>
+
+          <div class="section">
+            <div class="label">Category</div>
+            <div class="chips wrap" id="addCat">
+              <button class="chip">Food</button><button class="chip on">Household</button><button class="chip">Tools</button><button class="chip">Batteries</button><button class="chip">Fuel</button><button class="chip">Pets</button><button class="chip">Renewals</button>
+            </div>
+          </div>
+
+          <div class="list">
+            <div class="numfield"><span><b>How many</b></span><div class="inputrow" style="align-items:center"><div class="stepper"><button aria-label="Fewer" data-step="-1" data-for="addQty"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="addQty">2</output><button aria-label="More" data-step="1" data-for="addQty"><svg class="i sm"><use href="#i-plus"/></svg></button></div><select class="input" style="width:auto;padding:8px 10px" aria-label="Unit"><option>each</option><option>packs</option><option>litres</option><option>kg</option><option>rolls</option></select></div></div>
+            <button class="numfield" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:none;text-align:left" data-toast="Pick from the list or scan a shelf label"><span><b>Where</b><small>Hall › Drawer <code>H1</code></small></span><svg class="i muted"><use href="#i-chev"/></svg></button>
+            <div class="numfield"><span><b>Running low below</b><small>Shows on the shopping list</small></span><div class="stepper"><button aria-label="Fewer" data-step="-1" data-for="addMin"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="addMin">1</output><button aria-label="More" data-step="1" data-for="addMin"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+            <div class="numfield"><span><b>Shelf life</b><small>Optional, for food and renewals</small></span><span class="muted">None</span></div>
+          </div>
+
+          <div class="section">
+            <div class="label">Where to buy</div>
+            <div class="chips wrap" id="addShops"><button class="chip on">Any shop</button><button class="chip">Aldi</button><button class="chip">Tesco</button><button class="chip">Toolstation</button><button class="chip">Amazon</button></div>
+          </div>
+
+          <div class="list">
+            <div class="toggle"><span><b>Wish list</b><br><span class="small muted">Want it, don’t have it yet</span></span><button class="switch" role="switch" aria-checked="false" aria-label="Wish list"></button></div>
+            <div class="toggle" style="border-top:1px solid var(--line)"><span><b>Power cut kit</b><br><span class="small muted">Add to a scenario</span></span><button class="switch" role="switch" aria-checked="true" aria-label="Power cut scenario"></button></div>
+          </div>
+          <button class="btn primary block" id="addSave" data-toast="Head torch added · 2 in Hall › Drawer H1">Add head torch</button>
+        </div>
+      </section>
+
+      <!-- ============ SHOP ============ -->
+      <section class="view" id="v-shop" data-tab="shop" hidden>
+        <header class="hdr"><h1 id="shopTitle">Shopping</h1><button class="iconbtn" aria-label="Add to list" data-toast="Add a one-off item to this trip"><svg class="i"><use href="#i-plus"/></svg></button></header>
+        <div class="content">
+          <div class="chips" id="shopChips"></div>
+          <p class="small muted" style="margin:0" id="shopNote"></p>
+          <div id="shopList" class="section" style="gap:18px"></div>
+
+          <div class="card pricecheck">
+            <div class="label" style="margin:0">Spotted a different pack?</div>
+            <div class="small muted" style="margin-top:-6px">Toilet roll usually costs <b class="mono" style="color:var(--ink)">£0.36</b> a roll.</div>
+            <div class="inputrow">
+              <label class="field" for="pcQty" style="flex:1"><span>Rolls in pack</span><input class="input" id="pcQty" type="number" inputmode="numeric" value="24" min="1"></label>
+              <label class="field" for="pcPrice" style="flex:1"><span>Price (£)</span><input class="input" id="pcPrice" type="number" inputmode="decimal" value="8.00" step="0.01" min="0"></label>
+            </div>
+            <div class="verdict" id="pcVerdict"></div>
+            <button class="btn small" style="justify-self:start" id="pcUpdate">Make this the usual price</button>
+          </div>
+        </div>
+        <div class="dock"><button class="btn primary" id="shopDone">Tick items as you shop</button></div>
+      </section>
+
+      <!-- ============ LOCATIONS ============ -->
+      <section class="view" id="v-locations" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Places</h1><a class="iconbtn" href="#grid" aria-label="Set up a storage grid"><svg class="i"><use href="#i-grid"/></svg></a></header>
+        <div class="content">
+          <label class="search" for="locSearch"><svg class="i"><use href="#i-search"/></svg><input id="locSearch" type="search" placeholder="Find a place or code"></label>
+          <div class="list" id="locTree"></div>
+          <a class="card" href="#grid" style="padding:16px;display:flex;gap:14px;align-items:center">
+            <span class="tile lg" style="background:var(--accent-soft)"><svg class="i lg"><use href="#i-grid"/></svg></span>
+            <span class="item-main"><b style="font-family:var(--f-display);font-size:17px">Set up shelves or boxes</b><span class="small muted">“4 shelves, 6 boxes each” makes G1-1 to G4-6 in one go</span></span>
+            <svg class="i muted"><use href="#i-chev"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <!-- ============ LOCATION ============ -->
+      <section class="view" id="v-location" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#locations" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Garage racking</h1><a class="iconbtn" href="#labels" aria-label="Print label"><svg class="i"><use href="#i-print"/></svg></a></header>
+        <div class="content">
+          <div class="list desk-only" id="locTree2" aria-label="All places"></div>
+          <div class="loc-top" style="display:flex;gap:14px;align-items:center">
+            <div style="display:grid;gap:4px;flex:1;min-width:0"><span class="bigcode">G2-4</span><span class="muted small">Garage › Garage racking › Shelf 2</span></div>
+            <canvas data-qr="G2-4" style="width:64px;height:64px;border-radius:6px" aria-label="QR label for G2-4"></canvas>
+          </div>
+          <div class="photo"><span style="display:grid;justify-items:center;gap:6px"><svg class="i lg"><use href="#i-camera"/></svg><span class="small">Photo of the box</span></span></div>
+          <div class="btnrow"><a class="btn" href="#scan" data-mode="putaway"><svg class="i"><use href="#i-inbox"/></svg>Put away here</a><button class="btn" data-toast="Hold your phone to an NFC sticker"><svg class="i"><use href="#i-nfc"/></svg>Link NFC</button></div>
+          <div class="section">
+            <div class="label">In this box · 5</div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-drop"/></svg></span><span class="item-main"><span class="item-name">Camping gas</span><span class="item-meta">Campingaz CV 470</span></span><span class="item-side"><span class="qty">1</span><span class="pill p-low">Low</span></span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-tent"/></svg></span><span class="item-main"><span class="item-name">Camping stove</span><span class="item-meta">Single burner</span></span><span class="qty">1</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-tent"/></svg></span><span class="item-main"><span class="item-name">Tent pegs</span><span class="item-meta">Steel, 23 cm</span></span><span class="qty">40</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-wrench"/></svg></span><span class="item-main"><span class="item-name">Bungee cords</span><span class="item-meta">Mixed lengths</span></span><span class="qty">6</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Camping lantern</span><span class="item-meta">Usually here · now in Loft</span></span><span class="pill p-away">Moved</span></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ GRID WIZARD ============ -->
+      <section class="view" id="v-grid" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#locations" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Shelves &amp; boxes</h1><span class="muted small">2 of 3</span></header>
+        <div class="content">
+          <div class="wizard-steps" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></div>
+          <div class="list">
+            <label class="numfield" for="gName"><span><b>Name</b></span><input class="input" id="gName" value="Garage racking" style="max-width:60%;text-align:right;padding:8px 10px"></label>
+            <div class="numfield"><span><b>Inside</b></span><span>Garage</span></div>
+            <label class="numfield" for="gPrefix"><span><b>Code starts with</b><small>Short and unique</small></span><input class="input mono" id="gPrefix" value="G" maxlength="3" style="width:72px;text-align:center;padding:8px 10px"></label>
+            <div class="numfield"><span><b>Shelves</b></span><div class="stepper"><button aria-label="Fewer shelves" data-step="-1" data-for="gRows" data-min="1" data-max="8"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="gRows">4</output><button aria-label="More shelves" data-step="1" data-for="gRows" data-min="1" data-max="8"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+            <div class="numfield"><span><b>Boxes per shelf</b></span><div class="stepper"><button aria-label="Fewer boxes" data-step="-1" data-for="gCols" data-min="1" data-max="8"><svg class="i sm"><use href="#i-minus"/></svg></button><output id="gCols">6</output><button aria-label="More boxes" data-step="1" data-for="gCols" data-min="1" data-max="8"><svg class="i sm"><use href="#i-plus"/></svg></button></div></div>
+            <div class="numfield"><span><b>Shelf 1 is</b></span><div class="seg" id="gFrom"><button class="on" data-f="top">Top</button><button data-f="bottom">Bottom</button></div></div>
+          </div>
+          <div class="section">
+            <div class="label"><span>Preview</span><span id="gSummary" style="text-transform:none;letter-spacing:0;font-weight:600"></span></div>
+            <div class="rack" id="gRack"></div>
+          </div>
+          <div class="list">
+            <div class="toggle"><span><b>Print labels next</b><br><span class="small muted">One QR label per box</span></span><button class="switch" role="switch" aria-checked="true" aria-label="Print labels next"></button></div>
+          </div>
+          <button class="btn primary block" id="gCreate">Create 24 places</button>
+        </div>
+      </section>
+
+      <!-- ============ SCENARIOS ============ -->
+      <section class="view" id="v-scenarios" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Scenarios</h1><button class="iconbtn" aria-label="New scenario" data-toast="Name it, then tag items into it"><svg class="i"><use href="#i-plus"/></svg></button></header>
+        <div class="content">
+          <p class="muted small" style="margin:0">Groups of things you need together. Pick one to see every item, how many you have and where it is.</p>
+          <div class="list">
+            <a class="item" href="#scenario"><span class="tile lg"><svg class="i lg"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Power cut</span><span class="item-meta">11 items · 4 places</span></span><span class="item-side"><span class="pill p-low">1 low</span><span class="pill p-wish">2 wished</span></span></a>
+            <a class="item" href="#scenario"><span class="tile lg"><svg class="i lg"><use href="#i-box"/></svg></span><span class="item-main"><span class="item-name">Emergency food</span><span class="item-meta">21 items · 3 places</span></span><span class="item-side"><span class="pill p-ok">All stocked</span></span></a>
+            <a class="item" href="#scenario"><span class="tile lg"><svg class="i lg"><use href="#i-gift"/></svg></span><span class="item-main"><span class="item-name">Christmas</span><span class="item-meta">18 items · Loft mostly</span></span><span class="item-side"><span class="pill p-low">3 low</span><span class="pill p-wish">5 wished</span></span></a>
+            <a class="item" href="#scenario"><span class="tile lg"><svg class="i lg"><use href="#i-tent"/></svg></span><span class="item-main"><span class="item-name">Camping</span><span class="item-meta">14 items · Garage</span></span><span class="item-side"><span class="pill p-low">1 low</span></span></a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENARIO ============ -->
+      <section class="view" id="v-scenario" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#scenarios" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Power cut</h1><a class="iconbtn" href="#print-scenario" aria-label="Printable page"><svg class="i"><use href="#i-print"/></svg></a></header>
+        <div class="content">
+          <div class="stats">
+            <div class="stat"><b>11</b><span>Items</span></div>
+            <div class="stat low"><b>1</b><span>Low</span></div>
+            <div class="stat"><b style="color:var(--accent)">2</b><span>Wish list</span></div>
+          </div>
+          <div class="section">
+            <div class="label">Hall › Drawer <code>H1</code></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-battery"/></svg></span><span class="item-main"><span class="item-name">AA batteries</span><span class="item-meta">Rechargeable</span></span><span class="item-side"><span class="qty">6 charged</span><span class="small muted">4 flat</span></span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Head torch</span></span><span class="qty">2</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Torch</span></span><span class="qty">1</span></a>
+            </div>
+          </div>
+          <div class="section">
+            <div class="label">Kitchen › Drawer <code>K2</code></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-sparkle"/></svg></span><span class="item-main"><span class="item-name">Candles</span></span><span class="qty">12</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-sparkle"/></svg></span><span class="item-main"><span class="item-name">Matches</span></span><span class="qty">3 boxes</span></a>
+            </div>
+          </div>
+          <div class="section">
+            <div class="label">Garage racking <code>G2-4</code></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-tent"/></svg></span><span class="item-main"><span class="item-name">Camping stove</span></span><span class="qty">1</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-drop"/></svg></span><span class="item-main"><span class="item-name">Camping gas</span></span><span class="item-side"><span class="qty">1</span><span class="pill p-low">Min 3</span></span></a>
+            </div>
+          </div>
+          <div class="section">
+            <div class="label">Utility › Shelf <code>U1</code></div>
+            <div class="list">
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-drop"/></svg></span><span class="item-main"><span class="item-name">Bottled water</span></span><span class="qty">12 L</span></a>
+              <a class="item" href="#product"><span class="tile"><svg class="i"><use href="#i-apple"/></svg></span><span class="item-main"><span class="item-name">UHT milk</span></span><span class="qty">4 L</span></a>
+            </div>
+          </div>
+          <div class="section">
+            <div class="label">On the wish list <a href="#wishlist">Wish list</a></div>
+            <div class="list">
+              <a class="item" href="#wishlist"><span class="tile"><svg class="i"><use href="#i-heart"/></svg></span><span class="item-main"><span class="item-name">Power bank, 20,000 mAh</span></span><span class="pill p-wish">Wished</span></a>
+              <a class="item" href="#wishlist"><span class="tile"><svg class="i"><use href="#i-heart"/></svg></span><span class="item-main"><span class="item-name">Wind-up radio</span></span><span class="pill p-wish">Wished</span></a>
+            </div>
+          </div>
+          <a class="btn block" href="#print-scenario"><svg class="i"><use href="#i-print"/></svg>Printable page</a>
+        </div>
+      </section>
+
+      <!-- ============ WISH LIST ============ -->
+      <section class="view" id="v-wishlist" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Wish list</h1><a class="iconbtn" href="#add" aria-label="Add to wish list"><svg class="i"><use href="#i-plus"/></svg></a></header>
+        <div class="content">
+          <p class="muted small" style="margin:0">Things you want but don’t have. Buy one and it moves into stock.</p>
+          <div class="list" id="wishList">
+            <div class="item"><span class="tile"><svg class="i"><use href="#i-battery"/></svg></span><span class="item-main"><span class="item-name">Power bank, 20,000 mAh</span><span class="item-meta">Power cut · Anker, about £25</span></span><button class="btn small" data-bought>Bought it</button></div>
+            <div class="item"><span class="tile"><svg class="i"><use href="#i-zap"/></svg></span><span class="item-main"><span class="item-name">Wind-up radio</span><span class="item-meta">Power cut · Emergency food</span></span><button class="btn small" data-bought>Bought it</button></div>
+            <div class="item"><span class="tile"><svg class="i"><use href="#i-gift"/></svg></span><span class="item-main"><span class="item-name">Kids' head torches × 2</span><span class="item-meta">Christmas</span></span><button class="btn small" data-bought>Bought it</button></div>
+            <div class="item"><span class="tile"><svg class="i"><use href="#i-wrench"/></svg></span><span class="item-main"><span class="item-name">Wet &amp; dry vacuum</span><span class="item-meta">Toolstation <code>93542</code> · link saved</span></span><button class="btn small" data-bought>Bought it</button></div>
+            <div class="item"><span class="tile"><svg class="i"><use href="#i-paw"/></svg></span><span class="item-main"><span class="item-name">Dog car harness</span><span class="item-meta">Large · Pets at Home</span></span><button class="btn small" data-bought>Bought it</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LABELS ============ -->
+      <section class="view" id="v-labels" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Label sheets</h1><button class="iconbtn" aria-label="Print" data-toast="In the real app this opens your browser’s print dialog"><svg class="i"><use href="#i-print"/></svg></button></header>
+        <div class="content">
+          <div class="section">
+            <div class="label">Labels for</div>
+            <div class="chips" id="lblSource">
+              <button class="chip on" data-src="garage">Garage racking <span class="n">24</span></button>
+              <button class="chip" data-src="shed">Shed shelves <span class="n">12</span></button>
+              <button class="chip" data-src="freezer">Chest freezer <span class="n">3</span></button>
+              <button class="chip" data-src="products">Chosen items <span class="n">8</span></button>
+            </div>
+          </div>
+          <label class="field" for="lblTpl"><span>Sheet layout</span>
+            <select class="input" id="lblTpl">
+              <option value="l7160">Avery L7160 · 21 per sheet · 63.5 × 38.1 mm</option>
+              <option value="l7163">Avery L7163 · 14 per sheet · 99.1 × 38.1 mm</option>
+              <option value="l7651">Avery L7651 · 65 per sheet · 38.1 × 21.2 mm</option>
+              <option value="plain">Plain A4 with cut lines · 24 per sheet</option>
+            </select>
+          </label>
+          <div class="paperwrap"><div class="paper"><div class="sheet-grid" id="lblSheet"></div></div></div>
+          <p class="small muted" style="margin:0" id="lblInfo"></p>
+          <button class="btn primary block" data-toast="In the real app this opens your browser’s print dialog"><svg class="i"><use href="#i-print"/></svg>Print</button>
+        </div>
+      </section>
+
+      <!-- ============ SCENARIO PRINT ============ -->
+      <section class="view" id="v-print-scenario" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#scenario" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Power cut page</h1><button class="iconbtn" aria-label="Print" data-toast="In the real app this opens your browser’s print dialog"><svg class="i"><use href="#i-print"/></svg></button></header>
+        <div class="content">
+          <div class="list"><div class="toggle"><span><b>Include place photos</b><br><span class="small muted">Helps someone else find things in the dark</span></span><button class="switch" role="switch" aria-checked="true" aria-label="Include place photos" id="photoToggle"></button></div></div>
+          <div class="paperwrap"><div class="paper">
+            <div class="scen-page" id="scenPage">
+              <div><h4>Power cut</h4><div class="meta">11 items in 4 places · printed 28 Oct 2026</div></div>
+              <div class="grp"><div class="ph"></div><div><h5>Hall › Drawer <code>H1</code></h5><ul><li><span>AA batteries (6 charged)</span><b>10</b></li><li><span>Head torch</span><b>2</b></li><li><span>Torch</span><b>1</b></li></ul></div></div>
+              <div class="grp"><div class="ph"></div><div><h5>Kitchen › Drawer <code>K2</code></h5><ul><li><span>Candles</span><b>12</b></li><li><span>Matches</span><b>3 boxes</b></li></ul></div></div>
+              <div class="grp"><div class="ph"></div><div><h5>Garage racking <code>G2-4</code></h5><ul><li><span>Camping stove</span><b>1</b></li><li><span>Camping gas</span><b>1</b></li></ul></div></div>
+              <div class="grp"><div class="ph"></div><div><h5>Utility › Shelf <code>U1</code></h5><ul><li><span>Bottled water</span><b>12 L</b></li><li><span>UHT milk</span><b>4 L</b></li></ul></div></div>
+            </div>
+          </div></div>
+          <button class="btn primary block" data-toast="In the real app this opens your browser’s print dialog"><svg class="i"><use href="#i-print"/></svg>Print</button>
+        </div>
+      </section>
+
+      <!-- ============ SHOPS ============ -->
+      <section class="view" id="v-shops" data-tab="more" hidden>
+        <header class="hdr"><a class="iconbtn ghost" href="#more" aria-label="Back"><svg class="i"><use href="#i-back"/></svg></a><h1>Shops</h1><button class="iconbtn" aria-label="Add a shop" data-toast="Name the shop, then pick what it sells"><svg class="i"><use href="#i-plus"/></svg></button></header>
+        <div class="content">
+          <p class="muted small" style="margin:0">Items set to “Any shop” only show up at shops that sell that kind of thing. Tap a category to change what a shop sells.</p>
+          <div id="shopsList" class="section" style="gap:12px"></div>
+        </div>
+      </section>
+
+      <!-- ============ MORE ============ -->
+      <section class="view" id="v-more" data-tab="more" hidden>
+        <header class="hdr"><h1>More</h1></header>
+        <div class="content">
+          <div class="more-grid">
+            <a href="#locations"><span class="tile"><svg class="i"><use href="#i-pin"/></svg></span><b>Places</b><span class="muted">7 rooms, 61 spots</span></a>
+            <a href="#scenarios"><span class="tile"><svg class="i"><use href="#i-layers"/></svg></span><b>Scenarios</b><span class="muted">Power cut, Christmas…</span></a>
+            <a href="#wishlist"><span class="tile"><svg class="i"><use href="#i-heart"/></svg></span><b>Wish list</b><span class="muted">5 things</span></a>
+            <a href="#labels"><span class="tile"><svg class="i"><use href="#i-print"/></svg></span><b>Labels &amp; printing</b><span class="muted">QR sheets, pages</span></a>
+            <a href="#more" data-toast="Saved recipes arrive in Phase 4"><span class="tile"><svg class="i"><use href="#i-book"/></svg></span><b>Recipes</b><span class="soon-tag">Phase 4</span></a>
+            <a href="#shops"><span class="tile"><svg class="i"><use href="#i-store"/></svg></span><b>Shops</b><span class="muted">4 shops, what each sells</span></a>
+            <a href="#stock" data-filter="Renewals"><span class="tile"><svg class="i"><use href="#i-shield"/></svg></span><b>Renewals</b><span class="muted">Insurance, MOT</span></a>
+            <a href="#more" data-toast="Modules, lookup sources, MQTT, MCP"><span class="tile"><svg class="i"><use href="#i-sliders"/></svg></span><b>Set-up</b><span class="muted">Modules &amp; links</span></a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <nav class="tabbar" aria-label="Main">
+      <a class="tab" href="#home" data-t="home"><svg class="i"><use href="#i-home"/></svg>Home</a>
+      <a class="tab" href="#stock" data-t="stock"><svg class="i"><use href="#i-box"/></svg>Stock</a>
+      <a class="tab scan" href="#scan" data-t="scan" aria-label="Scan"><span class="fab"><svg class="i"><use href="#i-scan"/></svg><span class="side-label">Scan</span></span></a>
+      <a class="side-add" href="#add"><svg class="i sm"><use href="#i-plus"/></svg>Add by name</a>
+      <a class="tab" href="#shop" data-t="shop"><svg class="i"><use href="#i-cart"/></svg>Shop</a>
+      <a class="tab" href="#more" data-t="more"><svg class="i"><use href="#i-more"/></svg>More</a>
+      <div class="side-group">
+        <span class="side-head">Organise</span>
+        <a class="tab" href="#locations" data-v="locations location grid"><svg class="i"><use href="#i-pin"/></svg>Places</a>
+        <a class="tab" href="#shops" data-v="shops"><svg class="i"><use href="#i-store"/></svg>Shops</a>
+        <a class="tab" href="#scenarios" data-v="scenarios scenario print-scenario"><svg class="i"><use href="#i-layers"/></svg>Scenarios</a>
+        <a class="tab" href="#wishlist" data-v="wishlist"><svg class="i"><use href="#i-heart"/></svg>Wish list</a>
+        <span class="side-head">Print</span>
+        <a class="tab" href="#labels" data-v="labels"><svg class="i"><use href="#i-print"/></svg>Label sheets</a>
+        <span class="side-head">More</span>
+        <a class="tab" href="#more" data-v="more"><svg class="i"><use href="#i-more"/></svg>Recipes, renewals, set-up</a>
+      </div>
+    </nav>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <aside class="notes" id="notes" aria-label="Review notes"><div class="panel" id="notesPanel"></div></aside>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const ic = (n, c = '') => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- screens + review notes ---------- */
+const SCREENS = [
+  ['Everyday', [
+    ['search', 'Search', 'Search is the main way in and covers everything, with results in sections: stock, shopping lists, places, scenarios, wish list, shops and saved recipes. Stock results have + and − buttons. If nothing matches, “Add as a new item” is right there.',
+      ['Decided: Enter opens the highlighted result. ↑ and ↓ count up or down, then Enter adds or uses that many. Tab moves to the next result. Try it on a laptop: type “batt”, press ↑ three times, then Enter.', 'Decided: search covers everything, grouped into sections.', 'Try “torch”, “milk”, “aldi”, “chicken” or something new like “cable ties”.', 'Is this the right order of sections?']],
+    ['home', 'Home', 'The dashboard. Scan is the biggest thing on the screen, the shop with the most of your list is suggested, and anything that needs attention sits underneath.',
+      ['Decided: “Out of place” means an item isn’t in its usual place, e.g. it usually lives in the Garage but is now in the Shed.', 'Is “the shop with the most items” the right suggestion, or should it also think about day of the week (e.g. Aldi on Saturdays)?', 'Is the one-line greeting useful, or would you rather go straight to the buttons?', 'Anything missing here? Battery warnings from Home Assistant devices could also live on this screen.']],
+    ['stock', 'Stock list', 'Everything in the house in one list. Search is fuzzy and checks aliases, notes and places, so “bog rol” or “battries” still work. Filter chips and the Category/Place switch change the view.',
+      ['Should the list group by category or by place by default?', 'Try searching “bog rol”, “kerosene” or “G2-4”.', 'Rows open the toilet roll example; every product would have its own page.']],
+    ['product', 'Product detail', 'One generic product (toilet roll) with two brands under it, stock split across two places, an expected delivery and a usual unit price.',
+      ['Is the expected delivery shown clearly enough? It counts towards stock, so toilet roll is not on any shopping list.', 'Quick +/− per place for fast use. Is that enough, or do you want a “use from…” step?', 'Photos and links would sit in Details. Left out here to keep it short.']],
+    ['scan', 'Scanning', 'Pick what a scan does (add, use, move, put away, look up), then point the camera. The three states below the camera show a recognised barcode, an unknown one, and a shelf QR label.',
+      ['Decided: scanning always starts in Add. Switch mode before scanning to use, move or put away.', 'Put-away is two scans: item, then shelf. Does that match how you’d use it?', '“Keep scanning” after each add, so you can unpack a whole shop quickly?']],
+    ['add', 'Add by name', 'For things with no barcode: tools, fuel, batteries. Typing suggests what you already have first, so you don’t create duplicates.',
+      ['Is this too many fields? Everything except the name is optional.', 'Should “Rechargeable” appear automatically when the category is Batteries?']],
+    ['shop', 'Shopping by shop', 'Pick a shop and see everything low that can come from there: that shop’s favourites plus “Any shop” items in the categories it sells. Tick items as you go; ticked items go into stock. The price checker compares a different pack with the usual price per unit.',
+      ['Decided: “Any shop” items only appear at shops that sell their category. Cable ties show at Toolstation; kitchen roll shows at Aldi and Tesco but not Toolstation.', 'Try the price checker: 24 rolls for £8 against the usual £0.36 a roll.', 'Should ticked items go into stock straight away, or only when you tap Done?']],
+  ]],
+  ['Organise', [
+    ['locations', 'Places', 'The nested place list: room › furniture › shelf or box. Codes like G2-4 come from the grid set-up and match the printed labels.',
+      ['Decided: the app says “Places” throughout.', 'Each place can have a photo, QR label and NFC tag.']],
+    ['shops', 'Shops', 'Each shop has a list of what it sells. “Any shop” items only appear on the lists of shops that sell their category.',
+      ['Are these the right categories for your shops?', 'When two shops tie on the home screen, should one you pick as a favourite win?']],
+    ['location', 'Place contents', 'What scanning a shelf QR shows: what lives here, including things that belong here but are elsewhere right now.',
+      ['Is “Put away here” the right main action on this screen?']],
+    ['grid', 'Grid set-up', 'Step 2 of the guided set-up for racking or box storage. Change shelves and boxes and the preview and codes update.',
+      ['Codes are prefix + shelf + box (G2-4). Happy with that format?', 'Should shelf 1 be the top or the bottom by default?']],
+    ['scenarios', 'Scenarios', 'Groups such as Power cut or Christmas. No target quantities; the badges come from each item’s own minimum and the wish list.',
+      ['Any other scenarios you’d set up on day one?']],
+    ['scenario', 'Scenario detail', 'Every item in the Power cut scenario grouped by where it lives, with wish list items at the bottom.',
+      ['Is grouping by place right? It matches the printed page.']],
+    ['wishlist', 'Wish list', 'Normal products with no stock and a wish flag. “Bought it” clears the flag and asks where you put it.',
+      ['Should wish list items show a target price yet, or leave that for the offers feature later?']],
+  ]],
+  ['Print', [
+    ['labels', 'QR label sheets', 'Pick what to label and a sheet layout. The preview matches common Avery sticky label sheets, or plain A4 with cut lines.',
+      ['Which label sheets do you already have, if any?', 'Labels show code + name. Want room for a photo or a short note too?']],
+    ['print-scenario', 'Scenario page', 'A printable Power cut page grouped by place, with or without place photos, for the kitchen drawer or the babysitter.',
+      ['Tick boxes are there so you can use it as a checklist. Keep them?']],
+  ]],
+  ['Menu', [
+    ['more', 'More', 'Everything that isn’t daily: places, scenarios, wish list, printing, recipes (Phase 4), shops, renewals and set-up.',
+      ['Should Renewals get its own screen, or is a filtered stock list enough?']],
+  ]],
+];
+const FLAT = SCREENS.flatMap(([g, items]) => items.map(i => ({ g, id: i[0], title: i[1], desc: i[2], q: i[3] })));
+
+$('#indexNav').innerHTML = SCREENS.map(([g, items]) => `<div class="grp">${g}</div>` + items.map(i => `<a href="#${i[0]}" data-i="${i[0]}">${i[1]}</a>`).join('')).join('');
+$('#screenSelect').innerHTML = SCREENS.map(([g, items]) => `<optgroup label="${g}">` + items.map(i => `<option value="${i[0]}">${i[1]}</option>`).join('') + '</optgroup>').join('');
+$('#screenSelect').addEventListener('change', e => { location.hash = e.target.value; });
+$('#notesBtn').addEventListener('click', () => { const n = $('#notes'); const open = n.classList.toggle('open'); $('#notesBtn').setAttribute('aria-expanded', open); $('#notesBtn').textContent = open ? 'Close' : 'Notes'; });
+
+const DESK = {
+  search: 'The search bar runs across the top of every screen, with results dropping down under it. Press / to jump to it from anywhere. The strip at the bottom of the results shows which keys do what.',
+  home: 'Search across the very top, then three columns: the main actions, shop suggestion and counts, then use soon, on the way and out of place side by side.',
+  stock: 'A table with a detail pane. Click a row to preview it on the right; “Open full page” shows everything.',
+  product: 'Two columns: stock and brands on the left, price and details on the right. Use, Move and Add stay along the bottom.',
+  scan: 'Camera on the left, result on the right. On a laptop a USB scanner is the likelier input, and it works on any screen.',
+  add: 'The same form, kept to a comfortable width.',
+  shop: 'The list on the left with the price checker beside it.',
+  locations: 'The place tree with set-up alongside.',
+  location: 'The place tree stays on the left while you look inside a box.',
+  grid: 'Settings on the left, a live preview of the codes on the right.',
+  shops: 'Shops as cards in two columns.',
+  scenarios: 'Scenarios as cards in two columns.',
+  scenario: 'Places side by side in two columns.',
+  wishlist: 'Wish list items as cards in two columns.',
+  labels: 'Controls on the left, a full sheet preview on the right.',
+  'print-scenario': 'Options on the left, the page preview on the right.',
+  more: 'On a big screen these links live in the sidebar, so this page is rarely needed.',
+};
+function renderNotes(id) {
+  const s = FLAT.find(x => x.id === id); if (!s) return;
+  const desk = $('.stage').classList.contains('desk') && DESK[id];
+  $('#notesPanel').innerHTML = `<div class="eyebrow">${s.g} · Review notes</div><h3>${s.title}</h3><p>${s.desc}</p>
+    ${desk ? `<div class="qhead">On a big screen</div><p>${DESK[id]}</p>` : ''}
+    <div class="qhead">Questions for you</div><ul>${s.q.map(q => `<li>${q}</li>`).join('')}</ul>`;
+}
+
+/* ---------- phone / desktop preview ---------- */
+const isDesk = () => $('#phone').clientWidth >= 900;
+function setViewMode(m) {
+  $('.stage').classList.toggle('desk', m === 'desk');
+  $$('[data-vm]').forEach(b => b.classList.toggle('on', b.dataset.vm === m));
+  $('#notes').classList.remove('open'); $('#notesBtn').textContent = 'Notes'; $('#notesBtn').setAttribute('aria-expanded', 'false');
+  try { localStorage.setItem('larder-mock-view', m); } catch (e) { /* storage unavailable */ }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-vm]'); if (b) { setViewMode(b.dataset.vm); show(location.hash.slice(1) || 'home'); } });
+
+/* ---------- routing ---------- */
+let pendingFilter = null, pendingShop = null, pendingMode = null;
+function show(id) {
+  const demo = id === 'search';
+  if (demo || !document.getElementById('v-' + id)) id = 'home';
+  $$('.view').forEach(v => v.hidden = v.id !== 'v-' + id);
+  const view = $('#v-' + id);
+  $$('.tab[data-t]').forEach(t => t.classList.toggle('on', t.dataset.t === view.dataset.tab));
+  $$('.tabbar [data-v]').forEach(t => t.classList.toggle('on', t.dataset.v.split(' ').includes(id)));
+  $$('#indexNav a').forEach(a => a.classList.toggle('on', a.dataset.i === (demo ? 'search' : id)));
+  $('#screenSelect').value = demo ? 'search' : id;
+  $('#screen').scrollTop = 0;
+  renderNotes(demo ? 'search' : id);
+  $('.app').classList.toggle('at-home', id === 'home');
+  closeSearch();
+  if (demo) { $('#gq').value = 'batt'; requestAnimationFrame(renderSearch); }
+  if (id === 'stock') { if (pendingFilter) { stockState.filter = pendingFilter; pendingFilter = null; } renderStock(); }
+  if (id === 'shop') { if (pendingShop) { shopState.shop = pendingShop; pendingShop = null; } renderShop(); }
+  if (id === 'scan' && pendingMode) { setScanMode(pendingMode); pendingMode = null; }
+  if (id === 'labels') renderLabels();
+  if (id === 'shops') renderShops();
+  requestAnimationFrame(() => $$('canvas[data-qr]', view).forEach(drawQR));
+}
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-filter],[data-shop],[data-mode]');
+  if (a && a.tagName === 'A') {
+    if (a.dataset.filter) pendingFilter = a.dataset.filter;
+    if (a.dataset.shop) pendingShop = a.dataset.shop;
+    if (a.dataset.mode) pendingMode = a.dataset.mode;
+    if (a.getAttribute('href') === location.hash) { e.preventDefault(); show(location.hash.slice(1)); }
+  }
+  const t = e.target.closest('[data-toast]');
+  if (t) { if (t.tagName === 'A' && t.getAttribute('href') === '#more') e.preventDefault(); toast(t.dataset.toast); }
+  const st = e.target.closest('[data-step]');
+  if (st) {
+    const out = document.getElementById(st.dataset.for);
+    const min = st.dataset.min ? +st.dataset.min : 0, max = st.dataset.max ? +st.dataset.max : 999;
+    out.textContent = Math.min(max, Math.max(min, +out.textContent + +st.dataset.step));
+    if (st.dataset.for === 's1' || st.dataset.for === 's2') $('#pQty').textContent = +$('#s1').textContent + +$('#s2').textContent;
+    if (st.dataset.for === 'scanQty') $('#scan-found .btn.primary').textContent = `Add ${out.textContent} tin${out.textContent === '1' ? '' : 's'}`;
+    if (st.dataset.for.startsWith('g')) renderGrid();
+  }
+  const sw = e.target.closest('.switch');
+  if (sw) { sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') !== 'true'); if (sw.id === 'photoToggle') $('#scenPage').classList.toggle('nophotos', sw.getAttribute('aria-checked') !== 'true'); }
+  const ch = e.target.closest('#addCat .chip, #addShops .chip');
+  if (ch) {
+    if (ch.parentElement.id === 'addCat') $$('.chip', ch.parentElement).forEach(c => c.classList.toggle('on', c === ch));
+    else {
+      const any = ch.textContent === 'Any shop';
+      if (any) $$('.chip', ch.parentElement).forEach(c => c.classList.toggle('on', c === ch));
+      else { ch.classList.toggle('on'); ch.parentElement.firstElementChild.classList.toggle('on', !$$('.chip.on', ch.parentElement).some(c => c.textContent !== 'Any shop')); }
+    }
+  }
+  const choice = e.target.closest('.choice');
+  if (choice) $$('.choice', choice.parentElement).forEach(c => c.classList.toggle('on', c === choice));
+  const bought = e.target.closest('[data-bought]');
+  if (bought) { const row = bought.closest('.item'); toast(`${row.querySelector('.item-name').textContent} moved into stock. Where did you put it?`); row.remove(); }
+});
+
+let toastTimer;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600); }
+
+/* ---------- stock ---------- */
+const CAT_ICON = { Food: 'apple', Household: 'sparkle', Pets: 'paw', Tools: 'wrench', Batteries: 'battery', Fuel: 'drop', Renewals: 'shield' };
+const STOCK = [
+  { n: 'Baby spinach', a: ['spinach', 'salad'], c: 'Food', q: '1 bag', l: 'Kitchen › Fridge', s: [['soon', 'Today']] },
+  { n: 'Chicken thighs', a: ['chicken'], c: 'Food', q: '1 kg', l: 'Kitchen › Fridge', s: [['soon', 'Tomorrow']] },
+  { n: 'Semi-skimmed milk', a: ['milk'], c: 'Food', q: '2 × 2.27 L', l: 'Kitchen › Fridge', s: [['soon', 'Fri 30 Oct']] },
+  { n: 'Baked beans', a: ['beans', 'beanz'], c: 'Food', q: '6 tins', l: 'Kitchen › Pantry', code: 'P3', s: [] },
+  { n: 'Frozen peas', a: ['peas'], c: 'Food', q: '1.6 kg', l: 'Garage › Chest freezer', code: 'CF-2', s: [] },
+  { n: 'Toilet roll', a: ['loo roll', 'toilet paper', 'bog roll'], c: 'Household', q: '4 rolls', l: 'Utility › Shelf', code: 'U2', s: [['coming', '+18 Thu']], note: 'Kids get through these fast in winter' },
+  { n: 'Washing-up liquid', a: ['fairy', 'dish soap'], c: 'Household', q: '¼ bottle', l: 'Kitchen › Under sink', s: [['low', 'Low']] },
+  { n: 'Dishwasher tablets', a: ['dishwasher tabs'], c: 'Household', q: '38 tabs', l: 'Kitchen › Under sink', s: [] },
+  { n: 'Candles', a: ['tea lights'], c: 'Household', q: '12', l: 'Kitchen › Drawer', code: 'K2', s: [] },
+  { n: 'Dog food', sub: 'Harringtons lamb & rice, 15 kg', a: ['dog biscuits', 'kibble'], c: 'Pets', q: '2 kg', l: 'Utility › Dog food bin', s: [['low', 'Low']] },
+  { n: 'Wormer tablets', sub: 'Milbemax, large dog', a: ['worming', 'flea'], c: 'Pets', q: '1 dose', l: 'Kitchen › Medicine box', s: [['soon', 'Due 12 Nov']] },
+  { n: 'AA batteries', sub: 'Eneloop, rechargeable', a: ['double a', 'batteries'], c: 'Batteries', q: '6 charged · 4 flat', l: 'Hall › Drawer', code: 'H1', s: [] },
+  { n: 'AAA batteries', sub: 'Duracell', a: ['triple a', 'batteries'], c: 'Batteries', q: '3', l: 'Hall › Drawer', code: 'H1', s: [['low', 'Low']] },
+  { n: 'Cordless drill', sub: 'Makita 18 V', a: ['drill', 'driver'], c: 'Tools', q: '1', l: 'Shed › Shelf', code: 'S2-3', s: [['away', 'Now in Kitchen']] },
+  { n: 'Extension lead', sub: '10 m, 4 sockets', a: ['extension cable', 'lead'], c: 'Tools', q: '1', l: 'Garage › Racking', code: 'G1-2', s: [['away', 'Now in Garden room']] },
+  { n: 'Heating oil', sub: 'Kerosene, 1,200 L tank', a: ['kerosene', 'oil', 'fuel'], c: 'Fuel', q: '620 L', l: 'Outside › Oil tank', s: [] },
+  { n: 'Camping gas', sub: 'Campingaz CV 470', a: ['gas canister', 'butane'], c: 'Fuel', q: '1', l: 'Garage › Racking', code: 'G2-4', s: [['low', 'Low']] },
+  { n: 'Petrol', sub: 'For the mower', a: ['fuel', 'unleaded'], c: 'Fuel', q: '5 L', l: 'Shed › Floor', s: [] },
+  { n: 'House insurance', sub: 'Aviva, renews yearly', a: ['home insurance', 'buildings', 'contents'], c: 'Renewals', q: 'Active', l: 'Study › Filing box', s: [['soon', 'Renews 15 Nov']] },
+  { n: 'Car MOT', sub: 'Skoda Octavia', a: ['mot', 'car'], c: 'Renewals', q: 'Valid', l: 'Study › Filing box', s: [['ok', 'Due 3 Feb']] },
+];
+const FILTERS = [['all', 'All'], ['low', 'Low'], ['soon', 'Use soon'], ['away', 'Out of place'], ['coming', 'On the way'], ...Object.keys(CAT_ICON).map(c => [c, c])];
+const stockState = { filter: 'all', group: 'cat', q: '', sel: 'Toilet roll' };
+
+function lev(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function fuzzy(p, q) {
+  const hay = [p.n, p.sub || '', ...p.a, p.c, p.l, p.code || '', p.note || ''].join(' ').toLowerCase();
+  const words = hay.split(/[\s,›·&()]+/).filter(Boolean);
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(t =>
+    hay.includes(t) || words.some(w => (w.startsWith(t.slice(0, -1)) && t.length > 4) || lev(w.slice(0, t.length + 1), t) <= (t.length > 5 ? 2 : 1) || lev(w, t) <= (t.length > 5 ? 2 : 1)));
+}
+function rowHTML(p) {
+  const pills = p.s.map(([k, t]) => `<span class="pill p-${k}">${esc(t)}</span>`).join('');
+  const place = `${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}`;
+  return `<a class="item ${p.n === stockState.sel ? 'sel' : ''}" href="#product" data-n="${esc(p.n)}"><span class="tile">${ic(CAT_ICON[p.c])}</span>
+    <span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${p.sub ? esc(p.sub) : `<span class="d-inline">${p.c}</span>`}<span class="m-place">${p.sub ? ' · ' : ''}${place}</span></span></span>
+    <span class="col-place">${place}</span>
+    <span class="item-side"><span class="qty">${esc(p.q)}</span>${pills}</span></a>`;
+}
+function renderPane() {
+  const p = STOCK.find(x => x.n === stockState.sel) || STOCK[0];
+  const pills = p.s.map(([k, t]) => `<span class="pill p-${k}">${esc(t)}</span>`).join('');
+  $('#stockPane').innerHTML = `<div class="card pane">
+    <div class="hero"><span class="tile lg">${ic(CAT_ICON[p.c], 'lg')}</span><div style="display:grid;gap:4px;min-width:0"><h2 style="font-size:22px">${esc(p.n)}</h2>${p.sub ? `<span class="muted small">${esc(p.sub)}</span>` : ''}</div></div>
+    <div class="aliases">${p.a.map(x => `<span class="pill p-plain">${esc(x)}</span>`).join('')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><b class="pane-qty">${esc(p.q)}</b><span style="display:flex;gap:6px">${pills}</span></div>
+    <dl class="kv"><dt>Category</dt><dd>${p.c}</dd><dt>Place</dt><dd>${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}</dd></dl>
+    ${p.note ? `<p class="small muted" style="margin:0">${esc(p.note)}</p>` : ''}
+    <div class="btnrow"><button class="btn small" data-toast="Used 1 · stock updated">${ic('minus', 'sm')}Use</button><a class="btn small" href="#scan" data-mode="move">${ic('move', 'sm')}Move</a><button class="btn small primary" data-toast="Added 1 · stock updated">${ic('plus', 'sm')}Add</button></div>
+    <a class="btn block" href="#product">Open full page${ic('chev', 'sm')}</a></div>`;
+}
+function renderStock() {
+  $('#stockFilters').innerHTML = FILTERS.map(([k, t]) => {
+    const n = k === 'all' ? STOCK.length : STOCK.filter(p => p.c === k || p.s.some(s => s[0] === k)).length;
+    return `<button class="chip ${stockState.filter === k ? 'on' : ''}" data-f="${k}">${t} <span class="n">${n}</span></button>`;
+  }).join('');
+  let items = STOCK.filter(p => stockState.filter === 'all' || p.c === stockState.filter || p.s.some(s => s[0] === stockState.filter));
+  if (stockState.q.trim()) items = items.filter(p => fuzzy(p, stockState.q));
+  const key = p => stockState.group === 'cat' ? p.c : p.l.split(' › ')[0];
+  const groups = {};
+  items.forEach(p => (groups[key(p)] ||= []).push(p));
+  $('#stockCount').textContent = `${items.length} of 312 items (sample)`;
+  renderPane();
+  $('#stockList').innerHTML = items.length ? '<div class="stock-head"><span></span><span>Item</span><span>Place</span><span>Stock</span></div>' + Object.entries(groups).map(([g, ps]) =>
+    `<div class="section"><div class="label">${esc(g)} <span style="font-weight:600">${ps.length}</span></div><div class="list">${ps.map(rowHTML).join('')}</div></div>`).join('')
+    : `<div class="card" style="padding:18px;display:grid;gap:10px"><b>Nothing matches “${esc(stockState.q)}”</b><span class="muted small">Check the spelling, or add it as a new item.</span><a class="btn small" href="#add" style="justify-self:start">${ic('plus', 'sm')}Add “${esc(stockState.q)}”</a></div>`;
+}
+$('#stockFilters').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) { stockState.filter = b.dataset.f; renderStock(); } });
+$('#stockGroup').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; stockState.group = b.dataset.g; $$('#stockGroup button').forEach(x => x.classList.toggle('on', x === b)); renderStock(); });
+$('#stockSearch').addEventListener('input', e => { stockState.q = e.target.value; renderStock(); });
+$('#stockList').addEventListener('click', e => {
+  const a = e.target.closest('a.item[data-n]'); if (!a || !isDesk()) return;
+  e.preventDefault(); stockState.sel = a.dataset.n; renderStock();
+});
+/* ---------- search everywhere ---------- */
+const PLACE_CODES = [['G2-4', 'Garage racking · shelf 2, box 4', '#location'], ['G1-2', 'Garage racking · shelf 1, box 2', '#location'], ['S2-3', 'Shed shelves · shelf 2, box 3', '#locations'],
+  ['U2', 'Utility › Shelf', '#locations'], ['H1', 'Hall › Drawer', '#locations'], ['P3', 'Kitchen › Pantry', '#locations'], ['CF-2', 'Garage › Chest freezer, middle', '#locations']];
+const RECENT = ['Toilet roll', 'Semi-skimmed milk', 'AA batteries', 'Cordless drill'];
+const SCEN = [
+  ['Power cut', ['AA batteries', 'Head torch', 'Torch', 'Candles', 'Matches', 'Camping stove', 'Camping gas', 'Bottled water', 'UHT milk', 'Power bank', 'Wind-up radio']],
+  ['Emergency food', ['Baked beans', 'UHT milk', 'Bottled water', 'Chopped tomatoes', 'Penne', 'Porridge oats']],
+  ['Christmas', ['Fairy lights', 'Wrapping paper', 'Sellotape', 'Kids’ head torches', 'Mince pies']],
+  ['Camping', ['Camping stove', 'Camping gas', 'Tent pegs', 'Head torch', 'Bungee cords']],
+];
+const WISH = [['Power bank, 20,000 mAh', 'Power cut'], ['Wind-up radio', 'Power cut · Emergency food'], ['Kids’ head torches × 2', 'Christmas'], ['Wet & dry vacuum', 'Toolstation 93542'], ['Dog car harness', 'Pets at Home']];
+const RECIPES = [['Chicken & spinach traybake', ['Chicken thighs', 'Baby spinach'], 'you have everything'], ['Cheesy beans on toast', ['Baked beans', 'Mature cheddar'], 'missing cheddar (on the Aldi list)']];
+const qparse = q => { const m = q.match(/^(\d+(?:\.\d+)?)(\s?.*)$/); return m ? [parseFloat(m[1]), m[2]] : null; };
+const fzText = (t, q) => fuzzy({ n: t, a: [], c: '', l: '' }, q);
+const canCount = p => !!p && !!qparse(p.q) && p.c !== 'Renewals' && !p.a.includes('double a');
+const gs = { sel: 0, count: 0 };
+
+function gsActions(p) {
+  const nm = esc(p.n);
+  if (p.c === 'Renewals') return `<button class="btn small" data-gs="renew" data-n="${nm}">Renewed</button>`;
+  if (p.a.includes('double a')) return `<button class="btn small" data-gs="flat" data-n="${nm}">1 went flat</button>`;
+  if (!qparse(p.q)) return `<a class="btn small" href="#product">Open</a>`;
+  return `<div class="stepper sm"><button aria-label="Use one ${nm}" data-gs="use" data-n="${nm}">${ic('minus', 'sm')}</button><output>${esc(p.q)}</output><button aria-label="Add one ${nm}" data-gs="add" data-n="${nm}">${ic('plus', 'sm')}</button></div>`;
+}
+function gsRow(p) {
+  const pill = (canCount(p) ? '' : ` · ${esc(p.q)}`) + (p.s[0] ? ` · <span style="color:var(--${p.s[0][0]})">${esc(p.s[0][1])}</span>` : '');
+  return `<div class="gs-row" data-stock="${esc(p.n)}"><a class="gs-main" href="#product"><span class="tile">${ic(CAT_ICON[p.c])}</span><span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}${pill}</span></span></a><div class="gs-acts">${gsActions(p)}</div></div>`;
+}
+const gsSimple = (icon, name, meta, action, href, attr = '') => `<div class="gs-row"><a class="gs-main" href="${href}"${attr}><span class="tile">${ic(icon)}</span><span class="item-main"><span class="item-name">${name}</span><span class="item-meta">${meta}</span></span></a><div class="gs-acts">${action}</div></div>`;
+const gsSection = (title, rows) => rows.length ? `<div class="gs-head">${title} · ${rows.length}</div>${rows.join('')}` : '';
+
+function renderSearch(keep) {
+  const q = $('#gq').value.trim(), ql = q.toLowerCase(), box = $('#gsResults');
+  if (keep !== true) { gs.sel = 0; gs.count = 0; }
+  let html = '';
+  if (!q) {
+    html = `<div class="gs-head">Recent</div>${RECENT.map(n => gsRow(STOCK.find(p => p.n === n))).join('')}
+      <div class="gs-tip">Search covers everything: stock, shopping lists, places, scenarios, the wish list, shops and recipes. Try “batt”, “torch”, “milk” or “G2-4”.</div>`;
+  } else {
+    const items = STOCK.filter(p => fuzzy(p, q)).slice(0, 5);
+    const onList = {};
+    Object.entries(SHOPS).forEach(([k, s]) => s.groups.forEach(([, its]) => its.forEach(([n, , why]) => { if (fzText(n, q)) (onList[n] ||= { why, shops: [] }).shops.push([k, s.name]); })));
+    const listRows = Object.entries(onList).slice(0, 3).map(([n, o]) => gsSimple('cart', esc(n), `On your ${o.shops.map(s => s[1]).join(' and ')} list${o.shops.length > 1 ? 's' : ''} · ${esc(o.why)}`,
+      `<a class="btn small" href="#shop" data-shop="${o.shops[0][0]}">Open list</a>`, '#shop', ` data-shop="${o.shops[0][0]}"`));
+    const top = items[0];
+    if (top && top.c !== 'Renewals' && !Object.keys(onList).some(n => n.toLowerCase().includes(top.n.toLowerCase().split(' ')[0]))) {
+      const shop = Object.values(SHOPS).find(s => s.sells.includes(top.c));
+      if (shop) listRows.push(gsSimple('cart', `Put ${esc(top.n.toLowerCase())} on the list`, `Goes on the ${shop.name} list`, `<button class="btn small" data-tolist="${esc(top.n)}" data-shopname="${shop.name}">Add to list</button>`, '#shop'));
+    }
+    const placeRows = [
+      ...PLACE_CODES.filter(([c, n]) => c.toLowerCase().startsWith(ql) || n.toLowerCase().includes(ql)).map(([c, n, href]) => gsSimple('pin', `<code>${c}</code>`, esc(n), `<a class="btn small" href="#scan" data-mode="putaway">Put away here</a>`, href)),
+      ...PLACES.filter(([n]) => n.toLowerCase().startsWith(ql)).map(([n, c, i, kids]) => gsSimple(i, esc(n), `${c} items · ${kids.length} spots`, `<a class="btn small" href="#locations">Open</a>`, '#locations')),
+    ].slice(0, 3);
+    const scenRows = SCEN.map(([n, its]) => [n, its.filter(i => fzText(i, q))]).filter(([n, hits]) => fzText(n, q) || hits.length).slice(0, 3)
+      .map(([n, hits]) => gsSimple('layers', esc(n), hits.length ? `Includes ${hits.slice(0, 3).map(esc).join(', ')}` : 'Scenario', `<a class="btn small" href="#scenario">Open</a>`, '#scenario'));
+    const wishRows = WISH.filter(([n]) => fzText(n, q)).slice(0, 3).map(([n, m]) => gsSimple('heart', esc(n), `Wish list · ${esc(m)}`, `<button class="btn small" data-bought-wish="${esc(n)}">Bought it</button>`, '#wishlist'));
+    const shopRows = Object.entries(SHOPS).filter(([, s]) => fzText(s.name, q)).map(([k, s]) => gsSimple('store', s.name, `${shopCount(k)} on the list · sells ${s.sells.join(', ')}`,
+      `<a class="btn small" href="#shop" data-shop="${k}">Open list</a>`, '#shop', ` data-shop="${k}"`));
+    const recipeRows = RECIPES.filter(([n, uses]) => fzText(n, q) || uses.some(u => fzText(u, q))).map(([n, , have]) => gsSimple('book', esc(n), `Saved recipe · ${esc(have)}`,
+      `<a class="btn small" href="#more" data-toast="Saved recipes arrive in Phase 4">Open</a>`, '#more', ' data-toast="Saved recipes arrive in Phase 4"'));
+    html = gsSection('Stock', items.map(gsRow)) + gsSection('Shopping lists', listRows) + gsSection('Places', placeRows) + gsSection('Scenarios', scenRows)
+      + gsSection('Wish list', wishRows) + gsSection('Shops', shopRows) + gsSection('Saved recipes', recipeRows);
+    if (!html) html = `<div class="gs-empty"><b>Nothing called “${esc(q)}” yet</b><br><span class="small muted">Add it now. You can scan a barcode for it later.</span></div>`;
+    if (items.length) html += `<a class="gs-wish" href="#add" data-newname="${esc(q)}">${ic('plus', 'sm')}Not what you meant? Add “${esc(q)}” as a new item</a>`;
+    else html += `<a class="gs-new" href="#add" data-newname="${esc(q)}">${ic('plus')}<span>Add “${esc(q)}” as a new item<br><span class="small" style="font-weight:500">Name it, say how many and where it goes</span></span></a>`
+      + `<button class="gs-wish" data-wish="${esc(q)}">${ic('heart', 'sm')}Add “${esc(q)}” to the wish list instead</button>`;
+  }
+  box.innerHTML = html + '<div class="gs-keys" id="gsKeys"></div>'; box.hidden = false;
+  highlight();
+}
+
+/* keyboard: Tab picks a result, ↑/↓ count, Enter opens it or applies the count */
+const K = k => `<kbd>${k}</kbd>`;
+function keysHint(row, p) {
+  if (!row) return `${K('Enter')} add as a new item · ${K('Esc')} close`;
+  const name = esc(row.querySelector('.item-name').textContent);
+  if (canCount(p) && gs.count) return `${K('Enter')} ${gs.count > 0 ? 'add' : 'use'} ${Math.abs(gs.count)} · ${K('↑')}${K('↓')} change amount · ${K('Esc')} cancel`;
+  if (canCount(p)) return `${K('Enter')} open ${name} · ${K('↑')} add · ${K('↓')} use · ${K('Tab')} next result`;
+  return `${K('Enter')} open ${name} · ${K('Tab')} next result`;
+}
+function highlight() {
+  const rows = $$('#gsResults .gs-row');
+  $$('#gsResults .gs-pending').forEach(x => x.remove());
+  $$('#gsResults output.preview').forEach(o => { o.textContent = o.dataset.q; o.classList.remove('preview'); });
+  if (!rows.length) { $('#gsKeys').innerHTML = keysHint(null); return; }
+  gs.sel = (gs.sel + rows.length) % rows.length;
+  rows.forEach((r, i) => r.classList.toggle('hl', i === gs.sel));
+  const row = rows[gs.sel], p = STOCK.find(x => x.n === row.dataset.stock);
+  if (canCount(p) && gs.count) {
+    const [n, rest] = qparse(p.q), o = row.querySelector('output');
+    o.dataset.q = p.q; o.textContent = Math.max(0, Math.round((n + gs.count) * 10) / 10) + rest; o.classList.add('preview');
+    row.querySelector('.gs-acts').insertAdjacentHTML('afterbegin', `<span class="gs-pending">${gs.count > 0 ? '+' : '−'}${Math.abs(gs.count)}</span>`);
+  }
+  $('#gsKeys').innerHTML = keysHint(row, p);
+  row.scrollIntoView({ block: 'nearest' });
+}
+function closeSearch() { $('#gsResults').hidden = true; gs.count = 0; }
+$('#gq').addEventListener('focus', renderSearch);
+$('#gq').addEventListener('input', renderSearch);
+$('#gq').addEventListener('keydown', e => {
+  const rows = $$('#gsResults .gs-row'), row = rows[gs.sel], p = row && STOCK.find(x => x.n === row.dataset.stock);
+  if (e.key === 'Escape') { if (gs.count) { gs.count = 0; highlight(); } else { closeSearch(); e.target.blur(); } return; }
+  if ($('#gsResults').hidden) return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!canCount(p)) return;
+    const d = e.key === 'ArrowUp' ? 1 : -1;
+    if (qparse(p.q)[0] + gs.count + d < 0) return;
+    gs.count += d; highlight(); return;
+  }
+  if (e.key === 'Tab' && rows.length) { e.preventDefault(); gs.sel += e.shiftKey ? -1 : 1; gs.count = 0; highlight(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!rows.length) { const a = $('#gsResults .gs-new'); if (a) a.click(); return; }
+    if (canCount(p) && gs.count) {
+      const [n, rest] = qparse(p.q);
+      p.q = Math.max(0, Math.round((n + gs.count) * 10) / 10) + rest;
+      toast(`${gs.count > 0 ? 'Added' : 'Used'} ${Math.abs(gs.count)} · ${p.n}: ${p.q}`);
+      gs.count = 0; renderSearch(true); return;
+    }
+    row.querySelector('.gs-main').click();
+  }
+});
+$('#gsResults').addEventListener('mousemove', e => {
+  const r = e.target.closest('.gs-row'); if (!r) return;
+  const i = $$('#gsResults .gs-row').indexOf(r);
+  if (i !== gs.sel) { gs.sel = i; gs.count = 0; highlight(); }
+});
+document.addEventListener('keydown', e => { if (e.key === '/' && !e.target.closest('input, select, textarea') && $('#topbar').offsetParent) { e.preventDefault(); $('#gq').focus(); } });
+document.addEventListener('click', e => { if (e.target.isConnected && !e.target.closest('#gsearch')) closeSearch(); });
+$('#gsResults').addEventListener('click', e => {
+  const b = e.target.closest('[data-gs]');
+  if (b) {
+    const p = STOCK.find(x => x.n === b.dataset.n);
+    if (b.dataset.gs === 'renew') toast(`${p.n} renewed · next reminder in a year`);
+    else if (b.dataset.gs === 'flat') toast('1 AA moved from charged to flat · 5 charged, 5 flat');
+    else {
+      const [n, rest] = qparse(p.q), next = Math.max(0, Math.round((n + (b.dataset.gs === 'add' ? 1 : -1)) * 10) / 10);
+      p.q = next + rest; toast(`${p.n}: ${p.q}`);
+    }
+    gs.count = 0; renderSearch(true); return;
+  }
+  const tl = e.target.closest('[data-tolist]');
+  if (tl) { toast(`${tl.dataset.tolist} added to the ${tl.dataset.shopname} list`); closeSearch(); return; }
+  const bw = e.target.closest('[data-bought-wish]');
+  if (bw) { toast(`${bw.dataset.boughtWish} moved into stock. Where did you put it?`); closeSearch(); return; }
+  const nw = e.target.closest('[data-newname]');
+  if (nw) { $('#addName').value = nw.dataset.newname; renderAdd(); closeSearch(); return; }
+  const w = e.target.closest('[data-wish]');
+  if (w) { toast(`“${w.dataset.wish}” added to the wish list`); closeSearch(); return; }
+  if (e.target.closest('a')) closeSearch();
+});
+
+/* ---------- add by name ---------- */
+function renderAdd() {
+  const name = $('#addName').value.trim() || 'New item';
+  const have = STOCK.filter(p => fuzzy(p, name)).slice(0, 2);
+  $('#addSuggest').innerHTML = have.map(p => `<a class="item" href="#product"><span class="tile">${ic(CAT_ICON[p.c])}</span><span class="item-main"><span class="item-name">${esc(p.n)}</span><span class="item-meta">You have ${esc(p.q)} · ${esc(p.l)}${p.code ? ` <code>${p.code}</code>` : ''}</span></span><span class="pill p-plain">Add 1</span></a>`).join('')
+    + `<div class="item" style="background:var(--accent-soft)"><span class="tile" style="background:var(--surface)">${ic('plus')}</span><span class="item-main"><span class="item-name">Create “${esc(name)}”</span><span class="item-meta">New product, details below</span></span></div>`;
+  $('#addSave').textContent = `Add ${name.toLowerCase()}`;
+  $('#addSave').dataset.toast = `${name} added · 2 in Hall › Drawer H1`;
+}
+$('#addName').addEventListener('input', renderAdd);
+renderAdd();
+
+/* ---------- shop ---------- */
+const SHOPS = {
+  aldi: { name: 'Aldi', sells: ['Food', 'Household', 'Batteries'], groups: [
+    ['Fresh', [['Bananas', '1 bunch', 'None left', '£0.89'], ['Mature cheddar', '400 g', '100 g left · min 200 g', '£2.39 · £0.60/100 g'], ['Free-range eggs', '12', '2 left · min 6', '£2.65 · £0.22 each'], ['Butter', '250 g', '1 left · min 2', '£1.99'], ['Greek yoghurt', '1 kg', 'None left', '£1.79']]],
+    ['Cupboard', [['Penne', '500 g × 2', '1 left · min 3', '£0.49 · £0.10/100 g'], ['Chopped tomatoes', '4 tins', '8 left · min 10', '£0.39 · £0.10/100 g'], ['Porridge oats', '1 kg', 'Nearly empty', '£0.89 · £0.09/100 g']]],
+    ['Household', [['Washing-up liquid', '1 bottle', '¼ bottle · min 1', '£0.79'], ['Kitchen roll', '4 pack', '1 left · min 2', '£2.29 · £0.57/roll', true], ['Bin bags', '1 roll', '3 left · min 10', '£1.49', true], ['Sandwich bags', '1 box', 'None left', '£0.99', true]]],
+    ['Kids & other', [['Orange squash', '1 L', 'None left', '£0.85'], ['AAA batteries', '8 pack', '3 left · min 8', '£2.49 · £0.31 each', true]]],
+  ] },
+  tesco: { name: 'Tesco', sells: ['Food', 'Household', 'Pets', 'Batteries'], groups: [
+    ['Fresh', [['Oatly Barista', '1 L × 2', '1 left · min 3', '£2.10 · £2.10/L'], ['Fish fingers', '20 pack', 'None left', '£3.50']]],
+    ['Cupboard', [['Cheerios', '600 g', 'Nearly empty', '£3.00 · £0.50/100 g'], ['Heinz ketchup', '910 g', 'None spare', '£3.75']]],
+    ['Household', [['Fairy non-bio liquid', '1.33 L', '¼ bottle · min 1', '£7.00 · £0.18/wash'], ['Kitchen roll', '4 pack', '1 left · min 2', '£2.75 · £0.69/roll', true], ['Bin bags', '1 roll', '3 left · min 10', '£1.75', true], ['Sandwich bags', '1 box', 'None left', '£1.10', true]]],
+    ['Other', [['AAA batteries', '8 pack', '3 left · min 8', '£4.00 · £0.50 each', true]]],
+  ] },
+  toolstation: { name: 'Toolstation', sells: ['Tools', 'Fuel'], extra: 'Codes match the Toolstation app for reordering.', groups: [
+    ['DIY & outdoor', [['Camping gas', '2 × CV 470', '1 left · min 3', '£7.98 · code 76043'], ['Silicone sealant, white', '1 tube', 'None left', '£4.98 · code 31867'], ['Cable ties, 300 mm', '100 pack', 'None left', '£3.49', true]]],
+  ] },
+  pets: { name: 'Pets at Home', sells: ['Pets'], groups: [
+    ['Dog', [['Harringtons lamb & rice', '15 kg', '2 kg left · min 4 kg', '£32.00 · £2.13/kg']]],
+  ] },
+};
+const shopState = { shop: 'aldi', done: new Set() };
+const shopCount = k => SHOPS[k].groups.reduce((n, g) => n + g[1].length, 0);
+const SHOP_CATS = Object.keys(CAT_ICON).filter(c => c !== 'Renewals');
+function renderShops() {
+  $('#shopsList').innerHTML = Object.entries(SHOPS).map(([k, s]) => `<div class="card" style="padding:14px 16px;display:grid;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><b style="font-family:var(--f-display);font-size:17px">${s.name}</b><a class="small" href="#shop" data-shop="${k}" style="color:var(--accent);font-weight:600">${shopCount(k)} on the list</a></div>
+    <div class="chips wrap">${SHOP_CATS.map(c => `<button class="chip sm ${s.sells.includes(c) ? 'on' : ''}" data-shopk="${k}" data-cat="${c}" aria-pressed="${s.sells.includes(c)}">${c}</button>`).join('')}</div></div>`).join('');
+}
+$('#shopsList').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]'); if (!b) return;
+  const s = SHOPS[b.dataset.shopk], c = b.dataset.cat, has = s.sells.includes(c);
+  s.sells = has ? s.sells.filter(x => x !== c) : [...s.sells, c];
+  renderShops(); toast(`${s.name} ${has ? 'no longer sells' : 'now sells'} ${c}`);
+});
+function renderShop() {
+  const s = SHOPS[shopState.shop];
+  $('#shopTitle').textContent = `At ${s.name}`;
+  $('#shopChips').innerHTML = Object.keys(SHOPS).map(k => `<button class="chip ${k === shopState.shop ? 'on' : ''}" data-s="${k}">${SHOPS[k].name} <span class="n">${shopCount(k)}</span></button>`).join('')
+    + `<button class="chip" data-toast="Shows things that can come from anywhere">Somewhere else</button>`;
+  $('#shopNote').textContent = `Your ${s.name} favourites, plus “Any shop” items in what ${s.name} sells: ${s.sells.join(', ')}.`
+    + (s.extra ? ' ' + s.extra : '') + (s.sells.includes('Household') ? ' Toilet roll is covered by Thursday’s delivery, so it’s not here.' : '');
+  $('.pricecheck').hidden = !s.sells.includes('Household');
+  $('#shopList').innerHTML = s.groups.map(([g, items]) => `<div class="section"><div class="label">${g}</div><div class="list">${items.map(([n, q, why, price, any]) => {
+    const id = shopState.shop + ':' + n, done = shopState.done.has(id);
+    return `<div class="item ${done ? 'done' : ''}" data-id="${esc(id)}"><button class="check" aria-label="Got ${esc(n)}" aria-pressed="${done}">${ic('check', 'sm')}</button>
+      <span class="item-main"><span class="item-name">${esc(n)} <span class="muted" style="font-weight:500">· ${esc(q)}</span></span><span class="item-meta">${esc(why)}</span></span>
+      <span class="item-side"><span class="small mono">${price.split(' · ').map(esc).join('</span><span class="small mono muted">')}</span>${any ? '<span class="pill p-plain">Any shop</span>' : ''}</span></div>`;
+  }).join('')}</div></div>`).join('');
+  updateShopDone();
+}
+function updateShopDone() {
+  const n = [...shopState.done].filter(id => id.startsWith(shopState.shop + ':')).length;
+  const b = $('#shopDone');
+  b.textContent = n ? `Done · add ${n} item${n > 1 ? 's' : ''} to stock` : 'Tick items as you shop';
+  b.disabled = !n; b.style.opacity = n ? 1 : .55;
+}
+$('#shopChips').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) { shopState.shop = b.dataset.s; renderShop(); } });
+$('#shopList').addEventListener('click', e => {
+  const b = e.target.closest('.check'); if (!b) return;
+  const row = b.closest('.item'), id = row.dataset.id;
+  shopState.done.has(id) ? shopState.done.delete(id) : shopState.done.add(id);
+  row.classList.toggle('done'); b.setAttribute('aria-pressed', row.classList.contains('done')); updateShopDone();
+});
+$('#shopDone').addEventListener('click', () => {
+  const ids = [...shopState.done].filter(id => id.startsWith(shopState.shop + ':'));
+  if (!ids.length) return;
+  toast(`${ids.length} item${ids.length > 1 ? 's' : ''} added to stock and taken off your list`);
+  const s = SHOPS[shopState.shop];
+  s.groups.forEach(g => g[1] = g[1].filter(i => !shopState.done.has(shopState.shop + ':' + i[0])));
+  s.groups = s.groups.filter(g => g[1].length);
+  ids.forEach(id => shopState.done.delete(id)); renderShop();
+});
+const USUAL = 0.361;
+function priceCheck() {
+  const q = parseFloat($('#pcQty').value), p = parseFloat($('#pcPrice').value), v = $('#pcVerdict');
+  if (!(q > 0) || !(p >= 0)) { v.className = 'verdict same'; v.innerHTML = 'Enter how many rolls and the price.'; return; }
+  const unit = p / q, diff = (unit - USUAL) / USUAL;
+  const cls = Math.abs(diff) < .02 ? 'same' : diff < 0 ? 'cheaper' : 'dearer';
+  const word = cls === 'same' ? 'About the same as usual' : `${Math.round(Math.abs(diff) * 100)}% ${cls === 'cheaper' ? 'cheaper' : 'dearer'} than usual`;
+  v.className = 'verdict ' + cls;
+  v.innerHTML = `<span>${word}</span><small><span class="mono">£${unit.toFixed(3)}</span> a roll against the usual <span class="mono">£${USUAL.toFixed(3)}</span>. ${cls === 'cheaper' ? `Saves about £${((USUAL - unit) * q).toFixed(2)} on this pack.` : ''}</small>`;
+}
+['#pcQty', '#pcPrice'].forEach(s => $(s).addEventListener('input', priceCheck));
+$('#pcUpdate').addEventListener('click', () => toast('Usual price updated to £' + (parseFloat($('#pcPrice').value) / parseFloat($('#pcQty').value)).toFixed(2) + ' a roll'));
+
+/* ---------- scan ---------- */
+const MODES = { add: ['plus', 'Adding to stock'], use: ['minus', 'Using up'], move: ['move', 'Moving: scan item, then new place'], putaway: ['inbox', 'Put away: item, then shelf'], look: ['search', 'Look up only'] };
+function setScanMode(m) {
+  $$('#scanMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  $('#modeChip').innerHTML = ic(MODES[m][0], 'sm') + MODES[m][1];
+  if (m === 'putaway' || m === 'move') setScanState('location');
+}
+function setScanState(s) {
+  $$('#scanState button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  ['found', 'unknown', 'location'].forEach(k => $('#scan-' + k).hidden = k !== s);
+}
+$('#scanMode').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) setScanMode(b.dataset.m); });
+$('#scanState').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) setScanState(b.dataset.s); });
+
+/* ---------- locations ---------- */
+const PLACES = [
+  ['Kitchen', 64, 'home', [['Fridge', '', 21], ['Freezer drawers', 'KF', 9], ['Pantry shelves', 'P1–P4', 28], ['Drawer', 'K2', 4], ['Under sink', '', 6]]],
+  ['Garage', 88, 'box', [['Chest freezer', 'CF-1–CF-3', 31], ['Garage racking', 'G1-1–G4-6', 52], ['Workbench', '', 5]]],
+  ['Shed', 42, 'wrench', [['Shelves', 'S1-1–S3-4', 37], ['Floor', '', 5]]],
+  ['Utility', 31, 'sparkle', [['Shelf', 'U1', 14], ['Shelf', 'U2', 12], ['Dog food bin', '', 1], ['Cleaning cupboard', '', 4]]],
+  ['Hall', 14, 'pin', [['Drawer', 'H1', 9], ['Coat cupboard', '', 5]]],
+  ['Loft', 19, 'gift', [['Christmas boxes', 'L1–L4', 15], ['Suitcases', '', 4]]],
+  ['Outside', 2, 'drop', [['Oil tank', '', 1], ['Log store', '', 1]]],
+];
+$('#locTree').innerHTML = PLACES.map(([n, c, i, kids], idx) => `<details class="loc" ${idx === 1 ? 'open' : ''}><summary><span class="tile">${ic(i)}</span><span class="item-main"><span class="item-name">${n}</span><span class="item-meta">${c} items · ${kids.length} spots</span></span>${ic('chev', 'chev')}</summary>
+  ${kids.map(([k, code, cnt]) => `<a class="subloc" href="${code.startsWith('G') ? '#location' : '#locations'}"><span class="grow">${k}</span>${code ? `<span class="code">${code}</span>` : ''}<span class="muted small" style="min-width:24px;text-align:right">${cnt}</span></a>`).join('')}</details>`).join('');
+$('#locTree2').innerHTML = $('#locTree').innerHTML;
+$$('#locTree2 .subloc').forEach(a => a.classList.toggle('cur', a.textContent.includes('Garage racking')));
+['#locTree', '#locTree2'].forEach(s => $(s).addEventListener('click', e => { const a = e.target.closest('a.subloc'); if (a && a.getAttribute('href') === '#locations') { e.preventDefault(); toast('Each spot opens its contents, like G2-4'); } }));
+
+/* ---------- grid wizard ---------- */
+let gFrom = 'top';
+function renderGrid() {
+  const rows = +$('#gRows').textContent, cols = +$('#gCols').textContent, p = ($('#gPrefix').value || 'G').toUpperCase();
+  const order = [...Array(rows)].map((_, i) => gFrom === 'top' ? i + 1 : rows - i);
+  $('#gRack').innerHTML = order.map(r => `<div class="shelf"><span class="small muted">Shelf ${r}</span><div class="boxes" style="grid-template-columns:repeat(${cols},minmax(36px,1fr))">${[...Array(cols)].map((_, c) => `<span class="box">${esc(p)}${r}-${c + 1}</span>`).join('')}</div></div>`).join('');
+  $('#gSummary').textContent = `${esc(p)}1-1 to ${esc(p)}${rows}-${cols}`;
+  $('#gCreate').textContent = `Create ${rows * cols} places`;
+}
+$('#gPrefix').addEventListener('input', renderGrid);
+$('#gFrom').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; gFrom = b.dataset.f; $$('#gFrom button').forEach(x => x.classList.toggle('on', x === b)); renderGrid(); });
+$('#gCreate').addEventListener('click', () => { toast(`${$('#gCreate').textContent.replace('Create ', '')} created in Garage`); setTimeout(() => location.hash = 'labels', 700); });
+
+/* ---------- labels ---------- */
+const TPL = { l7160: { cols: 3, rows: 7, per: 21 }, l7163: { cols: 2, rows: 7, per: 14 }, l7651: { cols: 5, rows: 13, per: 65, tiny: true }, plain: { cols: 3, rows: 8, per: 24, cut: true } };
+const grid = (p, r, c, name) => [...Array(r)].flatMap((_, i) => [...Array(c)].map((_, j) => [`${p}${i + 1}-${j + 1}`, `${name} · shelf ${i + 1}, box ${j + 1}`]));
+const SOURCES = {
+  garage: grid('G', 4, 6, 'Garage racking'),
+  shed: grid('S', 3, 4, 'Shed shelves'),
+  freezer: [['CF-1', 'Chest freezer · top drawer'], ['CF-2', 'Chest freezer · middle'], ['CF-3', 'Chest freezer · bottom']],
+  products: [['Drill', 'Cordless drill · Makita'], ['AA', 'AA batteries · Eneloop'], ['Lead', 'Extension lead 10 m'], ['Gas', 'Camping gas CV 470'], ['Stove', 'Camping stove'], ['Torch', 'Torch'], ['Ladder', 'Step ladder'], ['Mower', 'Lawn mower']],
+};
+const lblState = { src: 'garage' };
+function renderLabels() {
+  const t = TPL[$('#lblTpl').value], items = SOURCES[lblState.src];
+  const sheet = $('#lblSheet');
+  sheet.className = 'sheet-grid' + (t.tiny ? ' tiny' : '') + (t.cut ? ' cut' : '');
+  sheet.style.gridTemplateColumns = `repeat(${t.cols}, minmax(0,1fr))`;
+  sheet.style.gridTemplateRows = `repeat(${t.rows}, minmax(0,1fr))`;
+  const page = items.slice(0, t.per);
+  sheet.innerHTML = page.map(([code, name]) => `<div class="lbl"><canvas data-qr="${esc(code)}"></canvas><div class="t"><b>${esc(code)}</b><span>${esc(name)}</span></div></div>`).join('')
+    + Array(Math.max(0, t.per - page.length)).fill('<div class="lbl"></div>').join('');
+  const sheets = Math.ceil(items.length / t.per);
+  $('#lblInfo').textContent = `${items.length} labels · ${sheets} sheet${sheets > 1 ? 's' : ''}${items.length < t.per ? ` · ${t.per - items.length} spare on this sheet` : ''}. Each QR opens that place or item in Larder.`;
+  requestAnimationFrame(() => $$('canvas[data-qr]', sheet).forEach(drawQR));
+}
+$('#lblSource').addEventListener('click', e => { const b = e.target.closest('[data-src]'); if (!b) return; lblState.src = b.dataset.src; $$('#lblSource .chip').forEach(c => c.classList.toggle('on', c === b)); renderLabels(); });
+$('#lblTpl').addEventListener('change', renderLabels);
+
+/* ---------- fake QR (illustration only) ---------- */
+function rng(seed) { let h = 1779033703 ^ seed.length; for (let i = 0; i < seed.length; i++) { h = Math.imul(h ^ seed.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+  return () => { h = Math.imul(h ^ h >>> 16, 2246822507); h = Math.imul(h ^ h >>> 13, 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; }; }
+function drawQR(cv) {
+  const n = 21, css = cv.clientHeight || cv.clientWidth; if (!css) return;
+  const dpr = window.devicePixelRatio || 1, px = Math.round(css * dpr);
+  cv.width = px; cv.height = px;
+  const ctx = cv.getContext('2d'), m = px / (n + 2), r = rng(cv.dataset.qr);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px); ctx.fillStyle = '#111';
+  const inFinder = (x, y) => (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!inFinder(x, y) && r() < .5) ctx.fillRect((x + 1) * m, (y + 1) * m, m + .5, m + .5);
+  [[0, 0], [n - 7, 0], [0, n - 7]].forEach(([fx, fy]) => {
+    ctx.fillStyle = '#111'; ctx.fillRect((fx + 1) * m, (fy + 1) * m, 7 * m, 7 * m);
+    ctx.fillStyle = '#fff'; ctx.fillRect((fx + 2) * m, (fy + 2) * m, 5 * m, 5 * m);
+    ctx.fillStyle = '#111'; ctx.fillRect((fx + 3) * m, (fy + 3) * m, 3 * m, 3 * m);
+  });
+}
+
+/* ---------- boot ---------- */
+renderGrid(); priceCheck();
+let savedView = 'phone';
+try { savedView = localStorage.getItem('larder-mock-view') || 'phone'; } catch (e) { /* storage unavailable */ }
+setViewMode(savedView);
+show(location.hash.slice(1) || 'home');
+</script>

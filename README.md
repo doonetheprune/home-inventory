@@ -10,7 +10,7 @@ Larder will be made up of:
 
 ## Status
 
-**Phase 0: interface design.** Clickable mock-ups are in [`mockups/index.html`](mockups/index.html). Open the file in a browser; every screen is reachable from the menu on the left (or the drop-down on a phone). No application code has been written yet.
+**Phase 0: interface design.** Clickable mock-ups are in [`mockups/index.html`](mockups/index.html). Open the file in a browser; every screen is reachable from the menu on the left (or the drop-down on a phone), and the Phone / Desktop switch shows each screen at either size. No application code has been written yet.
 
 The full requirements are in [`docs/BRIEF.md`](docs/BRIEF.md).
 
