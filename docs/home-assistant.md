@@ -152,6 +152,10 @@ actions:
       message: "{{ trigger.event.data.message }}"
 ```
 
+## AI assistants through Home Assistant
+
+The integration passes Larder's MCP server through at `https://<home-assistant>/api/larder/mcp`, signed in with a Home Assistant long-lived access token (your profile → Security). That works wherever Home Assistant is reachable, Nabu Casa included, for clients that can send a header (Claude Code, Gemini CLI, Open WebUI, LM Studio, Claude Desktop with `mcp-remote`). See [mcp.md](mcp.md).
+
 ## Troubleshooting
 
 - **Sensors unavailable:** Larder can't be reached. Check the add-on (or container) is running and the address is right (Settings → Devices & services → Larder → ⋮ → Reconfigure).

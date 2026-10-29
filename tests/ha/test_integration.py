@@ -265,6 +265,30 @@ async def test_actions_exist_before_larder_is_connected(hass: HomeAssistant) -> 
         await hass.services.async_call(DOMAIN, "use_stock", {"item": "milk"}, blocking=True)
 
 
+async def test_mcp_through_home_assistant(hass: HomeAssistant, hass_client, larder: Larder, setup_larder) -> None:
+    """AI assistants reach Larder's tools through Home Assistant (and so through Nabu Casa)."""
+    client = await hass_client()
+    headers = {"accept": "application/json, text/event-stream", "content-type": "application/json"}
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}}
+    resp = await client.post("/api/larder/mcp", json=init, headers=headers)
+    assert resp.status == 200
+    assert (await resp.json())["result"]["serverInfo"]["name"] == "larder"
+
+    name = unique("Porridge oats")
+    await larder.call("POST", "/products", {"name": name, "unit": "kg"})
+    call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "add_stock", "arguments": {"item": name, "quantity": 2}}}
+    resp = await client.post("/api/larder/mcp", json=call, headers={**headers, "mcp-protocol-version": "2025-06-18"})
+    body = await resp.json()
+    assert body["result"]["content"][0]["text"] == f"{name}: added 2 kg. 2 kg in stock."
+
+
+async def test_mcp_needs_home_assistant_sign_in(hass: HomeAssistant, aiohttp_client, setup_larder) -> None:
+    """Without a Home Assistant token, the pass-through refuses."""
+    client = await aiohttp_client(hass.http.app)
+    resp = await client.post("/api/larder/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert resp.status == 401
+
+
 async def _battery_device(hass: HomeAssistant, name: str, level: str):
     from homeassistant.helpers import device_registry as dr, entity_registry as er
     from pytest_homeassistant_custom_component.common import MockConfigEntry

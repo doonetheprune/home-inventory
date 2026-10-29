@@ -169,9 +169,9 @@ export function createAutomation(deps: {
     }),
     async run(i) {
       const p = await resolve.product(i.item);
-      const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
-      const s = await stock.add({ productId: p.id, quantity: i.quantity, placeId, expiresOn: i.expires_on, note: i.note });
-      return { message: `${p.name}: added ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
+      const place = i.place ? await resolve.place(i.place) : null;
+      const s = await stock.add({ productId: p.id, quantity: i.quantity, placeId: place?.id, expiresOn: i.expires_on, note: i.note });
+      return { message: `${p.name}: added ${amount(i.quantity, p.unit)}${place ? ` to ${place.name}` : ''}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
     },
   });
   addAction({
@@ -325,6 +325,11 @@ export function createAutomation(deps: {
         }
       }
       return out;
+    },
+
+    /** An action's definition (with its zod input), for reuse by AI assistant tools. */
+    definition(id: string): ActionDefinition | undefined {
+      return actions.find((a) => a.def.id === id && a.enabled())?.def;
     },
 
     async run(id: string, input: unknown, caller: { userId: string | null } = { userId: null }): Promise<ActionResult> {

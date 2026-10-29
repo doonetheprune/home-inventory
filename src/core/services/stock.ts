@@ -173,7 +173,7 @@ export function createStockService(ctx: CoreContext) {
       const available = roundQty(usable.reduce((n, e) => n + e.quantity, 0));
       if (input.quantity > available + EPS) {
         const what = t.product.rechargeable ? 'charged ' : '';
-        throw new ValidationError(available ? `There ${available === 1 ? 'is' : 'are'} only ${plural(available, `${what}${t.product.unit}`)} to use.` : `There are no ${what}${t.product.name.toLowerCase()} left to use.`);
+        throw new ValidationError(available ? `There ${available === 1 ? 'is' : 'are'} only ${plural(available, `${what}${t.product.unit}`)} to use.` : what ? `None of the ${t.product.name} are charged.` : `There's no ${t.product.name} left to use.`);
       }
       let left = input.quantity;
       const movements: Movement[] = [];

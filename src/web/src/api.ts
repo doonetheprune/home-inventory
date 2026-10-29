@@ -148,6 +148,10 @@ export const api = {
     setEnabled: (id: string, enabled: boolean) => patch<ModuleInfo>(`/modules/${id}`, { enabled }),
     call: <T>(id: string, method: string, path: string, body?: unknown) => request<T>(method, `/modules/${id}${path}`, body),
   },
+  oauth: {
+    request: (id: string) => get<{ client: string; redirectHost: string }>(`/oauth/requests/${encodeURIComponent(id)}`),
+    answer: (id: string, approve: boolean) => post<{ redirect: string }>(`/oauth/requests/${encodeURIComponent(id)}`, { approve }),
+  },
   nfc: {
     recent: () => get<NfcScan[]>('/nfc/recent'),
     scanned: (b: { tagId: string; device?: string }) => post<NfcScan & { path: string | null }>('/nfc/scanned', b),

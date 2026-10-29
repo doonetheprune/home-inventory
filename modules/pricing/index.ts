@@ -105,6 +105,47 @@ export default defineModule({
       },
     });
 
+    async function setUsual(product: Product, unitPrice: number, priceUnit?: string, basedOn?: string): Promise<PricingFields> {
+      const next = PricingFields.parse({ ...pricing(product), usualUnitPrice: Math.round(unitPrice * 10000) / 10000, priceUnit: priceUnit ?? pricing(product).priceUnit, basedOn: basedOn ?? '', updatedAt: ctx.core.now() });
+      await ctx.core.products.update(product.id, { fields: { pricing: next } });
+      return next;
+    }
+
+    ctx.addTool({
+      name: 'check_price', title: 'Is this pack cheaper than usual?', readOnly: true,
+      description: 'Compare a pack seen in a shop with the item\'s usual price per unit, e.g. "24 rolls for £8 at Aldi". If it\'s good value, offer to make it the usual price with set_usual_price.',
+      input: z.object({
+        item: z.string().min(1).max(200).describe('The item, e.g. "toilet roll"'),
+        quantity: z.number().positive().describe('How many units are in the pack, in the item\'s unit (e.g. 24 rolls, 2.5 kg)'),
+        price: z.number().min(0).describe('Price of the whole pack, e.g. 8 for £8.00'),
+      }),
+      async run({ item, quantity, price }) {
+        const product = await ctx.core.resolve.product(item);
+        const { currency } = await ctx.core.settings.get();
+        const r = checkPrice(product, { quantity, price }, currency);
+        return { text: r.message, data: r };
+      },
+    });
+
+    ctx.addTool({
+      name: 'set_usual_price', title: 'Set the usual price', destructive: true,
+      description: 'Make a pack price the usual price for an item (only after the person agrees). Give the pack size and price; the price per unit is worked out.',
+      input: z.object({
+        item: z.string().min(1).max(200).describe('The item, e.g. "toilet roll"'),
+        quantity: z.number().positive().describe('Units in the pack, e.g. 24'),
+        price: z.number().min(0).describe('Pack price, e.g. 8'),
+        where: z.string().max(120).optional().describe('Where it was seen, e.g. "Aldi"'),
+      }),
+      async run({ item, quantity, price, where }) {
+        const product = await ctx.core.resolve.product(item);
+        const { currency } = await ctx.core.settings.get();
+        const unit = pricing(product).priceUnit ?? product.unit;
+        const next = await setUsual(product, price / quantity, undefined, `${quantity} ${unit} for ${money(price, currency)}${where ? ` at ${where}` : ''}`);
+        const per = next.usualUnitPrice!;
+        return { text: `The usual price for ${product.name} is now ${money(per, currency, per < 1 ? 3 : 2)} a ${unit}.`, data: next };
+      },
+    });
+
     ctx.addRoute({
       method: 'PUT', path: '/usual', summary: 'Set the usual price per unit',
       description: 'Either give unitPrice directly, or quantity and price for a pack and it works out the unit price.',
@@ -115,9 +156,7 @@ export default defineModule({
         const unitPrice = b.unitPrice ?? (b.quantity && b.price !== undefined ? b.price / b.quantity : undefined);
         if (unitPrice === undefined) throw new ValidationError('Give either unitPrice, or quantity and price.');
         const product = await getProduct(ctx.core, b.productId);
-        const next = PricingFields.parse({ ...pricing(product), usualUnitPrice: Math.round(unitPrice * 10000) / 10000, priceUnit: b.priceUnit ?? pricing(product).priceUnit, basedOn: b.basedOn ?? '', updatedAt: ctx.core.now() });
-        await ctx.core.products.update(product.id, { fields: { pricing: next } });
-        return next;
+        return setUsual(product, unitPrice, b.priceUnit, b.basedOn);
       },
     });
 

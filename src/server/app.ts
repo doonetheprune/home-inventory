@@ -3,7 +3,7 @@
  * live updates at /api/v1/events, and the web app at /.
  */
 import { existsSync } from 'node:fs';
-import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type RawServerDefault } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type FastifyRequest, type RawServerDefault } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
@@ -22,6 +22,8 @@ import { registerStockRoutes } from './routes/stock';
 import { registerMiscRoutes } from './routes/misc';
 import { registerModuleRoutes } from './routes/modules';
 import { registerAutomationRoutes } from './routes/automation';
+import { MCP_PATH, registerMcp } from './mcp';
+import { createOAuth, resourceMetadataUrl } from './oauth';
 
 export type ZodApp = FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse, FastifyBaseLogger, ZodTypeProvider>;
 
@@ -40,6 +42,24 @@ const safeDecode = (s: string) => {
     return s;
   }
 };
+
+/**
+ * Did a browser send this from another website? Browsers say so in
+ * Sec-Fetch-Site; older ones only send Origin, which must then be Larder's.
+ * Requests without either come from scripts and apps, not web pages.
+ */
+function fromOtherSite(request: FastifyRequest, baseUrl: string | null): boolean {
+  const site = request.headers['sec-fetch-site'];
+  if (typeof site === 'string') return site === 'cross-site' || site === 'same-site';
+  const origin = request.headers.origin;
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).host;
+    return host !== request.host && (!baseUrl || host !== new URL(baseUrl).host);
+  } catch {
+    return true;
+  }
+}
 
 /** Routes anyone can call without signing in. */
 const PUBLIC = new Set(['/api/health', '/api/v1/auth/status', '/api/v1/auth/login', '/api/v1/auth/setup', '/api/openapi.json']);
@@ -92,21 +112,39 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   const auth = createAuth(core, config);
+  const oauth = createOAuth({ core, config, auth });
   app.decorateRequest('user', null);
 
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
   });
 
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
     // Decide by the route that matched, not the raw URL: the router decodes
     // %-escapes, so "/%61pi/v1/…" reaches /api/v1/… and must still be checked.
     const raw = request.url.split('?')[0]!;
     const path = request.routeOptions.url ?? safeDecode(raw);
-    if (!path.startsWith('/api/') && !safeDecode(raw).toLowerCase().startsWith('/api/')) return;
+    const decoded = safeDecode(raw).toLowerCase();
+    const guarded = (p: string) => p.startsWith('/api/') || p === MCP_PATH || p.startsWith(`${MCP_PATH}/`);
+    if (!guarded(path) && !guarded(decoded)) return;
+    // No changes from other websites (a hidden form on another site posting to Larder),
+    // whatever the sign-in mode: with LARDER_AUTH=none, and for sign-in and first-run
+    // setup, nothing else would stop them. An access token or Larder's own header
+    // can't be sent from another site without Larder allowing it, so those pass.
+    const writes = request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS';
+    if (writes && !request.headers.authorization && !request.headers['x-larder-client'] && fromOtherSite(request, config.baseUrl)) {
+      throw new LarderError('Larder doesn\'t take changes from other websites.', 403, 'forbidden');
+    }
     request.user = await auth.identify(request);
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
-    if (!request.user) throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
+    if (!request.user) {
+      if (path === MCP_PATH) {
+        // Tells OAuth-capable connectors (Claude.ai, ChatGPT) where to sign in.
+        reply.header('WWW-Authenticate', `Bearer resource_metadata="${resourceMetadataUrl(config, request)}"`);
+        throw new LarderError('Send a Larder access token: Authorization: Bearer lrd_… (make one in Larder under Settings → Access tokens).', 401, 'unauthorised');
+      }
+      throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
+    }
     // Cookie sessions must come from the web app (blocks cross-site form posts).
     if ((request.user.via === 'session' || request.user.via === 'ingress') && request.method !== 'GET' && request.method !== 'HEAD' && !request.headers['x-larder-client']) {
       throw new LarderError('Requests signed in with a cookie need the X-Larder-Client header.', 403, 'forbidden');
@@ -138,10 +176,14 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       registerStockRoutes(z, { core });
       registerMiscRoutes(z, { core, config, backup: deps.backup });
       registerAutomationRoutes(z, { core });
+      oauth.registerApi(z);
       registerModuleRoutes(z, { core });
     },
     { prefix: '/api/v1' },
   );
+
+  registerMcp(app, { core, config });
+  oauth.registerPublic(app);
 
   if (existsSync(config.webDir)) {
     await app.register(staticFiles, {

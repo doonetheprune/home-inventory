@@ -15,5 +15,6 @@ export type { SearchSection } from './services/search';
 export type { ActionDefinition, ActionInfo, ActionResult, SensorDefinition, SensorInfo, SensorReading, SensorState } from './services/automation';
 export { AmbiguousError } from './services/resolve';
 export { NfcScan } from './services/nfc';
+export { ASSISTANT_INSTRUCTIONS, type AssistantTool, type ToolInfo, type ToolResult } from './services/assistant';
 export { DEFAULT_CATEGORIES, SHOP_PRESETS } from './services/catalogue';
 export { addDays, amount, andList, daysBetween, localDate, newId, pluralWord, roundQty } from './util';

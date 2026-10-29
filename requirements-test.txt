@@ -1,2 +1,4 @@
-# Home Assistant's own test harness for custom integrations; pins a Home Assistant version.
+# Home Assistant's own test harness for custom integrations (pins a Home Assistant version),
+# and the official Python MCP SDK as a second client for Larder's MCP server.
 pytest-homeassistant-custom-component==0.13.316
+mcp==2.3.0

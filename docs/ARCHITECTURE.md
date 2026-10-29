@@ -3,7 +3,7 @@
 Larder is one process and one data folder. Everything talks to a small core through ports, so the parts around it can be replaced without touching the rules in the middle.
 
 ```
- Web app (React)   Home Assistant integration (Python)   MCP server (Phase 3)   scripts / Node-RED
+ Web app (React)   Home Assistant integration (Python)   AI assistants (MCP)   scripts / Node-RED
         │                      │                                │                     │
         └──────────────────────┴────────── REST API /api/v1 ────┴─────────────────────┘
                                    (OpenAPI: docs/openapi.json, /api/docs)
@@ -66,6 +66,12 @@ React, TanStack Query and React Router. One set of screens: phone layout by defa
 ## Modules
 
 See [modules.md](modules.md). A module gets `ctx.core` (the public core API), and hooks to add routes, search sections, lookup providers, product fields, event handlers and its own collections. Web parts register panels and pages through `@larder/web-sdk`. Modules can be switched on and off at runtime.
+
+## AI assistants (MCP)
+
+`src/core/services/assistant.ts` holds a small set of tools (search, get_item, add_item, add/use/move stock, deliveries, shopping list, what to use soon; modules add more with `ctx.addTool`) and the instructions an assistant gets when it connects. The write tools reuse the Home Assistant actions, so an assistant and an automation say the same thing.
+
+`src/server/mcp.ts` serves them with the official MCP SDK at `/mcp`: Streamable HTTP, stateless, plain JSON answers, signed in with an access token. `src/server/oauth.ts` adds the MCP authorization spec's sign-in for connectors (Claude.ai, ChatGPT) when Larder has a public https address: the person approves in the web app and the connector gets an ordinary access token. The Home Assistant integration passes MCP through at `/api/larder/mcp` with Home Assistant sign-in, for Nabu Casa. See [mcp.md](mcp.md).
 
 ## Data folder
 
