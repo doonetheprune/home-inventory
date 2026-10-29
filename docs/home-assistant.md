@@ -183,6 +183,7 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **Calling an action through Home Assistant's REST API (`/api/services/larder/...`) answers 500 when the action fails**, e.g. for an unknown item. That's how Home Assistant's REST API reports every action error; Larder's message is in the Home Assistant log. The UI, automations, scripts and Node-RED show the message itself.
 - **"Home Assistant saved the automation but hasn't loaded it":** `configuration.yaml` is missing the line `automation: !include automations.yaml` (new installs have it). Add it and restart Home Assistant.
 - **"That needs an admin's access token":** Larder runs outside Home Assistant with a token from a user who isn't an admin. Make one as an admin, or use the YAML.
+- **"OpenStreetMap's map servers are busy":** the free public servers Larder searches turned it away (they're often overloaded). Try again in a few minutes. Larder already tries three of them in turn.
 - **No arrival alert:** check the person's phone shows them at the shop (their state is the zone's name), the companion app can send notifications, and the shop's list has something on it (or turn off "Only when there's something to get there").
 - **No `larder_batteries_low` events:** check the battery product is linked to the device under **Used in**, and that the device has a battery sensor in Home Assistant.
 

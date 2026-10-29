@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import { defineModule, LarderError, newId, ValidationError, type CoreApi, type HomeAssistantPerson, type HomeAssistantPhone, type HomeAssistantPort, type Shop } from '@larder/core';
-import { findBranches, geocode, NOMINATIM_URL, OVERPASS_URL, type FoundBranch } from './osm';
+import { findBranches, geocode, NOMINATIM_URL, OVERPASS_URLS, type FoundBranch } from './osm';
 import { toYaml } from './yaml';
 
 export const AUTOMATION_ID = 'larder_shop_arrivals';
@@ -145,7 +145,8 @@ export default defineModule({
     const core: CoreApi = ctx.core;
     const branches = ctx.collection<Branch>('branches');
     const settings = ctx.collection<Record<string, unknown>>('settings');
-    const overpassUrl = ctx.config.overpass_url || OVERPASS_URL;
+    // Your own Overpass server(s) instead of the public ones, comma-separated.
+    const overpassUrls = ctx.config.overpass_url ? ctx.config.overpass_url.split(',').map((u) => u.trim()).filter(Boolean) : OVERPASS_URLS;
     const nominatimUrl = ctx.config.nominatim_url || NOMINATIM_URL;
 
     const allBranches = async () => (await branches.list()).map((b) => Branch.parse(b.data)).sort((a, b) => a.name.localeCompare(b.name));
@@ -303,7 +304,7 @@ export default defineModule({
         const shop = await shopFor(q.shopId);
         const h = await home();
         if (!h) throw new LarderError('Larder doesn\'t know where home is yet. Set it on the Shop locations page.', 409, 'no_home');
-        const found = await findBranches(ctx.fetch, shop.name, h, q.within, overpassUrl).catch((err: unknown) => {
+        const found = await findBranches(ctx.fetch, shop.name, h, q.within, overpassUrls).catch((err: unknown) => {
           throw new LarderError(`Couldn't search the map. ${err instanceof Error ? err.message : ''}`.trim(), 502, 'map_unavailable');
         });
         const saved = new Set((await allBranches()).filter((b) => b.shopId === shop.id).map((b) => b.osmId));

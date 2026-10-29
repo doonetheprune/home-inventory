@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { HomeAssistantPort, HomeAssistantZone } from '@larder/core';
 import { makeCore } from '../../tests/helpers';
 import shopLocations, { AUTOMATION_ID, type Branch } from './index';
-import { namePattern, overpassQuery } from './osm';
+import { findBranches, namePattern, overpassQuery } from './osm';
 import { scalar, toYaml } from './yaml';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
@@ -104,6 +104,38 @@ describe('shop locations: the map', () => {
     const q = overpassQuery('Aldi', HOME, 5000);
     expect(q).toContain('(around:6000,53.44,-2.22)');
     expect(q).not.toContain('53.443');
+  });
+
+  it('asks the next map server when one is busy, and says what each said when all are', async () => {
+    const aldi = { type: 'node', id: 1, lat: 53.4452, lon: -2.219, tags: { name: 'Aldi', 'addr:street': 'Wilmslow Road' } };
+    const answers: Record<string, () => Response | Promise<Response>> = {
+      'a.test': () => new Response('<html><body><h1>502 Bad Gateway</h1></body></html>', { status: 502, headers: { 'content-type': 'text/html' } }),
+      'b.test': () => Response.json({ elements: [], remark: 'runtime error: Query timed out in "query" at line 3 after 16 seconds.' }),
+      'c.test': () => new Promise<Response>(() => {}),
+      'd.test': () => Response.json({ elements: [aldi] }),
+      'e.test': () => new Response('<html>Rate limited</html>', { status: 200 }),
+    };
+    const asked: string[] = [];
+    const fetch = (async (url: string, init?: RequestInit) => {
+      const h = new URL(url).host;
+      asked.push(h);
+      const r = answers[h]!();
+      // A server that never answers still gives up when Larder stops waiting.
+      return init?.signal ? Promise.race([r, new Promise<Response>((_, no) => init.signal!.addEventListener('abort', () => no(init.signal!.reason)))]) : r;
+    }) as unknown as typeof globalThis.fetch;
+    const at = (...hosts: string[]) => hosts.map((h) => `https://${h}/api/interpreter`);
+
+    const found = await findBranches(fetch, 'Aldi', HOME, 5000, at('a.test', 'b.test', 'c.test', 'd.test'), 100);
+    expect(found.map((b) => b.name)).toEqual(['Aldi']);
+    expect(asked).toEqual(['a.test', 'b.test', 'c.test', 'd.test']);
+
+    await expect(findBranches(fetch, 'Aldi', HOME, 5000, at('a.test', 'b.test', 'c.test', 'e.test'), 100)).rejects.toThrow(
+      'OpenStreetMap\'s map servers are busy (a.test answered 502; b.test: runtime error: Query timed out in "query" at line 3 after 16 seconds.; c.test didn\'t answer in time; e.test sent a page instead of map data). Try again in a few minutes.',
+    );
+
+    // A search the server can't read would fail everywhere, so it stops at the first.
+    const strict = (async () => new Response('<p><strong style="color:#FF0000">Error</strong>: line 3: parse error: Unknown type &quot;nwrx&quot; </p>', { status: 400 })) as unknown as typeof globalThis.fetch;
+    await expect(findBranches(strict, 'Aldi', HOME, 5000, at('a.test', 'd.test'))).rejects.toThrow('The map service didn\'t understand the search: Error : line 3: parse error: Unknown type "nwrx"');
   });
 
   it('finds branches near Home Assistant\'s home, nearest first, and saves them once', async () => {

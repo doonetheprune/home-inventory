@@ -118,7 +118,12 @@ function FindSheet({ shop, onClose }: { shop: Shop; onClose: () => void }) {
               {RANGES.map(([m, label]) => <option key={m} value={m}>Within {label}</option>)}
             </select>
           </div>
-          {searching ? <Loading /> : error ? <div className="error">{error}</div> : results && !results.length ? (
+          {searching ? <Loading /> : error ? (
+            <div className="stack" style={{ gap: 8 }}>
+              <div className="error">{error}</div>
+              <button type="button" className="btn small" style={{ justifySelf: 'start' }} onClick={() => void search()}>Try again</button>
+            </div>
+          ) : results && !results.length ? (
             <Empty title={`No ${shop.name} found nearby`}><span className="small muted">Try further away. The map may not have every shop, or may spell it differently.</span></Empty>
           ) : results && (
             <div className="list">

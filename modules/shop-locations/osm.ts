@@ -22,7 +22,15 @@ export interface FoundBranch extends Point {
   distance: number;
 }
 
-export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+/**
+ * Public Overpass servers, asked in turn: the main one is often too busy to
+ * answer (502, 504, 429). From the OpenStreetMap wiki's list of instances.
+ */
+export const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 // Both services ask callers to say who they are.
 const USER_AGENT = 'Larder home inventory (self-hosted; shop locations)';
@@ -73,7 +81,7 @@ export function overpassQuery(shopName: string, home: Point, within: number): st
   const around = `(around:${Math.round(within + 1000)},${lat},${lon})`;
   const pattern = JSON.stringify(namePattern(shopName));
   return [
-    '[out:json][timeout:20];',
+    '[out:json][timeout:15];',
     '(',
     ...['name', 'brand'].flatMap((key) => [`  nwr["shop"]["${key}"~${pattern},i]${around};`, `  nwr["amenity"="pharmacy"]["${key}"~${pattern},i]${around};`]),
     ');',
@@ -115,17 +123,55 @@ export function branchesFrom(elements: OsmElement[], shopName: string, home: Poi
   return out.sort((a, b) => a.distance - b.distance).slice(0, 25);
 }
 
-export async function findBranches(f: typeof fetch, shopName: string, home: Point, within: number, url = OVERPASS_URL): Promise<FoundBranch[]> {
-  const res = await f(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': USER_AGENT },
-    body: new URLSearchParams({ data: overpassQuery(shopName, home, within) }).toString(),
-    signal: AbortSignal.timeout(25_000),
-  });
-  if (res.status === 429 || res.status === 504) throw new Error('The map service is busy. Try again in a minute.');
-  if (!res.ok) throw new Error(`The map service answered ${res.status}.`);
-  const body = (await res.json()) as { elements?: OsmElement[] };
-  return branchesFrom(body.elements ?? [], shopName, home, within);
+const host = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
+/** Overpass explains a rejected query in an HTML page; keep its words. */
+const plainText = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+
+/** Branches near home, asking each server in turn until one answers. */
+export async function findBranches(f: typeof fetch, shopName: string, home: Point, within: number, urls: string[] = OVERPASS_URLS, timeoutMs = 20_000): Promise<FoundBranch[]> {
+  const body = new URLSearchParams({ data: overpassQuery(shopName, home, within) }).toString();
+  const problems: string[] = [];
+  for (const url of urls) {
+    let res: Response;
+    try {
+      res = await f(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': USER_AGENT, accept: 'application/json' },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      problems.push(`${host(url)} didn't answer${err instanceof Error && err.name === 'TimeoutError' ? ' in time' : ''}`);
+      continue;
+    }
+    // A 400 is about the query itself, so every server would say the same.
+    if (res.status === 400) throw new Error(`The map service didn't understand the search: ${plainText(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      problems.push(`${host(url)} answered ${res.status}`);
+      continue;
+    }
+    const text = await res.text();
+    let answer: { elements?: OsmElement[]; remark?: string };
+    try {
+      answer = JSON.parse(text) as typeof answer;
+    } catch {
+      problems.push(`${host(url)} sent a page instead of map data`);
+      continue;
+    }
+    // A busy server can answer 200 with no results and a remark such as "runtime error: Query timed out".
+    if (!answer.elements?.length && answer.remark && /error|timed out|out of memory/i.test(answer.remark)) {
+      problems.push(`${host(url)}: ${answer.remark.slice(0, 120)}`);
+      continue;
+    }
+    return branchesFrom(answer.elements ?? [], shopName, home, within);
+  }
+  throw new Error(`OpenStreetMap's map servers are busy (${problems.join('; ')}). Try again in a few minutes.`);
 }
 
 /** A postcode, town or address to a point, or null when the map doesn't know it. */
