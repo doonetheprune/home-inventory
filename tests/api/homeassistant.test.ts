@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addonEnv, addonSettings, announceToHomeAssistant, supervisorMqtt } from '../../src/server/addon';
+import { addonEnv, addonSettings, announceToHomeAssistant, compareVersions, installIntegration, notifyIntegrationInstalled, runIntegrationInstall, supervisorMqtt } from '../../src/server/addon';
 import { makeApp } from './helpers';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,5 +154,84 @@ describe('automation API', () => {
     expect((await call<Any>('POST', '/api/v1/nfc/link', { tagId: 'tag-1', placeId: box.id })).body).toEqual({ kind: 'place' });
     expect((await call<Any>('POST', '/api/v1/nfc/scanned', { tagId: 'tag-1' })).body).toMatchObject({ kind: 'place', name: 'Camping box' });
     expect((await call<Any>('DELETE', '/api/v1/nfc/tags/tag-1')).body).toEqual({ unlinked: true });
+  });
+});
+
+describe('the add-on installs the Home Assistant integration', () => {
+  /** A Home Assistant config folder, and an integration to install, in a temporary folder. */
+  async function folders(version = '0.4.0') {
+    const root = await mkdtemp(join(tmpdir(), 'larder-ha-'));
+    const source = join(root, 'image', 'larder');
+    await mkdir(join(source, 'translations'), { recursive: true });
+    await mkdir(join(source, '__pycache__'), { recursive: true });
+    await writeFile(join(source, 'manifest.json'), JSON.stringify({ domain: 'larder', version }));
+    await writeFile(join(source, '__init__.py'), '# Larder');
+    await writeFile(join(source, 'translations', 'en.json'), '{}');
+    await writeFile(join(source, '__pycache__', 'x.pyc'), 'compiled');
+    const configDir = join(root, 'homeassistant');
+    await mkdir(configDir);
+    return { root, source, configDir, target: join(configDir, 'custom_components', 'larder') };
+  }
+  const versionIn = async (dir: string) => (JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as { version: string }).version;
+
+  it('installs it when missing, updates it when older, and leaves the same or newer alone', async () => {
+    const f = await folders('0.4.0');
+    expect(await installIntegration(f)).toEqual({ result: 'installed', version: '0.4.0', previous: null });
+    expect(await versionIn(f.target)).toBe('0.4.0');
+    expect(await readFile(join(f.target, 'translations', 'en.json'), 'utf8')).toBe('{}');
+    expect(existsSync(join(f.target, '__pycache__'))).toBe(false);
+    expect(await installIntegration(f)).toMatchObject({ result: 'current' });
+
+    // An older one (with a file the new version dropped) is replaced whole.
+    await writeFile(join(f.target, 'manifest.json'), JSON.stringify({ domain: 'larder', version: '0.3.9' }));
+    await writeFile(join(f.target, 'old.py'), '');
+    expect(await installIntegration(f)).toEqual({ result: 'updated', version: '0.4.0', previous: '0.3.9' });
+    expect(existsSync(join(f.target, 'old.py'))).toBe(false);
+    expect(readdirSync(join(f.configDir, 'custom_components'))).toEqual(['larder']);
+
+    // A newer one, from HACS say, stays.
+    await writeFile(join(f.target, 'manifest.json'), JSON.stringify({ domain: 'larder', version: '0.10.0' }));
+    expect(await installIntegration(f)).toMatchObject({ result: 'newer', previous: '0.10.0' });
+    expect(await versionIn(f.target)).toBe('0.10.0');
+    expect(compareVersions('0.10.0', '0.9.2')).toBe(1);
+    expect(compareVersions('1.0', '1.0.0')).toBe(0);
+  });
+
+  it('only runs as an add-on with the option on, and asks for a restart after installing', async () => {
+    const f = await folders();
+    const data = join(f.root, 'data');
+    await mkdir(data);
+    const env = { SUPERVISOR_TOKEN: 'sup', LARDER_INTEGRATION_SOURCE: f.source, LARDER_HA_CONFIG_DIR: f.configDir, LARDER_DATA_DIR: data };
+    const log: string[] = [];
+    expect(await runIntegrationInstall({ ...env, SUPERVISOR_TOKEN: undefined }, { log: (m) => log.push(m) })).toBeNull();
+    expect(await runIntegrationInstall(env, { read: () => JSON.stringify({ install_integration: false }), log: (m) => log.push(m) })).toBeNull();
+    expect(existsSync(f.target)).toBe(false);
+    expect(await runIntegrationInstall(env, { read: () => '{}', log: (m) => log.push(m) })).toMatchObject({ result: 'installed' });
+    expect(log.at(-1)).toBe('Installed the Larder integration 0.4.0 in Home Assistant. Restart Home Assistant to load it.');
+
+    // Larder then shows a notification in Home Assistant, once.
+    const calls: Array<{ url: string; body: Any; auth: string }> = [];
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(init.body as string), auth: (init.headers as Record<string, string>).authorization! });
+      return new Response('[]', { status: calls.length === 1 ? 502 : 200 });
+    }) as unknown as typeof fetch;
+    const quiet = { info: () => undefined, warn: () => undefined };
+    expect(await notifyIntegrationInstalled({ supervisorToken: 'sup', dataDir: data, log: quiet, fetch: fakeFetch, delayMs: 1 })).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ url: 'http://supervisor/core/api/services/persistent_notification/create', auth: 'Bearer sup', body: { notification_id: 'larder_integration' } });
+    expect(calls[1]!.body.message).toContain('Restart Home Assistant');
+    expect(await notifyIntegrationInstalled({ supervisorToken: 'sup', dataDir: data, log: quiet, fetch: fakeFetch, delayMs: 1 })).toBe(false);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('ships the integration in the image and asks the Supervisor for the access it needs', () => {
+    const config = readFileSync(new URL('../../addon/config.yaml', import.meta.url), 'utf8');
+    expect(config).toMatch(/map:\n {2}- type: homeassistant_config\n {4}read_only: false/);
+    expect(config).toContain('homeassistant_api: true');
+    expect(config).toMatch(/^ {2}install_integration: true$/m);
+    expect(config).toMatch(/^ {2}install_integration: bool$/m);
+    const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+    expect(dockerfile).toContain('COPY --from=build /app/custom_components/larder ./integration/larder');
+    expect(readFileSync(new URL('../../.dockerignore', import.meta.url), 'utf8')).not.toMatch(/^custom_components$/m);
   });
 });

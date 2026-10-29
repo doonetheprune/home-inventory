@@ -3,15 +3,18 @@
 Two parts, used together or separately:
 
 - **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data.
-- **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags and battery linking.
+- **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags and battery linking. The add-on installs and updates it for you, so you don't need HACS.
 
 If you run Home Assistant Container (no add-ons), run Larder with Docker ([running.md](running.md)) and add the integration by hand.
 
 ## Install the add-on
 
 1. Settings → Add-ons → Add-on store → ⋮ → **Repositories**, and add `https://github.com/doonetheprune/home-inventory`.
-2. Find **Larder**, install it, and start it. Turn on **Show in sidebar**.
-3. Open Larder from the sidebar. Home Assistant offers to set up the Larder integration (Settings → Devices & services → Discovered): click **Configure**, then **Submit**. No address or token needed: the add-on hands them over.
+2. Find **Larder**, install it, and start it. Turn on **Show in sidebar**. On its first start the add-on puts the matching Larder integration into Home Assistant's `custom_components` folder, and Home Assistant shows a notification asking you to restart.
+3. Restart Home Assistant (Settings → System → Restart).
+4. Home Assistant offers to set up the Larder integration (Settings → Devices & services → Discovered): click **Configure**, then **Submit**. No address or token needed: the add-on hands them over.
+
+When you update the add-on, it updates the integration too, and asks for one more restart. It leaves alone an integration that's newer than its own. To manage the integration with HACS instead, turn off **Install the Home Assistant integration** in the add-on's options.
 
 While the GitHub repository is private, Home Assistant can't download the add-on's image. Either make the repository (and its package on GitHub) public, or add the registry in Home Assistant: Settings → Add-ons → Add-on store → ⋮ → **Registries**, server `ghcr.io`, your GitHub username, and a GitHub token that can read packages.
 
@@ -35,7 +38,7 @@ Larder is in every Home Assistant user's sidebar, not only admins'. People who o
 
 ## Add the integration by hand
 
-For Larder running outside Home Assistant (Docker, another machine):
+For Larder running outside Home Assistant (Docker, another machine), or with the add-on's **Install the Home Assistant integration** option turned off:
 
 1. In Larder, Settings → Access tokens → make one called "Home Assistant".
 2. Install the integration: with HACS (add this repository as a custom repository, category Integration) or by copying `custom_components/larder` into your Home Assistant `config/custom_components/` folder. Restart Home Assistant.

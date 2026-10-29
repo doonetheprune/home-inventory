@@ -6,7 +6,6 @@ playwright-report
 .git
 *.log
 .venv
-__pycache__
-custom_components
+**/__pycache__
 addon
 mockups

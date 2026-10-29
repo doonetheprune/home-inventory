@@ -36,7 +36,8 @@ src/adapters/        Implementations of the ports: storage-sqlite, storage-memor
                      search-memory (MiniSearch), events-memory
 src/server/          Fastify app: REST API (/api/v1), OpenAPI, login and tokens, live events (SSE), static web app
 src/web/             React web app (Vite). Mobile first; switches to a sidebar layout at 900px wide
-  server/addon.ts    Running as a Home Assistant add-on: options, Supervisor discovery
+  server/addon.ts    Running as a Home Assistant add-on: options, Supervisor discovery, installing the integration
+  server/install-integration.ts  The add-on's start-up step (run as root by docker/entrypoint.sh) that installs it
   server/mcp.ts      MCP server at /mcp (tools from src/core/services/assistant.ts); server/oauth.ts: connector sign-in
 modules/             Feature modules, each self-contained with SPEC.md and tests. modules/index.ts lists them
   _template/         Copy this to start a new module
