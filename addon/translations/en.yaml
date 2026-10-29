@@ -17,6 +17,9 @@ configuration:
   disabled_modules:
     name: Modules that stay off
     description: Module ids that can't be switched on in the app, for example "pricing".
+  install_integration:
+    name: Install the Home Assistant integration
+    description: Keeps the Larder integration (sensors, actions, events, NFC, batteries) installed and up to date in Home Assistant, so you don't need HACS. Home Assistant asks for a restart after it changes. Turn off if you install it with HACS instead.
   env_vars:
     name: Extra settings
     description: Advanced. Any other LARDER_ setting, such as a module's settings (LARDER_MODULE_<ID>_<KEY>).

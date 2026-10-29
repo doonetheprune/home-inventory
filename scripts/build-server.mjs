@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs';
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 await build({
-  entryPoints: ['src/server/main.ts'],
-  outfile: 'dist/server/main.js',
+  // main.js is Larder; install-integration.js is the add-on's start-up step (see docker/entrypoint.sh).
+  entryPoints: ['src/server/main.ts', 'src/server/install-integration.ts'],
+  outdir: 'dist/server',
   bundle: true,
   platform: 'node',
   target: 'node22',

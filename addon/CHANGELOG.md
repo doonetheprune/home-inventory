@@ -10,6 +10,7 @@
 - Changes made at the same moment (two automations, a double tap) no longer lose one another.
 - Photos from barcode lookups are saved in Larder, so they're in backups and work offline.
 - Larder is in every Home Assistant user's sidebar, not only admins'.
+- The add-on installs and updates the Larder integration itself, so you don't need HACS. Home Assistant asks for one restart after it changes.
 - Stock opens on the types of thing (Food, Household, Tools & DIY…), each listed by place.
 - Every shop gets the same "Going shopping?" tile, with how much to buy there.
 - Add stock at another place, and say from Home that something has moved.

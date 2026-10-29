@@ -62,6 +62,7 @@ These follow from the decisions above; the owner can change any of them.
 - **NFC:** the integration forwards every `tag_scanned` event; Larder resolves it and fires `larder_nfc_scanned`. Unknown tags are linked from the product or place page within 15 minutes of scanning. Android Chrome can read tags directly too.
 - **Batteries:** a module. The integration sends every device with a battery sensor (and Battery Notes type and count, if installed); low is below 20% (option) or a battery-low binary sensor turning on. Larder answers swap / charge / spare / on the way / buy, and puts batteries on the shopping list when there are none.
 - **Own backups off in the add-on:** Home Assistant backups already include `/data`; Larder's daily copies can be turned on in the options.
+- **The add-on installs the integration** (the owner's choice, added after Phase 4, so a private repo needs no HACS): the image carries the matching `custom_components/larder`, and on start the add-on copies it into Home Assistant's config when it's missing or older, then shows a "restart Home Assistant" notification. It never downgrades one that's newer (from HACS, say), and an option turns it off. This needs write access to Home Assistant's config folder and the Home Assistant API, so Home Assistant shows the add-on with a lower security rating. The copy runs as root before Larder starts; Larder itself still runs as the unprivileged `node` user.
 - **Version 0.2.0:** app, add-on and integration versions move together (a test checks).
 
 ## Phase 3: how it was built

@@ -11,11 +11,14 @@ FROM node:24-alpine
 ENV NODE_ENV=production \
     LARDER_PORT=8080 \
     LARDER_DATA_DIR=/data \
-    LARDER_WEB_DIR=/app/dist/web
+    LARDER_WEB_DIR=/app/dist/web \
+    LARDER_INTEGRATION_SOURCE=/app/integration/larder
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The matching Home Assistant integration, which the add-on installs for you.
+COPY --from=build /app/custom_components/larder ./integration/larder
 # Starts as root only long enough to give the data folder to the node user.
 COPY docker/entrypoint.sh /usr/local/bin/larder-entrypoint
 RUN mkdir -p /data && chown node:node /data

@@ -4,9 +4,11 @@ What you've got, and where. A home inventory for everything in the house: food, 
 
 ## Getting started
 
-1. Start the add-on and turn on **Show in sidebar**.
+1. Start the add-on and turn on **Show in sidebar**. It installs the matching Larder integration in Home Assistant (no HACS needed), and Home Assistant asks you to restart: do that once (Settings → System → Restart).
 2. Open **Larder** from the sidebar. You're signed in as your Home Assistant user. Everyone with a Home Assistant login sees it, admins or not. To keep Larder's settings, accounts and modules to some of you, list them under **Larder admins** in the options.
-3. Home Assistant offers to set up the **Larder** integration (Settings → Devices & services → Discovered). Click **Configure**. That adds the sensors, actions and events, and links NFC tags and batteries.
+3. Home Assistant offers to set up the **Larder** integration (Settings → Devices & services → Discovered). Click **Configure**.
+
+Updating the add-on updates the integration too, with one more restart. If you'd rather install the integration with HACS, turn off **Install the Home Assistant integration** in the options. That adds the sensors, actions and events, and links NFC tags and batteries.
 
 New to Larder? Turn on **Load the example household** in the options, restart, and look around. Turn it off again once you start adding your own things (it only fills an empty Larder).
 
