@@ -8,7 +8,8 @@ import { Header, Stepper, Switch, useAction, useCategories, useModules, useToast
 export function Settings() {
   const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status });
   const admin = status.data?.user?.role === 'admin';
-  const local = status.data?.mode === 'local';
+  // Home Assistant users sign in through Home Assistant, but tokens and accounts are still for direct access.
+  const local = status.data?.mode === 'local' || status.data?.mode === 'homeassistant';
   return (
     <>
       <Header title="Settings" back="/more" />
@@ -195,7 +196,7 @@ function Data({ admin }: { admin: boolean }) {
           <dl className="kv">
             <dt>Version</dt><dd>{s.version}</dd>
             <dt>Storage</dt><dd>{s.storage === 'sqlite' ? 'SQLite' : 'In memory (lost on restart)'}</dd>
-            <dt>Login</dt><dd>{s.auth === 'local' ? 'Household accounts' : 'None (trusted network)'}</dd>
+            <dt>Login</dt><dd>{s.auth === 'local' ? 'Household accounts' : s.auth === 'homeassistant' ? 'Home Assistant (plus tokens and accounts for direct access)' : 'None (trusted network)'}</dd>
             <dt>Data folder</dt><dd className="mono">{s.dataDir}</dd>
           </dl>
         </div>

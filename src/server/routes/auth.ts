@@ -5,7 +5,7 @@ import type { Auth } from '../auth';
 import type { Config } from '../config';
 import { IdParams, Ok, admin, user } from './common';
 
-const PublicUser = z.object({ id: z.string(), username: z.string(), displayName: z.string(), role: Role, via: z.enum(['session', 'token', 'none']) });
+const PublicUser = z.object({ id: z.string(), username: z.string(), displayName: z.string(), role: Role, via: z.enum(['session', 'token', 'none', 'ingress']) });
 const Credentials = z.object({ username: z.string().min(1).max(60), password: z.string().min(1).max(200) });
 const TokenInfo = ApiToken.omit({ tokenHash: true });
 
@@ -13,7 +13,7 @@ export function registerAuthRoutes(app: ZodApp, { auth, config }: { auth: Auth; 
   const tags = ['Auth'];
 
   app.get('/auth/status', {
-    schema: { tags, summary: 'Login mode, whether first-time setup is needed, and who you are', response: { 200: z.object({ mode: z.enum(['local', 'none']), setupNeeded: z.boolean(), user: PublicUser.nullable(), version: z.string() }) } },
+    schema: { tags, summary: 'Login mode, whether first-time setup is needed, and who you are', response: { 200: z.object({ mode: z.enum(['local', 'none', 'homeassistant']), setupNeeded: z.boolean(), user: PublicUser.nullable(), version: z.string() }) } },
   }, async (request) => ({ mode: auth.mode, setupNeeded: await auth.needsSetup(), user: request.user, version: config.version }));
 
   app.post('/auth/setup', {

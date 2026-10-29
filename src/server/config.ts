@@ -10,7 +10,14 @@ export interface Config {
   /** Holds the database, photos and backups. Back this folder up. */
   dataDir: string;
   /** "local": household login and access tokens. "none": no login (trusted networks only). */
-  auth: 'local' | 'none';
+  /**
+   * "local": household accounts and tokens. "none": no login (trusted networks).
+   * "homeassistant": the add-on. People arriving through Home Assistant ingress are
+   * signed in as their Home Assistant user; everything else needs a token or account.
+   */
+  auth: 'local' | 'none' | 'homeassistant';
+  /** Addresses Home Assistant ingress requests come from (the Supervisor). */
+  ingressAddresses: string[];
   storage: 'sqlite' | 'memory';
   /** Public address, used in QR labels and links, e.g. https://larder.example.com */
   baseUrl: string | null;
@@ -47,7 +54,7 @@ const num = (v: string | undefined, fallback: number) => {
 
 export function loadConfig(env: Record<string, string | undefined> = process.env, defaults: { webDir?: string; version?: string } = {}): Config {
   const auth = (env.LARDER_AUTH ?? 'local').toLowerCase();
-  if (auth !== 'local' && auth !== 'none') throw new Error(`LARDER_AUTH must be "local" or "none", not "${auth}".`);
+  if (auth !== 'local' && auth !== 'none' && auth !== 'homeassistant') throw new Error(`LARDER_AUTH must be "local", "none" or "homeassistant", not "${auth}".`);
   const storage = (env.LARDER_STORAGE ?? 'sqlite').toLowerCase();
   if (storage !== 'sqlite' && storage !== 'memory') throw new Error(`LARDER_STORAGE must be "sqlite" or "memory", not "${storage}".`);
   return {
@@ -60,6 +67,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     disabledModules: (env.LARDER_MODULES_DISABLED ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     logLevel: env.LARDER_LOG_LEVEL ?? 'info',
     trustProxy: proxies(env.LARDER_TRUST_PROXY),
+    ingressAddresses: (env.LARDER_HA_INGRESS_ADDRESSES ?? '172.30.32.2').split(',').map((s) => s.trim()).filter(Boolean),
     demo: bool(env.LARDER_DEMO, false),
     backupEveryHours: num(env.LARDER_BACKUP_EVERY_HOURS, 24),
     backupsToKeep: num(env.LARDER_BACKUPS_TO_KEEP, 7),

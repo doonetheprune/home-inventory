@@ -57,3 +57,13 @@ export function pluralWord(word: string, n: number): string {
 export function andList(items: string[]): string {
   return items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
+
+const MEASURES = new Set(['g', 'kg', 'ml', 'l', 'm', 'cm']);
+
+/** "2 tins", "1 battery", "500 g", "3" (for things counted as "each"). */
+export function amount(n: number, unit: string): string {
+  const q = roundQty(n);
+  if (unit === 'each') return String(q);
+  if (MEASURES.has(unit.toLowerCase())) return `${q} ${unit}`;
+  return `${q} ${q > 0 && q <= 1 ? unit : pluralWord(unit, q)}`;
+}

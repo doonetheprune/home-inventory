@@ -12,7 +12,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { hasZodFastifySchemaValidationErrors, jsonSchemaTransform, jsonSchemaTransformObject, serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { registerSchemas } from './openapi';
-import { LarderError, type CoreApi } from '@larder/core';
+import { AmbiguousError, LarderError, type CoreApi } from '@larder/core';
 import { createAuth, type Auth } from './auth';
 import type { Config } from './config';
 import { registerAuthRoutes } from './routes/auth';
@@ -21,6 +21,7 @@ import { registerProductRoutes } from './routes/products';
 import { registerStockRoutes } from './routes/stock';
 import { registerMiscRoutes } from './routes/misc';
 import { registerModuleRoutes } from './routes/modules';
+import { registerAutomationRoutes } from './routes/automation';
 
 export type ZodApp = FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse, FastifyBaseLogger, ZodTypeProvider>;
 
@@ -107,7 +108,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
     if (!request.user) throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
     // Cookie sessions must come from the web app (blocks cross-site form posts).
-    if (request.user.via === 'session' && request.method !== 'GET' && request.method !== 'HEAD' && !request.headers['x-larder-client']) {
+    if ((request.user.via === 'session' || request.user.via === 'ingress') && request.method !== 'GET' && request.method !== 'HEAD' && !request.headers['x-larder-client']) {
       throw new LarderError('Requests signed in with a cookie need the X-Larder-Client header.', 403, 'forbidden');
     }
   });
@@ -117,6 +118,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       const issues = err.validation.map((v) => ({ path: (v.instancePath || '').replace(/^\//, '').replace(/\//g, '.'), message: v.message ?? 'is not valid' }));
       return reply.code(400).send({ error: 'invalid', message: issues.map((i) => `${i.path || 'request'}: ${i.message}`).join('; '), issues });
     }
+    if (err instanceof AmbiguousError) return reply.code(err.status).send({ error: err.code, message: err.message, candidates: err.candidates });
     if (err instanceof LarderError) return reply.code(err.status).send({ error: err.code, message: err.message });
     const e = err as { name?: string; message?: string; statusCode?: number; code?: string };
     if (e.name === 'ZodError') return reply.code(400).send({ error: 'invalid', message: e.message ?? 'Invalid input' });
@@ -135,6 +137,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       registerProductRoutes(z, { core });
       registerStockRoutes(z, { core });
       registerMiscRoutes(z, { core, config, backup: deps.backup });
+      registerAutomationRoutes(z, { core });
       registerModuleRoutes(z, { core });
     },
     { prefix: '/api/v1' },

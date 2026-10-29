@@ -4,6 +4,7 @@
  * household admin.
  */
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { LarderError, newId, type CoreApi, type User } from '@larder/core';
@@ -20,7 +21,7 @@ export interface AuthUser {
   username: string;
   displayName: string;
   role: 'admin' | 'member';
-  via: 'session' | 'token' | 'none';
+  via: 'session' | 'token' | 'none' | 'ingress';
 }
 
 declare module 'fastify' {
@@ -49,6 +50,9 @@ export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex'
 const publicUser = (u: User, via: AuthUser['via']): AuthUser => ({ id: u.id, username: u.username, displayName: u.displayName, role: u.role, via });
 
 const NO_AUTH_USER: AuthUser = { id: 'household', username: 'household', displayName: 'Household', role: 'admin', via: 'none' };
+
+/** Owns the token the add-on hands to the Home Assistant integration. */
+const INTEGRATION_USER = { id: 'ha-integration', username: 'integration@ha', displayName: 'Home Assistant' } as const;
 
 export function createAuth(core: CoreApi, config: Config) {
   const storage = core.adapters.storage;
@@ -92,6 +96,36 @@ export function createAuth(core: CoreApi, config: Config) {
     }
   }
 
+  const known = new Map<string, string>();
+
+  /**
+   * Home Assistant ingress: the Supervisor has already signed the person in
+   * and passes who they are in X-Remote-User-* headers. Only believed when the
+   * connection itself comes from the Supervisor, so nobody can send these
+   * headers to the add-on's own port and be let in.
+   */
+  async function ingressUser(request: FastifyRequest): Promise<AuthUser | null> {
+    const from = request.socket.remoteAddress?.replace(/^::ffff:/, '');
+    if (!from || !config.ingressAddresses.includes(from)) return null;
+    const header = (name: string) => {
+      const v = request.headers[name];
+      return (Array.isArray(v) ? v[0] : v)?.trim() ?? '';
+    };
+    const haId = header('x-remote-user-id').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+    const name = header('x-remote-user-name').slice(0, 50) || 'homeassistant';
+    const displayName = header('x-remote-user-display-name').slice(0, 80) || name;
+    const id = `ha-${haId || 'household'}`;
+    // Keep a record so tokens they create, and history, point at a real account.
+    if (known.get(id) !== displayName) {
+      const existing = await storage.users.get(id);
+      if (!existing || existing.displayName !== displayName) {
+        await storage.users.put({ id, username: `${haId ? name : 'household'}@ha`, displayName, passwordHash: '', role: 'admin', createdAt: existing?.createdAt ?? new Date().toISOString() });
+      }
+      known.set(id, displayName);
+    }
+    return { id, username: name, displayName, role: 'admin', via: 'ingress' };
+  }
+
   return {
     mode: config.auth,
 
@@ -108,6 +142,10 @@ export function createAuth(core: CoreApi, config: Config) {
         const now = new Date().toISOString();
         if (!token.lastUsedAt || Date.parse(now) - Date.parse(token.lastUsedAt) > 60_000) await storage.tokens.put({ ...token, lastUsedAt: now });
         return publicUser(user, 'token');
+      }
+      if (config.auth === 'homeassistant') {
+        const ingress = await ingressUser(request);
+        if (ingress) return ingress;
       }
       const secret = request.cookies[SESSION_COOKIE];
       if (!secret) return null;
@@ -186,6 +224,23 @@ export function createAuth(core: CoreApi, config: Config) {
       await storage.tokens.put(token);
       const { tokenHash: _hash, ...info } = token;
       return { token: raw, info };
+    },
+
+    /**
+     * The token the add-on gives the Home Assistant integration. Kept in a file
+     * in the data folder so the same token survives restarts; made again if it
+     * was revoked.
+     */
+    async integrationToken(file: string): Promise<string> {
+      const saved = (await readFile(file, 'utf8').catch(() => '')).trim();
+      if (saved && (await storage.tokens.findByHash(sha256(saved)))) return saved;
+      if (!(await storage.users.get(INTEGRATION_USER.id))) {
+        await storage.users.put({ ...INTEGRATION_USER, passwordHash: '', role: 'admin', createdAt: new Date().toISOString() });
+      }
+      const { token } = await this.createToken({ ...INTEGRATION_USER, role: 'admin', via: 'token' }, 'Home Assistant integration');
+      await writeFile(file, `${token}\n`, { mode: 0o600 });
+      await chmod(file, 0o600);
+      return token;
     },
 
     async listTokens(user: AuthUser) {

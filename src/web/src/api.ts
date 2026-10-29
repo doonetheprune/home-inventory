@@ -56,8 +56,8 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
   return s ? `?${s}` : '';
 };
 
-export interface AuthUser { id: string; username: string; displayName: string; role: 'admin' | 'member'; via: 'session' | 'token' | 'none' }
-export interface AuthStatus { mode: 'local' | 'none'; setupNeeded: boolean; user: AuthUser | null; version: string }
+export interface AuthUser { id: string; username: string; displayName: string; role: 'admin' | 'member'; via: 'session' | 'token' | 'none' | 'ingress' }
+export interface AuthStatus { mode: 'local' | 'none' | 'homeassistant'; setupNeeded: boolean; user: AuthUser | null; version: string }
 export interface TokenInfo { id: string; name: string; prefix: string; userId: string; createdAt: string; lastUsedAt: string | null }
 export interface ServerInfo { version: string; auth: string; storage: string; baseUrl: string | null; dataDir: string; backups: boolean; demo: boolean }
 

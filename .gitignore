@@ -6,3 +6,9 @@ data/
 test-results/
 playwright-report/
 .env
+
+# Python (Home Assistant integration)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

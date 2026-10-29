@@ -13,6 +13,9 @@ import { createProductService } from './services/products';
 import { createSearchService } from './services/search';
 import { createShoppingService } from './services/shopping';
 import { createStockService } from './services/stock';
+import { createAutomation, type Automation } from './services/automation';
+import { createResolver, type Resolver } from './services/resolve';
+import { createNfcService } from './services/nfc';
 import { createModuleRegistry, type ModuleOptions, type ModuleRegistry } from './modules';
 import type { EventBus, FileStore, LarderEvent, Storage } from './ports';
 import type { Movement } from './model';
@@ -27,6 +30,12 @@ export interface CoreApi {
   search: ReturnType<typeof createSearchService>;
   lookup: ReturnType<typeof createLookupService>;
   home: ReturnType<typeof createHomeService>;
+  /** Find things by name, code or id ("loo roll", "G2-4", "Aldi"). Refuses to guess between close matches. */
+  resolve: Resolver;
+  /** Sensors and actions for Home Assistant, Node-RED and MQTT. */
+  automation: Automation;
+  /** NFC tag scans and linking. */
+  nfc: ReturnType<typeof createNfcService>;
   settings: {
     get(): Promise<HouseholdSettings>;
     update(patch: Partial<HouseholdSettings>): Promise<HouseholdSettings>;
@@ -51,6 +60,10 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const products = createProductService(ctx, (f) => modules.validateFields(f));
   const stock = createStockService(ctx);
   const shopping = createShoppingService(ctx, stock);
+  const search = createSearchService(ctx);
+  const lookup = createLookupService(ctx, products, (id) => modules.isProviderEnabled(id));
+  const home = createHomeService(ctx, stock, shopping);
+  const resolve = createResolver(ctx, search, lookup);
 
   const core: CoreApi = {
     categories,
@@ -59,9 +72,12 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     products,
     stock,
     shopping,
-    search: createSearchService(ctx),
-    lookup: createLookupService(ctx, products, (id) => modules.isProviderEnabled(id)),
-    home: createHomeService(ctx, stock, shopping),
+    search,
+    lookup,
+    home,
+    resolve,
+    automation: createAutomation({ ctx, products, stock, shopping, resolve }),
+    nfc: createNfcService(ctx, products),
     settings: {
       get: () => ctx.household(),
       async update(patch) {
