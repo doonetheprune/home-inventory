@@ -77,6 +77,19 @@ export async function supervisorMqtt(env: Record<string, string | undefined>, do
 }
 
 /**
+ * All the settings the add-on makes, on top of the environment: its options
+ * first, then the Mosquitto add-on's broker only if no broker is set anywhere
+ * (the Supervisor's MQTT login must never go to a broker the person named).
+ */
+export async function addonSettings(
+  env: Record<string, string | undefined>,
+  io: { read?: (file: string) => string; fetch?: typeof fetch } = {},
+): Promise<Record<string, string>> {
+  const options = addonEnv(env, io.read);
+  return { ...(await supervisorMqtt({ ...env, ...options }, io.fetch)), ...options };
+}
+
+/**
  * Tells Home Assistant "Larder is here", with the address and a token for
  * the integration. Home Assistant then offers to set up the integration.
  * Retries for a while, because the Supervisor may still be starting.

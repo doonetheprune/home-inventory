@@ -7,7 +7,7 @@
  *
  * Topics (prefix "larder" unless set):
  *   larder/status            "online" / "offline" (retained; offline is the last will)
- *   larder/stock/<item>      each item's stock as JSON (retained)
+ *   larder/stock/<item>      each item's stock as JSON (retained; cleared when the item is renamed or removed)
  *   larder/sensor/<id>       every sensor (running low, use soon…) as JSON (retained)
  *   larder/event/<type>      every event, e.g. larder/event/stock.low (not retained)
  *
@@ -16,7 +16,7 @@
  * finds the Mosquitto broker add-on by itself.
  */
 import mqtt, { type MqttClient } from 'mqtt';
-import { defineModule, type LarderEvent } from '@larder/core';
+import { defineModule, type LarderEvent, type ProductSummary } from '@larder/core';
 
 /** "Toilet roll" → "toilet_roll", for topic names. */
 export const topicSlug = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'item';
@@ -40,6 +40,23 @@ export default defineModule({
       client?.publish(`${prefix}/${topic}`, typeof payload === 'string' ? payload : JSON.stringify(payload), { retain: keep, qos: 0 });
     };
 
+    // Where each item's stock was last published, so the old topic of a renamed or
+    // removed item can be cleared (an empty retained message removes it from the broker).
+    const stockTopics = new Map<string, string>();
+    const clearStock = (productId: string) => {
+      const topic = stockTopics.get(productId);
+      stockTopics.delete(productId);
+      // Names that differ only in punctuation share a topic; keep it while another item uses it.
+      if (topic && retain && ![...stockTopics.values()].includes(topic)) send(topic, '', true);
+    };
+    const sendStock = (d: { id: string; name: string; in_stock: number; expected: number; unit: string; low: boolean }) => {
+      const topic = `stock/${topicSlug(d.name)}`;
+      if (stockTopics.get(d.id) !== topic) clearStock(d.id);
+      stockTopics.set(d.id, topic);
+      send(topic, d);
+    };
+    const stockOf = (s: ProductSummary) => ({ id: s.product.id, name: s.product.name, in_stock: s.inStock, expected: s.expected, unit: s.product.unit, low: s.status.low });
+
     async function publishSensors() {
       sensorTimer = null;
       if (!client?.connected) return;
@@ -51,10 +68,7 @@ export default defineModule({
     };
 
     async function publishAllStock() {
-      const all = await ctx.core.products.list();
-      for (const s of all) {
-        send(`stock/${topicSlug(s.product.name)}`, { id: s.product.id, name: s.product.name, in_stock: s.inStock, expected: s.expected, unit: s.product.unit, low: s.status.low });
-      }
+      for (const s of await ctx.core.products.list()) sendStock(stockOf(s));
     }
 
     function connect() {
@@ -99,7 +113,13 @@ export default defineModule({
       send(`event/${e.type}`, e, false);
       if (e.type === 'stock.changed') {
         const d = e.data as { productId: string; name: string; inStock: number; expected: number; unit: string; low: boolean };
-        send(`stock/${topicSlug(d.name)}`, { id: d.productId, name: d.name, in_stock: d.inStock, expected: d.expected, unit: d.unit, low: d.low });
+        sendStock({ id: d.productId, name: d.name, in_stock: d.inStock, expected: d.expected, unit: d.unit, low: d.low });
+      }
+      const product = e.data as { id?: string; name?: string };
+      if (e.type === 'product.deleted' && product.id) clearStock(product.id);
+      // Renamed: move its stock to the new topic.
+      if ((e.type === 'product.updated' || e.type === 'product.created') && product.id && product.name && stockTopics.get(product.id) !== `stock/${topicSlug(product.name)}`) {
+        void ctx.core.products.summary(product.id).then((s) => sendStock(stockOf(s))).catch(() => undefined);
       }
       if (/^(stock|product|place|shop|category|settings|shopping|batteries)\./.test(e.type)) sensorsSoon();
     });

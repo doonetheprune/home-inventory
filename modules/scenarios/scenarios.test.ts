@@ -65,6 +65,21 @@ describe('scenarios module', () => {
     expect((await core.products.summary(ids.aa)).product.fields.scenarios).toEqual([]);
   });
 
+  it('keeps names unique when renaming, and tags safely alongside other changes', async () => {
+    const { core, s, ids } = await household();
+    const other = (await call(core, 'POST', '/', { name: 'Snowed in' })) as Scenario;
+    await expect(call(core, 'PATCH', '/:id', { name: 'power cut' }, { id: other.id })).rejects.toMatchObject({ status: 409 });
+    // Another module's field on the same item survives tagging.
+    await core.products.update(ids.gas, { fields: { pricing: { usualUnitPrice: 4 } } });
+    await Promise.all([
+      call(core, 'PUT', '/:id/items', { productId: ids.gas, included: true }, { id: other.id }),
+      call(core, 'PUT', '/:id/items', { productId: ids.gas, included: false }, { id: s.id }),
+    ]);
+    const fields = (await core.products.summary(ids.gas)).product.fields;
+    expect(fields.scenarios).toEqual([other.id]);
+    expect(fields.pricing).toEqual({ usualUnitPrice: 4 });
+  });
+
   it('adds example scenarios to the demo household', async () => {
     const core = await makeCore({ modules: [scenarios] });
     const torch = await core.products.create({ name: 'Head torch' });

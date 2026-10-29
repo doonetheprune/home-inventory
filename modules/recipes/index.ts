@@ -42,7 +42,8 @@ export type Recipe = z.infer<typeof Recipe>;
 const IngredientInput = z.object({
   name: z.string().min(1).max(120),
   item: z.string().max(200).optional().describe('The Larder item, if different from the name'),
-  productId: Id.optional(),
+  /** The Larder item's id; null to leave it unlinked. Left out, a re-saved ingredient keeps its link. */
+  productId: Id.nullable().optional(),
   quantity: z.number().positive().optional(),
   amount: z.string().max(60).optional(),
   optional: z.boolean().optional(),
@@ -140,28 +141,29 @@ export default defineModule({
       return r;
     }
 
-    /** By id or title (exact, or containing every word given). */
+    /** By id, or by title with the same strict rules as items (so "egg" doesn't find "Veggie chilli"). */
     async function find(ref: string): Promise<Recipe> {
       const byId = await recipes.get(ref.trim());
       if (byId) return byId;
-      const list = await all();
-      const q = ref.trim().toLowerCase();
-      const exact = list.filter((r) => r.title.toLowerCase() === q);
-      if (exact.length === 1) return exact[0]!;
-      const words = q.split(/\s+/).filter(Boolean);
-      const covering = list.filter((r) => words.length && words.every((w) => r.title.toLowerCase().includes(w)));
-      if (covering.length === 1) return covering[0]!;
-      if (covering.length > 1) throw new LarderError(`"${ref}" could be ${covering.map((r) => `"${r.title}"`).join(' or ')}.`, 409, 'ambiguous');
-      throw new LarderError(`There's no saved recipe called "${ref}".`, 404, 'not_found');
+      return core.resolve.among('saved recipe', ref, (await all()).map((r) => ({ name: r.title, recipe: r }))).recipe;
     }
 
-    /** Link each ingredient to a Larder item when its name (or `item`) clearly is one. Unclear ones stay unlinked. */
-    async function ingredientsFrom(input: RecipeInput['ingredients']): Promise<Ingredient[]> {
+    /**
+     * Link each ingredient to a Larder item: the one given, the link it already
+     * had (re-saving keeps links), or its name (or `item`) when that clearly is
+     * one. Unclear ones stay unlinked.
+     */
+    async function ingredientsFrom(input: RecipeInput['ingredients'], existing: Ingredient[] = []): Promise<Ingredient[]> {
       const out: Ingredient[] = [];
+      const known = async (id: string | null | undefined) => (id ? ((await core.products.summary(id).catch(() => null))?.product.id ?? null) : null);
       for (const i of input ?? []) {
         let productId: string | null = null;
-        if (i.productId) productId = (await core.products.summary(i.productId).catch(() => null))?.product.id ?? null;
-        else productId = (await core.resolve.product(i.item ?? i.name).catch(() => null))?.id ?? null;
+        if (i.productId !== undefined) productId = await known(i.productId);
+        else if (i.item) productId = (await core.resolve.product(i.item).catch(() => null))?.id ?? null;
+        else {
+          const before = existing.find((e) => e.productId && e.name.trim().toLowerCase() === i.name.trim().toLowerCase());
+          productId = (await known(before?.productId)) ?? (await core.resolve.product(i.name).catch(() => null))?.id ?? null;
+        }
         out.push(Ingredient.parse({ name: i.name, productId, quantity: i.quantity ?? null, amount: i.amount ?? '', optional: i.optional ?? false }));
       }
       return out;
@@ -172,7 +174,8 @@ export default defineModule({
       const now = core.now();
       const r = Recipe.parse({
         ...(existing ?? { id: newId(), createdAt: now, lastCookedAt: null, timesCooked: 0 }),
-        title: data.title, serves: data.serves ?? existing?.serves ?? null, ingredients: await ingredientsFrom(data.ingredients),
+        // Left out keeps what it was; null clears it.
+        title: data.title, serves: data.serves !== undefined ? data.serves : (existing?.serves ?? null), ingredients: await ingredientsFrom(data.ingredients, existing?.ingredients),
         method: data.method ?? existing?.method ?? '', notes: data.notes ?? existing?.notes ?? '', source: data.source ?? existing?.source ?? '', updatedAt: now,
       });
       await recipes.put(r.id, r);
@@ -185,16 +188,24 @@ export default defineModule({
       const v = await view(core, r);
       const items: Proposal['items'] = [];
       const skipped: string[] = [];
+      // One line per item: "butter 200 g" and "butter for greasing" add up.
+      const wanted = new Map<string, { name: string; want: number; unit: string; inStock: number; names: string[] }>();
       for (const i of v.ingredients) {
         if (!i.productId || !i.quantity) {
           if (!i.optional) skipped.push(i.name);
           continue;
         }
-        const want = Math.round(i.quantity * scale * 1000) / 1000;
+        const w = wanted.get(i.productId);
+        if (w) {
+          w.want += i.quantity * scale;
+          w.names.push(i.name);
+        } else wanted.set(i.productId, { name: i.item ?? i.name, want: i.quantity * scale, unit: i.unit ?? 'each', inStock: i.inStock ?? 0, names: [i.name] });
+      }
+      for (const [productId, w] of wanted) {
         // Propose no more than there is; the person can change it before confirming.
-        const qty = Math.min(want, i.inStock ?? 0);
-        if (qty > 0) items.push({ productId: i.productId, name: i.item ?? i.name, quantity: qty, unit: i.unit ?? 'each', inStock: i.inStock ?? 0 });
-        else skipped.push(i.name);
+        const qty = Math.min(Math.round(w.want * 1000) / 1000, w.inStock);
+        if (qty > 0) items.push({ productId, name: w.name, quantity: qty, unit: w.unit, inStock: w.inStock });
+        else skipped.push(...w.names);
       }
       const p = Proposal.parse({ id: newId(), recipeId: r.id, recipe: r.title, servings: servings ?? null, items, skipped, expiresAt: new Date(Date.parse(core.now()) + PROPOSAL_HOURS * 3_600_000).toISOString() });
       // Forget old proposals as new ones are made.
@@ -203,24 +214,43 @@ export default defineModule({
       return p;
     }
 
+    // Proposals being confirmed right now, so a double tap or a retry can't use stock twice.
+    const confirming = new Set<string>();
+
     async function confirm(proposalId: string, changes?: Array<{ productId?: string; item?: string; quantity: number }>) {
-      const p = await proposals.get(proposalId);
-      if (!p || Date.parse(p.expiresAt) < Date.parse(core.now())) throw new LarderError('That proposal has expired or was already used. Propose cooking it again.', 404, 'not_found');
-      const quantities = new Map(p.items.map((i) => [i.productId, i.quantity]));
-      for (const c of changes ?? []) {
-        const id = c.productId ?? (c.item ? (await core.resolve.product(c.item)).id : null);
-        if (!id) throw new ValidationError('Each change needs the item and its quantity.');
-        quantities.set(id, c.quantity);
+      if (confirming.has(proposalId)) throw new LarderError('That proposal is already being confirmed.', 409, 'conflict');
+      confirming.add(proposalId);
+      try {
+        const p = await proposals.get(proposalId);
+        if (!p || Date.parse(p.expiresAt) < Date.parse(core.now())) throw new LarderError('That proposal has expired or was already used. Propose cooking it again.', 404, 'not_found');
+        const quantities = new Map(p.items.map((i) => [i.productId, i.quantity]));
+        for (const c of changes ?? []) {
+          const product = c.productId ? null : c.item ? await core.resolve.product(c.item) : null;
+          const id = c.productId ?? product?.id;
+          if (!id) throw new ValidationError('Each change needs the item and its quantity.');
+          // Changes adjust what was proposed; anything else used goes through use_stock.
+          if (!quantities.has(id)) throw new ValidationError(`${product?.name ?? 'That item'} isn't in this proposal. Take it out of stock on its own (use_stock).`);
+          quantities.set(id, c.quantity);
+        }
+        const uses = [...quantities].filter(([, q]) => q > 0).map(([productId, quantity]) => ({ productId, quantity, note: `Cooked ${p.recipe}` }));
+        // A proposal works once: forget it before touching stock, and bring it back if that fails.
+        await proposals.remove(p.id);
+        let result: Awaited<ReturnType<typeof core.stock.useMany>>;
+        try {
+          result = uses.length ? await core.stock.useMany(uses) : [];
+        } catch (err) {
+          await proposals.put(p.id, p);
+          throw err;
+        }
+        const r = await recipes.get(p.recipeId);
+        if (r) {
+          await recipes.put(r.id, { ...r, lastCookedAt: core.now(), timesCooked: r.timesCooked + 1 });
+          ctx.publish('recipes.changed', { id: r.id });
+        }
+        return { used: uses.length, products: result };
+      } finally {
+        confirming.delete(proposalId);
       }
-      const uses = [...quantities].filter(([, q]) => q > 0).map(([productId, quantity]) => ({ productId, quantity, note: `Cooked ${p.recipe}` }));
-      const result = uses.length ? await core.stock.useMany(uses) : [];
-      await proposals.remove(p.id);
-      const r = await recipes.get(p.recipeId);
-      if (r) {
-        await recipes.put(r.id, { ...r, lastCookedAt: core.now(), timesCooked: r.timesCooked + 1 });
-        ctx.publish('recipes.changed', { id: r.id });
-      }
-      return { used: uses.length, products: result };
     }
 
     const proposalText = (p: Proposal) => [
@@ -352,7 +382,7 @@ export default defineModule({
       },
     });
     ctx.addTool({
-      name: 'confirm_cooking', title: 'Confirm taking ingredients out of stock',
+      name: 'confirm_cooking', title: 'Confirm taking ingredients out of stock', destructive: true,
       description: 'Apply a proposal from propose_cooking once the person agrees. Pass changes for anything they used a different amount of (quantity 0 to leave an item alone).',
       input: z.object({
         proposal: z.string().min(1).describe('The proposal id from propose_cooking'),

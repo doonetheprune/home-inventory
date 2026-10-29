@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addonEnv, announceToHomeAssistant, supervisorMqtt } from '../../src/server/addon';
+import { addonEnv, addonSettings, announceToHomeAssistant, supervisorMqtt } from '../../src/server/addon';
 import { makeApp } from './helpers';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +97,14 @@ describe('add-on runtime', () => {
     expect(await supervisorMqtt({}, fake)).toEqual({});
     const none = (async () => new Response('{}', { status: 400 })) as unknown as typeof fetch;
     expect(await supervisorMqtt({ SUPERVISOR_TOKEN: 'x' }, none)).toEqual({});
+
+    // A broker named in the add-on's own options keeps the Supervisor's login away from it.
+    const options = JSON.stringify({ env_vars: [{ name: 'LARDER_MODULE_MQTT_URL', value: 'mqtts://broker.example.net:8883' }] });
+    const mine = await addonSettings({ SUPERVISOR_TOKEN: 'x' }, { read: () => options, fetch: fake });
+    expect(mine.LARDER_MODULE_MQTT_URL).toBe('mqtts://broker.example.net:8883');
+    expect(mine.LARDER_MODULE_MQTT_USERNAME).toBeUndefined();
+    expect(mine.LARDER_MODULE_MQTT_PASSWORD).toBeUndefined();
+    expect((await addonSettings({ SUPERVISOR_TOKEN: 'x' }, { read: () => '{}', fetch: fake })).LARDER_MODULE_MQTT_PASSWORD).toBe('secret');
   });
 
   it('announces Larder to the Supervisor, retrying until it answers', async () => {

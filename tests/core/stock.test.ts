@@ -16,6 +16,20 @@ describe('stock', () => {
     shed = (await core.places.create({ name: 'Shed', code: 'S2-3' })).id;
   });
 
+  it('applies changes made at the same time one after another, so none is lost', async () => {
+    const roll = await core.products.create({ name: 'Toilet roll', unit: 'roll', defaultPlaceId: kitchen });
+    await core.stock.add({ productId: roll.id, quantity: 5 });
+    await Promise.all([core.stock.use({ productId: roll.id, quantity: 1 }), core.stock.use({ productId: roll.id, quantity: 1 }), core.stock.add({ productId: roll.id, quantity: 2 })]);
+    expect((await core.products.summary(roll.id)).inStock).toBe(5);
+    // Product updates too: neither field is lost.
+    await Promise.all([core.products.update(roll.id, { fields: { a: 1 } }), core.products.update(roll.id, { fields: { b: 2 } }), core.stock.use({ productId: roll.id, quantity: 1 })]);
+    const p = (await core.products.summary(roll.id)).product;
+    expect(p.fields).toMatchObject({ a: 1, b: 2 });
+    // A failed change doesn't hold up the next.
+    await expect(core.stock.use({ productId: roll.id, quantity: 99 })).rejects.toThrow();
+    expect((await core.stock.use({ productId: roll.id, quantity: 1 })).inStock).toBe(3);
+  });
+
   it('adds stock with an expiry worked out from the shelf life', async () => {
     const milk = await core.products.create({ name: 'Milk', unit: 'bottle', shelfLifeDays: 7, defaultPlaceId: fridge });
     const s = await core.stock.add({ productId: milk.id, quantity: 2 });

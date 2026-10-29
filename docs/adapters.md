@@ -24,6 +24,7 @@ Larder's core never talks to a database. It talks to the `Storage` port in `src/
 | Queries are named methods (`findByBarcode`, `listByProduct`, `listByPlace`) | Each needs one index or one query, not a query language |
 | Arrays inside documents (`barcodes`, `nfcTags`, `shopCodes`) | Firestore `array-contains`; SQL `json_each` or a side table |
 | `applyStockChanges` is all or nothing | One Firestore batch / SQL transaction |
+| One Larder process writes at a time | The core queues its own writes; with several instances on one database, the core's read-then-write would need a transaction (see ARCHITECTURE.md) |
 | Reads load collections whole | No joins; the core works out summaries in memory |
 | Module data via `documents(collection)` | One generic collection per module |
 

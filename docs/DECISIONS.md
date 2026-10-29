@@ -73,6 +73,7 @@ These follow from the decisions above; the owner can change any of them.
 - **Recipes:** ingredients link to items only when the name clearly is one (the same strict matching as actions); quantities to take are in the item's own unit. Cooking is always propose, then confirm (with changes), never automatic.
 - **MQTT:** off by default; retained stock and sensor topics, plus every event; no Home Assistant MQTT discovery (the integration is the Home Assistant link). The add-on uses the Mosquitto add-on automatically.
 - **Third-party packages in modules** are allowed only when listed for that module in the architecture test (MQTT uses `mqtt`).
+- **One change at a time** (after review): stock writes and product updates go through one queue in the core (`ctx.exclusive`), because two changes at the same moment (two automations, a double tap) could both start from the same stock and one would be lost. Modules change their own product field with `core.products.updateField`, and find their own things by name with `core.resolve.among` (the same strict rules as items). The queue is per process, which suits Larder (one process); a storage adapter for several instances would need database transactions instead (noted in ARCHITECTURE.md).
 - **Version 0.4.0.**
 
 ## For review

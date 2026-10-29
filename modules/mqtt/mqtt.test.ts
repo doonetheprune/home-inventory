@@ -66,6 +66,14 @@ describe('MQTT module', () => {
     seen.delete('house/sensor/low_stock');
     expect(JSON.parse((await waitFor('house/sensor/low_stock'))!)).toMatchObject({ state: 0 });
 
+    // Renamed or removed items don't leave their old retained topic behind.
+    await core.products.update(loo.id, { name: 'Loo roll' });
+    expect(JSON.parse((await waitFor('house/stock/loo_roll'))!)).toMatchObject({ in_stock: 12 });
+    expect(await retained(url, 'house/stock/toilet_roll')).toBeUndefined();
+    await core.products.remove(loo.id);
+    for (let i = 0; i < 50 && (await retained(url, 'house/stock/loo_roll')) !== undefined; i++) await new Promise((r) => setTimeout(r, 30));
+    expect(await retained(url, 'house/stock/loo_roll')).toBeUndefined();
+
     await core.modules.setEnabled('mqtt', false);
     for (let i = 0; i < 100 && seen.get('house/status') !== 'offline'; i++) await new Promise((r) => setTimeout(r, 30));
     expect(seen.get('house/status')).toBe('offline');

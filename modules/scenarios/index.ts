@@ -136,34 +136,33 @@ export default defineModule({
       return s;
     }
 
-    /** By id or name (exact, or every word given), for assistants. */
+    /** By id, or by name with the same strict rules as items, for assistants. */
     async function find(ref: string): Promise<Scenario> {
       const list = await all();
-      const q = ref.trim().toLowerCase();
-      const byId = list.find((s) => s.id === ref);
+      const byId = list.find((s) => s.id === ref.trim());
       if (byId) return byId;
-      const exact = list.filter((s) => s.name.toLowerCase() === q);
-      if (exact.length === 1) return exact[0]!;
-      const words = q.split(/\s+/).filter(Boolean);
-      const covering = list.filter((s) => words.length && words.every((w) => s.name.toLowerCase().split(/\s+/).some((x) => x.startsWith(w))));
-      if (covering.length === 1) return covering[0]!;
-      throw new LarderError(
-        covering.length ? `"${ref}" could be ${covering.map((s) => s.name).join(' or ')}.` : `There's no scenario called "${ref}". The scenarios are: ${list.map((s) => s.name).join(', ') || 'none yet'}.`,
-        covering.length ? 409 : 404, covering.length ? 'ambiguous' : 'not_found',
-      );
+      try {
+        return core.resolve.among('scenario', ref, list);
+      } catch (err) {
+        // There are only a few, so say which there are.
+        if (err instanceof LarderError && err.status === 404) throw new LarderError(`There's no scenario called "${ref.trim()}". The scenarios are: ${list.map((s) => s.name).join(', ') || 'none yet'}.`, 404, 'not_found');
+        throw err;
+      }
     }
 
     async function setTag(productId: string, scenarioId: string, included: boolean) {
-      const s = await core.products.summary(productId);
-      const tags = tagsOf(s);
-      const next = included ? [...new Set([...tags, scenarioId])] : tags.filter((t) => t !== scenarioId);
-      if (next.length === tags.length && next.every((t, i) => t === tags[i])) return;
-      await core.products.update(productId, { fields: { ...s.product.fields, scenarios: next } });
+      // Only this module's field, changed from its current value (two taps at once both count).
+      await core.products.updateField<unknown>(productId, 'scenarios', (current) => {
+        const parsed = ScenarioFields.safeParse(current ?? []);
+        const tags = parsed.success ? parsed.data : [];
+        return included ? [...new Set([...tags, scenarioId])] : tags.filter((t) => t !== scenarioId);
+      });
     }
 
+    const nameTaken = async (name: string, except?: string) => (await all()).some((s) => s.id !== except && s.name.toLowerCase() === name.trim().toLowerCase());
+
     async function create(input: z.infer<typeof ScenarioInput>): Promise<Scenario> {
-      const list = await all();
-      if (list.some((s) => s.name.toLowerCase() === input.name.toLowerCase())) throw new LarderError(`There's already a scenario called ${input.name}.`, 409, 'conflict');
+      if (await nameTaken(input.name)) throw new LarderError(`There's already a scenario called ${input.name}.`, 409, 'conflict');
       const now = core.now();
       const s = Scenario.parse({ id: newId(), name: input.name, icon: input.icon, notes: input.notes, createdAt: now, updatedAt: now });
       await scenarios.put(s.id, s);
@@ -197,7 +196,9 @@ export default defineModule({
       params: z.object({ id: Id }), body: ScenarioInput.partial(), response: Scenario,
       async handler({ params, body }) {
         const cur = await get((params as { id: string }).id);
-        const next = Scenario.parse({ ...cur, ...(body as object), updatedAt: core.now() });
+        const patch = body as Partial<z.infer<typeof ScenarioInput>>;
+        if (patch.name && (await nameTaken(patch.name, cur.id))) throw new LarderError(`There's already a scenario called ${patch.name}.`, 409, 'conflict');
+        const next = Scenario.parse({ ...cur, ...patch, updatedAt: core.now() });
         await scenarios.put(next.id, next);
         ctx.publish('scenarios.changed', { id: next.id });
         return next;

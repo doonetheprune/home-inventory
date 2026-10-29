@@ -64,6 +64,53 @@ describe('recipes module', () => {
     await core.stock.use({ productId: ids.spinach, quantity: 1 });
     await expect(call(core, 'POST', '/proposals/:proposalId/confirm', {}, { proposalId: p.id })).rejects.toThrow('Baby spinach');
     expect((await core.products.summary(ids.chicken)).inStock).toBe(2);
+    // The proposal is still there to try again.
+    await core.stock.add({ productId: ids.spinach, quantity: 1 });
+    await call(core, 'POST', '/proposals/:proposalId/confirm', {}, { proposalId: p.id });
+    expect((await core.products.summary(ids.chicken)).inStock).toBe(1);
+  });
+
+  it('adds up two lines for the same item, and only adjusts what was proposed', async () => {
+    const { core } = await kitchen();
+    const butter = await core.products.create({ name: 'Butter', unit: 'g' });
+    await core.stock.add({ productId: butter.id, quantity: 500 });
+    const r = (await call(core, 'POST', '/', { title: 'Shortbread', ingredients: [{ name: 'butter', quantity: 200 }, { name: 'butter for greasing', item: 'butter', quantity: 50 }] })) as RecipeView;
+    const p = (await call(core, 'POST', '/:id/cook', {}, { id: r.id })) as Proposal;
+    expect(p.items.map((i) => [i.name, i.quantity])).toEqual([['Butter', 250]]);
+    await expect(core.assistant.call('confirm_cooking', { proposal: p.id, changes: [{ item: 'chicken thighs', quantity: 1 }] })).rejects.toThrow("Chicken thighs isn't in this proposal");
+    await call(core, 'POST', '/proposals/:proposalId/confirm', {}, { proposalId: p.id });
+    expect((await core.products.summary(butter.id)).inStock).toBe(250);
+  });
+
+  it('takes stock once when a proposal is confirmed twice at the same moment', async () => {
+    const { core, r, ids } = await kitchen();
+    const p = (await call(core, 'POST', '/:id/cook', {}, { id: r.id })) as Proposal;
+    const confirm = () => call(core, 'POST', '/proposals/:proposalId/confirm', {}, { proposalId: p.id });
+    const results = await Promise.allSettled([confirm(), confirm()]);
+    expect(results.map((x) => x.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect((await core.products.summary(ids.chicken)).inStock).toBe(1);
+  });
+
+  it('keeps ingredient links when a recipe is saved again, and can clear "serves"', async () => {
+    const { core } = await kitchen();
+    await core.products.create({ name: 'Tinned tomatoes', unit: 'tin' });
+    const saved = await core.assistant.call('save_recipe', { title: 'Chilli', serves: 4, method: 'Simmer.', ingredients: [{ name: 'chopped tomatoes', item: 'Tinned tomatoes', quantity: 1 }] });
+    const id = saved.data!.id as string;
+    // The web editor sends the ingredient back by name, with only the method changed.
+    let v = (await call(core, 'PUT', '/:id', { title: 'Chilli', method: 'Simmer for an hour.', ingredients: [{ name: 'chopped tomatoes', quantity: 1 }] }, { id })) as RecipeView;
+    expect(v.ingredients[0]!.item).toBe('Tinned tomatoes');
+    expect(v.serves).toBe(4);
+    v = (await call(core, 'PUT', '/:id', { title: 'Chilli', serves: null, ingredients: [{ name: 'chopped tomatoes', productId: null }] }, { id })) as RecipeView;
+    expect(v.ingredients[0]!.item).toBeNull();
+    expect(v.serves).toBeNull();
+  });
+
+  it('finds recipes by whole words of the title, never part of a word', async () => {
+    const { core } = await kitchen();
+    await core.assistant.call('save_recipe', { title: 'Veggie chilli', method: 'Simmer.', ingredients: [] });
+    expect((await core.assistant.call('get_recipe', { recipe: 'chilli' })).text).toContain('Veggie chilli');
+    await expect(core.assistant.call('get_recipe', { recipe: 'egg' })).rejects.toMatchObject({ status: 404 });
+    await expect(core.assistant.call('get_recipe', { recipe: 'chil' })).rejects.toThrow('Did you mean "Veggie chilli"?');
   });
 
   it('works for AI assistants end to end, and puts missing things on the list', async () => {

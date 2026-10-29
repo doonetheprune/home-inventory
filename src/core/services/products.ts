@@ -29,6 +29,18 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     }
   }
 
+  // Reads the product and writes it back, so callers run it in the write queue (ctx.exclusive).
+  async function updateNow(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
+    const cur = await ctx.storage.products.get(id);
+    if (!cur) throw new NotFoundError('Product', id);
+    const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
+    const next = tidy(Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }));
+    await assertRefs(next);
+    await ctx.storage.products.put(next);
+    ctx.publish('product.updated', { id, name: next.name });
+    return next;
+  }
+
   const service = {
     async list(filter: ProductFilter = {}): Promise<ProductSummary[]> {
       const world = await loadWorld(ctx);
@@ -97,25 +109,33 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     },
 
     async update(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
-      const cur = await ctx.storage.products.get(id);
-      if (!cur) throw new NotFoundError('Product', id);
-      const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
-      const next = tidy(Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }));
-      await assertRefs(next);
-      await ctx.storage.products.put(next);
-      ctx.publish('product.updated', { id, name: next.name });
-      return next;
+      return ctx.exclusive(() => updateNow(id, patch));
+    },
+
+    /**
+     * Changes one module's field (`product.fields[key]`) from its current
+     * value, so two changes at the same moment (two taps) both count. Other
+     * modules' fields are left alone. `change` mustn't call Larder.
+     */
+    async updateField<T>(id: string, key: string, change: (current: T | undefined) => T): Promise<Product> {
+      return ctx.exclusive(async () => {
+        const cur = await ctx.storage.products.get(id);
+        if (!cur) throw new NotFoundError('Product', id);
+        return updateNow(id, { fields: { [key]: change(cur.fields[key] as T | undefined) } });
+      });
     },
 
     /** Removes the product, its variants and its stock. History is kept. */
     async remove(id: string): Promise<void> {
-      const cur = await ctx.storage.products.get(id);
-      if (!cur) throw new NotFoundError('Product', id);
-      const entries = await ctx.storage.stock.listByProduct(id);
-      await ctx.storage.applyStockChanges({ remove: entries.map((e) => e.id) });
-      for (const v of await ctx.storage.variants.listByProduct(id)) await ctx.storage.variants.remove(v.id);
-      await ctx.storage.products.remove(id);
-      ctx.publish('product.deleted', { id, name: cur.name });
+      return ctx.exclusive(async () => {
+        const cur = await ctx.storage.products.get(id);
+        if (!cur) throw new NotFoundError('Product', id);
+        const entries = await ctx.storage.stock.listByProduct(id);
+        await ctx.storage.applyStockChanges({ remove: entries.map((e) => e.id) });
+        for (const v of await ctx.storage.variants.listByProduct(id)) await ctx.storage.variants.remove(v.id);
+        await ctx.storage.products.remove(id);
+        ctx.publish('product.deleted', { id, name: cur.name });
+      });
     },
 
     async setOnList(id: string, onShoppingList: boolean): Promise<Product> {

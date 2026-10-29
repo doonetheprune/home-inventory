@@ -11206,9 +11206,16 @@
                           "maxLength": 200
                         },
                         "productId": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "quantity": {
                           "type": "number",
@@ -11339,9 +11346,16 @@
                           "maxLength": 200
                         },
                         "productId": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 100
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "quantity": {
                           "type": "number",

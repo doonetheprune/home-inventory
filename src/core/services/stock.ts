@@ -399,5 +399,12 @@ export function createStockService(ctx: CoreContext) {
         .sort((a, b) => (a.eta ?? '9999').localeCompare(b.eta ?? '9999') || a.source.localeCompare(b.source));
     },
   };
+
+  // Every change goes through the queue (they don't call each other, so none waits on itself).
+  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'arrive', 'renew'] as const;
+  for (const name of writes) {
+    const run = service[name] as (...args: unknown[]) => Promise<unknown>;
+    (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));
+  }
   return service;
 }

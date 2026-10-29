@@ -78,7 +78,7 @@ function Cooked({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
 
 function RecipePage() {
   const { id } = useModuleParams();
-  const r = useQuery({ queryKey: ['recipes', id], queryFn: () => call<Recipe>('GET', `/${id}`) });
+  const r = useQuery({ queryKey: ['recipes', id], queryFn: () => call<Recipe>('GET', `/${encodeURIComponent(id ?? '')}`) });
   const { run, busy } = useAction();
   const navigate = useNavigate();
   const [cooking, setCooking] = useState(false);
@@ -135,27 +135,32 @@ function RecipePage() {
   );
 }
 
-interface Row { name: string; amount: string; quantity: string; optional: boolean }
+/** An ingredient being edited. It keeps its link to a Larder item unless its name changes. */
+interface Row { name: string; amount: string; quantity: string; optional: boolean; productId?: string | null; linkedAs?: string }
 
 function RecipeEditor() {
   const { id } = useModuleParams();
   const editing = id && id !== 'new' ? id : null;
-  const existing = useQuery({ queryKey: ['recipes', editing], queryFn: () => call<Recipe>('GET', `/${editing}`), enabled: !!editing });
+  const existing = useQuery({ queryKey: ['recipes', editing], queryFn: () => call<Recipe>('GET', `/${encodeURIComponent(editing!)}`), enabled: !!editing });
   const [form, setForm] = useState<{ title: string; serves: string; method: string; notes: string; rows: Row[] } | null>(null);
   const { run, busy } = useAction();
   const navigate = useNavigate();
   if (editing && existing.isLoading) return <Loading />;
   const f = form ?? (existing.data
-    ? { title: existing.data.title, serves: existing.data.serves ? String(existing.data.serves) : '', method: existing.data.method, notes: existing.data.notes, rows: existing.data.ingredients.map((i) => ({ name: i.name, amount: i.amount, quantity: i.quantity ? String(i.quantity) : '', optional: i.optional })) }
+    ? { title: existing.data.title, serves: existing.data.serves ? String(existing.data.serves) : '', method: existing.data.method, notes: existing.data.notes, rows: existing.data.ingredients.map((i) => ({ name: i.name, amount: i.amount, quantity: i.quantity ? String(i.quantity) : '', optional: i.optional, productId: i.productId, linkedAs: i.name })) }
     : { title: '', serves: '', method: '', notes: '', rows: [{ name: '', amount: '', quantity: '', optional: false }] });
   const set = (patch: Partial<typeof f>) => setForm({ ...f, ...patch });
   const setRow = (n: number, patch: Partial<Row>) => set({ rows: f.rows.map((r, i) => (i === n ? { ...r, ...patch } : r)) });
   const save = async () => {
     const body = {
       title: f.title.trim(), serves: f.serves ? Number(f.serves) : null, method: f.method, notes: f.notes,
-      ingredients: f.rows.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), amount: r.amount.trim() || undefined, quantity: Number(r.quantity) > 0 ? Number(r.quantity) : undefined, optional: r.optional })),
+      ingredients: f.rows.filter((r) => r.name.trim()).map((r) => ({
+        name: r.name.trim(), amount: r.amount.trim() || undefined, quantity: Number(r.quantity) > 0 ? Number(r.quantity) : undefined, optional: r.optional,
+        // Renamed rows are matched again by their new name.
+        ...(r.productId && r.name.trim() === r.linkedAs ? { productId: r.productId } : {}),
+      })),
     };
-    const saved = await run(() => (editing ? call<Recipe>('PUT', `/${editing}`, body) : call<Recipe>('POST', '/', body)), 'Saved');
+    const saved = await run(() => (editing ? call<Recipe>('PUT', `/${encodeURIComponent(editing!)}`, body) : call<Recipe>('POST', '/', body)), 'Saved');
     if (saved) navigate(`/m/recipes/${saved.id}`, { replace: true });
   };
   return (

@@ -7,6 +7,8 @@
 - Saved recipes: what's missing, and taking ingredients out of stock after cooking once you confirm.
 - Optional MQTT feed, using the Mosquitto add-on automatically.
 - AI tools for scenarios and recipes.
+- Changes made at the same moment (two automations, a double tap) no longer lose one another.
+- Safer AI connections: no changes from other websites, limits on sign-in requests, and tools that take things away are marked so assistants ask first.
 
 ## 0.3.0
 

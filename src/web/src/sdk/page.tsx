@@ -1,24 +1,13 @@
 /** Helpers for module pages: URL parameters, and print page set-up. */
 import { createContext, useContext, useEffect } from 'react';
 
+export { matchPath } from './paths';
+
 export const ModuleParamsContext = createContext<Record<string, string>>({});
 
 /** Parameters from a page path like "/:id/print". */
 export function useModuleParams(): Record<string, string> {
   return useContext(ModuleParamsContext);
-}
-
-/** Matches "/12/print" against "/:id/print". */
-export function matchPath(pattern: string, path: string): Record<string, string> | null {
-  const a = pattern.split('/').filter(Boolean);
-  const b = path.split('/').filter(Boolean);
-  if (a.length !== b.length) return null;
-  const params: Record<string, string> = {};
-  for (let i = 0; i < a.length; i++) {
-    if (a[i]!.startsWith(':')) params[a[i]!.slice(1)] = decodeURIComponent(b[i]!);
-    else if (a[i] !== b[i]) return null;
-  }
-  return params;
 }
 
 /**

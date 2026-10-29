@@ -13,7 +13,7 @@ interface Detail { scenario: Scenario; counts: Counts; groups: Group[]; missing:
 const ICONS = ['zap', 'gift', 'drop', 'shield', 'paw', 'layers'];
 const call = <T,>(method: string, path: string, body?: unknown) => api.modules.call<T>('scenarios', method, path, body);
 const useList = () => useQuery({ queryKey: ['scenarios'], queryFn: () => call<Array<Scenario & { counts: Counts }>>('GET', '/') });
-const useDetail = (id: string) => useQuery({ queryKey: ['scenarios', id], queryFn: () => call<Detail>('GET', `/${id}`) });
+const useDetail = (id: string) => useQuery({ queryKey: ['scenarios', id], queryFn: () => call<Detail>('GET', `/${encodeURIComponent(id)}`) });
 const countText = (c: Counts) => [`${c.items} item${c.items === 1 ? '' : 's'}`, c.low ? `${c.low} low` : null, c.wish ? `${c.wish} wished for` : null].filter(Boolean).join(' · ');
 
 function ScenarioList() {
