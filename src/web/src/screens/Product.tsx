@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { ProductDetail, StockEntryView } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
@@ -15,7 +15,9 @@ export function ProductPage() {
   const { id = '' } = useParams();
   const desktop = useIsDesktop();
   const { data: p, error, isLoading } = useQuery({ queryKey: ['product', id], queryFn: () => api.products.get(id) });
-  const [sheet, setSheet] = useState<null | 'add' | 'use' | 'move' | 'expect'>(null);
+  // "?add=elsewhere" (from the stock list) opens straight on adding at another place.
+  const [params] = useSearchParams();
+  const [sheet, setSheet] = useState<null | 'add' | 'elsewhere' | 'use' | 'move' | 'expect'>(params.get('add') === 'elsewhere' ? 'elsewhere' : null);
   const { run, busy } = useAction();
   const panels = useEnabledWebModules().flatMap((m) => m.productPanels ?? []);
   const photoInput = useRef<HTMLInputElement>(null);
@@ -87,7 +89,7 @@ export function ProductPage() {
           </div>
 
           <div className="section">
-            <div className="label">Where it is</div>
+            <div className="label">Where it is {!renewal && <button type="button" className="link" onClick={() => setSheet('elsewhere')}>Add somewhere else</button>}</div>
             {inStock.length === 0 && expected.length === 0 ? <p className="muted small">None in the house.</p> : (
               <div className="list">
                 {inStock.map((e) => <EntryRow key={e.id} p={p} e={e} />)}
@@ -151,6 +153,7 @@ export function ProductPage() {
       </div>
       )}
       {sheet === 'add' && <AddSheet p={p} onClose={() => setSheet(null)} />}
+      {sheet === 'elsewhere' && <AddSheet p={p} elsewhere onClose={() => setSheet(null)} />}
       {sheet === 'use' && <UseSheet p={p} onClose={() => setSheet(null)} />}
       {sheet === 'move' && <MoveSheet p={p} onClose={() => setSheet(null)} />}
       {sheet === 'expect' && <ExpectSheet p={p} onClose={() => setSheet(null)} />}
@@ -226,22 +229,24 @@ function Variants({ p }: { p: ProductDetail }) {
   );
 }
 
-function AddSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
+/** Add stock: to its usual place, or (elsewhere) somewhere else picked by the person. */
+function AddSheet({ p, onClose, elsewhere = false }: { p: ProductDetail; onClose: () => void; elsewhere?: boolean }) {
   const places = usePlaces();
   const { run, busy } = useAction();
   const [n, setN] = useState(1);
-  const [placeId, setPlaceId] = useState<string | null>(p.product.defaultPlaceId ?? p.places[0]?.id ?? null);
+  const [placeId, setPlaceId] = useState<string | null>(elsewhere ? null : (p.product.defaultPlaceId ?? p.places[0]?.id ?? null));
   const [expiresOn, setExpiresOn] = useState('');
   const [variantId, setVariantId] = useState<string>('');
   return (
-    <Sheet title={`Add ${p.product.name.toLowerCase()}`} onClose={onClose}>
+    <Sheet title={elsewhere ? `Add ${p.product.name.toLowerCase()} somewhere else` : `Add ${p.product.name.toLowerCase()}`} onClose={onClose}>
+      {elsewhere && <p className="small muted">For a second place it's kept, like spare rolls in the bathroom as well as the utility room. To say something's been moved, use Move instead.</p>}
+      <label className="field"><span>Where</span><PlaceSelect value={placeId} onChange={setPlaceId} places={places} allowNone={!elsewhere} label="Where" />{elsewhere && !placeId && <small>Pick the place.</small>}</label>
       <div className="row" style={{ justifyContent: 'space-between' }}><b>How many {p.product.unit === 'each' ? '' : `(${p.product.unit})`}</b><Stepper value={n} onChange={setN} min={0.1} label="quantity" /></div>
-      <label className="field"><span>Where</span><PlaceSelect value={placeId} onChange={setPlaceId} places={places} /></label>
       <label className="field"><span>Expires (optional)</span><input className="input" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} /><small>{p.product.shelfLifeDays ? `Leave blank to use the ${p.product.shelfLifeDays}-day shelf life.` : 'Leave blank for no expiry.'}</small></label>
       {p.variants.length > 0 && (
         <label className="field"><span>Brand</span><select className="input" value={variantId} onChange={(e) => setVariantId(e.target.value)}><option value="">Not saying</option>{p.variants.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
       )}
-      <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.add({ productId: p.product.id, quantity: n, placeId, expiresOn: expiresOn || undefined, variantId: variantId || null }), (r) => `Added ${num(n)} · ${stockText(r)}`).then((r) => r && onClose())}>
+      <button type="button" className="btn primary block" disabled={busy || n <= 0 || (elsewhere && !placeId)} onClick={() => run(() => api.stock.add({ productId: p.product.id, quantity: n, placeId, expiresOn: expiresOn || undefined, variantId: variantId || null }), (r) => `Added ${num(n)}${placeId ? ` to ${places.find((x) => x.id === placeId)?.name ?? 'there'}` : ''} · ${stockText(r)}`).then((r) => r && onClose())}>
         Add {qty(n, p.product.unit)}
       </button>
     </Sheet>

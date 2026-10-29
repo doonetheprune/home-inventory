@@ -162,3 +162,51 @@ test('cooks a saved recipe after confirming what comes out of stock', async ({ p
   await expect(page.locator('.toast')).toContainText('out of stock');
   await expect(page.getByText(/Cooked \d+ time/)).toBeVisible();
 });
+
+/** The id of an example item, for going straight to its page. */
+async function productId(page: Page, name: string): Promise<string> {
+  return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
+}
+
+test('stock opens on the types of thing, and each type lists its items', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/#/stock');
+  await page.locator('.type-card', { hasText: 'Food' }).click();
+  await expect(page.getByRole('heading', { name: 'Food' })).toBeVisible();
+  await expect(page.getByText('Baby spinach').first()).toBeVisible();
+  await page.getByRole('tab', { name: /Household/ }).click();
+  await expect(page.getByRole('heading', { name: 'Household' })).toBeVisible();
+  await expect(page.getByText('Toilet roll').first()).toBeVisible();
+});
+
+test('adds stock at another place, and says from home that something has moved', async ({ page, isMobile }) => {
+  // Phone and desktop share one server, so each run uses its own places.
+  const pick = isMobile ? 1 : 3;
+  await signIn(page);
+  await page.goto(`/#/products/${await productId(page, 'Baby spinach')}`);
+  await page.getByRole('button', { name: 'Add somewhere else' }).click();
+  await page.getByLabel('Where', { exact: true }).selectOption({ index: pick + 1 });
+  await page.getByRole('button', { name: /^Add 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('Added 1 to');
+
+  await page.goto('/#/');
+  await page.getByRole('button', { name: "Something's moved" }).first().click();
+  await page.getByPlaceholder("What's moved? e.g. drill").fill('torch');
+  await page.locator('.sheet .item', { hasText: 'Head torch' }).click();
+  await page.getByLabel('Where it is now').selectOption({ index: pick });
+  await page.getByRole('button', { name: "It's there for now" }).click();
+  await expect(page.locator('.toast')).toContainText('now in');
+});
+
+test('shows the usual price per 100 g or per kg, and checks a shelf price', async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/#/products/${await productId(page, 'Baby spinach')}`);
+  await page.getByLabel('Show the price per').selectOption('100g');
+  await expect(page.getByText('£0.55', { exact: true })).toBeVisible();
+  await page.getByLabel('How much is in the pack').fill('1');
+  await page.getByLabel('Pack size unit').selectOption('kg');
+  await page.getByPlaceholder('2.50').fill('4.40');
+  await page.getByRole('button', { name: 'Check the price' }).click();
+  await expect(page.locator('.verdict')).toContainText('Cheaper than usual');
+  await expect(page.locator('.verdict')).toContainText('£0.44 per 100 g');
+});

@@ -6,7 +6,7 @@ Choices made with the user that aren't in the original brief. Newest last within
 
 - **Name:** the project and add-on are called **Larder**.
 - **Look:** its own modern style, not Home Assistant's. Deep cobalt blue accent, cool neutral greys, light and dark themes.
-- **Home screen:** a dashboard with a large Scan button, Add by name and Put away; a "Going shopping?" card that suggests the shop with the most items on the list; then use soon, running low, away from home and deliveries on the way.
+- **Home screen:** a dashboard with a large Scan button, Add by name and Put away; a "Going shopping?" card with every shop and how much to buy there (it first suggested one shop; see "After the owner tried it"); then use soon, running low, away from home and deliveries on the way.
 - **"Any shop" items:** each shop has a list of categories it sells (e.g. Tesco: groceries and household; Toolstation: hardware and tools). An item with no preferred shop only appears on the lists of shops that sell its category.
 - **Scanning:** always starts in Add mode. Use, move, put away and look up are picked before scanning.
 - **Wording:** the app says **Places**, not Locations.
@@ -15,6 +15,16 @@ Choices made with the user that aren't in the original brief. Newest last within
 - **Search keys:** Enter opens the highlighted result. ↑ and ↓ count up or down on a stock result, then Enter adds or uses that many. Tab moves between results. Esc cancels a count, then closes.
 - **Search scope:** search covers everything, with results in sections: stock, shopping lists, places, scenarios, wish list, shops and saved recipes.
 - **Out of place:** an item has a usual place and, optionally, a place it is in right now (usually in the Garage, now in the Shed). The app calls these items **Out of place**, not "away from home".
+
+## After the owner tried it
+
+Changes the owner asked for after trying the example household.
+
+- **Going shopping:** every shop gets the same tile, with how many to buy there and its name, in the order set under Shops. No shop is singled out (the headline no longer names one either).
+- **Stock by type:** Stock opens on a card per type of thing (Food, Household, Tools & DIY…, from the categories) with how many items and what needs attention; "Everything" is still a card. A type's list is grouped by place, with tabs to switch type and the status filters (low, use soon…) as their own row.
+- **Adding at another place:** "Add somewhere else" on an item's "Where it is", and from the stock pane on desktop. It asks for the place rather than assuming the usual one.
+- **Something's moved, from Home:** pick the item and where it is now; it shows as out of place until it's put back (the same as the `move_item` tool with `permanent: false`).
+- **Prices by weight:** the usual price can be shown per item, per 100 g or per kg (per 100 ml or per litre for liquids), chosen on the price card. Things counted in bags or tins need their size once ("1 bag = 200 g") to be priced by weight. Pack checks take a size and unit, so a shelf label like "£3.50/kg" can be compared. Assistants get `convert_price` and `set_item_size`, and `check_price` and `set_usual_price` take a unit.
 
 ## Architecture (agreed before Phase 1)
 

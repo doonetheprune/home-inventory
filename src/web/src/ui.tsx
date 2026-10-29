@@ -225,6 +225,7 @@ export function PlaceSelect({ value, onChange, places, allowNone = true, label =
   return (
     <select id={id} className="input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
       {allowNone && <option value="">No place</option>}
+      {!allowNone && !value && <option value="" disabled>Pick a place…</option>}
       {places.map((p) => <option key={p.id} value={p.id}>{p.path}{p.code ? ` (${p.code})` : ''}</option>)}
     </select>
   );

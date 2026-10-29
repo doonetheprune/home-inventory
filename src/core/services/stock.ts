@@ -248,7 +248,13 @@ export function createStockService(ctx: CoreContext) {
         .filter((e) => (input.mode === 'permanent' ? e.placeId !== input.toPlaceId || !!e.currentPlaceId : where(e) !== input.toPlaceId))
         .sort(useOrder);
       const available = roundQty(movable.reduce((n, e) => n + e.quantity, 0));
-      if (!available) throw new ValidationError(`There's no ${t.product.name.toLowerCase()} to move${input.fromPlaceId ? ' from there' : ''}.`);
+      if (!available) {
+        // There is some, but it's all where it's going already.
+        const inStock = work.some((e) => e.status === 'in_stock' && e.quantity > 0 && (!input.fromPlaceId || where(e) === input.fromPlaceId));
+        const place = inStock ? await ctx.storage.places.get(input.toPlaceId) : null;
+        if (place) throw new ValidationError(`${t.product.name} is already in ${place.name}.`);
+        throw new ValidationError(`There's no ${t.product.name.toLowerCase()} to move${input.fromPlaceId ? ' from there' : ''}.`);
+      }
       const quantity = input.quantity ?? available;
       if (quantity > available + EPS) throw new ValidationError(`Only ${plural(available, t.product.unit)} can be moved.`);
       let left = quantity;
