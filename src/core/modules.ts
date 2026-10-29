@@ -14,6 +14,7 @@ import type { CoreContext } from './services/context';
 import type { LookupProvider } from './services/lookup';
 import type { SearchSection } from './services/search';
 import type { ActionDefinition, SensorDefinition } from './services/automation';
+import type { AssistantTool } from './services/assistant';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -63,6 +64,11 @@ export interface ModuleContext {
   addSensor(sensor: SensorDefinition): void;
   /** An action for Home Assistant and Node-RED. Same id rule as sensors. */
   addAction<I extends z.ZodObject>(action: ActionDefinition<I>): void;
+  /**
+   * A tool for AI assistants (MCP). Name it plainly ("check_price"): names are shared
+   * with the core and other modules and must be unique. Hidden while the module is off.
+   */
+  addTool<I extends z.ZodObject>(tool: AssistantTool<I>): void;
   /**
    * Publish an event for the web app, Home Assistant and other modules. The type
    * must start with this module's id, e.g. "batteries.low". Dropped while the module is off.
@@ -211,6 +217,9 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           },
           addAction(action) {
             core.automation.addAction(prefixed(def.id, 'Action', action), def.id, () => enabled(def.id));
+          },
+          addTool(tool) {
+            core.assistant.addTool(tool, def.id, () => enabled(def.id));
           },
           publish(type, data) {
             if (!type.startsWith(`${def.id}.`)) throw new Error(`Event "${type}" from module ${def.id} must start with "${def.id}.".`);

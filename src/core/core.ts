@@ -16,6 +16,7 @@ import { createStockService } from './services/stock';
 import { createAutomation, type Automation } from './services/automation';
 import { createResolver, type Resolver } from './services/resolve';
 import { createNfcService } from './services/nfc';
+import { createAssistant, type Assistant } from './services/assistant';
 import { createModuleRegistry, type ModuleOptions, type ModuleRegistry } from './modules';
 import type { EventBus, FileStore, LarderEvent, Storage } from './ports';
 import type { Movement } from './model';
@@ -37,6 +38,8 @@ export interface CoreApi {
   automation: Automation;
   /** NFC tag scans and linking. */
   nfc: ReturnType<typeof createNfcService>;
+  /** Tools for AI assistants, served over MCP. */
+  assistant: Assistant;
   settings: {
     get(): Promise<HouseholdSettings>;
     update(patch: Partial<HouseholdSettings>): Promise<HouseholdSettings>;
@@ -67,6 +70,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const lookup = createLookupService(ctx, products, (id) => modules.isProviderEnabled(id));
   const home = createHomeService(ctx, stock, shopping);
   const resolve = createResolver(ctx, search, lookup);
+  const automation = createAutomation({ ctx, products, stock, shopping, resolve });
 
   const core: CoreApi = {
     categories,
@@ -79,8 +83,9 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     lookup,
     home,
     resolve,
-    automation: createAutomation({ ctx, products, stock, shopping, resolve }),
+    automation,
     nfc: createNfcService(ctx, products),
+    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, automation, resolve }),
     settings: {
       get: () => ctx.household(),
       async update(patch) {

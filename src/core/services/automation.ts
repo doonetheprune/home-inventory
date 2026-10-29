@@ -325,6 +325,11 @@ export function createAutomation(deps: {
       return out;
     },
 
+    /** An action's definition (with its zod input), for reuse by AI assistant tools. */
+    definition(id: string): ActionDefinition | undefined {
+      return actions.find((a) => a.def.id === id && a.enabled())?.def;
+    },
+
     async run(id: string, input: unknown, caller: { userId: string | null } = { userId: null }): Promise<ActionResult> {
       const a = actions.find((x) => x.def.id === id && x.enabled());
       if (!a) throw new LarderError(`There's no action called ${id}. It may belong to a module that's switched off.`, 404, 'not_found');

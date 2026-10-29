@@ -10,7 +10,9 @@ integration talks to it only through its REST API with an access token:
 - events: Larder's changes fired as larder_stock_changed, larder_stock_low,
   larder_stock_expiring, larder_nfc_scanned, larder_batteries_low…;
 - NFC: tags scanned with the Home Assistant app are sent to Larder;
-- batteries: devices with batteries are sent to Larder, and low ones reported.
+- batteries: devices with batteries are sent to Larder, and low ones reported;
+- MCP: Larder's tools for AI assistants at /api/larder/mcp, so they work
+  wherever Home Assistant is reachable (Nabu Casa included).
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from .const import (
 )
 from .coordinator import LarderCoordinator
 from .events import listen
+from .mcp import LarderMcpView
 from .nfc import async_track_tags
 from .services import async_reset_actions, async_setup_actions, async_update_actions
 
@@ -64,8 +67,9 @@ type LarderConfigEntry = ConfigEntry[LarderRuntime]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register Larder's actions, so automations can use them even before Larder is reachable."""
+    """Register Larder's actions (so automations can use them even before Larder is reachable) and the MCP pass-through."""
     await async_setup_actions(hass)
+    hass.http.register_view(LarderMcpView(hass))
     return True
 
 

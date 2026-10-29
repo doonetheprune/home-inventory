@@ -22,6 +22,7 @@ import { registerStockRoutes } from './routes/stock';
 import { registerMiscRoutes } from './routes/misc';
 import { registerModuleRoutes } from './routes/modules';
 import { registerAutomationRoutes } from './routes/automation';
+import { MCP_PATH, registerMcp } from './mcp';
 
 export type ZodApp = FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse, FastifyBaseLogger, ZodTypeProvider>;
 
@@ -103,10 +104,15 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     // %-escapes, so "/%61pi/v1/…" reaches /api/v1/… and must still be checked.
     const raw = request.url.split('?')[0]!;
     const path = request.routeOptions.url ?? safeDecode(raw);
-    if (!path.startsWith('/api/') && !safeDecode(raw).toLowerCase().startsWith('/api/')) return;
+    const decoded = safeDecode(raw).toLowerCase();
+    const guarded = (p: string) => p.startsWith('/api/') || p === MCP_PATH || p.startsWith(`${MCP_PATH}/`);
+    if (!guarded(path) && !guarded(decoded)) return;
     request.user = await auth.identify(request);
     if (PUBLIC.has(path) || path.startsWith('/api/docs')) return;
-    if (!request.user) throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
+    if (!request.user) {
+      if (path === MCP_PATH) throw new LarderError('Send a Larder access token: Authorization: Bearer lrd_… (make one in Larder under Settings → Access tokens).', 401, 'unauthorised');
+      throw new LarderError('Sign in to Larder first, or send an access token.', 401, 'unauthorised');
+    }
     // Cookie sessions must come from the web app (blocks cross-site form posts).
     if ((request.user.via === 'session' || request.user.via === 'ingress') && request.method !== 'GET' && request.method !== 'HEAD' && !request.headers['x-larder-client']) {
       throw new LarderError('Requests signed in with a cookie need the X-Larder-Client header.', 403, 'forbidden');
@@ -142,6 +148,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
     },
     { prefix: '/api/v1' },
   );
+
+  registerMcp(app, { core, config });
 
   if (existsSync(config.webDir)) {
     await app.register(staticFiles, {

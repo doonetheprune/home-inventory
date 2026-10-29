@@ -36,17 +36,17 @@ class LarderClient:
     """Talks to one Larder over HTTP with an access token."""
 
     def __init__(self, session: aiohttp.ClientSession, url: str, token: str) -> None:
-        self._session = session
+        self.session = session
         self.url = url.rstrip("/")
-        self._token = token
+        self.token = token
 
     @property
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
+        return {"Authorization": f"Bearer {self.token}", "Accept": "application/json"}
 
     async def _request(self, method: str, path: str, body: Any = None, timeout: float = 30) -> Any:
         try:
-            async with self._session.request(
+            async with self.session.request(
                 method,
                 f"{self.url}/api{path}",
                 json=body,
@@ -107,7 +107,7 @@ class LarderClient:
     async def events(self) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         """Larder's live events (Server-Sent Events). Ends when the connection drops."""
         try:
-            async with self._session.get(
+            async with self.session.get(
                 f"{self.url}/api/v1/events",
                 headers={**self._headers, "Accept": "text/event-stream"},
                 # Larder sends a ping every 25 seconds, so a minute of silence means the link is gone.
