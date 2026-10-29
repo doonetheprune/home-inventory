@@ -12,6 +12,7 @@ import scenarios from './scenarios';
 import printing from './printing';
 import recipes from './recipes';
 import mqttModule from './mqtt';
+import shopLocations from './shop-locations';
 import template from './_template';
 
-export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, batteries, scenarios, printing, recipes, mqttModule, template];
+export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, batteries, scenarios, printing, recipes, mqttModule, shopLocations, template];

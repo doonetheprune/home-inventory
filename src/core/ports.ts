@@ -192,3 +192,54 @@ export interface EventBus {
 export interface Clock {
   now(): Date;
 }
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * Home Assistant, when Larder can reach it: as an add-on through the
+ * Supervisor, or given Home Assistant's address and a token. Null
+ * otherwise, and features that need it offer YAML to paste instead.
+ */
+export interface HomeAssistantPort {
+  /** Home's location, as set in Home Assistant. */
+  home(): Promise<{ latitude: number; longitude: number; name: string }>;
+  /** People, and the phones (mobile app notify actions) they can be told on. */
+  people(): Promise<{ people: HomeAssistantPerson[]; phones: HomeAssistantPhone[] }>;
+  /** Creates each zone, or updates the one with its id (making a new one if it has gone). In the same order. */
+  saveZones(zones: HomeAssistantZone[]): Promise<Array<{ id: string; entityId: string }>>;
+  /**
+   * Creates or replaces an automation by its id, then waits for Home Assistant to load it.
+   * entityId is null when it saved the automation but didn't load it (automations.yaml isn't included).
+   */
+  saveAutomation(id: string, config: Record<string, unknown>): Promise<{ entityId: string | null }>;
+  /** Deletes zones Larder made, by id. Ones already gone are fine. */
+  removeZones(ids: string[]): Promise<void>;
+  /** Deletes an automation by its id. One already gone is fine. */
+  removeAutomation(id: string): Promise<void>;
+  /** Where Larder opens inside Home Assistant (the add-on's panel), for links in notifications. */
+  appPath(): Promise<string | null>;
+}
+
+export interface HomeAssistantPerson {
+  entityId: string;
+  name: string;
+  /** Notify actions for this person's own phones, e.g. "notify.mobile_app_shauns_phone". */
+  phones: string[];
+}
+
+export interface HomeAssistantPhone {
+  /** The notify action, e.g. "notify.mobile_app_shauns_phone". */
+  action: string;
+  name: string;
+}
+
+export interface HomeAssistantZone {
+  id?: string | null;
+  name: string;
+  latitude: number;
+  longitude: number;
+  /** Metres. */
+  radius: number;
+  icon?: string;
+}
+

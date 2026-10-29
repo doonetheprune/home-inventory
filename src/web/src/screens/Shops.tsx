@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useEnabledWebModules } from '../modules';
 import { Icon } from '../icons';
 import { Header, useAction, useCategories, useIsDesktop, useShops } from '../ui';
 
 export function Shops() {
   const desktop = useIsDesktop();
   const shops = useShops();
+  const panels = useEnabledWebModules().flatMap((m) => (m.shopPanels ?? []).map((P, i) => ({ key: `${m.id}-${i}`, P })));
   const categories = useCategories();
   const summary = useQuery({ queryKey: ['shopping'], queryFn: api.shopping.summary });
   const presets = useQuery({ queryKey: ['shops', 'presets'], queryFn: api.shops.presets, staleTime: Infinity });
@@ -37,6 +39,7 @@ export function Shops() {
                   return <button key={c.id} type="button" className={`chip sm ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => run(() => api.shops.update(s.id, { sells: on ? s.sells.filter((x) => x !== c.id) : [...s.sells, c.id] }), `${s.name} ${on ? 'no longer sells' : 'now sells'} ${c.name}`)}>{c.name}</button>;
                 })}
               </div>
+              {panels.map(({ key, P }) => <P key={key} shop={s} />)}
             </div>
           ))}
         </div>

@@ -3,7 +3,7 @@
  * `defineWebModule({...})` and may import only from here, React and its own files.
  */
 import type { ComponentType } from 'react';
-import type { ProductDetail, ShoppingList } from '@larder/core';
+import type { ProductDetail, Shop, ShoppingList } from '@larder/core';
 
 export interface WebModule {
   /** Must match the server module's id; the UI only shows while the module is on. */
@@ -12,6 +12,8 @@ export interface WebModule {
   productPanels?: Array<ComponentType<{ product: ProductDetail }>>;
   /** Panels shown beside a shop's shopping list. */
   shoppingPanels?: Array<ComponentType<{ list: ShoppingList }>>;
+  /** Panels inside each shop's card on the Shops page. */
+  shopPanels?: Array<ComponentType<{ shop: Shop }>>;
   /**
    * Whole pages at /m/<module id><path>. Paths can have parameters ("/:id", read with
    * useModuleParams). Pages without parameters (and not `hidden`) are linked from More and
@@ -33,4 +35,4 @@ export { Header, Empty } from '../ui';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';
 export { Link, useNavigate } from 'react-router-dom';
-export type { ProductDetail, ProductSummary, ShoppingList, ShoppingItem, HouseholdSettings } from '@larder/core';
+export type { ProductDetail, ProductSummary, Shop, ShoppingList, ShoppingItem, HouseholdSettings } from '@larder/core';

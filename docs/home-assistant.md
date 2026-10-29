@@ -5,6 +5,8 @@ Two parts, used together or separately:
 - **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data.
 - **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags and battery linking. The add-on installs and updates it for you, so you don't need HACS.
 
+Larder can also make zones for the shops you use, and an automation that sends a shop's list to your phone when you get there ([Shop arrival alerts](#shop-arrival-alerts)).
+
 If you run Home Assistant Container (no add-ons), run Larder with Docker ([running.md](running.md)) and add the integration by hand.
 
 ## Install the add-on
@@ -155,6 +157,20 @@ actions:
       message: "{{ trigger.event.data.message }}"
 ```
 
+## Shop arrival alerts
+
+When someone gets to a shop you use, their phone shows what to get there: "7 things to get at Aldi: Bananas, Free-range eggs…". It uses zones and an ordinary automation, both of which Larder can make for you.
+
+1. In Larder, **Shops** → **Find nearby** on a shop. Larder searches OpenStreetMap around Home Assistant's home location (or a postcode you give) and lists that shop's branches, nearest first. Tick the ones you use and **Save**.
+2. **Add to Home Assistant as zones.** Each branch becomes a zone ("Aldi, Wilmslow Road"), as if made under Settings → Areas, labels & zones. Change a zone's size on Larder's **Shop locations** page (150 m to start with; bigger for big car parks).
+3. On **Shop locations**, under **Arrival alerts**, choose each person's phone (phones with the Home Assistant app), then **Create the automation in Home Assistant**. It's saved as "Larder: shopping list when you reach a shop". Larder keeps it up to date when you add branches or change alerts, so change it in Larder rather than in Home Assistant.
+
+By default it only alerts when there's something on that shop's list. Tapping the alert opens Larder.
+
+**As the add-on**, Larder makes zones and the automation through the Supervisor, with no setup. **Running elsewhere**, give Larder an admin's long-lived access token (your profile in Home Assistant → Security) in `LARDER_HA_URL` and `LARDER_HA_TOKEN` ([running.md](running.md#settings)). Without them, or if you'd rather do it yourself, the **Shop locations** page has both as YAML: the zones go in `configuration.yaml`, and the automation can be pasted into a new automation (⋮ → Edit in YAML), with your person and phone in place of `person.your_name` and `notify.mobile_app_your_phone`.
+
+Only the shop name and home rounded to about 1 km are sent to OpenStreetMap; branches are matched to the exact home in Larder.
+
 ## AI assistants through Home Assistant
 
 The integration passes Larder's MCP server through at `https://<home-assistant>/api/larder/mcp`, signed in with a Home Assistant long-lived access token (your profile → Security). That works wherever Home Assistant is reachable, Nabu Casa included, for clients that can send a header (Claude Code, Gemini CLI, Open WebUI, LM Studio, Claude Desktop with `mcp-remote`). See [mcp.md](mcp.md).
@@ -165,6 +181,9 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **"Larder no longer accepts the access token":** the token was revoked. Make a new one in Larder and enter it when Home Assistant asks.
 - **An action says an item "could be" several things:** use a fuller name, or the item's id from its page in Larder.
 - **Calling an action through Home Assistant's REST API (`/api/services/larder/...`) answers 500 when the action fails**, e.g. for an unknown item. That's how Home Assistant's REST API reports every action error; Larder's message is in the Home Assistant log. The UI, automations, scripts and Node-RED show the message itself.
+- **"Home Assistant saved the automation but hasn't loaded it":** `configuration.yaml` is missing the line `automation: !include automations.yaml` (new installs have it). Add it and restart Home Assistant.
+- **"That needs an admin's access token":** Larder runs outside Home Assistant with a token from a user who isn't an admin. Make one as an admin, or use the YAML.
+- **No arrival alert:** check the person's phone shows them at the shop (their state is the zone's name), the companion app can send notifications, and the shop's list has something on it (or turn off "Only when there's something to get there").
 - **No `larder_batteries_low` events:** check the battery product is linked to the device under **Used in**, and that the device has a battery sensor in Home Assistant.
 
 ## For developers

@@ -58,11 +58,13 @@ Set `LARDER_BASE_URL` to the https address so QR labels point to it.
 | `LARDER_AUTH` | `local` | `local`: household accounts and access tokens. `none`: no login, for trusted networks only. `homeassistant`: set by the add-on (Home Assistant users through ingress, tokens otherwise) |
 | `LARDER_STORAGE` | `sqlite` | `sqlite`, or `memory` (lost on restart; for testing) |
 | `LARDER_BASE_URL` | none | Your public address, used in QR labels and links |
+| `LARDER_HA_URL` | none | Home Assistant's address (e.g. `http://homeassistant.local:8123`), so Larder can make shop zones and the arrival automation there. Not needed for the add-on |
+| `LARDER_HA_TOKEN` | none | A long-lived access token from a Home Assistant admin, with `LARDER_HA_URL` |
 | `LARDER_DEMO` | `false` | Load the example household into an empty Larder on start |
 | `LARDER_BACKUP_EVERY_HOURS` | `24` | Automatic backups (0 turns them off) |
 | `LARDER_BACKUPS_TO_KEEP` | `7` | How many automatic backups to keep |
 | `LARDER_MODULES_DISABLED` | none | Comma-separated module ids that are always off |
-| `LARDER_MODULE_<ID>_<KEY>` | | Settings for a module, e.g. `LARDER_MODULE_LOOKUP_OPENFOODFACTS_URL`, or for MQTT: `LARDER_MODULE_MQTT_URL` (`mqtt://host:1883`), `_USERNAME`, `_PASSWORD`, `_TOPIC` |
+| `LARDER_MODULE_<ID>_<KEY>` | | Settings for a module, e.g. `LARDER_MODULE_LOOKUP_OPENFOODFACTS_URL`, or for MQTT: `LARDER_MODULE_MQTT_URL` (`mqtt://host:1883`), `_USERNAME`, `_PASSWORD`, `_TOPIC`; shop locations: `LARDER_MODULE_SHOP_LOCATIONS_OVERPASS_URL`, `_NOMINATIM_URL` |
 | `LARDER_LOG_LEVEL` | `info` | `debug` also logs every request |
 | `LARDER_TRUST_PROXY` | off | Reverse proxies to believe about `X-Forwarded-*`: addresses or ranges (comma-separated), a number of hops, or `true` for any |
 

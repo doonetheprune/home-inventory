@@ -1,0 +1,22 @@
+# Shop locations
+
+Where each shop's branches are, as zones in Home Assistant, and an automation there that sends a shop's list to your phone when you get to one of its branches.
+
+- **Finding branches:** on the Shops page, **Find nearby** on a shop searches OpenStreetMap (Overpass) for shops and pharmacies whose name or brand matches, around home, nearest first. Names match with or without an apostrophe or "&" ("Sainsburys", "M and S"), at the start of a word, plus a few UK aliases (M&S is Marks & Spencer). Tick the ones you use and save them.
+- **Where home is:** Home Assistant's home location, unless a postcode or town (looked up with Nominatim) or the device's location has been set here. Home is rounded to about 1 km before it's sent to Overpass, and the search reaches 1 km further to make up for it; exact distances are worked out in Larder. Map data © OpenStreetMap contributors (shown in the sheet).
+- **Zones:** **Add to Home Assistant as zones** makes a zone per branch (name like "Aldi, Wilmslow Road", 150 m unless changed, `mdi:cart`), the same as Settings → Areas, labels & zones → Zones. Doing it again updates the same zones; one deleted in Home Assistant is made again. Forgetting a branch, or removing its shop, deletes its zone.
+- **Arrival alerts:** choose a phone per person (people and phones come from Home Assistant: phones are companion apps' `notify.mobile_app_*` actions; someone with one phone gets it to start with). **Create the automation** saves automation `larder_shop_arrivals`: a zone trigger per person and branch, carrying the shop and phone; then `larder.shopping_list_for`, then (unless switched off) only if the list has something, a notification "7 things to get at Aldi: …". It opens Larder when tapped (add-on only) and replaces an older alert for the same shop. Once made, Larder saves it again whenever branches, shops' names or alerts change, and removes it if nobody is left to alert.
+- **YAML:** the page always offers the zones (a `zone:` list for configuration.yaml) and the automation (for the automation editor's "Edit in YAML"), for when Larder isn't connected to Home Assistant or someone would rather paste them in. Without anyone chosen, the automation uses `person.your_name` and `notify.mobile_app_your_phone` to change.
+- **Home Assistant connection:** `ctx.core.homeAssistant` (the `HomeAssistantPort`). The add-on reaches Home Assistant through the Supervisor, as an admin; elsewhere set `LARDER_HA_URL` and `LARDER_HA_TOKEN` (an admin's long-lived token). Without one, finding branches and the YAML still work. A token that isn't an admin's is reported as such.
+- **Data:** `branches` collection: `{ id, shopId, osmId, name, address, latitude, longitude, radius, zoneId, zoneEntityId, zoneCurrent }`. `settings` collection: `home` (`{ latitude, longitude, label, source }`), `alerts` (`{ people: [{ entityId, name, phone }], onlyWithItems, automationEntityId, savedAt }`) and `sent` (the automation last sent, so unrelated shop changes don't resave it).
+- **Routes** (under `/api/v1/modules/shop-locations`):
+  - `GET /status`: home, whether Home Assistant is reachable, and counts.
+  - `PUT /home` `{ query }` or `{ latitude, longitude, label? }`; `DELETE /home` goes back to Home Assistant's.
+  - `GET /nearby?shopId=&within=` (metres, default 5000): branches found, each with `saved`.
+  - `GET /branches?shopId=`; `POST /branches` `{ shopId, branches: [...] }` (a branch found again by its OpenStreetMap id is updated, not added twice); `PATCH /branches/:id` `{ name?, radius? }`; `DELETE /branches/:id`.
+  - `POST /zones` `{ shopId? }`: make or update zones (and the automation, once made).
+  - `GET /alerts`, `PUT /alerts` `{ people, onlyWithItems? }`; `POST /automation` (makes missing zones first); `DELETE /automation`.
+  - `GET /yaml`: `{ zones, automation, placeholders }`.
+- **Who:** anyone can find and save branches and copy the YAML. Changing or forgetting branches, making zones, and the alerts and automation are for household admins, because they change Home Assistant (with the Supervisor's rights, as the add-on).
+- **Settings:** `LARDER_MODULE_SHOP_LOCATIONS_OVERPASS_URL` and `_NOMINATIM_URL` to use other servers (your own Overpass, say).
+- **UI:** a line on each shop's card (its branches, **Find nearby**, **Add as zones**), the find sheet (which goes straight on to making zones once saved), and a **Shop locations** page (home, branches with their zone size, arrival alerts, YAML to copy).

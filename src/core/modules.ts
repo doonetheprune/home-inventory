@@ -36,6 +36,8 @@ export interface ModuleRoute {
   query?: z.ZodType;
   params?: z.ZodType;
   response?: z.ZodType;
+  /** Only household admins may call it, e.g. because it changes Home Assistant's set-up. */
+  admin?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(req: ModuleRequest<any, any, any>): Promise<unknown>;
 }
@@ -54,6 +56,8 @@ export interface ModuleContext {
   isEnabled(): boolean;
   /** Your own JSON documents, stored by whichever storage adapter is in use. */
   collection<T = Record<string, unknown>>(name: string): DocumentCollection<T>;
+  /** For web services (maps, lookups). Use it rather than the global fetch, so tests can stand in for the internet. */
+  fetch: typeof fetch;
   addLookupProvider(provider: LookupProvider): void;
   addSearchSection(section: SearchSection): void;
   addRoute(route: ModuleRoute): void;
@@ -218,6 +222,7 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           config: configFor(def.id),
           isEnabled: () => enabled(def.id),
           collection: <T>(name: string) => ctx.storage.documents<T>(`${def.id}:${name}`),
+          fetch: ctx.fetch,
           addLookupProvider(provider) {
             providerOwner.set(provider.id, def.id);
             core.lookup.registerProvider(provider);
