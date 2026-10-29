@@ -48,11 +48,14 @@ describe('MCP server', () => {
     }
     expect(tools.find((t) => t.name === 'search')?.annotations?.readOnlyHint).toBe(true);
     expect(tools.find((t) => t.name === 'add_stock')?.annotations?.readOnlyHint).toBe(false);
+    // Clients may skip asking before tools that only add; ones that take away or overwrite say so.
+    const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
+    expect(destructive).toEqual(['use_stock', 'move_item', 'mark_arrived', 'set_usual_price']);
   });
 
   it('adds, finds and uses stock by name, answering in plain text', async () => {
     let r: Any = await client.callTool({ name: 'add_stock', arguments: { item: 'loo rolls', quantity: 12, place: 'b1' } });
-    expect(text(r)).toBe('Toilet roll: added 12 rolls. 12 rolls in stock.');
+    expect(text(r)).toBe('Toilet roll: added 12 rolls to Bathroom cupboard. 12 rolls in stock.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'toilet roll' } });
     expect(text(r)).toContain('In stock: 12 rolls.');
     expect(text(r)).toContain('- 12 rolls in Bathroom cupboard');
@@ -85,6 +88,12 @@ describe('MCP server', () => {
     expect(r.isError).toBe(true);
     r = await client.callTool({ name: 'add_item', arguments: { name: 'Gravy', category: 'Sauces' } });
     expect(text(r)).toContain('The categories are: Food');
+    // A barcode that's taken fails before anything is made.
+    await client.callTool({ name: 'add_item', arguments: { name: 'Baked beans', barcode: '5000157024671' } });
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Spaghetti hoops', barcode: '5000157024671' } });
+    expect(text(r)).toBe('Barcode 5000157024671 already belongs to Baked beans.');
+    r = await client.callTool({ name: 'search', arguments: { query: 'spaghetti hoops' } });
+    expect(text(r)).not.toContain('Spaghetti hoops');
 
     // Order emails mention shop codes.
     r = await client.callTool({ name: 'add_expected', arguments: { item: '4088600214568', quantity: 4, source: 'Aldi order', eta: '2026-11-01' } });

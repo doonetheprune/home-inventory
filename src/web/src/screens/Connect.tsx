@@ -34,6 +34,7 @@ export function Connect() {
           <>
             <h2 style={{ fontSize: 20 }}>Connect {info.data.client}?</h2>
             <p className="muted small">It will be able to see what's in the house and change stock, the same as you can. It goes back to <b>{info.data.redirectHost}</b>.</p>
+            <p className="muted small">Only allow it if you started connecting from that assistant just now. Any app can call itself "{info.data.client}", so check the address.</p>
             <p className="muted small">You can disconnect it any time under Settings → Access tokens.</p>
             {error && <div className="error">{error}</div>}
             <div className="btnrow">

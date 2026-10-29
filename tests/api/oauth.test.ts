@@ -67,7 +67,7 @@ describe('OAuth for MCP connectors', () => {
     expect(tools.statusCode).toBe(200);
     expect(tools.json().result.tools.length).toBeGreaterThan(5);
     // It shows up under Settings → Access tokens, so it can be revoked.
-    expect((await call<Any>('GET', '/api/v1/auth/tokens')).body.map((t: Any) => t.name)).toContain('Claude (connected)');
+    expect((await call<Any>('GET', '/api/v1/auth/tokens')).body.map((t: Any) => t.name)).toContain('Claude (via claude.ai)');
 
     // A code works once.
     const again = await app.inject({ method: 'POST', url: '/oauth/token', payload: { grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: CALLBACK, client_id: clientId } });
@@ -87,7 +87,8 @@ describe('OAuth for MCP connectors', () => {
     const elsewhere = await app.inject({ method: 'GET', url: `/oauth/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://evil.example/cb', code_challenge: challenge, code_challenge_method: 'S256' })}` });
     expect(elsewhere.statusCode).toBe(400);
     const plain = await authorize(app, clientId, challenge, { code_challenge_method: 'plain' });
-    expect(new URL(plain.headers.location as string).searchParams.get('error')).toBe('invalid_request');
+    expect(plain.statusCode).toBe(400);
+    expect(plain.headers.location).toBeUndefined();
     expect((await app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: ['http://evil.example/cb'] } })).statusCode).toBe(400);
   });
 
@@ -112,3 +113,59 @@ async function connectedDeny(app: Any, clientId: string, challenge: string) {
   const r = await app.inject({ method: 'POST', url: `/api/v1/oauth/requests/${request}`, headers: { cookie, 'x-larder-client': 'web' }, payload: { approve: false } });
   return r.json().redirect as string;
 }
+
+describe('OAuth limits', () => {
+  it('shows errors itself rather than redirecting, so it can\'t be used to bounce people elsewhere', async () => {
+    const { app } = await connected();
+    const clientId = await register(app, 'https://evil.example/landing');
+    const qs = new URLSearchParams({ client_id: clientId, redirect_uri: 'https://evil.example/landing' });
+    const r = await app.inject({ method: 'GET', url: `/oauth/authorize?${qs}` });
+    expect(r.statusCode).toBe(400);
+    expect(r.headers.location).toBeUndefined();
+    expect(r.body).toContain('response_type=code');
+    // A short or made-up challenge isn't a SHA-256 hash.
+    const bad = await app.inject({ method: 'GET', url: `/oauth/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://evil.example/landing', code_challenge: 'x'.repeat(5000), code_challenge_method: 'S256' })}` });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('keeps a bounded number of sign-ins waiting per client', async () => {
+    const { app, call } = await connected();
+    const clientId = await register(app);
+    const requests: string[] = [];
+    for (let i = 0; i < 25; i++) {
+      const r = await authorize(app, clientId, pkce().challenge);
+      requests.push(decodeURIComponent((r.headers.location as string).split('request=')[1]!));
+    }
+    // The oldest are dropped; the newest still work.
+    expect((await call('GET', `/api/v1/oauth/requests/${requests[0]}`)).status).toBe(404);
+    expect((await call('GET', `/api/v1/oauth/requests/${requests[24]}`)).status).toBe(200);
+  });
+
+  it('limits registrations per address, and never forgets a client that is in use', async () => {
+    const { app, call } = await connected();
+    // A real client that has signed in.
+    const real = await register(app);
+    const { verifier, challenge } = pkce();
+    const request = decodeURIComponent(((await authorize(app, real, challenge)).headers.location as string).split('request=')[1]!);
+    const code = new URL((await call<Any>('POST', `/api/v1/oauth/requests/${request}`, { approve: true })).body.redirect).searchParams.get('code')!;
+    expect((await app.inject({ method: 'POST', url: '/oauth/token', payload: { grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: CALLBACK, client_id: real } })).statusCode).toBe(200);
+
+    const junk = (address: string) => app.inject({ method: 'POST', url: '/oauth/register', remoteAddress: address, payload: { client_name: 'Claude', redirect_uris: ['https://evil.example/cb'] } });
+    for (let i = 0; i < 30; i++) expect((await junk('10.0.0.1')).statusCode).toBe(201);
+    expect((await junk('10.0.0.1')).statusCode).toBe(429);
+    // Fill the list from many addresses: the junk makes room for itself, the real client stays.
+    for (let i = 0; i < 200; i++) await junk(`10.1.${Math.floor(i / 25)}.${i % 25}`);
+    const again = await authorize(app, real, pkce().challenge);
+    expect(again.statusCode).toBe(302);
+    // Huge registrations are refused.
+    const big = await app.inject({ method: 'POST', url: '/oauth/register', remoteAddress: '10.9.9.9', payload: { client_name: 'x'.repeat(100), redirect_uris: ['https://a.example/' + 'x'.repeat(20000)] } });
+    expect(big.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('answers 400, not 500, to a token request with the wrong types', async () => {
+    const { app } = await connected();
+    const r = await app.inject({ method: 'POST', url: '/oauth/token', payload: { grant_type: 'authorization_code', code: { a: 1 }, code_verifier: 'v', redirect_uri: CALLBACK, client_id: 'c' } });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().error).toBe('invalid_request');
+  });
+});
