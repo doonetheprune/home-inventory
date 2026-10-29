@@ -271,3 +271,90 @@ describe('home', () => {
     expect(d.expiringSoon[0]?.daysToExpiry).toBe(1);
   });
 });
+
+describe('lookup photos', () => {
+  const jpeg = (n: number) => new Uint8Array([0xff, 0xd8, 0xff, 0xe0, n, 1, 2, 3]);
+  const images: Record<string, () => Response> = {
+    'https://images.example/beans.jpg': () => new Response(jpeg(1)),
+    'https://images.example/beans-tesco.jpg': () => new Response(jpeg(2)),
+    'https://images.example/page.jpg': () => new Response('<html><script>alert(1)</script></html>'),
+    'https://images.example/huge.jpg': () => new Response(new Uint8Array(6 * 1024 * 1024).fill(0xff)),
+    'https://images.example/gone.jpg': () => new Response('Not found', { status: 404 }),
+  };
+  const byBarcode: Record<string, string> = {
+    '5000157024671': 'https://images.example/beans.jpg',
+    '5010251000001': 'https://images.example/beans-tesco.jpg',
+    '5000000000001': 'https://images.example/page.jpg',
+    '5000000000002': 'http://images.example/plain.jpg',
+    '5000000000003': 'https://images.example/huge.jpg',
+    '5000000000004': 'https://images.example/gone.jpg',
+    '5000000000005': 'https://images.example/offline.jpg',
+  };
+
+  async function kitchen() {
+    const fetched: string[] = [];
+    const fetch = (async (url: string) => {
+      fetched.push(url);
+      const serve = images[url];
+      if (!serve) throw new Error('getaddrinfo ENOTFOUND');
+      return serve();
+    }) as unknown as typeof globalThis.fetch;
+    const core = await makeCore({
+      fetch,
+      modules: [defineModule({
+        id: 'fake-lookup', name: 'Fake lookup', description: 'Test', version: '1.0.0',
+        setup(ctx) {
+          ctx.addLookupProvider({
+            id: 'fake', name: 'Fake Facts',
+            async lookup(barcode) {
+              return byBarcode[barcode] ? { name: `Item ${barcode}`, brand: null, quantityText: null, imageUrl: byBarcode[barcode]!, categories: [] } : null;
+            },
+          });
+        },
+      })],
+    });
+    /** Scan, then save it as a new item, like the Scan screen does. */
+    const scanAndSave = async (barcode: string, name: string) => {
+      await core.lookup.identify(barcode);
+      return core.lookup.remember({ barcode, create: { name } });
+    };
+    return { core, fetched, scanAndSave };
+  }
+
+  it('keeps its own copy of the photo a lookup found, as the item\'s photo', async () => {
+    const { core, scanAndSave } = await kitchen();
+    const { product, variant } = await scanAndSave('5000157024671', 'Baked beans');
+    const photo = product.product.photoFileIds[0]!;
+    expect(photo).toBeTruthy();
+    expect(variant.photoFileId).toBe(photo);
+    expect(variant.imageUrl).toBe('https://images.example/beans.jpg');
+    const file = await core.adapters.files.get(photo);
+    expect(file).toMatchObject({ contentType: 'image/jpeg', name: 'Item 5000157024671.jpeg' });
+    expect([...file!.data]).toEqual([...jpeg(1)]);
+
+    // Another brand of the same item gets its own photo; the item keeps the one it has.
+    await core.lookup.identify('5010251000001');
+    const tesco = await core.lookup.remember({ barcode: '5010251000001', productId: product.product.id });
+    expect(tesco.variant.photoFileId).not.toBe(photo);
+    expect(tesco.product.product.photoFileIds).toEqual([photo]);
+  });
+
+  it('saves the item anyway when the photo is not a photo, too big, not https, or unreachable', async () => {
+    const { core, fetched, scanAndSave } = await kitchen();
+    for (const barcode of ['5000000000001', '5000000000002', '5000000000003', '5000000000004', '5000000000005']) {
+      const { product, variant } = await scanAndSave(barcode, `Thing ${barcode}`);
+      expect(product.product.photoFileIds, barcode).toEqual([]);
+      expect(variant.photoFileId, barcode).toBeNull();
+      expect(variant.barcodes).toEqual([barcode]);
+    }
+    expect(fetched).not.toContain('http://images.example/plain.jpg');
+    expect((await core.lookup.identify('5000000000005')).kind).toBe('product');
+  });
+
+  it('never downloads an address the caller sends', async () => {
+    const { core, fetched } = await kitchen();
+    const { variant } = await core.lookup.remember({ barcode: '4088600214568', create: { name: 'Chopped tomatoes' }, imageUrl: 'https://169.254.169.254/latest/meta-data' });
+    expect(fetched).toEqual([]);
+    expect(variant.photoFileId).toBeNull();
+  });
+});

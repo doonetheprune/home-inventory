@@ -10,7 +10,12 @@ export interface TestCore extends CoreApi {
   events: CoreApi['events'] & { log: Array<{ type: string; data: Record<string, unknown> }> };
 }
 
-export async function makeCore(options: { modules?: ModuleDefinition[]; storage?: Storage; now?: string } = {}): Promise<TestCore> {
+/** Tests never reach the internet: lookup photo downloads fail unless a test passes its own fetch. */
+const offline = (async () => {
+  throw new Error('No network in tests');
+}) as unknown as typeof fetch;
+
+export async function makeCore(options: { modules?: ModuleDefinition[]; storage?: Storage; now?: string; fetch?: typeof fetch } = {}): Promise<TestCore> {
   let now = new Date(options.now ?? '2026-10-28T09:00:00.000Z');
   const bus = createMemoryEventBus((err) => {
     throw err;
@@ -18,7 +23,7 @@ export async function makeCore(options: { modules?: ModuleDefinition[]; storage?
   const log: Array<{ type: string; data: Record<string, unknown> }> = [];
   bus.subscribe((e) => log.push({ type: e.type, data: e.data }));
   const core = await createCore(
-    { storage: options.storage ?? createMemoryStorage(), files: createMemoryFileStore(), search: createMemorySearchIndex(), events: bus, clock: { now: () => now }, lookupTimeoutMs: 200 },
+    { storage: options.storage ?? createMemoryStorage(), files: createMemoryFileStore(), search: createMemorySearchIndex(), events: bus, clock: { now: () => now }, lookupTimeoutMs: 200, fetch: options.fetch ?? offline },
     { modules: options.modules ?? [] },
   );
   return Object.assign(core, {

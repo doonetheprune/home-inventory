@@ -7,6 +7,7 @@ import type { IdentifyResult, LookupRecord, LookupResult, ProductSummary, Varian
 import { Variant as VariantSchema } from '../model';
 import { Remember as RememberSchema, type Remember } from '../inputs';
 import { NotFoundError } from '../errors';
+import { photoType } from '../photos';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { loadWorld, placePath, summarise } from './world';
@@ -20,6 +21,33 @@ export interface LookupProvider {
 
 const MISS_TTL_DAYS = 7;
 const BARCODE = /^\d{6,14}$/;
+/** Lookup photos are small (Open Food Facts' are about 100 KB); anything much bigger isn't one. */
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/** The body, or null if it's bigger than `max` (stops reading as soon as it is). */
+async function readUpTo(res: Response, max: number): Promise<Uint8Array | null> {
+  if (Number(res.headers.get('content-length') ?? 0) > max || !res.body) return null;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
+}
 
 /** Codes inside Larder's own QR labels and links. */
 function parseLarderCode(code: string): { kind: 'place' | 'product'; id: string } | null {
@@ -35,6 +63,26 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
     const world = await loadWorld(ctx);
     const p = world.productById.get(productId);
     return p ? { kind: 'product', code, product: summarise(world, p), variant } : null;
+  }
+
+  /**
+   * Saves a lookup's photo in Larder's own files, so it's in backups, works
+   * offline and doesn't depend on the lookup site. Only https, only real
+   * photos (judged by their bytes), and never fatal: null if it can't.
+   */
+  async function savePhoto(url: string | null | undefined, label: string): Promise<string | null> {
+    if (!url) return null;
+    try {
+      if (new URL(url).protocol !== 'https:') return null;
+      const res = await ctx.fetch(url, { signal: AbortSignal.timeout(ctx.lookupTimeoutMs), headers: { accept: 'image/*' } });
+      if (!res.ok) return null;
+      const data = await readUpTo(res, MAX_PHOTO_BYTES);
+      const contentType = data && photoType(data);
+      if (!data || !contentType) return null;
+      return (await ctx.files.put({ data, contentType, name: `${label}.${contentType.split('/')[1]}` })).id;
+    } catch {
+      return null;
+    }
   }
 
   async function suggestionsFor(name: string): Promise<ProductSummary[]> {
@@ -144,12 +192,19 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
       if (existing && existing.productId === productId) variant = existing;
       else {
         const cached = await ctx.storage.lookups.get(input.barcode);
+        const name = input.variantName ?? ([cached?.brand, cached?.name].filter(Boolean).join(' ') || product.name);
+        // Only the photo a lookup provider found is downloaded, never an address sent by the caller
+        // (and not when the barcode is another item's, which addVariant refuses).
+        const photoFileId = existing ? null : await savePhoto(cached?.imageUrl, name);
         variant = await products.addVariant(productId, VariantSchema.omit({ id: true, productId: true, createdAt: true }).parse({
-          name: input.variantName ?? ([cached?.brand, cached?.name].filter(Boolean).join(' ') || product.name),
+          name,
           barcodes: [input.barcode],
           imageUrl: input.imageUrl ?? cached?.imageUrl ?? null,
+          photoFileId,
           source: input.source ?? cached?.provider ?? 'local',
         }));
+        // The first photo an item gets becomes its photo; one it already has stays.
+        if (photoFileId && !product.photoFileIds.length) await products.update(productId, { photoFileIds: [photoFileId] });
       }
       return { product: await products.summary(productId), variant };
     },

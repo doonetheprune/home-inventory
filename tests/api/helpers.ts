@@ -6,10 +6,12 @@ import { createMemoryEventBus } from '../../src/adapters/events-memory';
 import { buildApp } from '../../src/server/app';
 import { loadConfig } from '../../src/server/config';
 
-export async function makeApp(options: { auth?: 'local' | 'none' | 'homeassistant'; modules?: ModuleDefinition[]; env?: Record<string, string> } = {}) {
+export async function makeApp(options: { auth?: 'local' | 'none' | 'homeassistant'; modules?: ModuleDefinition[]; env?: Record<string, string>; fetch?: typeof fetch } = {}) {
   const config = loadConfig({ LARDER_AUTH: options.auth ?? 'local', LARDER_WEB_DIR: '/nonexistent', LARDER_STORAGE: 'memory', ...options.env }, { version: 'test' });
   const core = await createCore(
-    { storage: createMemoryStorage(), files: createMemoryFileStore(), search: createMemorySearchIndex(), events: createMemoryEventBus(), lookupTimeoutMs: 200 },
+    { storage: createMemoryStorage(), files: createMemoryFileStore(), search: createMemorySearchIndex(), events: createMemoryEventBus(), lookupTimeoutMs: 200, fetch: options.fetch ?? (async () => {
+        throw new Error('No network in tests');
+      }) },
     { modules: options.modules ?? [], disabled: config.disabledModules, env: options.env ?? {} },
   );
   const { app, auth } = await buildApp({ core, config, logger: false });

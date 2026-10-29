@@ -159,6 +159,26 @@ describe('API', () => {
     expect(grid.places).toHaveLength(24);
   });
 
+  it('saves the photo a barcode lookup found when a scanned item is named, and serves it from Larder', async () => {
+    const jpeg = Buffer.from('ffd8ffe000104a464946', 'hex');
+    const lookups = defineModule({
+      id: 'fake-lookup', name: 'Fake lookup', description: 'Test', version: '1.0.0',
+      setup(ctx) {
+        ctx.addLookupProvider({ id: 'fake', name: 'Fake Facts', lookup: async () => ({ name: 'Baked Beanz', brand: 'Heinz', quantityText: '415 g', imageUrl: 'https://images.example/beanz.jpg', categories: [] }) });
+      },
+    });
+    const fetch = (async (url: string) => (url === 'https://images.example/beanz.jpg' ? new Response(jpeg) : new Response('', { status: 404 }))) as unknown as typeof globalThis.fetch;
+    const { call } = await makeApp({ auth: 'none', modules: [lookups], fetch });
+    // The Scan screen: identify, then "Add as new item".
+    expect((await call<Any>('GET', '/api/v1/identify?code=5000157024671')).body).toMatchObject({ kind: 'external', result: { imageUrl: 'https://images.example/beanz.jpg' } });
+    const saved = await call<Any>('POST', '/api/v1/identify/remember', { barcode: '5000157024671', create: { name: 'Baked beans', unit: 'tin' }, imageUrl: 'https://images.example/beanz.jpg' });
+    const photo = saved.body.product.product.photoFileIds[0];
+    expect(saved.body.variant.photoFileId).toBe(photo);
+    const down = await call('GET', `/api/v1/files/${photo}`);
+    expect(down.raw.headers['content-type']).toBe('image/jpeg');
+    expect(down.raw.rawPayload.equals(jpeg)).toBe(true);
+  });
+
   it('uploads and serves photos', async () => {
     const { app } = await makeApp({ auth: 'none' });
     const boundary = 'larderboundary';

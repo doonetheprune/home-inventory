@@ -17,12 +17,15 @@ export interface CoreDeps {
   search: SearchIndex;
   events: EventBus;
   clock?: Clock;
-  /** How long to wait for each barcode lookup provider. */
+  /** How long to wait for each barcode lookup provider (and for a lookup's photo). */
   lookupTimeoutMs?: number;
+  /** For downloading lookup photos. Defaults to the platform's fetch; tests pass their own. */
+  fetch?: typeof fetch;
 }
 
 /** Shared by every service. */
-export interface CoreContext extends Required<Omit<CoreDeps, 'clock'>> {
+export interface CoreContext extends Required<Omit<CoreDeps, 'clock' | 'fetch'>> {
+  fetch: typeof fetch;
   clock: Clock;
   now(): string;
   today(): string;
@@ -48,6 +51,7 @@ export function createContext(deps: CoreDeps): CoreContext {
     search: deps.search,
     events: deps.events,
     lookupTimeoutMs: deps.lookupTimeoutMs ?? 4000,
+    fetch: deps.fetch ?? ((input, init) => globalThis.fetch(input, init)),
     clock,
     now: () => isoNow(clock),
     today: () => localDate(clock.now(), timeZone),

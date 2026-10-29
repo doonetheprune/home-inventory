@@ -207,7 +207,7 @@ function Variants({ p }: { p: ProductDetail }) {
         <div className="list">
           {p.variants.map((v) => (
             <div className="item" key={v.id}>
-              <span className="tile">{v.imageUrl ? <img src={v.imageUrl} alt="" loading="lazy" /> : <Icon name="scan" />}</span>
+              <span className="tile">{v.photoFileId ? <img src={api.files.url(v.photoFileId)} alt="" loading="lazy" /> : v.imageUrl ? <img src={v.imageUrl} alt="" loading="lazy" /> : <Icon name="scan" />}</span>
               <span className="item-main"><span className="item-name">{v.name}</span><span className="item-meta">{[...v.barcodes.map((b) => b), ...v.shopCodes.map((c) => `shop code ${c.code}`)].join(' · ') || 'No barcode'}{v.source !== 'local' ? ` · from ${v.source}` : ''}</span></span>
               <button type="button" className="iconbtn ghost" aria-label={`Remove ${v.name}`} disabled={busy} onClick={() => run(() => api.products.removeVariant(v.id), 'Removed')}><Icon name="trash" size="sm" /></button>
             </div>

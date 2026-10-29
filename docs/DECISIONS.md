@@ -36,6 +36,7 @@ These follow from the decisions above; the owner can change any of them.
 - **Web app:** React with hash routing and relative paths so it works behind Home Assistant ingress and reverse proxies. Fonts are bundled, so nothing loads from the internet.
 - **Reverse proxies:** Larder ignores `X-Forwarded-*` headers unless `LARDER_TRUST_PROXY` names the proxy, so nobody can fake their address to dodge the sign-in limit (10 tries per address, 30 per account, in a few minutes).
 - **Photos:** only JPEG, PNG, WebP, GIF, HEIC and AVIF, checked from the file itself, and served so they can't run scripts.
+- **Lookup photos are saved, not linked** (added after Phase 4): when a scanned barcode is named, the photo the lookup found is downloaded once into Larder's files, so it's in backups and works offline. It becomes the item's photo if it has none, and that brand's photo either way. Only the address a lookup provider gave is downloaded (never one sent by a caller), only over https, up to 5 MB, and only if the bytes are a photo; if any of that fails the item is still saved, without a photo.
 - **Shopping ticks** are kept on the phone until "Done", then sent in one go.
 - **Barcode lookups** ask Open Food Facts, Open Beauty Facts and Open Products Facts in turn (4 seconds each). Answers and misses are cached; misses are retried after 7 days.
 - **Licence:** not chosen yet (`UNLICENSED` in package.json). The owner should pick one before the repo is made public.
