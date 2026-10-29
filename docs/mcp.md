@@ -72,7 +72,9 @@ A small set, described plainly, so small local models pick the right one. Everyt
 | `add_to_shopping_list` | Put something on the list that isn't low |
 | `shopping_list` | What to buy at a shop, or which shop to go to |
 | `expiring` | What to use soon, and renewals coming up |
-| `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?", and making it the usual price (pricing module) |
+| `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?" or "spinach is £4.40/kg here, is that good?", and making it the usual price. Both take the pack's unit (the item's own, g, kg, ml, l) (pricing module) |
+| `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
+| `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
 | `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |
 | `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house (recipes module) |
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, applied only once the person agrees (recipes module) |

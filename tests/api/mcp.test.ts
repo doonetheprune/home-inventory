@@ -41,7 +41,7 @@ describe('MCP server', () => {
     expect(client.getServerVersion()).toMatchObject({ name: 'larder', title: 'Larder' });
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    expect(names).toEqual(['search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'move_item', 'add_expected', 'mark_arrived', 'add_to_shopping_list', 'shopping_list', 'expiring', 'check_price', 'set_usual_price']);
+    expect(names).toEqual(['search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'move_item', 'add_expected', 'mark_arrived', 'add_to_shopping_list', 'shopping_list', 'expiring', 'check_price', 'set_usual_price', 'convert_price', 'set_item_size']);
     for (const t of tools) {
       expect(t.description!.length, t.name).toBeGreaterThan(30);
       expect(t.inputSchema.type).toBe('object');
@@ -50,7 +50,7 @@ describe('MCP server', () => {
     expect(tools.find((t) => t.name === 'add_stock')?.annotations?.readOnlyHint).toBe(false);
     // Clients may skip asking before tools that only add; ones that take away or overwrite say so.
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
-    expect(destructive).toEqual(['use_stock', 'move_item', 'mark_arrived', 'set_usual_price']);
+    expect(destructive).toEqual(['use_stock', 'move_item', 'mark_arrived', 'set_usual_price', 'set_item_size']);
   });
 
   it('adds, finds and uses stock by name, answering in plain text', async () => {

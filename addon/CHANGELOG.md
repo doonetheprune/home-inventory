@@ -10,6 +10,10 @@
 - Changes made at the same moment (two automations, a double tap) no longer lose one another.
 - Photos from barcode lookups are saved in Larder, so they're in backups and work offline.
 - Larder is in every Home Assistant user's sidebar, not only admins'.
+- Stock opens on the types of thing (Food, Household, Tools & DIY…), each listed by place.
+- Every shop gets the same "Going shopping?" tile, with how much to buy there.
+- Add stock at another place, and say from Home that something has moved.
+- Prices per item, per 100 g or per kg, chosen on each item's price card; shelf prices like "£3.50/kg" can be checked; assistants can convert prices between units.
 - Safer AI connections: no changes from other websites, limits on sign-in requests, and tools that take things away are marked so assistants ask first.
 
 ## 0.3.0

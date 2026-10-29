@@ -30,6 +30,15 @@ describe('stock', () => {
     expect((await core.stock.use({ productId: roll.id, quantity: 1 })).inStock).toBe(3);
   });
 
+  it('says when something is already where it is being moved to', async () => {
+    const drill = await core.products.create({ name: 'Cordless drill', defaultPlaceId: shed });
+    await core.stock.add({ productId: drill.id, quantity: 1 });
+    await core.stock.move({ productId: drill.id, toPlaceId: kitchen, mode: 'temporary' });
+    await expect(core.stock.move({ productId: drill.id, toPlaceId: kitchen, mode: 'temporary' })).rejects.toThrow('Cordless drill is already in Kitchen.');
+    const empty = await core.products.create({ name: 'Head torch' });
+    await expect(core.stock.move({ productId: empty.id, toPlaceId: kitchen, mode: 'temporary' })).rejects.toThrow("There's no head torch to move.");
+  });
+
   it('adds stock with an expiry worked out from the shelf life', async () => {
     const milk = await core.products.create({ name: 'Milk', unit: 'bottle', shelfLifeDays: 7, defaultPlaceId: fridge });
     const s = await core.stock.add({ productId: milk.id, quantity: 2 });

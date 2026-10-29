@@ -137,6 +137,125 @@
         ],
         "additionalProperties": {}
       },
+      "PriceViewInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PriceViewInput",
+        "type": "object",
+        "properties": {
+          "usual": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "price": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "per": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "price",
+                  "unit",
+                  "per"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basedOn": {
+            "type": "string"
+          },
+          "showPer": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "type": "string"
+                },
+                "per": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "needsSize": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "unit",
+                "per",
+                "price",
+                "needsSize"
+              ]
+            }
+          },
+          "itemSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "ml",
+                      "l"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "itemUnit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "packUnits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "usual",
+          "basedOn",
+          "showPer",
+          "options",
+          "itemSize",
+          "itemUnit",
+          "packUnits"
+        ]
+      },
       "BatteryDeviceInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/BatteryDeviceInput",
@@ -2866,6 +2985,129 @@
           "message"
         ],
         "additionalProperties": {}
+      },
+      "PriceView": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PriceView",
+        "type": "object",
+        "properties": {
+          "usual": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "price": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "per": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "price",
+                  "unit",
+                  "per"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basedOn": {
+            "type": "string"
+          },
+          "showPer": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "type": "string"
+                },
+                "per": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "needsSize": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "unit",
+                "per",
+                "price",
+                "needsSize"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "itemSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "ml",
+                      "l"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "itemUnit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "packUnits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "usual",
+          "basedOn",
+          "showPer",
+          "options",
+          "itemSize",
+          "itemUnit",
+          "packUnits"
+        ],
+        "additionalProperties": false
       },
       "BatteryDevice": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -10252,7 +10494,7 @@
         "tags": [
           "Module: pricing"
         ],
-        "description": "Give the pack size in the product's price unit and the pack price. Example: 24 rolls for £8.00.",
+        "description": "Give the pack size (in the product's unit, or g, kg, ml, l) and the pack price. Examples: 24 rolls for £8.00; 250 g for £1.20; a shelf price of £3.50/kg is 1 kg for 3.50.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10268,6 +10510,10 @@
                   "quantity": {
                     "type": "number",
                     "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "maxLength": 20
                   },
                   "price": {
                     "type": "number",
@@ -10298,6 +10544,9 @@
                       "type": "string"
                     },
                     "priceUnit": {
+                      "type": "string"
+                    },
+                    "per": {
                       "type": "string"
                     },
                     "unitPrice": {
@@ -10338,6 +10587,7 @@
                     "productId",
                     "productName",
                     "priceUnit",
+                    "per",
                     "unitPrice",
                     "usualUnitPrice",
                     "difference",
@@ -10353,13 +10603,127 @@
         }
       }
     },
+    "/api/v1/modules/pricing/view/{productId}": {
+      "get": {
+        "summary": "The usual price per each unit it can be shown in (for the price card)",
+        "tags": [
+          "Module: pricing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/pricing/display": {
+      "put": {
+        "summary": "Choose the unit prices are shown per, and how much one item holds",
+        "tags": [
+          "Module: pricing"
+        ],
+        "description": "showPer: e.g. \"100g\", \"kg\" or the item's own unit. itemSize: e.g. { amount: 200, unit: \"g\" } for a 200 g bag (null forgets it).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "showPer": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 20
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "itemSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "g",
+                              "kg",
+                              "ml",
+                              "l"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/pricing/usual": {
       "put": {
         "summary": "Set the usual price per unit",
         "tags": [
           "Module: pricing"
         ],
-        "description": "Either give unitPrice directly, or quantity and price for a pack and it works out the unit price.",
+        "description": "Either give unitPrice (per `unit`), or quantity and price for a pack and it works out the price per unit. `unit` defaults to the product's own.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10383,6 +10747,10 @@
                   "price": {
                     "type": "number",
                     "minimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "maxLength": 20
                   },
                   "priceUnit": {
                     "type": "string",
@@ -10443,13 +10811,59 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "itemSize": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "maximum": 1000000
+                            },
+                            "unit": {
+                              "type": "string",
+                              "enum": [
+                                "g",
+                                "kg",
+                                "ml",
+                                "l"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "amount",
+                            "unit"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "showPer": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 20
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "usualUnitPrice",
                     "priceUnit",
                     "basedOn",
-                    "updatedAt"
+                    "updatedAt",
+                    "itemSize",
+                    "showPer"
                   ],
                   "additionalProperties": false
                 }
