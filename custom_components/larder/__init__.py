@@ -45,6 +45,7 @@ from .coordinator import LarderCoordinator
 from .events import listen
 from .mcp import LarderMcpView
 from .nfc import async_track_tags
+from .oauth import async_register_views as async_register_oauth_views
 from .services import async_reset_actions, async_setup_actions, async_update_actions
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register Larder's actions (so automations can use them even before Larder is reachable) and the MCP pass-through."""
     await async_setup_actions(hass)
     hass.http.register_view(LarderMcpView(hass))
+    async_register_oauth_views(hass)
     return True
 
 

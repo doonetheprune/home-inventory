@@ -10803,6 +10803,93 @@
         }
       }
     },
+    "/api/v1/oauth/requests/{request}/home-assistant": {
+      "post": {
+        "summary": "Approve or deny a connection made through Home Assistant (for the Larder integration)",
+        "tags": [
+          "Auth"
+        ],
+        "description": "The integration's token only. As the add-on, the connection acts as the Home Assistant user who approved it; elsewhere, as the account whose token the integration uses.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "approve": {
+                    "type": "boolean"
+                  },
+                  "issuer": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "user": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "username": {
+                        "type": "string",
+                        "maxLength": 50
+                      },
+                      "displayName": {
+                        "type": "string",
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "displayName"
+                    ]
+                  }
+                },
+                "required": [
+                  "approve",
+                  "issuer",
+                  "user"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "request",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "redirect": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "redirect"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules": {
       "get": {
         "summary": "Feature modules and whether they are on",

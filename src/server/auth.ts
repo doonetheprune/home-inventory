@@ -114,22 +114,31 @@ export function createAuth(core: CoreApi, config: Config) {
       const v = request.headers[name];
       return (Array.isArray(v) ? v[0] : v)?.trim() ?? '';
     };
-    const haId = header('x-remote-user-id').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
-    if (!haId) return null;
-    const name = header('x-remote-user-name').slice(0, 50) || 'homeassistant';
-    const displayName = header('x-remote-user-display-name').slice(0, 80) || name;
+    const haId = header('x-remote-user-id');
+    if (!haId.replace(/[^A-Za-z0-9_-]/g, '')) return null;
+    return haAccount(haId, header('x-remote-user-name'), header('x-remote-user-display-name'), 'ingress');
+  }
+
+  /** The Larder account for a Home Assistant user, made or brought up to date. */
+  async function haAccount(haUserId: string, username: string, displayName: string, via: AuthUser['via']): Promise<AuthUser> {
+    const haId = haUserId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+    const name = username.slice(0, 50) || 'homeassistant';
+    const shown = displayName.slice(0, 80) || name;
     const role = config.haAdmins.length && !config.haAdmins.includes(name.toLowerCase()) ? 'member' : 'admin';
     const id = `ha-${haId}`;
     // Keep a record (keyed by the Home Assistant id, never the name) so tokens they make and history point at a real account.
     const existing = await storage.users.get(id);
-    if (!existing || existing.displayName !== displayName || existing.role !== role) {
-      await storage.users.put({ id, username: `ha:${haId}`, displayName, passwordHash: '', role, createdAt: existing?.createdAt ?? new Date().toISOString() });
+    if (!existing || existing.displayName !== shown || existing.role !== role) {
+      await storage.users.put({ id, username: `ha:${haId}`, displayName: shown, passwordHash: '', role, createdAt: existing?.createdAt ?? new Date().toISOString() });
     }
-    return { id, username: name, displayName, role, via: 'ingress' };
+    return { id, username: name, displayName: shown, role, via };
   }
 
   return {
     mode: config.auth,
+    haAccount,
+    /** The add-on's own Home Assistant integration (its token is made by Larder, not a person). */
+    isIntegration: (u: AuthUser) => u.id === INTEGRATION_USER.id,
 
     /** Works out who is calling. Never throws for missing credentials. */
     async identify(request: FastifyRequest): Promise<AuthUser | null> {

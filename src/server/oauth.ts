@@ -249,25 +249,55 @@ export function createOAuth(deps: { core: CoreApi; config: Config; auth: Auth })
       const client = await clients.get(p.clientId);
       return { client: client?.name ?? 'An AI assistant', redirectHost: new URL(p.redirectUri).host };
     });
+    /** The person's answer: where to send the browser back to the assistant, with a code or a refusal. */
+    const answer = (p: PendingRequest, approve: boolean, userId: string, issuer: string) => {
+      const u = new URL(p.redirectUri);
+      if (p.state) u.searchParams.set('state', p.state);
+      u.searchParams.set('iss', issuer);
+      if (!approve) {
+        forget(p);
+        u.searchParams.set('error', 'access_denied');
+        return { redirect: u.toString() };
+      }
+      const code = randomBytes(32).toString('base64url');
+      Object.assign(p, { codeHash: sha256url(code), userId, codeExpiresAt: Date.now() + CODE_MINUTES * 60_000 });
+      byCode.set(p.codeHash!, p.id);
+      u.searchParams.set('code', code);
+      return { redirect: u.toString() };
+    };
     api.post('/oauth/requests/:request', {
       schema: { tags, summary: 'Approve or deny a connection', params: Request, body: z.object({ approve: z.boolean() }), response: { 200: z.object({ redirect: z.string() }) } },
     }, async (request) => {
       const who = user(request);
       const p = live(request.params.request);
       if (who.via !== 'session' && who.via !== 'ingress') throw new LarderError('Approve connections while signed in to Larder in the browser.', 403, 'forbidden');
-      const u = new URL(p.redirectUri);
-      if (p.state) u.searchParams.set('state', p.state);
-      u.searchParams.set('iss', config.baseUrl ?? `${request.protocol}://${request.host}`);
-      if (!request.body.approve) {
-        forget(p);
-        u.searchParams.set('error', 'access_denied');
-        return { redirect: u.toString() };
-      }
-      const code = randomBytes(32).toString('base64url');
-      Object.assign(p, { codeHash: sha256url(code), userId: who.id, codeExpiresAt: Date.now() + CODE_MINUTES * 60_000 });
-      byCode.set(p.codeHash!, p.id);
-      u.searchParams.set('code', code);
-      return { redirect: u.toString() };
+      return answer(p, request.body.approve, who.id, config.baseUrl ?? `${request.protocol}://${request.host}`);
+    });
+    // Connectors reaching Larder through Home Assistant (Nabu Casa) sign in there: the
+    // integration checks who logged in to Home Assistant and that they said yes, then
+    // passes the answer on here.
+    api.post('/oauth/requests/:request/home-assistant', {
+      schema: {
+        tags, summary: 'Approve or deny a connection made through Home Assistant (for the Larder integration)',
+        description: 'The integration\'s token only. As the add-on, the connection acts as the Home Assistant user who approved it; elsewhere, as the account whose token the integration uses.',
+        params: Request,
+        body: z.object({
+          approve: z.boolean(),
+          /** The Home Assistant address the assistant signed in through, as its issuer. */
+          issuer: z.string().max(500).refine((s) => /^https?:\/\/[^/]/.test(s), 'should be an http(s) address'),
+          user: z.object({ id: z.string().min(1).max(64), username: z.string().max(50), displayName: z.string().max(80) }),
+        }),
+        response: { 200: z.object({ redirect: z.string() }) },
+      },
+    }, async (request) => {
+      const who = user(request);
+      // As the add-on, only its own integration; elsewhere, the admin token the integration was set up with (or anyone, with no login at all).
+      const integration = config.auth === 'homeassistant' ? auth.isIntegration(who) : who.role === 'admin' && (who.via === 'token' || who.via === 'none');
+      if (!integration) throw new LarderError('Only the Home Assistant integration can approve connections made through Home Assistant.', 403, 'forbidden');
+      const p = live(request.params.request);
+      const b = request.body;
+      const account = config.auth === 'homeassistant' ? await auth.haAccount(b.user.id, b.user.username, b.user.displayName, 'token') : who;
+      return answer(p, b.approve, account.id, b.issuer);
     });
   }
 
