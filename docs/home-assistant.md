@@ -174,7 +174,12 @@ Only the shop name and home rounded to about 1 km are sent to OpenStreetMap; bra
 
 ## AI assistants through Home Assistant
 
-The integration passes Larder's MCP server through at `https://<home-assistant>/api/larder/mcp`, signed in with a Home Assistant long-lived access token (your profile → Security). That works wherever Home Assistant is reachable, Nabu Casa included, for clients that can send a header (Claude Code, Gemini CLI, Open WebUI, LM Studio, Claude Desktop with `mcp-remote`). See [mcp.md](mcp.md).
+The integration passes Larder's MCP server through at `https://<home-assistant>/api/larder/mcp`, so assistants can use Larder wherever Home Assistant is reachable, Nabu Casa included:
+
+- **The Claude app** (claude.ai, desktop and phone) and ChatGPT: add it as a custom connector. They send you to Home Assistant's login, then ask you to allow the connection, and get a token for Larder only.
+- **Claude Code, Gemini CLI, Open WebUI, LM Studio**, Claude Desktop with `mcp-remote`: send a Home Assistant long-lived access token (your profile → Security) as `Authorization: Bearer …`.
+
+Opening the address in a browser shows Home Assistant's login: it's for assistants, not people. See [mcp.md](mcp.md).
 
 ## Troubleshooting
 
@@ -182,6 +187,7 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **"Larder no longer accepts the access token":** the token was revoked. Make a new one in Larder and enter it when Home Assistant asks.
 - **An action says an item "could be" several things:** use a fuller name, or the item's id from its page in Larder.
 - **Calling an action through Home Assistant's REST API (`/api/services/larder/...`) answers 500 when the action fails**, e.g. for an unknown item. That's how Home Assistant's REST API reports every action error; Larder's message is in the Home Assistant log. The UI, automations, scripts and Node-RED show the message itself.
+- **A connector says 404 for `/api/larder/mcp`:** the Larder integration isn't loaded. Check Settings → Devices & services has Larder (restart Home Assistant once after installing the add-on, then **Configure** it under Discovered).
 - **"Home Assistant saved the automation but hasn't loaded it":** `configuration.yaml` is missing the line `automation: !include automations.yaml` (new installs have it). Add it and restart Home Assistant.
 - **"That needs an admin's access token":** Larder runs outside Home Assistant with a token from a user who isn't an admin. Make one as an admin, or use the YAML.
 - **"The map servers are busy":** the free public map servers Larder searches turned it away (they're often overloaded). Larder tries five of them, then keeps trying in the background for up to a day; close the sheet, and the shop's card shows what it finds.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- The Claude app (and other assistants that sign in rather than take a pasted token) can connect to Larder through your Home Assistant address, Nabu Casa included: add `https://<your Home Assistant>/api/larder/mcp` as a connector, log in to Home Assistant, and allow it. Claude gets a Larder-only token, not access to the rest of Home Assistant.
+- Finding shops' branches tries five free map servers, keeps trying in the background when they're busy, and looks up to 20 miles away.
+
 ## 0.4.0
 
 - Scenarios (Power cut, Christmas…): every item, how many and where, with a printable page.

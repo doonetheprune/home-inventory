@@ -96,6 +96,14 @@ class LarderClient:
         """The devices with batteries Larder knows about."""
         return await self._request("GET", "/v1/modules/batteries/devices")
 
+    async def oauth_request(self, request_id: str) -> dict[str, Any]:
+        """Which assistant is asking to connect (for the approval page)."""
+        return await self._request("GET", f"/v1/oauth/requests/{request_id}")
+
+    async def oauth_answer(self, request_id: str, approve: bool, issuer: str, user: dict[str, str]) -> dict[str, Any]:
+        """Approve or refuse a connection someone signed in to through Home Assistant. Answers where to send them back."""
+        return await self._request("POST", f"/v1/oauth/requests/{request_id}/home-assistant", {"approve": approve, "issuer": issuer, "user": user})
+
     async def sync_battery_devices(self, devices: list[dict[str, Any]]) -> None:
         """Replace Larder's list of devices with batteries."""
         await self._request("PUT", "/v1/modules/batteries/devices", {"devices": devices})

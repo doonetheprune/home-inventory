@@ -7,7 +7,7 @@ Larder has an MCP server, so Claude, ChatGPT, Gemini CLI and local models (Open 
 | Where Larder runs | MCP address | Sign in with |
 |---|---|---|
 | Docker, or the add-on with its port opened | `http://<larder>:8080/mcp` | A Larder access token (Settings → Access tokens) |
-| Home Assistant add-on, through Home Assistant (Nabu Casa included) | `https://<home-assistant>/api/larder/mcp` | A Home Assistant long-lived access token (your profile → Security) |
+| Through Home Assistant, with the Larder integration (Nabu Casa included) | `https://<home-assistant>/api/larder/mcp` | Connector sign-in with your Home Assistant login (the Claude app, ChatGPT), or a Home Assistant long-lived access token (your profile → Security) |
 | Larder on a public https address (Cloudflare Tunnel, Tailscale Funnel) | `https://<larder address>/mcp` | Either of the above, or connector sign-in (below) |
 
 Every request needs `Authorization: Bearer <token>`. Make a separate token for each assistant so you can revoke one without the others. Tokens can do everything the person who made them can.
@@ -24,7 +24,10 @@ Menus move between versions; if one has, the client's own docs say where MCP ser
 claude mcp add --transport http larder http://larder.local:8080/mcp --header "Authorization: Bearer lrd_…"
 ```
 
-**Claude.ai, and Claude's desktop and mobile apps (custom connectors).** These connect from Anthropic's servers, so Larder needs a public https address. Set `LARDER_BASE_URL` to it, then add a custom connector with `https://<larder address>/mcp`. Claude opens Larder's approval page: sign in and press **Allow**. The connection appears in Larder under Settings → Access tokens as "Claude (via claude.ai)". (With the add-on, approve with a Larder account from Settings → Accounts, since the public address isn't reached through Home Assistant.)
+**The Claude app: claude.ai, and Claude's desktop and mobile apps (custom connectors).** These connect from Anthropic's servers, so they need an address that's reachable from the internet, and they sign in rather than take a pasted token.
+
+- *Through Home Assistant* (with Nabu Casa, or Home Assistant on its own https address): in Claude, Settings → Connectors → **Add custom connector**, with the address `https://<home-assistant>/api/larder/mcp` and nothing under advanced settings. Claude opens Home Assistant's login: log in, then press **Allow** on Larder's page. Claude gets a Larder token, not a Home Assistant one, so it can use Larder but nothing else in Home Assistant; it acts as the Home Assistant user who allowed it (as the add-on), and appears in Larder under Settings → Access tokens as "Claude (via claude.ai)", where it can be disconnected. Needs the Larder integration set up in Home Assistant.
+- *On Larder's own public address* (Cloudflare Tunnel, Tailscale Funnel): set `LARDER_BASE_URL` to it, then add a custom connector with `https://<larder address>/mcp`. Claude opens Larder's approval page: sign in and press **Allow**. (With the add-on, approve with a Larder account from Settings → Accounts, since that address isn't reached through Home Assistant.)
 
 **Claude Desktop on the same network, without a public address.** Use `mcp-remote` in `claude_desktop_config.json`:
 
@@ -40,7 +43,7 @@ claude mcp add --transport http larder http://larder.local:8080/mcp --header "Au
 }
 ```
 
-**ChatGPT (connectors, developer mode).** Like Claude.ai: a public https address, then a connector for `https://<larder address>/mcp`, approved on Larder's page.
+**ChatGPT (connectors, developer mode).** Like the Claude app: a connector for `https://<home-assistant>/api/larder/mcp` (or Larder's own public address), approved after logging in.
 
 **Gemini CLI** (`~/.gemini/settings.json`):
 
