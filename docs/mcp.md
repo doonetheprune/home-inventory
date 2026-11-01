@@ -61,26 +61,38 @@ claude mcp add --transport http larder http://larder.local:8080/mcp --header "Au
 
 ## Tools
 
-A small set, described plainly, so small local models pick the right one. Everything takes names as people say them ("loo roll", "garage racking", "aldi"); ids, barcodes, shop codes and place codes like `G2-4` work too. If a name could mean more than one thing, the tool says which ones rather than guessing.
+Everything you can do in the app, as plainly described tools, apart from accounts, access tokens, household settings, backups, photos, NFC tags and printing. Everything takes names as people say them ("loo roll", "garage racking", "aldi"); ids, barcodes, shop codes and place codes like `G2-4` work too. If a name could mean more than one thing, the tool says which ones rather than guessing.
 
 | Tool | What it does |
 |---|---|
 | `search` | Find items, places and shops by any words. Typos are fine |
 | `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, shops, notes |
-| `add_item` | Add something Larder doesn't know yet |
+| `add_item` | Add something Larder doesn't know yet. A shop, place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
+| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, usual place, shops to buy it from, notes, wish list, rechargeable |
+| `remove_item` | Remove an item with all its stock |
+| `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
+| `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |
 | `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat) |
 | `move_item` | Move something for now (out of place) or for good |
 | `add_expected` | Record an order that hasn't arrived (it counts towards stock). Takes shop codes from order emails |
 | `mark_arrived` | A delivery (or part of one) arrived |
-| `add_to_shopping_list` | Put something on the list that isn't low |
+| `add_to_shopping_list` / `remove_from_shopping_list` | Put something on the list that isn't low, or take it off again |
+| `put_back` | Something out of place is back where it lives |
+| `mark_charged` / `renew` | Rechargeables charged; a renewal (insurance, MOT) renewed |
 | `shopping_list` | What to buy at a shop, or which shop to go to |
 | `expiring` | What to use soon, and renewals coming up |
+| `deliveries` / `recent_changes` | Orders on the way; what changed in stock lately (all, or one item) |
+| `list_shops` / `add_shop` / `change_shop` / `remove_shop` | Shops and what they sell. Common UK shops (Tesco, Aldi, Screwfix…) come with what they usually sell |
+| `list_places` / `add_place` / `add_storage_grid` / `change_place` / `remove_place` | Places, nested, with label codes; shelving with numbered spots in one go; only empty places can be removed |
+| `list_categories` / `add_category` / `change_category` / `remove_category` | Categories, and how early their items are flagged before expiry |
 | `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?" or "spinach is £4.40/kg here, is that good?", and making it the usual price. Both take the pack's unit (the item's own, g, kg, ml, l) (pricing module) |
 | `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
 | `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
 | `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |
+| `make_scenario` / `change_scenario` / `remove_scenario` / `add_to_scenario` / `remove_from_scenario` | Making and changing scenarios (scenarios module) |
 | `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house (recipes module) |
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, applied only once the person agrees (recipes module) |
+| `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
 
 Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
 
@@ -102,8 +114,10 @@ The brief's separate "read order emails" automation (not part of Larder) can cal
 - **The SDK's OAuth client** signing in by itself: discovery, registration, PKCE, approval, token (`tests/api/mcp-oauth.test.ts`).
 - **Through Home Assistant** at `/api/larder/mcp` (`tests/ha`).
 
-Not tried yet, because they need Larder on a public https address or aren't installed here: Claude.ai and ChatGPT connectors, Gemini CLI, Open WebUI and LM Studio. The set-ups above follow each client's documented format.
+- **The Claude app** through Home Assistant 2026.10 and Nabu Casa: added `https://<home-assistant>/api/larder/mcp` as a custom connector, signed in with Home Assistant, and added items.
+
+Not tried yet: ChatGPT connectors, Gemini CLI, Open WebUI and LM Studio. The set-ups above follow each client's documented format.
 
 ## How it works
 
-`src/core/services/assistant.ts` defines the tools; `src/server/mcp.ts` serves them with the official MCP SDK over Streamable HTTP. It is stateless and answers every request with plain JSON (no sessions or open streams), so it passes through Home Assistant, reverse proxies and tunnels. `src/server/oauth.ts` adds the connector sign-in from the MCP authorization spec: protected resource and authorization server metadata, dynamic client registration, and the authorization code flow with PKCE. Approved connections get an ordinary Larder access token.
+`src/core/services/assistant.ts` and `assistant-manage.ts` define the tools; `src/server/mcp.ts` serves them with the official MCP SDK over Streamable HTTP. It is stateless and answers every request with plain JSON (no sessions or open streams), so it passes through Home Assistant, reverse proxies and tunnels. `src/server/oauth.ts` adds the connector sign-in from the MCP authorization spec: protected resource and authorization server metadata, dynamic client registration, and the authorization code flow with PKCE. Approved connections get an ordinary Larder access token.

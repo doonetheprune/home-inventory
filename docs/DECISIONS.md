@@ -78,6 +78,8 @@ These follow from the decisions above; the owner can change any of them.
 - **No changes from other websites**, in every sign-in mode: a write that a browser marks as coming from another site (Sec-Fetch-Site, or a foreign Origin) is refused unless it carries an access token or the web app's header. Only `/oauth/token` reads form posts.
 - **MCP hints:** tools that take away or overwrite (use_stock, move_item, mark_arrived, set_usual_price) are marked destructive, so clients can ask first.
 - **Version 0.3.0.**
+- **The connector can do what the app does** (the owner's request, after trying the Claude app; replaces "few, plain tools"): shops, places and storage grids, categories, changing or removing an item, brands and barcodes, correcting a batch, deliveries and recent changes, and everything on the scenarios and recipes pages. 53 tools with every module on. Left out on purpose: accounts, access tokens, household settings, backups and module switches (so a connector can't widen its own access), and photos, NFC tags, printing and shop locations (they need a camera, a tag, paper or the map pages). *Alternative:* a smaller set for small local models, which would then need the app for these.
+- **A shop, place or category that isn't set up is never left out quietly:** `add_item` refuses (adding nothing) and says to offer adding it first, naming `add_shop` (common UK shops come with what they sell), `add_place` or `add_category`.
 
 ## Phase 4: how it was built
 

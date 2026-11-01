@@ -134,4 +134,14 @@ describe('recipes module', () => {
     expect((await core.products.summary(ids.spinach)).product.onShoppingList).toBe(true);
     expect((await core.search.query('traybake')).find((s) => s.id === 'recipes')?.results[0]?.subtitle).toBe('Missing Baby spinach');
   });
+
+  it('lets assistants shop for a recipe and forget one', async () => {
+    const { core, ids } = await kitchen();
+    expect((await core.assistant.call('recipe_to_shopping_list', { recipe: 'traybake' })).text).toBe('On the shopping list for Chicken and spinach traybake: Baby spinach.');
+    expect((await core.products.summary(ids.spinach)).product.onShoppingList).toBe(true);
+    await core.stock.add({ productId: ids.spinach, quantity: 1 });
+    expect((await core.assistant.call('recipe_to_shopping_list', { recipe: 'traybake' })).text).toBe('Everything Chicken and spinach traybake needs is in the house.');
+    expect((await core.assistant.call('forget_recipe', { recipe: 'traybake' })).text).toBe('Forgot Chicken and spinach traybake.');
+    expect((await core.assistant.call('list_recipes', {})).text).toBe('There are no saved recipes yet.');
+  });
 });

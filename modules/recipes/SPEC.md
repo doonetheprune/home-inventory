@@ -6,6 +6,6 @@ Recipes the household liked, saved so they can be found again and checked agains
 - **Cooking:** `POST /:id/cook` `{ servings? }` proposes what to take out (scaled to servings, never more than there is) and **changes nothing**. `POST /proposals/:proposalId/confirm` `{ items?: [{ productId, quantity }] }` applies it, with any quantities changed (0 leaves an item alone), all together or not at all (`core.stock.useMany`). Two lines for the same item add up to one. Changes can only adjust items in the proposal. Proposals last six hours and work once, even when confirmed twice at the same moment.
 - **Other routes** (under `/api/v1/modules/recipes`): `GET /`, `POST /`, `GET /:id`, `PUT /:id`, `DELETE /:id`, `POST /:id/missing-to-list`.
 - **Search:** "Saved recipes" (order 70), by title and ingredients, saying what's missing.
-- **AI tools:** `save_recipe`, `list_recipes`, `get_recipe`, `propose_cooking`, `confirm_cooking`. The assistant is told to show the proposal and ask before confirming.
+- **AI tools:** `save_recipe`, `list_recipes`, `get_recipe`, `propose_cooking`, `confirm_cooking`, `recipe_to_shopping_list`, `forget_recipe`. The assistant is told to show the proposal and ask before confirming.
 - **Demo:** two recipes in the example household.
 - **UI:** the recipe list; a recipe page with each ingredient in or not, **Cooked it** (adjust, then confirm) and **Add missing to list**; and a simple editor.

@@ -2,17 +2,19 @@
  * Tools for AI assistants (Claude, ChatGPT, Gemini, local models), served
  * over MCP by the server (src/server/mcp.ts).
  *
- * Kept deliberately few and plain so small local models use them reliably:
- * every tool takes names the way people say them ("loo roll", "G2-4",
- * "aldi"), answers in short readable text (plus the same facts as data), and
+ * Plain, so small local models use them reliably: every tool takes names
+ * the way people say them ("loo roll", "G2-4", "aldi"), answers in short
+ * readable text (plus the same facts as data), and
  * says what to do next when something is unclear. Modules add their own with
  * `ctx.addTool` (pricing adds check_price; scenarios and recipes add theirs).
+ * Tools for shops, places, categories and changing items are in assistant-manage.ts.
  */
 import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
+import { addManageTools, finders } from './assistant-manage';
 import type { Automation } from './automation';
-import type { createCategoryService } from './catalogue';
+import type { createCategoryService, createPlaceService, createShopService } from './catalogue';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import type { Resolver } from './resolve';
@@ -62,6 +64,8 @@ export const ASSISTANT_INSTRUCTIONS = [
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Quantities are in each item\'s own unit (tins, rolls, kg). Items have a usual place; "out of place" means it is somewhere else for now.',
   'Before adding something new with add_item, search for it: it may already exist under another name.',
+  'Anything about an item can be changed later with change_item (its shop, usual place, minimum, category, name).',
+  'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
   'Low stock counts deliveries on the way. Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
 
@@ -119,10 +123,13 @@ export function createAssistant(deps: {
   shopping: ReturnType<typeof createShoppingService>;
   search: ReturnType<typeof createSearchService>;
   categories: ReturnType<typeof createCategoryService>;
+  shops: ReturnType<typeof createShopService>;
+  places: ReturnType<typeof createPlaceService>;
   automation: Automation;
   resolve: Resolver;
 }) {
-  const { ctx, products, shopping, search, categories, automation, resolve } = deps;
+  const { ctx, products, shopping, search, automation, resolve } = deps;
+  const find = finders(deps);
   const tools: Array<{ tool: AssistantTool; module: string | null; enabled: () => boolean }> = [];
 
   function addTool<I extends z.ZodObject>(tool: AssistantTool<I>, module: string | null = null, enabled: () => boolean = () => true) {
@@ -179,7 +186,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). Then use add_stock to say how many there are, or add_expected if it\'s on order.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -196,15 +203,10 @@ export function createAssistant(deps: {
     async run(i) {
       const existing = await resolve.product(i.name).catch(() => null);
       if (existing && existing.name.toLowerCase() === i.name.trim().toLowerCase()) throw new LarderError(`${existing.name} is already in Larder. Use add_stock to add some.`, 409, 'conflict');
-      let categoryId: string | null = null;
-      if (i.category) {
-        const cats = await categories.list();
-        const cat = cats.find((c) => c.name.toLowerCase() === i.category!.trim().toLowerCase());
-        if (!cat) throw new ValidationError(`There's no category called "${i.category}". The categories are: ${andList(cats.map((c) => c.name))}.`);
-        categoryId = cat.id;
-      }
-      const place = i.usual_place ? await resolve.place(i.usual_place) : null;
-      const shop = i.shop ? await resolve.shop(i.shop) : null;
+      // Everything named must exist first, so nothing is quietly left out.
+      const categoryId = i.category ? (await find.category(i.category)).id : null;
+      const place = i.usual_place ? await find.place(i.usual_place) : null;
+      const shop = i.shop ? await find.shop(i.shop) : null;
       if (i.shop_code && !shop) throw new ValidationError('A shop code needs the shop it belongs to.');
       // Check the barcode before creating anything, so a clash doesn't leave a half-made item.
       const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
@@ -226,6 +228,10 @@ export function createAssistant(deps: {
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
   fromAction('add_to_shopping_list', 'add_to_shopping_list', 'Put on the shopping list', 'Put an item on the shopping list even though it isn\'t low.');
+  fromAction('remove_from_shopping_list', 'remove_from_shopping_list', 'Take off the shopping list', 'Take an item that was put on the shopping list by hand off it again. Items that are low stay on until restocked.', true);
+  fromAction('put_back', 'put_back', 'Put an item back', 'Something that was out of place is back in its usual place.');
+  fromAction('mark_charged', 'mark_charged', 'Mark batteries charged', 'Rechargeable batteries (or similar): some flat ones have been charged.');
+  fromAction('renew', 'renew', 'Renew', 'A renewal (insurance, MOT, boiler service) has been renewed: restart its clock from today.');
 
   addTool({
     name: 'shopping_list', title: 'Shopping list', readOnly: true,
@@ -263,6 +269,8 @@ export function createAssistant(deps: {
       return { text, data: { items: due.map((s) => ({ item: s.product.name, expires_on: s.nextExpiry, days: s.daysToExpiry, in_stock: s.inStock, unit: s.product.unit, place: s.places[0]?.path ?? null, category: s.category?.name ?? null })) } };
     },
   });
+
+  addManageTools(addTool, deps);
 
   return {
     addTool,

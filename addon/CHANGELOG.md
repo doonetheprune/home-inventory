@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Claude (and other assistants) can do what the app does: add and change shops, places and categories; change anything about an item after adding it (its shop, usual place, minimum…); remove items; brands and barcodes; correct stock; see deliveries and recent changes; make and change scenarios; shop for a recipe.
+- Adding an item with a shop, place or category that isn't set up yet no longer leaves it out: Claude is told to offer to add it first.
+
 ## 0.4.1
 
 - The Claude app (and other assistants that sign in rather than take a pasted token) can connect to Larder through your Home Assistant address, Nabu Casa included: add `https://<your Home Assistant>/api/larder/mcp` as a connector, log in to Home Assistant, and allow it. Claude gets a Larder-only token, not access to the rest of Home Assistant.

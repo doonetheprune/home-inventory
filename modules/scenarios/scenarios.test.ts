@@ -54,6 +54,21 @@ describe('scenarios module', () => {
     await expect(core.assistant.call('get_scenario', { scenario: 'christmas' })).rejects.toThrow('The scenarios are: Power cut');
   });
 
+  it('lets assistants make and change scenarios as the app does', async () => {
+    const { core, ids } = await household();
+    expect((await core.assistant.call('make_scenario', { name: 'Snowed in', notes: 'A week without the shops' })).text).toBe('Made the Snowed in scenario. Add items to it with add_to_scenario.');
+    expect((await core.assistant.call('add_to_scenario', { scenario: 'snowed', items: ['candles', 'camping gas'] })).text).toBe('Candles and Camping gas are in Snowed in.');
+    // One unclear name, and nothing is added.
+    await expect(core.assistant.call('add_to_scenario', { scenario: 'snowed', items: ['head torch', 'unicorn'] })).rejects.toThrow('unicorn');
+    expect((await core.products.summary(ids.torch)).product.fields.scenarios).toHaveLength(1);
+    expect((await core.assistant.call('remove_from_scenario', { scenario: 'snowed in', items: ['camping gas'] })).text).toBe('Camping gas is out of Snowed in.');
+    expect((await core.assistant.call('change_scenario', { scenario: 'snowed in', name: 'Snowed in for a week' })).text).toBe('Snowed in for a week is updated.');
+    await expect(core.assistant.call('change_scenario', { scenario: 'snowed', name: 'Power cut' })).rejects.toThrow('already a scenario called Power cut');
+    expect((await core.assistant.call('list_scenarios', {})).text).toContain('- Snowed in for a week: 1 item');
+    expect((await core.assistant.call('remove_scenario', { scenario: 'snowed in for a week' })).text).toBe('Removed the Snowed in for a week scenario. Its items are still in Larder.');
+    expect((await core.assistant.call('list_scenarios', {})).text).not.toContain('Snowed');
+  });
+
   it('takes items out, renames, and removing a scenario untags its items', async () => {
     const { core, s, ids } = await household();
     await call(core, 'PUT', '/:id/items', { productId: ids.gas, included: false }, { id: s.id });

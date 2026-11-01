@@ -260,6 +260,19 @@ export default defineModule({
       `Proposal id: ${p.id}. Nothing has changed yet: ask the person to confirm or adjust, then call confirm_cooking.`,
     ].join('\n');
 
+    async function forget(r: Recipe): Promise<void> {
+      await recipes.remove(r.id);
+      ctx.publish('recipes.changed', { id: r.id });
+    }
+
+    /** The ingredients the house has none or too little of (not optional ones), put on the shopping list. */
+    async function missingToList(r: Recipe): Promise<string[]> {
+      const v = await view(core, r);
+      const missing = v.ingredients.filter((i) => !i.optional && i.productId && (i.status === 'none' || i.status === 'short'));
+      for (const i of missing) await core.products.setOnList(i.productId!, true);
+      return missing.map((i) => i.item ?? i.name);
+    }
+
     ctx.addRoute({
       method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each', response: z.array(RecipeView),
       handler: async () => Promise.all((await all()).map((r) => view(core, r))),
@@ -280,21 +293,14 @@ export default defineModule({
     ctx.addRoute({
       method: 'DELETE', path: '/:id', summary: 'Forget a recipe', params: z.object({ id: Id }), response: z.object({ ok: z.literal(true) }),
       async handler({ params }) {
-        const r = await get((params as { id: string }).id);
-        await recipes.remove(r.id);
-        ctx.publish('recipes.changed', { id: r.id });
+        await forget(await get((params as { id: string }).id));
         return { ok: true as const };
       },
     });
     ctx.addRoute({
       method: 'POST', path: '/:id/missing-to-list', summary: 'Put the missing ingredients on the shopping list', params: z.object({ id: Id }),
       response: z.object({ added: z.array(z.string()) }),
-      async handler({ params }) {
-        const v = await view(core, await get((params as { id: string }).id));
-        const missing = v.ingredients.filter((i) => !i.optional && i.productId && (i.status === 'none' || i.status === 'short'));
-        for (const i of missing) await core.products.setOnList(i.productId!, true);
-        return { added: missing.map((i) => i.item ?? i.name) };
-      },
+      handler: async ({ params }) => ({ added: await missingToList(await get((params as { id: string }).id)) }),
     });
     ctx.addRoute({
       method: 'POST', path: '/:id/cook', summary: 'Propose what cooking this takes out of stock (changes nothing yet)',
@@ -370,6 +376,26 @@ export default defineModule({
       async run({ recipe }) {
         const v = await view(core, await find(recipe));
         return { text: recipeText(v), data: v as unknown as Record<string, unknown> };
+      },
+    });
+    ctx.addTool({
+      name: 'recipe_to_shopping_list', title: 'Shop for a recipe',
+      description: 'Put the ingredients a saved recipe needs that the house has none or too little of on the shopping list.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"') }),
+      async run({ recipe }) {
+        const r = await find(recipe);
+        const added = await missingToList(r);
+        return { text: added.length ? `On the shopping list for ${r.title}: ${andList(added)}.` : `Everything ${r.title} needs is in the house.`, data: { id: r.id, added } };
+      },
+    });
+    ctx.addTool({
+      name: 'forget_recipe', title: 'Forget a saved recipe', destructive: true,
+      description: 'Remove a saved recipe. Nothing in stock changes.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title') }),
+      async run({ recipe }) {
+        const r = await find(recipe);
+        await forget(r);
+        return { text: `Forgot ${r.title}.`, data: { id: r.id } };
       },
     });
     ctx.addTool({
