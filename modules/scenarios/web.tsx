@@ -1,7 +1,7 @@
 /** Scenarios UI: the list, a scenario by place, its printable page, and a panel on product pages. */
 import { useState } from 'react';
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, PrintSetup, qty, Switch, useAction, useModuleParams, useNavigate, useQuery, type ProductDetail,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, ModulePanels, Pill, PrintSetup, qty, Switch, useAction, useModuleParams, useNavigate, useQuery, type ProductDetail,
 } from '@larder/web-sdk';
 
 interface Scenario { id: string; name: string; icon: string; notes: string }
@@ -123,6 +123,7 @@ function ScenarioPage() {
             </div>
           )}
         </div>
+        <ModulePanels slot="scenarios.scenario" id={scenario.id} />
         <div className="card pad">
           <b>Remove {scenario.name}</b>
           <p className="small muted">The items stay in Larder; they just leave this scenario.</p>

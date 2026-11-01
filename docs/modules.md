@@ -72,6 +72,7 @@ export default defineWebModule({
   productPanels: [MyPanel],      // shown on product pages: ({ product }) => JSX
   shoppingPanels: [MyListPanel], // shown beside a shop's list: ({ list }) => JSX
   shopPanels: [MyShopPanel],     // inside each shop's card on the Shops page: ({ shop }) => JSX
+  panels: [{ slot: 'scenarios.scenario', component: MyScenarioPanel }], // on another module's page: ({ id }) => JSX
   pages: [
     { path: '/', title: 'My feature', icon: 'box', component: MyPage },        // linked from More and the sidebar (Organise)
     { path: '/print', title: 'My sheets', section: 'print', component: Sheets }, // under Print in the sidebar
@@ -81,7 +82,11 @@ export default defineWebModule({
 });
 ```
 
-Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
+Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). 
+
+**Panels on another module's page.** A module page can offer a slot by rendering `<ModulePanels slot="<its module id>.<page>" id={…} />`; any switched-on module adds to it with `panels`, getting the id of what the page shows. Neither module imports the other, and nothing shows when the other is off. `useModuleEnabled(id)` says whether a module is on, e.g. to offer a choice that needs it. Slots offered now: `scenarios.scenario` (a scenario's page, with its id; recipes uses it).
+
+Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
 
 ## Example data
 

@@ -4,6 +4,7 @@
  */
 import type { ComponentType } from 'react';
 import type { ProductDetail, Shop, ShoppingList } from '@larder/core';
+import type { SlotPanel } from './panels';
 
 export interface WebModule {
   /** Must match the server module's id; the UI only shows while the module is on. */
@@ -20,6 +21,8 @@ export interface WebModule {
    * the desktop sidebar, under Organise (default) or Print.
    */
   pages?: Array<{ path: string; title: string; icon?: string; component: ComponentType; section?: 'organise' | 'print'; subtitle?: string; hidden?: boolean }>;
+  /** Panels on other modules' pages, at the slots those pages offer (e.g. recipes on a scenario). */
+  panels?: SlotPanel[];
 }
 
 export function defineWebModule(m: WebModule): WebModule {
@@ -31,6 +34,7 @@ export { useAction, useToast, Stepper, Sheet, Seg, Switch, Pill, Loading, ErrorB
 export { Icon } from '../icons';
 export { QrCode } from './qr';
 export { useModuleParams, PrintSetup } from './page';
+export { ModulePanels, useModuleEnabled, type SlotPanel } from './panels';
 export { Header, Empty } from '../ui';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';

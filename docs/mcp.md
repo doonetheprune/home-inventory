@@ -93,6 +93,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house (recipes module) |
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, applied only once the person agrees (recipes module) |
 | `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
+| `set_recipe_scenarios` | Put a recipe in scenarios (Christmas), and keep it only there if wanted (recipes module) |
 
 Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
 

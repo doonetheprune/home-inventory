@@ -6,6 +6,10 @@
  * what needs using soon. After cooking, Larder proposes what to take out of
  * stock and only does it once the person confirms (with quantities changed
  * if they like).
+ *
+ * A recipe can belong to scenarios (Christmas, Halloween), by their ids from
+ * the scenarios module, and can be kept for those scenarios only, so a
+ * seasonal recipe doesn't crowd the main list.
  */
 import { z } from 'zod';
 import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
@@ -36,6 +40,10 @@ export const Recipe = z.object({
   updatedAt: z.string(),
   lastCookedAt: z.string().nullable().default(null),
   timesCooked: z.number().int().default(0),
+  /** Scenarios it belongs to (ids from the scenarios module), e.g. Christmas. */
+  scenarioIds: z.array(Id).default([]),
+  /** Only show it in those scenarios, not on the main list (a Halloween recipe in November). */
+  scenarioOnly: z.boolean().default(false),
 }).meta({ id: 'Recipe' });
 export type Recipe = z.infer<typeof Recipe>;
 
@@ -55,6 +63,9 @@ const RecipeInput = z.object({
   method: z.string().max(20_000).optional(),
   notes: z.string().max(2000).optional(),
   source: z.string().max(60).optional(),
+  /** Every scenario it belongs to (replaces the old list). Left out keeps them. */
+  scenarioIds: z.array(Id).max(20).optional(),
+  scenarioOnly: z.boolean().optional(),
 });
 type RecipeInput = z.input<typeof RecipeInput>;
 
@@ -74,6 +85,10 @@ export const RecipeView = Recipe.extend({
   ingredients: z.array(Have),
   /** Required linked ingredients that are short or none. */
   missing: z.array(z.string()),
+  /** The scenarios it belongs to that still exist. */
+  scenarios: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Kept for its scenarios, so it's not on the main list. */
+  hidden: z.boolean(),
 }).meta({ id: 'RecipeView' });
 export type RecipeView = z.infer<typeof RecipeView>;
 
@@ -91,7 +106,22 @@ export type Proposal = z.infer<typeof Proposal>;
 
 const PROPOSAL_HOURS = 6;
 
-async function view(core: CoreApi, r: Recipe): Promise<RecipeView> {
+/**
+ * The scenarios module's scenarios (id → name) while it's on. Recipes keep
+ * only the ids, so when a scenario is removed (or the module is switched
+ * off) it stops counting, and its scenario-only recipes are back on the main list.
+ */
+export async function scenarioNames(core: CoreApi): Promise<Map<string, string>> {
+  if (!core.modules.isEnabled('scenarios')) return new Map();
+  const list = core.modules.routes().find((r) => r.moduleId === 'scenarios' && r.route.method === 'GET' && r.route.path === '/');
+  if (!list) return new Map();
+  const scenarios = (await list.route.handler({ body: undefined, query: {}, params: {}, userId: null })) as Array<{ id: string; name: string }>;
+  return new Map(scenarios.map((s) => [s.id, s.name]));
+}
+
+async function view(core: CoreApi, r: Recipe, known?: Map<string, string>): Promise<RecipeView> {
+  const names = known ?? (await scenarioNames(core));
+  const scenarios = r.scenarioIds.filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id)! }));
   const summaries = new Map<string, ProductSummary>();
   for (const i of r.ingredients) {
     if (i.productId && !summaries.has(i.productId)) {
@@ -105,7 +135,7 @@ async function view(core: CoreApi, r: Recipe): Promise<RecipeView> {
     const status = !s ? 'unknown' : s.inStock <= 0 ? 'none' : s.inStock + 1e-9 < need ? 'short' : 'have';
     return { name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, inStock: s ? s.inStock : null, status, optional: i.optional } as const;
   });
-  return { ...r, ingredients, missing: ingredients.filter((i) => !i.optional && (i.status === 'none' || i.status === 'short')).map((i) => i.item ?? i.name) };
+  return { ...r, ingredients, missing: ingredients.filter((i) => !i.optional && (i.status === 'none' || i.status === 'short')).map((i) => i.item ?? i.name), scenarios, hidden: r.scenarioOnly && scenarios.length > 0 };
 }
 
 export function recipeText(v: RecipeView): string {
@@ -117,6 +147,7 @@ export function recipeText(v: RecipeView): string {
     lines.push(`- ${how ? `${how} ` : ''}${i.name}${i.optional ? ' (optional)' : ''}: ${state}`);
   }
   lines.push(v.missing.length ? `Missing: ${andList(v.missing)}.` : 'Everything needed is in the house.');
+  if (v.scenarios.length) lines.push(`${v.hidden ? 'Only shown in' : 'Also in'} ${andList(v.scenarios.map((x) => x.name))}.`);
   if (v.method) lines.push('Method:', v.method);
   if (v.notes) lines.push(`Notes: ${v.notes}`);
   if (v.lastCookedAt) lines.push(`Last cooked ${v.lastCookedAt.slice(0, 10)} (${v.timesCooked} time${v.timesCooked === 1 ? '' : 's'}).`);
@@ -172,11 +203,20 @@ export default defineModule({
     async function save(input: RecipeInput, existing?: Recipe): Promise<Recipe> {
       const data = RecipeInput.parse(input);
       const now = core.now();
+      const scenarioIds = data.scenarioIds ?? existing?.scenarioIds ?? [];
+      if (data.scenarioIds?.length) {
+        const known = await scenarioNames(core);
+        if (!core.modules.isEnabled('scenarios')) throw new ValidationError('Scenarios are switched off, so a recipe can\'t go in one.');
+        if (data.scenarioIds.some((id) => !known.has(id))) throw new ValidationError('One of those scenarios no longer exists. Pick from the current scenarios.');
+      }
+      const scenarioOnly = data.scenarioOnly ?? existing?.scenarioOnly ?? false;
+      if (scenarioOnly && !scenarioIds.length) throw new ValidationError('Pick the scenarios it shows in, or keep it on the main list.');
       const r = Recipe.parse({
         ...(existing ?? { id: newId(), createdAt: now, lastCookedAt: null, timesCooked: 0 }),
         // Left out keeps what it was; null clears it.
         title: data.title, serves: data.serves !== undefined ? data.serves : (existing?.serves ?? null), ingredients: await ingredientsFrom(data.ingredients, existing?.ingredients),
         method: data.method ?? existing?.method ?? '', notes: data.notes ?? existing?.notes ?? '', source: data.source ?? existing?.source ?? '', updatedAt: now,
+        scenarioIds, scenarioOnly,
       });
       await recipes.put(r.id, r);
       ctx.publish('recipes.changed', { id: r.id });
@@ -274,8 +314,23 @@ export default defineModule({
     }
 
     ctx.addRoute({
-      method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each', response: z.array(RecipeView),
-      handler: async () => Promise.all((await all()).map((r) => view(core, r))),
+      method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each',
+      description: 'Without a filter, the main list: recipes kept for their scenarios are left out (ask for them with `show`).',
+      query: z.object({
+        productId: Id.optional().describe('Only recipes that use this item (scenario-only ones too)'),
+        scenarioId: Id.optional().describe('Only recipes in this scenario'),
+        show: z.enum(['main', 'scenario-only', 'all']).optional().describe('Which recipes: the main list (default without a filter), those kept for scenarios, or all'),
+      }),
+      response: z.array(RecipeView),
+      async handler({ query }) {
+        const q = query as { productId?: string; scenarioId?: string; show?: 'main' | 'scenario-only' | 'all' };
+        const known = await scenarioNames(core);
+        const show = q.show ?? (q.productId || q.scenarioId ? 'all' : 'main');
+        const views = await Promise.all((await all())
+          .filter((r) => (!q.productId || r.ingredients.some((i) => i.productId === q.productId)) && (!q.scenarioId || r.scenarioIds.includes(q.scenarioId)))
+          .map((r) => view(core, r, known)));
+        return views.filter((v) => show === 'all' || (show === 'main' ? !v.hidden : v.hidden));
+      },
     });
     ctx.addRoute({
       method: 'POST', path: '/', summary: 'Save a recipe', description: 'Ingredients are linked to Larder items when their name (or `item`) clearly is one.',
@@ -334,6 +389,25 @@ export default defineModule({
       },
     });
 
+    /** Scenario names, as people say them, to ids (the same strict matching as items). */
+    async function scenarioIdsFor(names: string[]): Promise<string[]> {
+      if (!names.length) return [];
+      if (!core.modules.isEnabled('scenarios')) throw new ValidationError('Scenarios are switched off, so a recipe can\'t go in one.');
+      const list = [...(await scenarioNames(core))].map(([id, name]) => ({ id, name }));
+      return names.map((n) => {
+        try {
+          return core.resolve.among('scenario', n, list).id;
+        } catch (err) {
+          if (err instanceof LarderError && err.code === 'not_found') {
+            throw new LarderError(`There's no scenario called "${n}".${list.length ? ` The scenarios are ${andList(list.map((x) => x.name))}.` : ''} Ask if they want it made with make_scenario.`, 404, 'not_found');
+          }
+          throw err;
+        }
+      });
+    }
+    const ScenarioNames = z.array(z.string().min(1).max(60)).max(20).describe('Scenarios it belongs to, by name, e.g. ["Christmas"]');
+    const ScenarioOnly = z.boolean().describe('True to show it only in those scenarios, not on the main recipe list (for seasonal recipes)');
+
     ctx.addTool({
       name: 'save_recipe', title: 'Save a recipe',
       description: 'Save a recipe the person liked, so it can be found and cooked again. For each ingredient give its name, and if you can, the Larder item and the quantity in that item\'s unit (get_item shows the unit), e.g. { name: "chopped tomatoes", quantity: 1, amount: "400 g tin" }.',
@@ -349,9 +423,11 @@ export default defineModule({
         })).max(60),
         method: z.string().max(20_000).describe('The steps, as plain text'),
         notes: z.string().max(2000).optional(),
+        scenarios: ScenarioNames.optional(),
+        scenario_only: ScenarioOnly.optional(),
       }),
-      async run(input) {
-        const r = await save({ ...input, source: 'AI assistant' });
+      async run({ scenarios, scenario_only, ...input }) {
+        const r = await save({ ...input, source: 'AI assistant', scenarioIds: await scenarioIdsFor(scenarios ?? []), scenarioOnly: scenario_only });
         const v = await view(core, r);
         const unlinked = v.ingredients.filter((i) => i.status === 'unknown').map((i) => i.name);
         return { text: `Saved "${r.title}".${unlinked.length ? ` Not matched to Larder items: ${andList(unlinked)}.` : ''} ${v.missing.length ? `Missing now: ${andList(v.missing)}.` : 'Everything needed is in the house.'}`, data: { id: r.id } };
@@ -359,14 +435,23 @@ export default defineModule({
     });
     ctx.addTool({
       name: 'list_recipes', title: 'List saved recipes', readOnly: true,
-      description: 'The household\'s saved recipes and what each is missing. Use it to suggest something they liked before.',
-      input: z.object({ query: z.string().max(100).optional().describe('Only recipes whose title or ingredients mention this') }),
-      async run({ query }) {
-        const views = await Promise.all((await all()).map((r) => view(core, r)));
+      description: 'The household\'s saved recipes and what each is missing. Use it to suggest something they liked before. Recipes kept for a scenario (e.g. Christmas) say so: only suggest those for that occasion.',
+      input: z.object({
+        query: z.string().max(100).optional().describe('Only recipes whose title or ingredients mention this'),
+        scenario: z.string().max(60).optional().describe('Only recipes in this scenario, e.g. "Christmas"'),
+      }),
+      async run({ query, scenario }) {
+        const known = await scenarioNames(core);
+        const only = scenario ? (await scenarioIdsFor([scenario]))[0]! : null;
+        const views = await Promise.all((await all()).filter((r) => !only || r.scenarioIds.includes(only)).map((r) => view(core, r, known)));
         const q = query?.trim().toLowerCase();
         const shown = q ? views.filter((v) => v.title.toLowerCase().includes(q) || v.ingredients.some((i) => i.name.toLowerCase().includes(q) || i.item?.toLowerCase().includes(q))) : views;
         if (!shown.length) return { text: q ? `No saved recipes mention "${query}".` : 'There are no saved recipes yet.', data: { recipes: [] } };
-        return { text: shown.map((v) => `- ${v.title}: ${v.missing.length ? `missing ${andList(v.missing)}` : 'everything in'}`).join('\n'), data: { recipes: shown.map((v) => ({ id: v.id, title: v.title, missing: v.missing })) } };
+        const where = (v: RecipeView) => (v.scenarios.length ? ` (${v.hidden ? 'only for' : 'also in'} ${andList(v.scenarios.map((x) => x.name))})` : '');
+        return {
+          text: shown.map((v) => `- ${v.title}${where(v)}: ${v.missing.length ? `missing ${andList(v.missing)}` : 'everything in'}`).join('\n'),
+          data: { recipes: shown.map((v) => ({ id: v.id, title: v.title, missing: v.missing, scenarios: v.scenarios.map((x) => x.name), scenario_only: v.hidden })) },
+        };
       },
     });
     ctx.addTool({
@@ -376,6 +461,22 @@ export default defineModule({
       async run({ recipe }) {
         const v = await view(core, await find(recipe));
         return { text: recipeText(v), data: v as unknown as Record<string, unknown> };
+      },
+    });
+    ctx.addTool({
+      name: 'set_recipe_scenarios', title: 'Put a recipe in scenarios', destructive: true,
+      description: 'Say which scenarios a saved recipe belongs to (e.g. a mince pie recipe in "Christmas"), and whether it shows only there. The list given replaces the old one; [] takes it out of every scenario.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title'), scenarios: ScenarioNames, only: ScenarioOnly.optional() }),
+      async run({ recipe, scenarios, only }) {
+        const r = await find(recipe);
+        const scenarioIds = await scenarioIdsFor(scenarios);
+        // Only the scenarios change; the rest of the recipe stays as it is.
+        const next = Recipe.parse({ ...r, scenarioIds, scenarioOnly: scenarioIds.length ? (only ?? r.scenarioOnly) : false, updatedAt: core.now() });
+        await recipes.put(next.id, next);
+        ctx.publish('recipes.changed', { id: next.id });
+        const v = await view(core, next);
+        const names = andList(v.scenarios.map((x) => x.name));
+        return { text: v.scenarios.length ? `${v.title} is in ${names}${v.hidden ? ', and only shows there' : ' and on the main list'}.` : `${v.title} isn't in any scenario.`, data: { id: v.id, scenarios: v.scenarios.map((x) => x.name), scenario_only: v.hidden } };
       },
     });
     ctx.addTool({

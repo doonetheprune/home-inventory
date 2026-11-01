@@ -149,7 +149,8 @@ export const api = {
     call: <T>(id: string, method: string, path: string, body?: unknown) => {
       // A module only reaches its own routes: no "..", even %-escaped, in the path.
       if (path.split('?')[0]!.split('/').some((s) => /^(\.|%2e){1,2}$/i.test(s))) return Promise.reject(new Error(`Not a path inside the ${id} module: ${path}`));
-      return request<T>(method, `/modules/${id}${path === '/' ? '' : path}`, body);
+      // The module's own root is its address with nothing after it ("/?show=all" too).
+      return request<T>(method, `/modules/${id}${path === '/' ? '' : path.startsWith('/?') ? path.slice(1) : path}`, body);
     },
   },
   oauth: {

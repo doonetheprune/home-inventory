@@ -851,6 +851,19 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "scenarioIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "scenarioOnly": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -990,11 +1003,45 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "scenarioIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "scenarioOnly": {
+            "default": false,
+            "type": "boolean"
+          },
           "missing": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "hidden": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1003,7 +1050,9 @@
           "ingredients",
           "createdAt",
           "updatedAt",
-          "missing"
+          "missing",
+          "scenarios",
+          "hidden"
         ]
       },
       "CookingProposalInput": {
@@ -3948,6 +3997,19 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "scenarioIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "scenarioOnly": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -3961,7 +4023,9 @@
           "createdAt",
           "updatedAt",
           "lastCookedAt",
-          "timesCooked"
+          "timesCooked",
+          "scenarioIds",
+          "scenarioOnly"
         ],
         "additionalProperties": false
       },
@@ -4095,11 +4159,46 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "scenarioIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "scenarioOnly": {
+            "default": false,
+            "type": "boolean"
+          },
           "missing": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "hidden": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -4114,7 +4213,11 @@
           "updatedAt",
           "lastCookedAt",
           "timesCooked",
-          "missing"
+          "scenarioIds",
+          "scenarioOnly",
+          "missing",
+          "scenarios",
+          "hidden"
         ],
         "additionalProperties": false
       },
@@ -12139,6 +12242,45 @@
         "tags": [
           "Module: recipes"
         ],
+        "description": "Without a filter, the main list: recipes kept for their scenarios are left out (ask for them with `show`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "productId",
+            "required": false,
+            "description": "Only recipes that use this item (scenario-only ones too)"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "scenarioId",
+            "required": false,
+            "description": "Only recipes in this scenario"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "main",
+                "scenario-only",
+                "all"
+              ]
+            },
+            "in": "query",
+            "name": "show",
+            "required": false,
+            "description": "Which recipes: the main list (default without a filter), those kept for scenarios, or all"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -12242,6 +12384,18 @@
                   "source": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "scenarioIds": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "scenarioOnly": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -12382,6 +12536,18 @@
                   "source": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "scenarioIds": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "scenarioOnly": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
