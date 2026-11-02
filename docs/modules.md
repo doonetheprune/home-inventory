@@ -104,6 +104,6 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |
 | `printing` | QR label sheets for places and items (Avery L7160, L7163, L7651, plain A4) |
-| `recipes` | Saved recipes, what's missing, and taking ingredients out of stock after cooking once confirmed |
+| `recipes` | Saved recipes, what's missing, scaling by ingredient ratios and named presets, and taking ingredients out of stock after cooking once confirmed |
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `_template` | Example to copy (off by default) |

@@ -6,9 +6,15 @@
  * what needs using soon. After cooking, Larder proposes what to take out of
  * stock and only does it once the person confirms (with quantities changed
  * if they like).
+ *
+ * Ingredients can carry ratios (2 eggs to 100 g flour to 300 ml milk), so a
+ * recipe can be scaled: "I've only got 2 eggs" works out the rest. Amounts
+ * people make often are kept as named presets ("Just me", "Family"); the
+ * default one is used unless another is asked for.
  */
 import { z } from 'zod';
-import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
+import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, pluralWord, roundQty, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
+import { convert, measuredBy, measureText, timesText, unitKey, unitsLike, withAmount } from './units';
 
 export const Ingredient = z.object({
   /** As the recipe says it, e.g. "chopped tomatoes". */
@@ -20,8 +26,25 @@ export const Ingredient = z.object({
   /** How the recipe puts it, e.g. "400 g" or "a handful". */
   amount: z.string().max(60).default(''),
   optional: z.boolean().default(false),
+  /**
+   * How much goes in for the recipe as saved, relative to the other
+   * ingredients, in `ratioUnit`: 2 (eggs), 100 (g of flour). Scaling works from these.
+   */
+  ratio: z.number().positive().nullable().default(null),
+  /** The ratio's measure: "g", "ml", "tsp", "slice"…; empty for a count (2 eggs). */
+  ratioUnit: z.string().max(20).default(''),
 });
 export type Ingredient = z.infer<typeof Ingredient>;
+
+/** Amounts the household makes often, e.g. "Family" at twice the recipe as saved. */
+export const Preset = z.object({
+  name: z.string().min(1).max(60),
+  /** How many times the recipe as saved: its ratios, stock quantities and servings. */
+  times: z.number().positive(),
+});
+export type Preset = z.infer<typeof Preset>;
+
+const MAX_PRESETS = 20;
 
 export const Recipe = z.object({
   id: Id,
@@ -36,6 +59,9 @@ export const Recipe = z.object({
   updatedAt: z.string(),
   lastCookedAt: z.string().nullable().default(null),
   timesCooked: z.number().int().default(0),
+  presets: z.array(Preset).max(MAX_PRESETS).default([]),
+  /** The preset used when none is asked for; null for the amounts as saved. */
+  defaultPreset: z.string().nullable().default(null),
 }).meta({ id: 'Recipe' });
 export type Recipe = z.infer<typeof Recipe>;
 
@@ -47,6 +73,12 @@ const IngredientInput = z.object({
   quantity: z.number().positive().optional(),
   amount: z.string().max(60).optional(),
   optional: z.boolean().optional(),
+  ratio: z.number().positive().max(1_000_000).nullable().optional().describe('How much goes in for the recipe as saved, in ratioUnit (2 eggs, 100 g flour)'),
+  ratioUnit: z.string().trim().max(20).optional().describe('g, kg, oz, lb, ml, l, tsp, tbsp, fl oz, pint or a word like "slice"; empty for a count'),
+});
+const PresetInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  times: z.number().positive().max(1000).describe('How many times the recipe as saved'),
 });
 const RecipeInput = z.object({
   title: z.string().trim().min(1).max(120),
@@ -55,10 +87,47 @@ const RecipeInput = z.object({
   method: z.string().max(20_000).optional(),
   notes: z.string().max(2000).optional(),
   source: z.string().max(60).optional(),
+  /** Replaces the presets; left out keeps them. */
+  presets: z.array(PresetInput).max(MAX_PRESETS).optional(),
+  /** One of the presets' names, or null for the amounts as saved. Left out keeps it. */
+  defaultPreset: z.string().trim().max(60).nullable().optional(),
 });
 type RecipeInput = z.input<typeof RecipeInput>;
 
-const Have = z.object({
+/** How much to make. Give one of these; none means the default preset (or the amounts as saved). */
+export const ScaleInput = z.object({
+  preset: z.string().trim().min(1).max(60).optional().describe('A saved preset, by name, e.g. "family"'),
+  servings: z.number().int().positive().max(1000).optional().describe('How many it is for, when the recipe says how many it serves'),
+  times: z.number().positive().max(1000).optional().describe('How many times the recipe as saved: 2 doubles it, 0.5 halves it, 1 is the amounts as saved'),
+  have: z.array(z.object({
+    ingredient: z.string().trim().min(1).max(120).describe('The ingredient, e.g. "eggs"'),
+    amount: z.number().positive().max(1_000_000),
+    unit: z.string().trim().max(20).optional().describe('e.g. "g", "kg", "ml", "tbsp"; leave out for a count (2 eggs)'),
+  })).min(1).max(20).optional().describe('How much they have of some ingredients, e.g. only 2 eggs: the rest is worked out from the ratios so that none needs more than this'),
+});
+export type ScaleInput = z.infer<typeof ScaleInput>;
+
+const PresetSave = ScaleInput.omit({ preset: true }).extend({
+  name: z.string().trim().min(1).max(60).describe('What to call it, e.g. "Family" or "Just me"'),
+  default: z.boolean().optional().describe('true to use it whenever no other amount is asked for; false to stop'),
+});
+type PresetSave = z.infer<typeof PresetSave>;
+
+const Scale = z.object({
+  /** saved: the amounts as saved. preset: a preset (the default one when nothing was asked for). */
+  kind: z.enum(['saved', 'preset', 'servings', 'times', 'have']),
+  /** How many times the recipe as saved. */
+  times: z.number(),
+  preset: z.string().nullable(),
+  servings: z.number().nullable(),
+  /** In words: "as saved", 'the "Family" preset', "for 6", "×2", "2 eggs". */
+  by: z.string(),
+  /** Given several ingredients they have, the one that runs out first. */
+  limitedBy: z.string().nullable(),
+});
+type Scale = z.infer<typeof Scale>;
+
+const IngredientView = z.object({
   name: z.string(),
   productId: z.string().nullable(),
   item: z.string().nullable(),
@@ -69,11 +138,22 @@ const Have = z.object({
   /** have: enough in stock. short: some, not enough. none: none in. unknown: not linked to a Larder item. */
   status: z.enum(['have', 'short', 'none', 'unknown']),
   optional: z.boolean(),
+  ratio: z.number().nullable(),
+  ratioUnit: z.string(),
+  /** How much at this scale, in words ("200 g", "4"), or as the recipe puts it when it can't be scaled. */
+  shown: z.string(),
+  /** The amount with the ingredient: "200 g plain flour", "1 egg". */
+  label: z.string(),
+  /** False when it has no ratio or stock quantity, so `shown` stays as saved whatever the scale. */
+  scales: z.boolean(),
+  /** What cooking takes from stock at this scale, in the item's own unit. */
+  need: z.number().nullable(),
 });
 export const RecipeView = Recipe.extend({
-  ingredients: z.array(Have),
-  /** Required linked ingredients that are short or none. */
+  ingredients: z.array(IngredientView),
+  /** Required linked ingredients that are short or none, at this scale. */
   missing: z.array(z.string()),
+  scale: Scale,
 }).meta({ id: 'RecipeView' });
 export type RecipeView = z.infer<typeof RecipeView>;
 
@@ -82,6 +162,10 @@ export const Proposal = z.object({
   recipeId: z.string(),
   recipe: z.string(),
   servings: z.number().nullable(),
+  /** How many times the recipe as saved, and the preset or what they had that set it. */
+  times: z.number().default(1),
+  preset: z.string().nullable().default(null),
+  from: z.string().default(''),
   items: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number(), unit: z.string(), inStock: z.number() })),
   /** Ingredients that can't be taken from stock (not linked, or no amount). */
   skipped: z.array(z.string()),
@@ -91,7 +175,91 @@ export type Proposal = z.infer<typeof Proposal>;
 
 const PROPOSAL_HOURS = 6;
 
-async function view(core: CoreApi, r: Recipe): Promise<RecipeView> {
+const sameName = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
+/** "grams" → "g", "Slices" → "slice", "each" → "": stored the same way however it was typed. */
+const canonicalUnit = (u: string) => (unitKey(u) === 'floz' ? 'fl oz' : unitKey(u));
+const roundTimes = (t: number) => Math.max(0.0001, Math.round(t * 10_000) / 10_000);
+
+/** An ingredient with its Larder item and what it can be scaled by. */
+interface Base {
+  i: Ingredient;
+  s: ProductSummary | undefined;
+  names: string[];
+  /** The ratio, or the stock quantity in the item's unit when there's no ratio. */
+  measure: { amount: number; unit: string } | null;
+  /** What cooking takes from stock for the recipe as saved, in the item's unit. */
+  stock: number | null;
+}
+
+function ingredientCalled(core: CoreApi, r: Recipe, base: Base[], ref: string): Base {
+  const what = `ingredient in ${r.title}`;
+  try {
+    return core.resolve.among(what, ref, base.map((b) => ({ name: b.i.name, b }))).b;
+  } catch (err) {
+    if (!(err instanceof LarderError) || err.status !== 404) throw err;
+    // "milk" when the ingredient is "semi-skimmed" but linked to the milk.
+    try {
+      return core.resolve.among(what, ref, base.filter((b) => b.s).map((b) => ({ name: b.s!.product.name, b }))).b;
+    } catch (again) {
+      throw again instanceof LarderError && again.status !== 404 ? again : err;
+    }
+  }
+}
+
+function presetCalled(core: CoreApi, r: Recipe, ref: string): Preset {
+  if (!r.presets.length) throw new LarderError(`${r.title} has no presets yet. Save one with save_recipe_preset.`, 404, 'not_found');
+  try {
+    return core.resolve.among(`${r.title} preset`, ref, r.presets);
+  } catch (err) {
+    if (err instanceof LarderError && err.status === 404) throw new LarderError(`${r.title} has no preset called "${ref.trim()}". Its presets are ${andList(r.presets.map((p) => `"${p.name}"`))}.`, 404, 'not_found');
+    throw err;
+  }
+}
+
+function unitMismatch(r: Recipe, b: Base): string {
+  const u = b.measure!.unit;
+  const by = measuredBy(u);
+  if (by) return `${r.title} measures the ${b.i.name} by ${by}, so give it in ${unitsLike(u)}.`;
+  if (!unitKey(u)) return `${r.title} counts the ${b.i.name}, so give how many, with no unit.`;
+  return `${r.title} measures the ${b.i.name} in ${pluralWord(unitKey(u), 2)}, so give how many of those.`;
+}
+
+/** How much to make, from what was asked (or the default preset). */
+function scaleFor(core: CoreApi, r: Recipe, base: Base[], input: ScaleInput): Scale {
+  const asked = (['preset', 'servings', 'times', 'have'] as const).filter((k) => input[k] !== undefined);
+  if (asked.length > 1) throw new ValidationError(`Give one of preset, servings, times or have, not ${andList(asked)}.`);
+  const plain = { preset: null, servings: null, limitedBy: null };
+  if (input.preset !== undefined) {
+    const p = presetCalled(core, r, input.preset);
+    return { ...plain, kind: 'preset', times: p.times, preset: p.name, by: `the "${p.name}" preset` };
+  }
+  if (input.servings !== undefined) {
+    if (!r.serves) throw new ValidationError(`${r.title} doesn't say how many it serves, so it can't be worked out for ${input.servings}. Give times, or what they have.`);
+    return { ...plain, kind: 'servings', times: input.servings / r.serves, servings: input.servings, by: `for ${input.servings}` };
+  }
+  if (input.times !== undefined) return { ...plain, kind: input.times === 1 ? 'saved' : 'times', times: input.times, by: input.times === 1 ? 'as saved' : timesText(input.times) };
+  if (input.have?.length) {
+    const scalable = base.filter((b) => b.measure).map((b) => b.i.name);
+    let least: { times: number; name: string } | null = null;
+    const said: string[] = [];
+    for (const h of input.have) {
+      const b = ingredientCalled(core, r, base, h.ingredient);
+      if (!b.measure) throw new ValidationError(`${r.title} has no ratio for ${b.i.name}, so the rest can't be worked out from it.${scalable.length ? ` It can from ${andList(scalable)}.` : ' Add ratios to its ingredients first (save_recipe).'}`);
+      const n = convert(h.amount, h.unit ?? b.measure.unit, b.measure.unit, b.names);
+      if (n === null) throw new ValidationError(unitMismatch(r, b));
+      const unit = h.unit ?? b.measure.unit;
+      said.push(withAmount(measureText(h.amount, unit), b.i.name, unit));
+      const t = n / b.measure.amount;
+      if (!least || t < least.times) least = { times: t, name: b.i.name };
+    }
+    return { ...plain, kind: 'have', times: least!.times, by: andList(said), limitedBy: input.have.length > 1 ? least!.name : null };
+  }
+  const d = r.defaultPreset ? r.presets.find((p) => p.name === r.defaultPreset) : undefined;
+  if (d) return { ...plain, kind: 'preset', times: d.times, preset: d.name, by: `the "${d.name}" preset` };
+  return { ...plain, kind: 'saved', times: 1, by: 'as saved' };
+}
+
+async function view(core: CoreApi, r: Recipe, input: ScaleInput = {}): Promise<RecipeView> {
   const summaries = new Map<string, ProductSummary>();
   for (const i of r.ingredients) {
     if (i.productId && !summaries.has(i.productId)) {
@@ -99,24 +267,55 @@ async function view(core: CoreApi, r: Recipe): Promise<RecipeView> {
       if (s) summaries.set(i.productId, s);
     }
   }
-  const ingredients = r.ingredients.map((i) => {
+  const base: Base[] = r.ingredients.map((i) => {
     const s = i.productId ? summaries.get(i.productId) : undefined;
-    const need = i.quantity ?? 0;
-    const status = !s ? 'unknown' : s.inStock <= 0 ? 'none' : s.inStock + 1e-9 < need ? 'short' : 'have';
-    return { name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, inStock: s ? s.inStock : null, status, optional: i.optional } as const;
+    const names = [i.name, ...(s ? [s.product.name] : [])];
+    const measure = i.ratio ? { amount: i.ratio, unit: i.ratioUnit } : s && i.quantity ? { amount: i.quantity, unit: s.product.unit } : null;
+    // The quantity given, or the ratio when it's in the item's own unit (or converts to it).
+    const stock = !s ? null : (i.quantity ?? (i.ratio ? convert(i.ratio, i.ratioUnit, s.product.unit, names) : null));
+    return { i, s, names, measure, stock };
   });
-  return { ...r, ingredients, missing: ingredients.filter((i) => !i.optional && (i.status === 'none' || i.status === 'short')).map((i) => i.item ?? i.name) };
+  const scale = scaleFor(core, r, base, input);
+  const t = scale.times;
+  const ingredients = base.map(({ i, s, measure, stock }) => {
+    const need = stock === null ? null : roundQty(stock * t);
+    const status = !s ? 'unknown' : s.inStock <= 0 ? 'none' : s.inStock + 1e-9 < (need ?? 0) ? 'short' : 'have';
+    const shown = t === 1 ? i.amount || (measure ? measureText(measure.amount, measure.unit) : '') : measure ? measureText(measure.amount * t, measure.unit) : i.amount;
+    return {
+      name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, inStock: s ? s.inStock : null, status, optional: i.optional,
+      ratio: i.ratio, ratioUnit: i.ratioUnit, shown, label: withAmount(shown, i.name, measure?.unit ?? ''), scales: !!measure, need,
+    } as const;
+  });
+  return { ...r, ingredients, missing: ingredients.filter((i) => !i.optional && (i.status === 'none' || i.status === 'short')).map((i) => i.item ?? i.name), scale };
+}
+
+function scaleLine(v: RecipeView): string | null {
+  const s = v.scale;
+  const t = timesText(s.times);
+  if (s.kind === 'preset') return `Amounts for the "${s.preset}" preset (${s.preset === v.defaultPreset ? 'the default, ' : ''}${t}).`;
+  if (s.kind === 'servings') return `Amounts for ${s.servings} (${t}).`;
+  if (s.kind === 'times') return `Amounts at ${t} the recipe as saved.`;
+  if (s.kind === 'have') return `Amounts worked out from ${s.by} (${t}).${s.limitedBy ? ` Limited by the ${s.limitedBy}.` : ''}`;
+  return v.presets.length ? 'Amounts as saved.' : null;
 }
 
 export function recipeText(v: RecipeView): string {
+  const s = v.scale;
   const lines = [`${v.title}${v.serves ? ` (serves ${v.serves})` : ''}`];
+  const line = scaleLine(v);
+  if (line) lines.push(line);
+  if (v.presets.length) {
+    const list = v.presets.map((p) => `${p.name} (${timesText(p.times)}${p.name === v.defaultPreset ? ', the default' : ''})`);
+    lines.push(`Presets: ${list.join(', ')}.${!v.defaultPreset && s.kind === 'saved' ? ' None is the default: ask which they\'d like, or use the amounts as saved.' : ''}`);
+  }
   lines.push('Ingredients:');
   for (const i of v.ingredients) {
-    const how = i.amount || (i.quantity && i.unit ? amount(i.quantity, i.unit) : '');
     const state = i.status === 'have' ? 'in the house' : i.status === 'short' ? `only ${amount(i.inStock ?? 0, i.unit ?? 'each')} in` : i.status === 'none' ? 'none in' : 'not tracked in Larder';
-    lines.push(`- ${how ? `${how} ` : ''}${i.name}${i.optional ? ' (optional)' : ''}: ${state}`);
+    const fixed = !i.scales && s.times !== 1 ? ' (not scaled)' : '';
+    lines.push(`- ${i.label}${i.optional ? ' (optional)' : ''}${fixed}: ${state}`);
   }
   lines.push(v.missing.length ? `Missing: ${andList(v.missing)}.` : 'Everything needed is in the house.');
+  if (s.kind !== 'preset' && s.kind !== 'saved') lines.push('If they might make these amounts again, offer to save them as a preset (save_recipe_preset).');
   if (v.method) lines.push('Method:', v.method);
   if (v.notes) lines.push(`Notes: ${v.notes}`);
   if (v.lastCookedAt) lines.push(`Last cooked ${v.lastCookedAt.slice(0, 10)} (${v.timesCooked} time${v.timesCooked === 1 ? '' : 's'}).`);
@@ -124,28 +323,44 @@ export function recipeText(v: RecipeView): string {
   return lines.join('\n');
 }
 
+/** "2 eggs, 100 g plain flour and 300 ml milk": the first few amounts at that scale. */
+const amountsText = (v: RecipeView) => {
+  const shown = v.ingredients.filter((i) => i.scales && i.shown).map((i) => i.label);
+  return shown.length > 3 ? `${shown.slice(0, 3).join(', ')}…` : andList(shown);
+};
+
 export default defineModule({
   id: 'recipes',
   name: 'Recipes',
-  description: 'Saves recipes the household liked (usually from an AI assistant), shows what\'s missing, and takes ingredients out of stock after cooking once you confirm.',
-  version: '1.0.0',
+  description: 'Saves recipes the household liked (usually from an AI assistant), shows what\'s missing, scales them by ratios and presets, and takes ingredients out of stock after cooking once you confirm.',
+  version: '1.1.0',
   setup(ctx) {
     const recipes = ctx.collection<Recipe>('recipes');
     const proposals = ctx.collection<Proposal>('proposals');
     const core = ctx.core;
     const all = async () => (await recipes.list()).map((d) => d.data).sort((a, b) => a.title.localeCompare(b.title));
 
+    // Changes to a saved recipe one at a time, so a preset saved by an
+    // assistant and an edit in the app at the same moment don't lose one another.
+    let queue: Promise<unknown> = Promise.resolve();
+    const serial = <T>(fn: () => Promise<T>): Promise<T> => {
+      const run = queue.then(fn, fn);
+      queue = run.catch(() => undefined);
+      return run;
+    };
+
     async function get(id: string): Promise<Recipe> {
       const r = await recipes.get(id);
       if (!r) throw new NotFoundError('Recipe', id);
-      return r;
+      // Saved before presets and ratios existed: fill in their defaults.
+      return Recipe.parse(r);
     }
 
     /** By id, or by title with the same strict rules as items (so "egg" doesn't find "Veggie chilli"). */
     async function find(ref: string): Promise<Recipe> {
       const byId = await recipes.get(ref.trim());
-      if (byId) return byId;
-      return core.resolve.among('saved recipe', ref, (await all()).map((r) => ({ name: r.title, recipe: r }))).recipe;
+      if (byId) return Recipe.parse(byId);
+      return Recipe.parse(core.resolve.among('saved recipe', ref, (await all()).map((r) => ({ name: r.title, recipe: r }))).recipe);
     }
 
     /**
@@ -161,10 +376,21 @@ export default defineModule({
         if (i.productId !== undefined) productId = await known(i.productId);
         else if (i.item) productId = (await core.resolve.product(i.item).catch(() => null))?.id ?? null;
         else {
-          const before = existing.find((e) => e.productId && e.name.trim().toLowerCase() === i.name.trim().toLowerCase());
+          const before = existing.find((e) => e.productId && sameName(e.name, i.name));
           productId = (await known(before?.productId)) ?? (await core.resolve.product(i.name).catch(() => null))?.id ?? null;
         }
-        out.push(Ingredient.parse({ name: i.name, productId, quantity: i.quantity ?? null, amount: i.amount ?? '', optional: i.optional ?? false }));
+        const ratio = i.ratio ?? null;
+        out.push(Ingredient.parse({ name: i.name, productId, quantity: i.quantity ?? null, amount: i.amount ?? '', optional: i.optional ?? false, ratio, ratioUnit: ratio ? canonicalUnit(i.ratioUnit ?? '') : '' }));
+      }
+      return out;
+    }
+
+    function presetsFrom(list: z.input<typeof PresetInput>[]): Preset[] {
+      const out: Preset[] = [];
+      for (const p of list) {
+        const name = p.name.trim();
+        if (out.some((x) => sameName(x.name, name))) throw new ValidationError(`Two presets are called "${name}". Give each its own name.`);
+        out.push({ name, times: roundTimes(p.times) });
       }
       return out;
     }
@@ -172,42 +398,86 @@ export default defineModule({
     async function save(input: RecipeInput, existing?: Recipe): Promise<Recipe> {
       const data = RecipeInput.parse(input);
       const now = core.now();
+      const presets = data.presets !== undefined ? presetsFrom(data.presets) : (existing?.presets ?? []);
+      const wanted = data.defaultPreset !== undefined ? data.defaultPreset || null : (existing?.defaultPreset ?? null);
+      const defaultPreset = wanted === null ? null : (presets.find((p) => sameName(p.name, wanted))?.name ?? null);
+      if (wanted !== null && !defaultPreset && data.defaultPreset !== undefined) {
+        throw new ValidationError(`The default preset must be one of the recipe's presets${presets.length ? ` (${andList(presets.map((p) => `"${p.name}"`))})` : ', and it has none'}.`);
+      }
       const r = Recipe.parse({
         ...(existing ?? { id: newId(), createdAt: now, lastCookedAt: null, timesCooked: 0 }),
         // Left out keeps what it was; null clears it.
         title: data.title, serves: data.serves !== undefined ? data.serves : (existing?.serves ?? null), ingredients: await ingredientsFrom(data.ingredients, existing?.ingredients),
         method: data.method ?? existing?.method ?? '', notes: data.notes ?? existing?.notes ?? '', source: data.source ?? existing?.source ?? '', updatedAt: now,
+        presets, defaultPreset,
       });
       await recipes.put(r.id, r);
       ctx.publish('recipes.changed', { id: r.id });
       return r;
     }
 
-    async function propose(r: Recipe, servings?: number | null): Promise<Proposal> {
-      const scale = servings && r.serves ? servings / r.serves : 1;
-      const v = await view(core, r);
+    async function savePreset(id: string, input: PresetSave): Promise<{ recipe: Recipe; preset: Preset }> {
+      return serial(async () => {
+        const r = await get(id);
+        const old = r.presets.find((p) => sameName(p.name, input.name));
+        // "family" saves over "Family" and keeps its name.
+        const name = old?.name ?? input.name.trim();
+        const asked = input.times !== undefined || input.servings !== undefined || input.have !== undefined;
+        if (!asked && !old) throw new ValidationError(`Say how much the "${name}" preset makes: times, servings, or what they have.`);
+        const times = asked ? (await view(core, r, { times: input.times, servings: input.servings, have: input.have })).scale.times : old!.times;
+        const preset = { name, times: roundTimes(times) };
+        const presets = old ? r.presets.map((p) => (p === old ? preset : p)) : [...r.presets, preset];
+        if (presets.length > MAX_PRESETS) throw new ValidationError(`${r.title} has ${MAX_PRESETS} presets already. Forget one first.`);
+        let defaultPreset = r.defaultPreset;
+        if (input.default === true) defaultPreset = name;
+        else if (input.default === false && defaultPreset === name) defaultPreset = null;
+        const saved = Recipe.parse({ ...r, presets, defaultPreset, updatedAt: core.now() });
+        await recipes.put(saved.id, saved);
+        ctx.publish('recipes.changed', { id: saved.id });
+        return { recipe: saved, preset };
+      });
+    }
+
+    async function forgetPreset(id: string, ref: string): Promise<{ recipe: Recipe; preset: Preset; wasDefault: boolean }> {
+      return serial(async () => {
+        const r = await get(id);
+        const preset = presetCalled(core, r, ref);
+        const wasDefault = r.defaultPreset === preset.name;
+        const saved = Recipe.parse({ ...r, presets: r.presets.filter((p) => p !== preset), defaultPreset: wasDefault ? null : r.defaultPreset, updatedAt: core.now() });
+        await recipes.put(saved.id, saved);
+        ctx.publish('recipes.changed', { id: saved.id });
+        return { recipe: saved, preset, wasDefault };
+      });
+    }
+
+    async function propose(r: Recipe, scale: ScaleInput = {}): Promise<Proposal> {
+      const v = await view(core, r, scale);
       const items: Proposal['items'] = [];
       const skipped: string[] = [];
       // One line per item: "butter 200 g" and "butter for greasing" add up.
       const wanted = new Map<string, { name: string; want: number; unit: string; inStock: number; names: string[] }>();
       for (const i of v.ingredients) {
-        if (!i.productId || !i.quantity) {
+        if (!i.productId || !i.need) {
           if (!i.optional) skipped.push(i.name);
           continue;
         }
         const w = wanted.get(i.productId);
         if (w) {
-          w.want += i.quantity * scale;
+          w.want += i.need;
           w.names.push(i.name);
-        } else wanted.set(i.productId, { name: i.item ?? i.name, want: i.quantity * scale, unit: i.unit ?? 'each', inStock: i.inStock ?? 0, names: [i.name] });
+        } else wanted.set(i.productId, { name: i.item ?? i.name, want: i.need, unit: i.unit ?? 'each', inStock: i.inStock ?? 0, names: [i.name] });
       }
       for (const [productId, w] of wanted) {
         // Propose no more than there is; the person can change it before confirming.
-        const qty = Math.min(Math.round(w.want * 1000) / 1000, w.inStock);
+        const qty = Math.min(roundQty(w.want), w.inStock);
         if (qty > 0) items.push({ productId, name: w.name, quantity: qty, unit: w.unit, inStock: w.inStock });
         else skipped.push(...w.names);
       }
-      const p = Proposal.parse({ id: newId(), recipeId: r.id, recipe: r.title, servings: servings ?? null, items, skipped, expiresAt: new Date(Date.parse(core.now()) + PROPOSAL_HOURS * 3_600_000).toISOString() });
+      const s = v.scale;
+      const p = Proposal.parse({
+        id: newId(), recipeId: r.id, recipe: r.title, servings: s.servings, times: s.times, preset: s.preset, from: s.kind === 'have' ? s.by : '',
+        items, skipped, expiresAt: new Date(Date.parse(core.now()) + PROPOSAL_HOURS * 3_600_000).toISOString(),
+      });
       // Forget old proposals as new ones are made.
       for (const old of await proposals.list()) if (Date.parse(old.data.expiresAt) < Date.parse(core.now())) await proposals.remove(old.id);
       await proposals.put(p.id, p);
@@ -242,27 +512,35 @@ export default defineModule({
           await proposals.put(p.id, p);
           throw err;
         }
-        const r = await recipes.get(p.recipeId);
-        if (r) {
+        await serial(async () => {
+          const r = await recipes.get(p.recipeId);
+          if (!r) return;
           await recipes.put(r.id, { ...r, lastCookedAt: core.now(), timesCooked: r.timesCooked + 1 });
           ctx.publish('recipes.changed', { id: r.id });
-        }
+        });
         return { used: uses.length, products: result };
       } finally {
         confirming.delete(proposalId);
       }
     }
 
-    const proposalText = (p: Proposal) => [
-      `Cooking ${p.recipe}${p.servings ? ` for ${p.servings}` : ''} would take out of stock:`,
-      ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${amount(i.quantity, i.unit)} (of ${amount(i.inStock, i.unit)})`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
-      ...(p.skipped.length ? [`Not taken: ${p.skipped.join(', ')}.`] : []),
-      `Proposal id: ${p.id}. Nothing has changed yet: ask the person to confirm or adjust, then call confirm_cooking.`,
-    ].join('\n');
+    const proposalText = (p: Proposal) => {
+      const t = timesText(p.times);
+      const how = p.preset ? ` (the "${p.preset}" preset, ${t})` : p.servings ? ` for ${p.servings}` : p.from ? ` from ${p.from} (${t})` : p.times !== 1 ? ` (${t})` : '';
+      return [
+        `Cooking ${p.recipe}${how} would take out of stock:`,
+        ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${amount(i.quantity, i.unit)} (of ${amount(i.inStock, i.unit)})`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
+        ...(p.skipped.length ? [`Not taken: ${p.skipped.join(', ')}.`] : []),
+        `Proposal id: ${p.id}. Nothing has changed yet: ask the person to confirm or adjust, then call confirm_cooking.`,
+      ].join('\n');
+    };
+
+    const scaleBody = ScaleInput.optional();
+    const scaleOf = (body: unknown) => (body ?? {}) as ScaleInput;
 
     ctx.addRoute({
-      method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each', response: z.array(RecipeView),
-      handler: async () => Promise.all((await all()).map((r) => view(core, r))),
+      method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each (at its default preset)', response: z.array(RecipeView),
+      handler: async () => Promise.all((await all()).map((r) => view(core, Recipe.parse(r)))),
     });
     ctx.addRoute({
       method: 'POST', path: '/', summary: 'Save a recipe', description: 'Ingredients are linked to Larder items when their name (or `item`) clearly is one.',
@@ -270,12 +548,12 @@ export default defineModule({
       handler: async ({ body }) => view(core, await save(body as RecipeInput)),
     });
     ctx.addRoute({
-      method: 'GET', path: '/:id', summary: 'A recipe, with what\'s in the house', params: z.object({ id: Id }), response: RecipeView,
+      method: 'GET', path: '/:id', summary: 'A recipe, with what\'s in the house, at its default preset', params: z.object({ id: Id }), response: RecipeView,
       handler: async ({ params }) => view(core, await get((params as { id: string }).id)),
     });
     ctx.addRoute({
-      method: 'PUT', path: '/:id', summary: 'Replace a recipe', params: z.object({ id: Id }), body: RecipeInput, response: RecipeView,
-      handler: async ({ params, body }) => view(core, await save(body as RecipeInput, await get((params as { id: string }).id))),
+      method: 'PUT', path: '/:id', summary: 'Replace a recipe', description: 'Presets and the default preset are kept unless given.', params: z.object({ id: Id }), body: RecipeInput, response: RecipeView,
+      handler: async ({ params, body }) => view(core, await serial(async () => save(body as RecipeInput, await get((params as { id: string }).id)))),
     });
     ctx.addRoute({
       method: 'DELETE', path: '/:id', summary: 'Forget a recipe', params: z.object({ id: Id }), response: z.object({ ok: z.literal(true) }),
@@ -287,10 +565,31 @@ export default defineModule({
       },
     });
     ctx.addRoute({
-      method: 'POST', path: '/:id/missing-to-list', summary: 'Put the missing ingredients on the shopping list', params: z.object({ id: Id }),
+      method: 'POST', path: '/:id/scale', summary: 'A recipe worked out for another amount',
+      description: 'Give one of: a preset, servings, times (2 doubles it), or `have` (how much there is of some ingredients; the rest follows from the ratios, so none needs more). None gives the default preset.',
+      params: z.object({ id: Id }), body: scaleBody, response: RecipeView,
+      handler: async ({ params, body }) => view(core, await get((params as { id: string }).id), scaleOf(body)),
+    });
+    ctx.addRoute({
+      method: 'POST', path: '/:id/presets', summary: 'Save amounts as a preset, or change which is the default',
+      description: 'How much is given as for /scale (times, servings or have). Saving an existing name replaces it; with no amount, only `default` changes.',
+      params: z.object({ id: Id }), body: PresetSave, response: RecipeView,
+      handler: async ({ params, body }) => view(core, (await savePreset((params as { id: string }).id, body as PresetSave)).recipe),
+    });
+    ctx.addRoute({
+      method: 'DELETE', path: '/:id/presets/:name', summary: 'Forget a preset', description: 'If it was the default, the amounts as saved are used again.',
+      params: z.object({ id: Id, name: z.string().min(1).max(60) }), response: RecipeView,
+      handler: async ({ params }) => {
+        const { id, name } = params as { id: string; name: string };
+        return view(core, (await forgetPreset(id, name)).recipe);
+      },
+    });
+    ctx.addRoute({
+      method: 'POST', path: '/:id/missing-to-list', summary: 'Put the missing ingredients on the shopping list', description: 'At the default preset, or the amount given (as for /scale).',
+      params: z.object({ id: Id }), body: scaleBody,
       response: z.object({ added: z.array(z.string()) }),
-      async handler({ params }) {
-        const v = await view(core, await get((params as { id: string }).id));
+      async handler({ params, body }) {
+        const v = await view(core, await get((params as { id: string }).id), scaleOf(body));
         const missing = v.ingredients.filter((i) => !i.optional && i.productId && (i.status === 'none' || i.status === 'short'));
         for (const i of missing) await core.products.setOnList(i.productId!, true);
         return { added: missing.map((i) => i.item ?? i.name) };
@@ -298,8 +597,9 @@ export default defineModule({
     });
     ctx.addRoute({
       method: 'POST', path: '/:id/cook', summary: 'Propose what cooking this takes out of stock (changes nothing yet)',
-      params: z.object({ id: Id }), body: z.object({ servings: z.number().int().positive().optional() }).optional(), response: Proposal,
-      handler: async ({ params, body }) => propose(await get((params as { id: string }).id), (body as { servings?: number } | undefined)?.servings),
+      description: 'At the default preset, or the amount given (as for /scale).',
+      params: z.object({ id: Id }), body: scaleBody, response: Proposal,
+      handler: async ({ params, body }) => propose(await get((params as { id: string }).id), scaleOf(body)),
     });
     ctx.addRoute({
       method: 'POST', path: '/proposals/:proposalId/confirm', summary: 'Confirm a cooking proposal, with quantities changed if wanted',
@@ -321,34 +621,65 @@ export default defineModule({
         for (const h of hits) {
           const r = list.find((x) => x.id === h.refId);
           if (!r) continue;
-          const v = await view(core, r);
+          const v = await view(core, Recipe.parse(r));
           out.push({ type: 'recipe', id: r.id, title: r.title, subtitle: v.missing.length ? `Missing ${andList(v.missing)}` : 'You have everything', href: `/m/recipes/${r.id}` });
         }
         return out;
       },
     });
 
+    const ToolIngredient = z.object({
+      name: z.string().min(1).max(120).describe('The ingredient, e.g. "chopped tomatoes"'),
+      item: z.string().max(200).optional().describe('The Larder item, if its name is different'),
+      quantity: z.number().positive().optional().describe('How much, in the Larder item\'s own unit (e.g. 1 tin, 0.2 kg)'),
+      amount: z.string().max(60).optional().describe('How the recipe puts it, e.g. "400 g" or "a handful"'),
+      optional: z.boolean().optional(),
+      ratio: z.number().positive().max(1_000_000).optional().describe('How much goes in for the recipe as saved, in ratio_unit: 2 (eggs), 100 (g flour). Give the main ingredients one so the recipe can be scaled to what they have'),
+      ratio_unit: z.string().max(20).optional().describe('The ratio\'s measure: g, kg, oz, lb, ml, l, tsp, tbsp, fl oz, pint, or a word like "slice"; leave out for a count (2 eggs)'),
+    });
+    type ToolIngredient = z.infer<typeof ToolIngredient>;
+    const asInput = (e: Ingredient) => ({ name: e.name, productId: e.productId, quantity: e.quantity ?? undefined, amount: e.amount, optional: e.optional, ratio: e.ratio, ratioUnit: e.ratioUnit });
+    /** Changing a saved recipe: what an ingredient leaves out stays as it was. */
+    const merged = (i: ToolIngredient, before: Ingredient[]) => {
+      const e = before.find((x) => sameName(x.name, i.name));
+      return {
+        name: i.name, ...(i.item !== undefined ? { item: i.item } : {}),
+        quantity: i.quantity ?? e?.quantity ?? undefined, amount: i.amount ?? e?.amount, optional: i.optional ?? e?.optional,
+        ratio: i.ratio ?? e?.ratio ?? null, ratioUnit: i.ratio !== undefined ? (i.ratio_unit ?? '') : (i.ratio_unit ?? e?.ratioUnit ?? ''),
+      };
+    };
+
     ctx.addTool({
       name: 'save_recipe', title: 'Save a recipe',
-      description: 'Save a recipe the person liked, so it can be found and cooked again. For each ingredient give its name, and if you can, the Larder item and the quantity in that item\'s unit (get_item shows the unit), e.g. { name: "chopped tomatoes", quantity: 1, amount: "400 g tin" }.',
+      description: 'Save a recipe the person liked, so it can be found and cooked again, or change a saved one (give its title as recipe). For each ingredient give its name, and if you can, the Larder item and the quantity in that item\'s unit (get_item shows the unit), e.g. { name: "chopped tomatoes", quantity: 1, amount: "400 g tin" }. Give the main ingredients a ratio too (eggs: ratio 2; flour: ratio 100, ratio_unit "g"), so it can be scaled to what they have.',
       input: z.object({
-        title: z.string().min(1).max(120),
+        recipe: z.string().min(1).max(120).optional().describe('To change a saved recipe (for example to add ratios), its title; leave out to save a new one'),
+        title: z.string().min(1).max(120).optional().describe('Needed for a new recipe'),
         serves: z.number().int().positive().optional(),
-        ingredients: z.array(z.object({
-          name: z.string().min(1).max(120).describe('The ingredient, e.g. "chopped tomatoes"'),
-          item: z.string().max(200).optional().describe('The Larder item, if its name is different'),
-          quantity: z.number().positive().optional().describe('How much, in the Larder item\'s own unit (e.g. 1 tin, 0.2 kg)'),
-          amount: z.string().max(60).optional().describe('How the recipe puts it, e.g. "400 g" or "a handful"'),
-          optional: z.boolean().optional(),
-        })).max(60),
-        method: z.string().max(20_000).describe('The steps, as plain text'),
+        ingredients: z.array(ToolIngredient).max(60).optional().describe('Needed for a new recipe. When changing one, send every ingredient (any left out are dropped); what you leave out of an ingredient stays as it was'),
+        method: z.string().max(20_000).optional().describe('The steps, as plain text. Needed for a new recipe'),
         notes: z.string().max(2000).optional(),
       }),
       async run(input) {
-        const r = await save({ ...input, source: 'AI assistant' });
-        const v = await view(core, r);
+        const r = await serial(async () => {
+          if (input.recipe) {
+            const e = await find(input.recipe);
+            const ingredients = input.ingredients ? input.ingredients.map((i) => merged(i, e.ingredients)) : e.ingredients.map(asInput);
+            return save({ title: input.title ?? e.title, serves: input.serves, ingredients, method: input.method, notes: input.notes }, await get(e.id));
+          }
+          if (!input.title) throw new ValidationError('Give the new recipe a title. To change a saved one, give its title as recipe.');
+          if (!input.method) throw new ValidationError('Give the method (the steps) for a new recipe.');
+          return save({ title: input.title, serves: input.serves, ingredients: (input.ingredients ?? []).map((i) => merged(i, [])), method: input.method, notes: input.notes, source: 'AI assistant' });
+        });
+        const v = await view(core, r, { times: 1 });
         const unlinked = v.ingredients.filter((i) => i.status === 'unknown').map((i) => i.name);
-        return { text: `Saved "${r.title}".${unlinked.length ? ` Not matched to Larder items: ${andList(unlinked)}.` : ''} ${v.missing.length ? `Missing now: ${andList(v.missing)}.` : 'Everything needed is in the house.'}`, data: { id: r.id } };
+        const ratios = v.ingredients.filter((i) => i.ratio);
+        const noRatio = v.ingredients.filter((i) => !i.ratio && !i.optional).map((i) => i.name);
+        const scaling = ratios.length && noRatio.length ? ` No ratio for ${andList(noRatio)}, so ${noRatio.length === 1 ? 'it stays' : 'those stay'} as saved when it's scaled.` : '';
+        return {
+          text: `${input.recipe ? 'Changed' : 'Saved'} "${r.title}".${unlinked.length ? ` Not matched to Larder items: ${andList(unlinked)}.` : ''} ${v.missing.length ? `Missing now: ${andList(v.missing)}.` : 'Everything needed is in the house.'}${scaling}`,
+          data: { id: r.id },
+        };
       },
     });
     ctx.addTool({
@@ -356,28 +687,62 @@ export default defineModule({
       description: 'The household\'s saved recipes and what each is missing. Use it to suggest something they liked before.',
       input: z.object({ query: z.string().max(100).optional().describe('Only recipes whose title or ingredients mention this') }),
       async run({ query }) {
-        const views = await Promise.all((await all()).map((r) => view(core, r)));
+        const views = await Promise.all((await all()).map((r) => view(core, Recipe.parse(r))));
         const q = query?.trim().toLowerCase();
         const shown = q ? views.filter((v) => v.title.toLowerCase().includes(q) || v.ingredients.some((i) => i.name.toLowerCase().includes(q) || i.item?.toLowerCase().includes(q))) : views;
         if (!shown.length) return { text: q ? `No saved recipes mention "${query}".` : 'There are no saved recipes yet.', data: { recipes: [] } };
-        return { text: shown.map((v) => `- ${v.title}: ${v.missing.length ? `missing ${andList(v.missing)}` : 'everything in'}`).join('\n'), data: { recipes: shown.map((v) => ({ id: v.id, title: v.title, missing: v.missing })) } };
+        return {
+          text: shown.map((v) => `- ${v.title}: ${v.missing.length ? `missing ${andList(v.missing)}` : 'everything in'}${v.presets.length ? ` (presets: ${v.presets.map((p) => p.name).join(', ')})` : ''}`).join('\n'),
+          data: { recipes: shown.map((v) => ({ id: v.id, title: v.title, missing: v.missing, presets: v.presets.map((p) => p.name), defaultPreset: v.defaultPreset })) },
+        };
       },
     });
     ctx.addTool({
       name: 'get_recipe', title: 'Get a saved recipe', readOnly: true,
-      description: 'A saved recipe: ingredients with what\'s in the house and what\'s missing, and the method.',
-      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"') }),
-      async run({ recipe }) {
-        const v = await view(core, await find(recipe));
+      description: 'A saved recipe: ingredients with what\'s in the house and what\'s missing, and the method. Amounts follow its default preset. For another amount give a preset, what they have of some ingredients (e.g. only 2 eggs: the rest is worked out from the ratios), servings or times. Give only one.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"'), ...ScaleInput.shape }),
+      async run({ recipe, ...scale }) {
+        const v = await view(core, await find(recipe), scale);
         return { text: recipeText(v), data: v as unknown as Record<string, unknown> };
       },
     });
     ctx.addTool({
+      name: 'save_recipe_preset', title: 'Save a recipe\'s amounts as a preset',
+      description: 'Keep amounts the person makes often under a name ("Family", "Just me") so get_recipe can use them again. Offer it after working out amounts they might want again. Say how much as for get_recipe (what they have, servings or times); default: true makes it the one used when no amount is asked for. With only a name and default, it changes which preset is the default.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('The recipe\'s title'), ...PresetSave.shape }),
+      async run({ recipe, ...input }) {
+        const { recipe: r, preset } = await savePreset((await find(recipe)).id, input);
+        const v = await view(core, r, { preset: preset.name });
+        const amounts = amountsText(v);
+        const isDefault = r.defaultPreset === preset.name;
+        return {
+          text: `Saved the "${preset.name}" preset for ${r.title}: ${timesText(preset.times)} the recipe as saved${amounts ? ` (${amounts})` : ''}. ${isDefault ? `It's the default, so ${r.title} uses it unless another amount is asked for.` : `To use it, call get_recipe with preset "${preset.name}".`}`,
+          data: { id: r.id, preset, defaultPreset: r.defaultPreset },
+        };
+      },
+    });
+    ctx.addTool({
+      name: 'forget_recipe_preset', title: 'Forget a recipe preset', destructive: true,
+      description: 'Remove a saved preset from a recipe, when the person asks.',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('The recipe\'s title'), preset: z.string().min(1).max(60).describe('The preset\'s name') }),
+      async run({ recipe, preset }) {
+        const r = await forgetPreset((await find(recipe)).id, preset);
+        return {
+          text: `Forgot the "${r.preset.name}" preset for ${r.recipe.title}.${r.wasDefault ? ' It was the default, so the amounts as saved are used now.' : ''}`,
+          data: { id: r.recipe.id, presets: r.recipe.presets.map((p) => p.name), defaultPreset: r.recipe.defaultPreset },
+        };
+      },
+    });
+    ctx.addTool({
       name: 'propose_cooking', title: 'Propose taking ingredients out of stock',
-      description: 'After the person has cooked a saved recipe: work out what to take out of stock. Changes nothing. Show the list, ask them to confirm or adjust, then call confirm_cooking.',
-      input: z.object({ recipe: z.string().min(1).max(120), servings: z.number().int().positive().optional().describe('If they made more or fewer than the recipe serves') }),
-      async run({ recipe, servings }) {
-        const p = await propose(await find(recipe), servings);
+      description: 'After the person has cooked a saved recipe: work out what to take out of stock. Changes nothing. Uses the default preset unless they made another amount (a preset, what they had, servings or times). Show the list, ask them to confirm or adjust, then call confirm_cooking.',
+      input: z.object({
+        recipe: z.string().min(1).max(120),
+        ...ScaleInput.shape,
+        servings: ScaleInput.shape.servings.describe('If they made more or fewer than the recipe serves'),
+      }),
+      async run({ recipe, ...scale }) {
+        const p = await propose(await find(recipe), scale);
         return { text: proposalText(p), data: p as unknown as Record<string, unknown> };
       },
     });
@@ -418,6 +783,18 @@ export default defineModule({
         { name: 'bread', amount: '4 slices' },
       ],
       method: 'Warm the beans, toast the bread, pile on and grate the cheddar over. Grill for a minute if you like it melted.',
+    }, query: {}, params: {}, userId: null });
+    await post.handler({ body: {
+      title: 'Pancakes', serves: 2, source: 'Claude',
+      ingredients: [
+        { name: 'plain flour', ratio: 100, ratioUnit: 'g' },
+        { name: 'eggs', productId: id('Free-range eggs'), ratio: 2 },
+        { name: 'milk', productId: id('Semi-skimmed milk'), quantity: 0.25, ratio: 300, ratioUnit: 'ml' },
+        { name: 'butter, for frying', amount: 'a little' },
+      ],
+      presets: [{ name: 'Just me', times: 0.5 }, { name: 'Family', times: 2 }],
+      method: '1. Whisk the flour, eggs and milk into a smooth batter. Rest it for 30 minutes if you can.\n2. Heat a little butter in a frying pan until it sizzles.\n3. Pour in a thin layer of batter, cook for a minute, flip and cook for another minute.',
+      notes: 'Lemon and sugar, or golden syrup.',
     }, query: {}, params: {}, userId: null });
   },
 });
