@@ -163,6 +163,54 @@ test('cooks a saved recipe after confirming what comes out of stock', async ({ p
   await expect(page.getByText(/Cooked \d+ time/)).toBeVisible();
 });
 
+test('scales a recipe by its presets and by what you have, and keeps it as the default', async ({ page, isMobile }) => {
+  // Phone and desktop share one server, so each run saves its own preset.
+  const name = isMobile ? 'Brunch phone' : 'Brunch desktop';
+  await signIn(page);
+  await page.goto('/#/m/recipes/');
+  await page.getByRole('link', { name: /Pancakes/ }).click();
+  const amounts = page.getByRole('group', { name: 'Amounts' });
+  await amounts.getByRole('button', { name: 'As saved' }).click();
+  await expect(page.getByText('100 g plain flour')).toBeVisible();
+  await amounts.getByRole('button', { name: /Family/ }).click();
+  await expect(page.getByText('200 g plain flour')).toBeVisible();
+  await expect(page.getByText('4 eggs')).toBeVisible();
+
+  await amounts.getByRole('button', { name: /I've got/ }).click();
+  await page.getByLabel('Ingredient').selectOption('eggs');
+  await page.getByLabel('How many').fill('3');
+  await page.getByRole('button', { name: 'Work it out' }).click();
+  await expect(page.getByText('150 g plain flour')).toBeVisible();
+  await expect(page.getByText('450 ml milk')).toBeVisible();
+  await expect(page.getByText('From 3 eggs (×1.5)')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Save as preset' }).click();
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('switch', { name: 'Use it by default' }).click();
+  await page.getByRole('button', { name: 'Save preset' }).click();
+  await expect(page.locator('.toast')).toContainText(`Saved the ${name} preset`);
+  await expect(amounts.getByRole('button', { name: new RegExp(name) })).toHaveAttribute('aria-pressed', 'true');
+
+  // Opened again, it starts on the default preset.
+  await page.reload();
+  await expect(page.getByText(`The ${name} preset (×1.5), the default.`)).toBeVisible();
+  await expect(page.getByText('150 g plain flour')).toBeVisible();
+  await page.getByRole('button', { name: 'Cooked it' }).click();
+  await expect(page.getByText('This is what Larder will take out of stock.')).toBeVisible();
+  await expect(page.locator('.sheet').getByText('Free-range eggs')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // The editor keeps the presets, and can change which is the default.
+  await page.getByRole('link', { name: 'Edit' }).click();
+  const presetRow = (preset: string) => page.locator('.inputrow').filter({ has: page.locator(`input[aria-label="Preset name"][value="${preset}"]`) });
+  await expect(presetRow(name).getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'true');
+  await presetRow('Family').getByRole('button', { name: 'Default' }).click();
+  await expect(presetRow(name).getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('The Family preset (×2), the default.')).toBeVisible();
+  await expect(page.getByText('200 g plain flour')).toBeVisible();
+});
+
 /** The id of an example item, for going straight to its page. */
 async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
