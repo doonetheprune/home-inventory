@@ -5,7 +5,7 @@ Links shared from a phone wait in **Pending**, next to the Wish list, until some
 - **In Pending:** named from the page (its product data, then its title without the shop's name), with the page's picture saved as a Larder photo, the link and shop, and the price when the page gives one. A Pending entry isn't an item: it isn't on the wish list, in stock, in sensors or known to assistants until it's decided.
 - **Add to wish list** makes a wish list item with the name, photo, link (titled with the shop) and price ("£3.50 at Tesco when it was shared (2026-11-03)." in its notes).
 - **Add to Larder** (got it already) opens the Add item page filled in from it (name, link, photo, price note), to say how many, where, its category and so on. Saving makes the item and takes it out of Pending.
-- **The bin** forgets one shared by mistake.
+- **The bin** forgets one shared by mistake, and deletes its picture.
 - **Where it came from** is kept on the item either way, in `product.fields.sharing`: the link, the shop, the app and phone it was shared from, when, and the price then. The item's page shows it under **From a shared link**.
 - **Finding Pending:** next to the Wish list in the sidebar and in More, and the Wish list says "2 shared links in Pending" when there are some.
 - **When the page can't be read** (some shops turn robots away, Amazon among them), the shared text names it: "Check out this deal on Amazon: Oatly Barista 1L https://amzn.eu/…" becomes "Oatly Barista 1L". Short links are followed to the real page, and addresses are tidied (tracking bits removed, Amazon's to `/dp/<item>`), so the same thing shared twice is spotted.
@@ -16,7 +16,7 @@ Links shared from a phone wait in **Pending**, next to the Wish list, until some
 
 ## Safety
 
-Larder fetches the shared page and its picture itself, so it only goes to the public web: https addresses with a real domain name, not numbered addresses or names inside the home network (`.local`, `.lan`, `.home.arpa`, `router`, …), checked again at every redirect. Pages are read up to 1.5 MB and pictures up to 5 MB, only if they really are pictures. A picture saved for something forgotten from Pending stays in Larder's files.
+Larder fetches the shared page and its picture itself, so it only goes to the public web: https addresses with a real domain name, not numbered addresses or names inside the home network (`.local`, `.lan`, `.home.arpa`, `router`, …), checked again at every redirect. Pages are read up to 1.5 MB and pictures up to 5 MB, only if they really are pictures. Forgetting something from Pending deletes its picture too (unless an item, brand or place has come to use it).
 
 ## Routes
 
@@ -38,4 +38,4 @@ Larder fetches the shared page and its picture itself, so it only goes to the pu
 
 ## Hooks used
 
-`addRoute`, `collection`, `productFields` (`sharing`), `ctx.fetch`, `core.lookup.savePhotoFromLink`, `core.products.create` / `updateField`, `core.homeAssistant.appPath()`, `publish`; on the web, a page next to the Wish list (`section: 'wishlist'`), `wishListPanels`, a product panel, and `useAddItem` with `photoFileId` and `onSaved`.
+`addRoute`, `collection`, `productFields` (`sharing`), `ctx.fetch`, `core.lookup.savePhotoFromLink` / `forgetPhoto`, `core.products.create` / `updateField`, `core.homeAssistant.appPath()`, `publish`; on the web, a page next to the Wish list (`section: 'wishlist'`), `wishListPanels`, a product panel, and `useAddItem` with `photoFileId` and `onSaved`.

@@ -76,6 +76,8 @@ describe('Sharing: a shared link waits in Pending', () => {
       url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco', app: null, device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP',
     } satisfies SharedFrom);
     expect(await waiting(core)).toEqual([]);
+    // The picture is the item's now, so it stays.
+    expect(await core.adapters.files.get(photo!)).not.toBeNull();
     await expect(decide(core, 'POST', '/pending/:id/wish', out.pendingId!)).rejects.toMatchObject({ status: 404 });
   });
 
@@ -91,12 +93,15 @@ describe('Sharing: a shared link waits in Pending', () => {
     expect(await share(core, { text: 'https://amzn.eu/d/abc' })).toMatchObject({ status: 'exists', productId: made.id, message: 'Oat drink is already in Larder.' });
   });
 
-  it('can be forgotten when it was shared by mistake', async () => {
+  it('can be forgotten when it was shared by mistake, picture and all', async () => {
     const core = await makeCore({ modules: [sharing], fetch: internet().fetch });
     const out = await share(core, { url: 'https://www.tesco.com/groceries/en-GB/products/254656543' });
+    const photo = (await waiting(core))[0]!.photoFileId!;
+    expect(await core.adapters.files.get(photo)).not.toBeNull();
     await decide(core, 'DELETE', '/pending/:id', out.pendingId!);
     expect(await waiting(core)).toEqual([]);
     expect(await core.products.list({ status: 'wish' })).toEqual([]);
+    expect(await core.adapters.files.get(photo)).toBeNull();
   });
 
   it('doesn\'t add the same thing twice', async () => {

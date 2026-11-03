@@ -44,3 +44,21 @@ describe('lookup.savePhotoFromLink', () => {
     expect(asked).not.toContain('https://192.168.1.10/cam.jpg');
   });
 });
+
+describe('lookup.forgetPhoto', () => {
+  it('deletes a photo nothing uses, and keeps one an item, brand or place uses', async () => {
+    const core = await makeCore();
+    const put = async () => (await core.adapters.files.put({ data: new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]), contentType: 'image/jpeg', name: 'p.jpg' })).id;
+    const [loose, onItem, onBrand, onPlace] = [await put(), await put(), await put(), await put()];
+    const item = await core.products.create({ name: 'Head torch', photoFileIds: [onItem] });
+    await core.products.addVariant(item.id, { name: 'Petzl', photoFileId: onBrand });
+    await core.places.create({ name: 'Garage', photoFileId: onPlace });
+
+    expect(await core.lookup.forgetPhoto(loose)).toBe(true);
+    expect(await core.adapters.files.get(loose)).toBeNull();
+    for (const used of [onItem, onBrand, onPlace]) {
+      expect(await core.lookup.forgetPhoto(used)).toBe(false);
+      expect(await core.adapters.files.get(used)).not.toBeNull();
+    }
+  });
+});

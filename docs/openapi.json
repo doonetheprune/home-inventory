@@ -15522,7 +15522,7 @@
     },
     "/api/v1/modules/sharing/pending/{id}": {
       "delete": {
-        "summary": "Forget a shared link in Pending (shared by mistake)",
+        "summary": "Forget a shared link in Pending (shared by mistake), and its picture",
         "tags": [
           "Module: sharing"
         ],

@@ -287,6 +287,17 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
      */
     savePhotoFromLink: (url: string, label: string) => savePhotoFromLink(url, label),
 
+    /**
+     * Deletes a photo from Larder's files when nothing uses it (no item, brand
+     * or place): a shared link's picture once it's forgotten, say. True if it was deleted.
+     */
+    async forgetPhoto(fileId: string): Promise<boolean> {
+      const [items, brands, places] = await Promise.all([ctx.storage.products.list(), ctx.storage.variants.list(), ctx.storage.places.list()]);
+      if (items.some((p) => p.photoFileIds.includes(fileId)) || brands.some((v) => v.photoFileId === fileId) || places.some((p) => p.photoFileId === fileId)) return false;
+      await ctx.files.remove(fileId);
+      return true;
+    },
+
     /** Name an unknown barcode once (or link it to an existing product) so it's instant next time. */
     async remember(raw: Remember): Promise<{ product: ProductSummary; variant: Variant }> {
       const input = RememberSchema.parse(raw);

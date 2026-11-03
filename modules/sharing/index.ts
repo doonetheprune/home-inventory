@@ -215,12 +215,14 @@ export default defineModule({
     ctx.addRoute({
       method: 'DELETE',
       path: '/pending/:id',
-      summary: 'Forget a shared link in Pending (shared by mistake)',
+      summary: 'Forget a shared link in Pending (shared by mistake), and its picture',
       params: z.object({ id: z.string() }),
       response: z.object({ removed: z.boolean() }),
       async handler({ params }) {
-        await onePending(params.id);
-        await pending.remove(params.id);
+        const p = await onePending(params.id);
+        await pending.remove(p.id);
+        // Its picture was only kept for Pending; nothing else uses it (forgetPhoto checks).
+        if (p.photoFileId) await ctx.core.lookup.forgetPhoto(p.photoFileId);
         return { removed: true };
       },
     });
