@@ -10,7 +10,7 @@ export type * from './ports';
 export { createCore, type CoreApi } from './core';
 export { defineModule, type DemoSeed, type ModuleContext, type ModuleDefinition, type ModuleInfo, type ModuleRoute, type ModuleRequest, type ModuleLogger, type HttpMethod } from './modules';
 export { HouseholdSettings, type CoreDeps } from './services/context';
-export type { LookupProvider } from './services/lookup';
+export type { LookupMatch, LookupProvider } from './services/lookup';
 export type { SearchSection } from './services/search';
 export type { ActionDefinition, ActionInfo, ActionResult, SensorDefinition, SensorInfo, SensorReading, SensorState } from './services/automation';
 export { AmbiguousError } from './services/resolve';

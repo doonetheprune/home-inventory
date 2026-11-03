@@ -34,7 +34,7 @@ export default defineModule({
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
-| `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files |
+| `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files. Optionally add `search({ name, brand })`, returning products of that brand (`{ name, brands, quantityText, imageUrl }`, best first), to find a photo for an item added by name and brand; Larder checks the brand and name again before using one |
 | `ctx.addSearchSection({ id, title, order, documents?, results })` | Add a section to search everywhere. `documents()` feeds the shared fuzzy index (types must start with your section id); `results()` turns hits into rows. Core orders: stock 10, shopping 20, places 30, wish list 50, shops 60. Scenarios will use 40 and recipes 70 |
 | `ctx.fetch` | Reach web services (maps, lookups). Use it rather than the global `fetch`, so tests can stand in for the internet |
 | `ctx.core.homeAssistant` | Home Assistant, when Larder can reach it (the add-on always can; elsewhere `LARDER_HA_URL` and `LARDER_HA_TOKEN`), else `null`: home location, people and their phones, saving zones and automations. See `HomeAssistantPort` in `src/core/ports.ts` and the shop locations module |
@@ -104,7 +104,7 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 
 | Module | What it does |
 |---|---|
-| `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes |
+| `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes (Open Food Facts also finds a photo for a brand added by name) |
 | `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |

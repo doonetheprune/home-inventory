@@ -4,6 +4,7 @@
 
 - Claude (and other assistants) can do what the app does: add and change shops, places and categories; change anything about an item after adding it (its shop, usual place, minimum…); remove items; brands and barcodes; correct stock; see deliveries and recent changes; make and change scenarios; shop for a recipe.
 - Adding an item with a shop, place or category that isn't set up yet no longer leaves it out: Claude is told to offer to add it first.
+- Items Claude adds get a photo: from the barcode, like a scan, or, given the brand ("Flahavan's porridge"), from that brand's product in Open Food Facts. With no barcode or brand there's no photo, rather than some other brand's.
 - An item's page lists the saved recipes that use it, and a recipe's ingredients open their items.
 - Recipes can belong to scenarios, and be kept for them only, so a Halloween recipe isn't on the Recipes list at Christmas. A scenario's page lists its recipes and can add one.
 

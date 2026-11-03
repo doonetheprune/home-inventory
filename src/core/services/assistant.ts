@@ -16,6 +16,7 @@ import { addManageTools, finders } from './assistant-manage';
 import type { Automation } from './automation';
 import type { createCategoryService, createPlaceService, createShopService } from './catalogue';
 import type { CoreContext } from './context';
+import type { createLookupService } from './lookup';
 import type { createProductService } from './products';
 import type { Resolver } from './resolve';
 import type { createSearchService } from './search';
@@ -125,10 +126,11 @@ export function createAssistant(deps: {
   categories: ReturnType<typeof createCategoryService>;
   shops: ReturnType<typeof createShopService>;
   places: ReturnType<typeof createPlaceService>;
+  lookup: ReturnType<typeof createLookupService>;
   automation: Automation;
   resolve: Resolver;
 }) {
-  const { ctx, products, shopping, search, automation, resolve } = deps;
+  const { ctx, products, shopping, search, lookup, automation, resolve } = deps;
   const find = finders(deps);
   const tools: Array<{ tool: AssistantTool; module: string | null; enabled: () => boolean }> = [];
 
@@ -186,7 +188,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -197,6 +199,7 @@ export function createAssistant(deps: {
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
       shop_code: z.string().max(40).optional().describe('That shop\'s product code (e.g. a Toolstation item number), used to match order emails'),
+      brand: z.string().max(80).optional().describe('The brand, if the person said one (e.g. "Flahavan\'s"), so a photo of it can be found'),
       barcode: z.string().max(64).optional(),
       wish_list: z.boolean().optional().describe('True to put it on the wish list instead (wanted, none yet)'),
     }),
@@ -215,10 +218,21 @@ export function createAssistant(deps: {
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
-      if (i.barcode || i.shop_code) {
-        await products.addVariant(p.id, { name: p.name, barcodes: i.barcode ? [i.barcode] : [], shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [] });
+      // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
+      const { match, photoFileId } = i.barcode || i.brand ? await lookup.findPhoto({ barcode: i.barcode, name: p.name, brand: i.brand }) : { match: null, photoFileId: null };
+      if (i.barcode || i.shop_code || i.brand) {
+        const fromBarcode = match && i.barcode && !i.brand;
+        await products.addVariant(p.id, {
+          name: fromBarcode ? [match.brand, match.name].filter(Boolean).join(' ') : [i.brand?.trim(), p.name].filter(Boolean).join(' '),
+          barcodes: i.barcode ? [i.barcode] : [],
+          shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [],
+          imageUrl: match?.imageUrl ?? null, photoFileId, source: match?.provider ?? 'local',
+        });
       }
-      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}. It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name } };
+      if (photoFileId) await products.update(p.id, { photoFileIds: [photoFileId] });
+      const photoOf = match && (!match.brand || match.name.toLowerCase().includes(match.brand.toLowerCase()) ? match.name : `${match.brand} ${match.name}`);
+      const photo = photoFileId ? ` with a photo of ${photoOf}` : '';
+      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}. It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
     },
   });
 

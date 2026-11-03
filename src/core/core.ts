@@ -89,7 +89,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     resolve,
     automation,
     nfc: createNfcService(ctx, products),
-    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, automation, resolve }),
+    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, lookup, automation, resolve }),
     settings: {
       get: () => ctx.household(),
       async update(patch) {
