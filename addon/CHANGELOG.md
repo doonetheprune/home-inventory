@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+- **Online shopping:** Larder can fill your online basket, Tesco first, through a shopping provider running on a computer on your network (the `larder-provider-tesco` service with its Chrome extension). Add it in Settings → **Shopping providers**: where it runs, its token, and how Home Assistant wakes that computer (a magic packet to its MAC address, filled in for you by **Test connection**, or a switch or script) and, optionally, puts it back to sleep afterwards.
+- **"Do me a shop"** with Claude: it checks the shop is ready (waking the computer if it's asleep), asks when you'd like it delivered, lists the free slots that day in plain words, books the one you agree, then fills the basket with what's low and anything on offer at your target price. It stops at the basket: you check it and pay on the shop's website. Everything added counts as on the way, from "Tesco delivery", so it isn't bought twice.
+- **Buying rules** on an item's page (Online shopping): paste a Tesco code or link to link the products to buy (a small and a large pack, say), optionally adding them to your Tesco favourites too; choose the cheapest mix of packs or always one; set the price that counts as an offer and how many to stock up to when it's on offer. Clubcard prices, multibuys (3 for £2, buy 2 get 1 free, 25% off 6 or more) and offer dates count. Things that go off are never bought faster than you use them. **Use picture** makes the shop's picture the item's photo.
+- **Stock up to:** every item can say how many to have after buying more (minimum 4, stock up to 12), next to "Running low below". Shopping lists at every shop now suggest topping up to it, not just back to the minimum.
+- **Plan basket** and **Fill basket** beside a shop's shopping list, with **Book a delivery slot**, and a summary of what was bought and why, what was unavailable, and products that have gone from the shop and need linking again.
+- **Shop favourites in Pending:** bring in your Tesco favourites (a button, Claude, or a Home Assistant automation on a schedule) and any not linked to an item wait in Pending, to become a new item (with the shop's picture), be linked to one, or be dismissed for good (undo in Settings).
+- Home Assistant gets `larder_online_shopping_basket_filled`, `_slot_booked`, `_favourites_pending` and `_failed` events (the last says when you need to log in to the shop again), and the action **Bring in shop favourites**.
+
 ## 0.5.1
 
 - **Quicker scanning:** scan, Add, next. A barcode that's new to Larder is named (from Open Food Facts when it knows it), remembered and added in one press, instead of Save and then Add. The card says plainly whether it's **In Larder** or **New**, where it goes is one line (the shelf you scanned, or its usual place) with **Change** for the odd one, and on a phone it sits at the bottom of the screen so Add is always in reach.
