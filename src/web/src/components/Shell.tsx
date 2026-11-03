@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../icons';
 import { dayDate } from '../format';
 import { GlobalSearch } from './GlobalSearch';
+import { AddActions } from './AddActions';
 import { useEnabledWebModules } from '../modules';
 
 function todayIso() {
@@ -73,6 +74,7 @@ export function Shell() {
             <span className="fab"><Icon name="scan" /><span className="side-label">Scan</span></span>
           </NavLink>
           <NavLink to="/add" className="side-add"><Icon name="plus" size="sm" />Add by name</NavLink>
+          <AddActions place="sidebar" />
           {tab('/shop', 'cart', 'Shop', 'shop')}
           {tab('/more', 'more', 'More', 'more')}
           <div className="side-group">

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { Icon } from '../icons';
 import { ago } from '../format';
 import { Header, Stepper, Switch, useAction, useCategories, useModules, useToast } from '../ui';
+import { useEnabledWebModules } from '../modules';
 
 export function Settings() {
   const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status });
@@ -17,6 +18,7 @@ export function Settings() {
         <Household admin={admin} />
         <Categories admin={admin} />
         <Modules admin={admin} />
+        <ModuleSettings admin={admin} />
         {local && <Tokens />}
         {local && <Accounts admin={admin} />}
         <Data admin={admin} />
@@ -97,6 +99,12 @@ function Modules({ admin }: { admin: boolean }) {
       </div>
     </div>
   );
+}
+
+/** Modules' own sections (AI keys and models, say), shown while the module is on. */
+function ModuleSettings({ admin }: { admin: boolean }) {
+  const panels = useEnabledWebModules().flatMap((m) => (m.settingsPanels ?? []).map((Panel, i) => ({ key: `${m.id}-${i}`, Panel })));
+  return <>{panels.map(({ key, Panel }) => <Panel key={key} admin={admin} />)}</>;
 }
 
 function Tokens() {

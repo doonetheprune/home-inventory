@@ -17,6 +17,7 @@ const root = join(__dirname, '..');
  */
 const MODULE_PACKAGES: Record<string, string[]> = {
   mqtt: ['mqtt'],
+  ai: ['@anthropic-ai/sdk', '@anthropic-ai/sdk/helpers/zod'],
 };
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {

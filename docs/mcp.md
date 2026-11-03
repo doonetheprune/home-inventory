@@ -67,7 +67,7 @@ A small set, described plainly, so small local models pick the right one. Everyt
 |---|---|
 | `search` | Find items, places and shops by any words. Typos are fine |
 | `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, shops, notes |
-| `add_item` | Add something Larder doesn't know yet |
+| `add_item` | Add something Larder doesn't know yet, with its brand and barcode. From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`) |
 | `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat) |
 | `move_item` | Move something for now (out of place) or for good |
 | `add_expected` | Record an order that hasn't arrived (it counts towards stock). Takes shop codes from order emails |

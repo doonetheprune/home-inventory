@@ -72,17 +72,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
-  hacs:
-    # HACS can only check public repositories.
-    if: ${{ !github.event.repository.private }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: hacs/action@main
-        with:
-          category: integration
-          # Needs a submission to home-assistant/brands, which can wait until the repo is public.
-          ignore: brands
-
   addon-lint:
     runs-on: ubuntu-latest
     steps:

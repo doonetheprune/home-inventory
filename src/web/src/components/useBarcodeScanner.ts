@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
-type Detector = { detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>> };
+type Detector = { detect(source: HTMLVideoElement | ImageBitmap): Promise<Array<{ rawValue: string }>> };
 declare global {
   interface Window {
     BarcodeDetector?: { new (opts?: { formats?: string[] }): Detector; getSupportedFormats?(): Promise<string[]> };
@@ -103,4 +103,34 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
   }, [active, video]);
 
   return { state, error };
+}
+
+/**
+ * A product barcode (EAN or UPC digits) in a photo, or null if there isn't one
+ * this phone can read. Reads on the phone, so it costs nothing and never guesses a digit.
+ */
+export async function readBarcode(photo: Blob): Promise<string | null> {
+  const product = (code: string | undefined) => (code && /^\d{8,14}$/.test(code) ? code : null);
+  try {
+    if (window.BarcodeDetector) {
+      const bitmap = await createImageBitmap(photo);
+      try {
+        const found = await new window.BarcodeDetector().detect(bitmap);
+        for (const f of found) if (product(f.rawValue)) return f.rawValue;
+        return null;
+      } finally {
+        bitmap.close();
+      }
+    }
+    const { BrowserMultiFormatReader } = await import('@zxing/browser');
+    const url = URL.createObjectURL(photo);
+    try {
+      return product((await new BrowserMultiFormatReader().decodeFromImageUrl(url)).getText());
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    // No barcode in view, or this browser can't read photos for them.
+    return null;
+  }
 }

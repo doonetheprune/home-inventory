@@ -14412,6 +14412,614 @@
         }
       }
     },
+    "/api/v1/modules/ai": {
+      "get": {
+        "summary": "Which AIs read photos for Add by photo, in what order, and whether they are set up (never the keys)",
+        "tags": [
+          "Module: ai"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "claude",
+                            "gemini"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "claude": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "gemini": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "ready",
+                    "order",
+                    "first",
+                    "claude",
+                    "gemini"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/settings": {
+      "put": {
+        "summary": "Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model (admin)",
+        "tags": [
+          "Module: ai"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "order": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    }
+                  },
+                  "claude": {
+                    "type": "object",
+                    "properties": {
+                      "apiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 300,
+                            "pattern": "^\\S+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "pattern": "^[A-Za-z0-9._:@/-]+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "gemini": {
+                    "type": "object",
+                    "properties": {
+                      "apiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 300,
+                            "pattern": "^\\S+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "pattern": "^[A-Za-z0-9._:@/-]+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "claude",
+                            "gemini"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "claude": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "gemini": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "ready",
+                    "order",
+                    "first",
+                    "claude",
+                    "gemini"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/models": {
+      "get": {
+        "summary": "The models Claude or Gemini offers that can read photos, using the saved key (also checks the key works) (admin)",
+        "tags": [
+          "Module: ai"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "claude",
+                "gemini"
+              ]
+            },
+            "in": "query",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "default": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "models",
+                    "default"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/identify": {
+      "post": {
+        "summary": "Read a photo of something and say what it is (nothing is saved)",
+        "tags": [
+          "Module: ai"
+        ],
+        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "minLength": 100,
+                    "maxLength": 1900000
+                  }
+                },
+                "required": [
+                  "image"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readable": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "brand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "categoryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shelfLifeDays": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "shop": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "preset": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "id",
+                            "preset"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "gemini"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "readable",
+                    "name",
+                    "brand",
+                    "unit",
+                    "categoryId",
+                    "shelfLifeDays",
+                    "aliases",
+                    "shop",
+                    "provider",
+                    "model",
+                    "skipped"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/template/count": {
       "get": {
         "summary": "How many stock changes have happened since the module was switched on",
