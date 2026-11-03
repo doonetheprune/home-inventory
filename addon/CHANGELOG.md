@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- **Add from receipt:** take a photo of a till receipt (or an online order) and Claude or Gemini matches each line to the things you already keep, then adds what you tick to stock in one go, with the prices paid. Receipts are vague, so anything it can't place is shown as "Not in Larder" and left out; **Match** picks the item by hand. Nothing new is added from a receipt.
+- **It learns your shops' names:** once "ANDREX CLASSIC 9PK" at Tesco has been added as 9 toilet rolls, the next Tesco receipt matches it straight away ("as before"). Guesses are marked **Check** and left unticked.
+- Two packs of 9 rolls count as 18 rolls, weighed things by weight, and the same receipt added twice is spotted.
+- Assistants can add a receipt they've read with the new `add_receipt` tool.
+
 ## 0.5.2
 
 - **Read with AI in the scanner:** a barcode Larder and Open Food Facts don't know has **Read it with AI** on its card. Point the camera at the front of the pack and Claude or Gemini names it; **Add 1** adds it and remembers the barcode, so next time it's known straight away.
