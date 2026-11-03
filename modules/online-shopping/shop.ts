@@ -63,6 +63,8 @@ export const Run = z.object({
   plan: PlanSchema.nullable(),
   /** Items in Larder that are low at this shop but have no listing there. */
   unmatched: z.array(z.object({ productId: z.string(), name: z.string() })).default([]),
+  /** Low items linked here, but bought at other shops (their preferred shops don't include this one). */
+  elsewhere: z.array(z.object({ productId: z.string(), name: z.string(), shops: z.array(z.string()) })).default([]),
   /** Filled: what went into the basket, and what the shop refused. */
   added: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number(), unit: z.string() })).default([]),
   failed: z.array(z.object({ productId: z.string(), name: z.string(), listingName: z.string(), error: z.string(), message: z.string() })).default([]),
@@ -111,14 +113,26 @@ export function createShops(ctx: ModuleContext, s: Services) {
     for (const r of old) await runs.remove(r.id);
   }
 
-  /** Items linked to this shop that are worth quoting, and items on its list with no listing there. */
-  async function candidates(shop: Pick<Shop, 'id'>): Promise<{ candidates: Candidate[]; unmatched: Array<{ productId: string; name: string }> }> {
+  /**
+   * Items linked to this shop that are worth quoting. Only items that belong on this shop's list:
+   * one of their shops, or "any shop" and this shop sells their category. A listing alone doesn't
+   * decide where something is bought. Also: low items here with no listing, and low items linked
+   * here that are bought elsewhere.
+   */
+  async function candidates(shop: Shop): Promise<{ candidates: Candidate[]; unmatched: Run['unmatched']; elsewhere: Run['elsewhere'] }> {
     const out: Candidate[] = [];
+    const elsewhere: Run['elsewhere'] = [];
+    const shops = await ctx.core.shops.list();
     for (const sum of await ctx.core.products.list({ status: 'all' })) {
       const p = sum.product;
       const f = fieldsOf(p);
       const rules = rulesFor(p, shop.id);
       if (!rules.listings.length) continue;
+      const here = p.preferredShopIds.length ? p.preferredShopIds.includes(shop.id) : !!p.categoryId && shop.sells.includes(p.categoryId);
+      if (!here) {
+        if (sum.status.low || p.onShoppingList) elsewhere.push({ productId: p.id, name: p.name, shops: shops.filter((s) => p.preferredShopIds.includes(s.id)).map((s) => s.name) });
+        continue;
+      }
       const c: Candidate = {
         productId: p.id, name: p.name, unit: p.unit, inStock: sum.inStock, expected: sum.expected,
         minimum: p.minQuantity, stockUpTo: p.stockUpTo ?? null, offerStockUpTo: f.offerStockUpTo, targetPrice: rules.targetPrice ?? f.targetPrice,
@@ -131,7 +145,7 @@ export function createShops(ctx: ModuleContext, s: Services) {
     }
     const list = await ctx.core.shopping.forShop(shop.id);
     const unmatched = list.groups.flatMap((g) => g.items).filter((i) => !rulesFor(i.summary.product, shop.id).listings.length).map((i) => ({ productId: i.summary.product.id, name: i.summary.product.name }));
-    return { candidates: out, unmatched };
+    return { candidates: out, unmatched, elsewhere };
   }
 
   /** Records what went into the basket as expected stock, item by item. */
@@ -171,9 +185,11 @@ export function createShops(ctx: ModuleContext, s: Services) {
         await update({ step: `Checking ${run.shopName} is ready` });
         const { woke } = await providers.awake(provider, { wake: true, onWaking: () => void update({ step: `Waking the ${run.shopName} provider's computer` }) });
         const client = await s.ready(provider);
-        const { candidates: cs, unmatched } = await candidates({ id: run.shopId });
+        const shop = (await ctx.core.shops.list()).find((x) => x.id === run.shopId);
+        if (!shop) throw new LarderError(`${run.shopName} has been removed from Larder.`, 404, 'not_found');
+        const { candidates: cs, unmatched, elsewhere } = await candidates(shop);
         const ids = [...new Set(cs.flatMap((c) => c.listings.map((l) => l.listingId)))];
-        await update({ step: ids.length ? `Getting ${run.shopName}'s prices for ${ids.length} product${ids.length === 1 ? '' : 's'}` : 'Nothing to check', unmatched });
+        await update({ step: ids.length ? `Getting ${run.shopName}'s prices for ${ids.length} product${ids.length === 1 ? '' : 's'}` : 'Nothing to check', unmatched, elsewhere });
         const quotes = new Map<string, QuoteLine>();
         if (ids.length) for (const q of await client.quote(ids)) quotes.set(q.listing_id, q);
         const o = await options();
@@ -196,6 +212,9 @@ export function createShops(ctx: ModuleContext, s: Services) {
         if (job.status === 'failed') throw new ProviderError(job.error?.message ?? `${run.shopName} couldn't fill the basket.`, job.error?.code ?? 'provider_error');
         const result = BasketAddResult.parse(job.result);
         const got = await expectDeliveries(current, p, result);
+        // Put on the list by hand: it's bought now, as when ticked off in a shop, so it isn't bought again.
+        const byHand = new Set(cs.filter((c) => c.manual).map((c) => c.productId));
+        for (const a of got.added) if (byHand.has(a.productId)) await ctx.core.products.setOnList(a.productId, false);
         await update({ status: 'done', step: 'Basket filled', ...got, finishedAt: ctx.core.now() });
         current = await save({ ...current, summary: summary(current, await s.currency(), woke) });
         ctx.publish('online-shopping.basket_filled', {
@@ -290,6 +309,7 @@ export function summary(run: Run, currency: string, woke = false): string {
     if (p.unavailable.length) lines.push(`Unavailable: ${p.unavailable.map((u) => `${u.name} (${u.why})`).join('; ')}.`);
     if (p.relink.length) lines.push(`Gone from ${run.shopName}, link the new one: ${p.relink.map((r) => `${r.name} (${r.listingName})`).join('; ')}.`);
     if (run.unmatched.length) lines.push(`Low but not linked to a ${run.shopName} product: ${andList(run.unmatched.map((u) => u.name))}.`);
+    if (run.elsewhere.length) lines.push(`Low and linked at ${run.shopName}, but bought elsewhere (add ${run.shopName} to its shops to buy it here): ${run.elsewhere.map((e) => `${e.name} (${e.shops.length ? andList(e.shops) : 'no shop sells its type'})`).join('; ')}.`);
     if (p.otherDeals.length) lines.push(`Other offers seen (not used): ${p.otherDeals.map((d) => `${d.name}: ${d.text}`).join('; ')}.`);
   }
   if (run.kind === 'fill' && run.status === 'done' && p?.items.length) {

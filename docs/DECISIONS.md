@@ -35,6 +35,8 @@ Changes the owner asked for after trying the example household.
   - **Perishables are capped by usage history**: never more than gets used within the shelf life (daily use from the last 90 days of stock taken out); with no history, something that keeps under 90 days only tops up to the normal amount, never the on-offer one.
   - **"Stock up to" is an ordinary item setting in the core**, so every shop's list suggests topping up to it, not just the online shop. The on-offer amount and target prices belong to the module.
   - **Built in one go** (five steps, one commit each) as one pull request.
+  - **A link doesn't decide where something is bought:** the online basket only takes what belongs on that shop's list (its shops, or "any shop" and the shop sells its category). Linking a product to an item with no shop makes that shop its shop; an item already set to another shop keeps it, and the summary says it's linked but bought elsewhere.
+  - **Things put on the list by hand are bought online too**, up to the stock-up amount (at least one pack), and come off the list once they're in the basket.
 
 ## Architecture (agreed before Phase 1)
 

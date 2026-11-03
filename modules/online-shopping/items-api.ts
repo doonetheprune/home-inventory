@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { Id, LarderError, ValidationError, type ModuleContext } from '@larder/core';
 import { productLine, perUnit, qty } from './format';
-import { Listing, OnlineFields, PackRule, fieldsOf, packText } from './items';
+import { Listing, OnlineFields, PackRule, fieldsOf, packText, shopSetText } from './items';
 import { Shop } from './providers-api';
 import type { Services } from './services';
 
@@ -24,10 +24,10 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
     return addToFavourites ? client.addFavourite(idOrLink.trim()) : client.product(idOrLink.trim());
   }
 
-  async function linkText(productId: string, listing: Listing, shopId: string, favourite: boolean): Promise<string> {
+  async function linkText(productId: string, listing: Listing, shopId: string, favourite: boolean, shopSet: boolean): Promise<string> {
     const item = await items.product(productId);
     const shop = await providers.shopName(shopId);
-    return `${listing.name} at ${shop} is linked to ${item.name} (${packText(listing, item.unit)}${listing.guessed ? ': check this' : ''})${favourite ? ` and added to your ${shop} favourites` : ''}.`;
+    return `${listing.name} at ${shop} is linked to ${item.name} (${packText(listing, item.unit)}${listing.guessed ? ': check this' : ''})${favourite ? ` and added to your ${shop} favourites` : ''}.${shopSetText(shopSet, shop)}`;
   }
 
   /* ---------------------------------- Routes --------------------------------- */
@@ -40,8 +40,8 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
     response: ListingAnswer,
     async handler({ params, body }) {
       const p = await fetchProduct(body.shopId, body.idOrLink, !!body.addToFavourites);
-      const { product, listing } = await items.link(params.productId, body.shopId, p, { packQuantity: body.packQuantity });
-      return { listing, fields: OnlineFields.parse(product.fields['online-shopping']), message: await linkText(product.id, listing, body.shopId, !!body.addToFavourites) };
+      const { product, listing, shopSet } = await items.link(params.productId, body.shopId, p, { packQuantity: body.packQuantity });
+      return { listing, fields: OnlineFields.parse(product.fields['online-shopping']), message: await linkText(product.id, listing, body.shopId, !!body.addToFavourites, shopSet) };
     },
   });
 
@@ -124,8 +124,8 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
       const product = await ctx.core.resolve.product(item);
       const { shop: sh } = await providers.resolve(shop);
       const p = await fetchProduct(sh.id, id_or_link, !!add_to_favourites);
-      const { listing } = await items.link(product.id, sh.id, p, { packQuantity: pack_quantity });
-      const text = await linkText(product.id, listing, sh.id, !!add_to_favourites);
+      const { listing, shopSet } = await items.link(product.id, sh.id, p, { packQuantity: pack_quantity });
+      const text = await linkText(product.id, listing, sh.id, !!add_to_favourites, shopSet);
       return { text: listing.guessed ? `${text} Ask how many ${product.unit} one pack holds if that's wrong, and say it with pack_quantity.` : text, data: { item: product.name, listing } };
     },
   });

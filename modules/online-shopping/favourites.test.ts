@@ -91,7 +91,7 @@ describe('online shopping: favourites into Pending', () => {
 
     await core.products.create({ name: 'Mushrooms', unit: 'g' });
     const linked = await core.assistant.call('add_to_favourites', { id_or_link: 'https://www.tesco.com/groceries/en-GB/products/2001', item: 'mushrooms' });
-    expect(linked.text).toBe('Added to your Tesco favourites: Tesco Closed Cup Mushrooms 300G (code 2001), pack 300 g, £0.89. Linked to Mushrooms (1 pack = 300 g).');
+    expect(linked.text).toBe('Added to your Tesco favourites: Tesco Closed Cup Mushrooms 300G (code 2001), pack 300 g, £0.89. Linked to Mushrooms (1 pack = 300 g). It\'s bought from Tesco now.');
     await expect(core.assistant.call('add_to_favourites', { id_or_link: '9999' })).rejects.toThrow('Tesco has no product with that code or link.');
   });
 

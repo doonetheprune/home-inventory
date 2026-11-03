@@ -2062,6 +2062,32 @@
               ]
             }
           },
+          "elsewhere": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "shops": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "shops"
+              ]
+            }
+          },
           "added": {
             "default": [],
             "type": "array",
@@ -6109,6 +6135,33 @@
               "additionalProperties": false
             }
           },
+          "elsewhere": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "shops": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "shops"
+              ],
+              "additionalProperties": false
+            }
+          },
           "added": {
             "default": [],
             "type": "array",
@@ -6213,6 +6266,7 @@
           "booking",
           "plan",
           "unmatched",
+          "elsewhere",
           "added",
           "failed",
           "summary",

@@ -72,6 +72,31 @@ describe('online shopping: planning and filling a basket', () => {
     expect(again.text.split('\n')[0]).toBe('Nothing needs buying at Tesco right now.');
   });
 
+  it('only buys what belongs on that shop\'s list, and says which linked items are bought elsewhere', async () => {
+    const { core, shop } = await setup();
+    const aldi = await core.shops.addPreset('Aldi');
+    shop.listing('5001', 'Tesco Free Range Eggs 6 Pack', { amount: 6, unit: 'each' }, 1.9);
+    const eggs = await core.products.create({ name: 'Eggs', unit: 'egg', minQuantity: 6 });
+    await core.assistant.call('link_listing', { item: 'eggs', id_or_link: '5001' });
+    await core.products.update(eggs.id, { preferredShopIds: [aldi.id] });
+    const r = await core.assistant.call('plan_basket', {});
+    expect(r.text).not.toContain('- Eggs');
+    expect(r.text).toContain('Low and linked at Tesco, but bought elsewhere (add Tesco to its shops to buy it here): Eggs (Aldi).');
+  });
+
+  it('buys things put on the list by hand, once', async () => {
+    const { core, shop } = await setup();
+    shop.listing('6001', 'Tesco Kitchen Roll 2 Rolls', { amount: 2, unit: 'each' }, 1.5);
+    const roll = await core.products.create({ name: 'Kitchen roll', unit: 'roll', minQuantity: 1, stockUpTo: 4 });
+    await core.stock.add({ productId: roll.id, quantity: 3 });
+    await core.assistant.call('link_listing', { item: 'kitchen roll', id_or_link: '6001' });
+    await core.products.setOnList(roll.id, true);
+    const filled = await core.assistant.call('fill_basket', {});
+    expect(filled.text).toContain('- Kitchen roll: 1 × Tesco Kitchen Roll 2 Rolls = 2 rolls, £1.50; on the list by hand');
+    expect((await core.products.summary(roll.id)).product.onShoppingList).toBe(false);
+    expect((await core.assistant.call('plan_basket', {})).text.split('\n')[0]).toBe('Nothing needs buying at Tesco right now.');
+  });
+
   it('stops and says so when the shop needs the person to log in', async () => {
     const { core, shop } = await setup();
     shop.state.loggedIn = false;

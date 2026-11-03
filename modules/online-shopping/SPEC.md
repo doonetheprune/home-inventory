@@ -15,7 +15,7 @@ Settings → **Shopping providers** → **Add automated shopping provider**: the
 
 On an item's page, **Online shopping** (shown once a provider is set up):
 
-- **Listings**, per shop: the shop's products to buy for this item, linked by pasting a code or link (looked up with the provider; an unknown one is refused, never guessed), optionally adding it to the shop's favourites at the same time. Each says how many of the item one pack gives ("1 pack = 9 rolls"): sure for weights and volumes the item is counted in, and when the name says what's counted ("9 Rolls"); otherwise a guess marked **check this** until someone sets it. A listing belongs to one item. A listing the shop says has gone is marked **Gone from Tesco: link the new one** (Tesco often gives a changed product a new code).
+- **Listings**, per shop: the shop's products to buy for this item, linked by pasting a code or link (looked up with the provider; an unknown one is refused, never guessed), optionally adding it to the shop's favourites at the same time. Each says how many of the item one pack gives ("1 pack = 9 rolls"): sure for weights and volumes the item is counted in, and when the name says what's counted ("9 Rolls"); otherwise a guess marked **check this** until someone sets it. A listing belongs to one item. Linking one to an item with no shop makes that shop its shop ("It's bought from Tesco now."); an item already set to other shops keeps them, so a link alone never decides where it's bought. A listing the shop says has gone is marked **Gone from Tesco: link the new one** (Tesco often gives a changed product a new code).
 - **Pack rule**, per shop: the **cheapest mix** of listings that covers what's needed (default), or **always the first** (a fixed pack).
 - **On offer at**: the target price per one of the item's unit (per kg for things counted in g, per litre for ml). At or below it counts as on offer. Each shop can have its own, which wins.
 - **Stock up to, on offer**: how many to have after buying when it's on offer.
@@ -42,12 +42,12 @@ The person says when they're free; Larder doesn't look at calendars. A provider 
 
 ## Order logic
 
-`plan.ts`, on its own so it's tested on its own. For each item with a listing at the shop:
+`plan.ts`, on its own so it's tested on its own. For each item with a listing at the shop that belongs on that shop's list (one of its shops, or "any shop" and the shop sells its category, the same as the shopping list):
 
 1. **Candidate** when it's low (stock plus on order below the minimum), on the list by hand, or has a target price and stock plus on order is below its on-offer amount. Only candidates are quoted, to keep traffic to the shop low.
 2. **Quote** all its listings.
 3. **Level**: on offer (the best price per unit, using the loyalty price and a multibuy's per-unit price, at or below the target) → the on-offer amount. Not on offer but low or on the list → the normal amount (stock up to, else the minimum). Otherwise it's skipped. Loyalty prices and offers only count when valid on the delivery day (the booked slot's, else today) and, for loyalty ones, when the provider's **Loyalty prices** is on. "Other" deals are ignored but listed in the summary.
-4. **Needed** = level − stock − on order. Something on the list by hand gets at least one pack.
+4. **Needed** = level − stock − on order. Something on the list by hand gets at least one pack, and once it's in the basket it comes off the list (as when ticked off in a shop), so it isn't bought again.
 5. **Packs**: a fixed pack buys enough of that listing; the cheapest mix tries every mix of the six cheapest listings (up to 99 packs each) and takes the cheapest that covers it, then the one least over, then the fewest packs. Unavailable listings are left out; gone ones (`listing_dead`) are marked on the item for relinking.
 6. **Multibuys** (3 for £2, buy 2 get 1 free, 25% off 6 or more) are rounded up to complete the deal when that keeps stock within the household's allowance over the level (**Multibuys may go over by**, 25% unless changed).
 7. **Perishables** (items with a shelf life) are capped at what gets used before it goes off: daily use (stock used over the last 90 days, or since the oldest movement if sooner; at least a week of history) × shelf life, never below the minimum. With no usage history, something keeping under 90 days only tops up to the normal amount, never the on-offer one.
@@ -59,7 +59,7 @@ Worked examples (the tests): loo roll, minimum 4, stock up to 12, 36 on offer, t
 
 **Plan basket** works the basket out without adding anything; **Fill basket** also adds it. Both run in the background, one at a time per provider: wake and check the provider (stopping with what to do when it's logged out), quote, plan, then (filling) add and wait for the provider's job. Everything added is recorded as expected stock from "Tesco delivery", with the booked slot's date and reference when there is one, so it counts towards stock straight away and the order confirmation email or a scan marks it arrived. Then, with **Sleep after** set and nothing else running there, the computer is put back to sleep.
 
-The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items low at that shop but not linked to anything there, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
+The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items low at that shop but not linked to anything there, low items linked there but bought at another shop, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
 
 In the app, beside a shop's shopping list: **Plan basket**, **Fill basket**, and how the latest went (followed every 3 seconds while it runs).
 

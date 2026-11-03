@@ -78,6 +78,9 @@ export function packQuantityFor(pack: PackSize | null, name: string, itemUnit: s
   return { quantity: 1, guessed: true };
 }
 
+/** Said after linking when the item had no shop: " It's bought from Tesco now." */
+export const shopSetText = (shopSet: boolean, shopName: string) => (shopSet ? ` It's bought from ${shopName} now.` : '');
+
 /** "1 pack = 9 rolls", "1 pack = 300 g" */
 export function packText(l: Pick<Listing, 'packQuantity'>, unit: string): string {
   return `1 pack = ${amount(l.packQuantity, unit)}`;
@@ -109,8 +112,11 @@ export function createItems(ctx: ModuleContext) {
     change,
     linked,
 
-    /** Links a shop's product to an item (or refreshes its details if it's already linked there). */
-    async link(productId: string, shopId: string, p: ShopProduct, o: { packQuantity?: number } = {}): Promise<{ product: Product; listing: Listing }> {
+    /**
+     * Links a shop's product to an item (or refreshes its details if it's already linked there).
+     * An item with no preferred shop gets this one (`shopSet`); one already set to other shops keeps them.
+     */
+    async link(productId: string, shopId: string, p: ShopProduct, o: { packQuantity?: number } = {}): Promise<{ product: Product; listing: Listing; shopSet: boolean }> {
       const item = await product(productId);
       const owner = (await linked()).get(`${shopId}:${p.listing_id}`);
       if (owner && owner.id !== productId) throw new ConflictError(`${p.name} is already linked to ${owner.name}. Unlink it there first.`);
@@ -134,7 +140,8 @@ export function createItems(ctx: ModuleContext) {
         if (replaced && rules.fixedListingId === replaced.listingId) rules.fixedListingId = p.listing_id;
         return { ...f, shops: { ...f.shops, [shopId]: { ...rules, listings } } };
       });
-      return { product: updated, listing: listing! };
+      if (updated.preferredShopIds.length) return { product: updated, listing: listing!, shopSet: false };
+      return { product: await ctx.core.products.update(productId, { preferredShopIds: [shopId] }), listing: listing!, shopSet: true };
     },
 
     async unlink(productId: string, shopId: string, listingId: string): Promise<Product> {
