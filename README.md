@@ -59,3 +59,7 @@ npm run dev        # API :8080 + web app :5173
 npm test           # unit, contract, API and module tests
 npm run test:e2e   # browser tests, phone and desktop
 ```
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
