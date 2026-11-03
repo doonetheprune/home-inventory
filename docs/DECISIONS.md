@@ -53,7 +53,8 @@ These follow from the decisions above; the owner can change any of them.
 - **Lookup photos are saved, not linked** (added after Phase 4): when a scanned barcode is named, the photo the lookup found is downloaded once into Larder's files, so it's in backups and works offline. It becomes the item's photo if it has none, and that brand's photo either way. Only the address a lookup provider gave is downloaded (never one sent by a caller), only over https, up to 5 MB, and only if the bytes are a photo; if any of that fails the item is still saved, without a photo.
 - **Shopping ticks** are kept on the phone until "Done", then sent in one go.
 - **Barcode lookups** ask Open Food Facts, Open Beauty Facts and Open Products Facts in turn (4 seconds each). Answers and misses are cached; misses are retried after 7 days.
-- **Licence:** MIT (the owner's choice, made when the repo went public; HACS needs one).
+- **Licence:** MIT (the owner's choice, made when the repo went public).
+- **No HACS check in CI** (the owner doesn't use HACS: the add-on installs the integration). The integration can still be added to HACS by hand as a custom repository.
 
 ## Phase 2: how it was built
 
