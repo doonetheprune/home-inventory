@@ -10,7 +10,7 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
 - **Scenarios and printing.** "Power cut": every torch, battery and candle, how many and where, printed for the cupboard door. QR label sheets for boxes and shelves.
 - **Recipes.** Save the ones you liked (an AI assistant can), see what's missing, and take the ingredients out of stock after cooking.
-- **Home Assistant**: an add-on that opens from the sidebar, and an integration with sensors (running low, use soon, out of place), actions for automations and Node-RED, events, NFC tags, and batteries linked to the devices that use them.
+- **Home Assistant**: an add-on that opens from the sidebar, and an integration with sensors (running low, use soon, out of place), actions for automations and Node-RED, events, NFC tags, links shared from your phone straight onto the wish list, and batteries linked to the devices that use them.
 - **AI assistants**: an MCP server, so Claude, ChatGPT, Gemini or a local model can answer "have we got AA batteries?" or "what should I cook with what's about to go off?", and update stock when you tell them.
 - **Runs on its own** too (Docker, one data folder, SQLite). A documented REST API underneath everything.
 

@@ -67,3 +67,26 @@ export function amount(n: number, unit: string): string {
   if (MEASURES.has(unit.toLowerCase())) return `${q} ${unit}`;
   return `${q} ${q > 0 && q <= 1 ? unit : pluralWord(unit, q)}`;
 }
+
+/**
+ * The address, if it's somewhere on the public web Larder may fetch from for
+ * someone (a shared link, its picture): https, a real domain name, and not a
+ * name or numbered address that points inside the home network. Null otherwise.
+ * It can't see where a name points, so it isn't a firewall, but it stops the
+ * plain cases (a router's page, a NAS, Home Assistant itself).
+ */
+export function publicWebAddress(raw: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host.includes('.') || host.startsWith('[')) return null;
+  // Numbered addresses: a shop's link has a name.
+  if (/^\d+(\.\d+){3}$/.test(host)) return null;
+  if (/(^|\.)(localhost|local|lan|home|internal|intranet|corp|home\.arpa|localdomain)$/.test(host)) return null;
+  return url;
+}

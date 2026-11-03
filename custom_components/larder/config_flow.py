@@ -21,10 +21,12 @@ from .api import LarderAuthError, LarderClient, LarderError
 from .const import (
     CONF_ADDON_SLUG,
     CONF_BATTERY_THRESHOLD,
+    CONF_FORWARD_SHARES,
     CONF_FORWARD_TAGS,
     CONF_TOKEN,
     CONF_URL,
     DEFAULT_BATTERY_THRESHOLD,
+    DEFAULT_FORWARD_SHARES,
     DEFAULT_FORWARD_TAGS,
     DOMAIN,
 )
@@ -122,12 +124,12 @@ class LarderConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> LarderOptionsFlow:
-        """Options: battery threshold and NFC forwarding."""
+        """Options: battery threshold, NFC and share forwarding."""
         return LarderOptionsFlow()
 
 
 class LarderOptionsFlow(OptionsFlow):
-    """Battery threshold and NFC tag forwarding."""
+    """Battery threshold, NFC tag forwarding and shared links."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The options form."""
@@ -139,5 +141,6 @@ class LarderOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required(CONF_BATTERY_THRESHOLD, default=options.get(CONF_BATTERY_THRESHOLD, DEFAULT_BATTERY_THRESHOLD)): vol.All(vol.Coerce(int), vol.Range(min=1, max=99)),
                 vol.Required(CONF_FORWARD_TAGS, default=options.get(CONF_FORWARD_TAGS, DEFAULT_FORWARD_TAGS)): bool,
+                vol.Required(CONF_FORWARD_SHARES, default=options.get(CONF_FORWARD_SHARES, DEFAULT_FORWARD_SHARES)): bool,
             }),
         )

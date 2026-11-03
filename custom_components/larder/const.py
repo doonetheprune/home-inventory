@@ -13,8 +13,10 @@ CONF_ADDON_SLUG: Final = "addon_slug"
 # Options
 CONF_BATTERY_THRESHOLD: Final = "battery_threshold"
 CONF_FORWARD_TAGS: Final = "forward_tags"
+CONF_FORWARD_SHARES: Final = "forward_shares"
 DEFAULT_BATTERY_THRESHOLD: Final = 20
 DEFAULT_FORWARD_TAGS: Final = True
+DEFAULT_FORWARD_SHARES: Final = True
 
 # Larder events arrive as "stock.low" and are fired in Home Assistant as "larder_stock_low".
 EVENT_PREFIX: Final = "larder_"

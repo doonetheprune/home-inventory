@@ -30,7 +30,7 @@ export default defineModule({
 
 | Hook | Use it to |
 |---|---|
-| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup`, `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()` |
+| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup` (including `savePhotoFromLink(url, label)`, which saves a picture from a public https address as a Larder photo), `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()`. Before fetching an address someone gave, check it with `publicWebAddress(url)` from `@larder/core` (https, a real domain, not the home network) |
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
@@ -120,4 +120,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `recipes` | Saved recipes, what's missing, scaling by ingredient ratios and named presets, and taking ingredients out of stock after cooking once confirmed |
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
+| `sharing` | Links shared to the Home Assistant app from a phone go on the wish list, named from the page, with its picture and price |
 | `_template` | Example to copy (off by default) |

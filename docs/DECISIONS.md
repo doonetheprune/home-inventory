@@ -55,6 +55,7 @@ These follow from the decisions above; the owner can change any of them.
 - **Shopping ticks** are kept on the phone until "Done", then sent in one go.
 - **Barcode lookups** ask Open Food Facts, Open Beauty Facts and Open Products Facts in turn (4 seconds each). Answers and misses are cached; misses are retried after 7 days.
 - **Licence:** MIT (the owner's choice, made when the repo went public).
+- **Sharing from a phone** (the `sharing` module): Android's share menu → Home Assistant, which the integration forwards to Larder. A shared link goes on the **wish list**, and the item keeps the link and where it came from (shop, app, phone, when, the price then). Not a separate Larder entry in the share menu, which would need Larder at its own https address outside Home Assistant.
 - **No HACS check in CI** (the owner doesn't use HACS: the add-on installs the integration). The integration can still be added to HACS by hand as a custom repository.
 
 ## Phase 2: how it was built
@@ -124,3 +125,6 @@ Bigger calls made while the owner was away, with the alternative. Say if any sho
 21. **The AI never reads barcodes:** the phone does, from the same photo, so a misread digit can't attach the wrong barcode. *Alternative:* also ask the AI, checking its digits with the barcode's check digit.
 22. **Anyone in the household can use Add by photo** (it spends the household's API credit); only admins set the keys and models. *Alternative:* admins only.
 23. **Not yet tried with a real photo and a real key.** Tests stand in for both services, following their documented request and answer formats. Larder did reach Google's real service with a made-up key and showed "Gemini didn't accept the API key"; Claude's couldn't be tried from where this was built.
+24. **Shared links go on the wish list as soon as they're shared**, with a notification to undo by hand (no confirm step: the Home Assistant app has no screen for one). Sharing is on by default for every phone with the app. *Alternative:* a "Shared" inbox in Larder to accept or dismiss.
+25. **Larder fetches shared pages itself** to name them and get their picture, only on the public web (https, a real domain name, nothing that names or numbers the home network, checked at every redirect). It can't see where a name points, so a public name pointing inside the house would still be fetched; anyone who can share to Home Assistant is in the household anyway. *Alternative:* name from the shared text only and never fetch.
+26. **Wish list names come from the page title**, tidied (the shop's name and departments removed, long Amazon titles cut at the first comma), not from the AI. *Alternative:* ask the AI (when one is set up) for a generic name and brand, as Add by photo does.
