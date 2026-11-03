@@ -78,7 +78,8 @@ describe('MQTT module', () => {
     for (let i = 0; i < 100 && seen.get('house/status') !== 'offline'; i++) await new Promise((r) => setTimeout(r, 30));
     expect(seen.get('house/status')).toBe('offline');
     await listener.endAsync();
-  });
+    // A real broker round trip with polling waits: about 5 seconds on its own, more alongside the other tests.
+  }, 15_000);
 
   it('makes topic-safe names', () => {
     expect(topicSlug('Power bank, 20,000 mAh')).toBe('power_bank_20_000_mah');
