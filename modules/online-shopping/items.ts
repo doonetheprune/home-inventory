@@ -5,7 +5,7 @@
  * The normal stock-up amount is the item's own `stockUpTo`, used in the shop too.
  */
 import { z } from 'zod';
-import { ConflictError, NotFoundError, ValidationError, type ModuleContext, type Product } from '@larder/core';
+import { ConflictError, NotFoundError, ValidationError, amount, type ModuleContext, type Product } from '@larder/core';
 import { PackSize, type Product as ShopProduct } from './contract';
 
 export const Listing = z.object({
@@ -78,9 +78,9 @@ export function packQuantityFor(pack: PackSize | null, name: string, itemUnit: s
   return { quantity: 1, guessed: true };
 }
 
-/** "1 pack = 9 rolls" */
+/** "1 pack = 9 rolls", "1 pack = 300 g" */
 export function packText(l: Pick<Listing, 'packQuantity'>, unit: string): string {
-  return `1 pack = ${Math.round(l.packQuantity * 1000) / 1000} ${unit}`;
+  return `1 pack = ${amount(l.packQuantity, unit)}`;
 }
 
 export function createItems(ctx: ModuleContext) {

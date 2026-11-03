@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops,
+  api, defineWebModule, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, qty, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops,
   type ProductDetail, type ProductSummary, type ShoppingList,
 } from '@larder/web-sdk';
 
@@ -232,6 +232,12 @@ interface OnlineFields { shops: Record<string, ShopRules>; offerStockUpTo: numbe
 
 const emptyRules: ShopRules = { listings: [], packRule: 'cheapest', fixedListingId: null, targetPrice: null };
 
+/** A shop's picture, straight from the shop; a cart instead when it won't load. */
+function ShopImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  return failed ? <Icon name="cart" /> : <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+}
+
 /** Prices are kept per one of the item's unit; things counted in g or ml are easier per kg or litre. */
 function pricePer(unit: string): { label: string; factor: number } {
   const u = unit.toLowerCase();
@@ -258,7 +264,7 @@ function PriceBox({ value, unit, onSave, label }: { value: number | null; unit: 
   return (
     <span className="row" style={{ gap: 6, alignItems: 'center' }}>
       <span>£</span>
-      <input className="input" inputMode="decimal" style={{ width: 90 }} value={text} placeholder="Not set" aria-label={label}
+      <input className="input" inputMode="decimal" style={{ width: 80 }} value={text} placeholder="Not set" aria-label={label}
         onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
       <span className="small muted">{per.label}</span>
     </span>
@@ -272,7 +278,7 @@ function ListingRow({ l, unit, shopId, shopName, productId }: { l: Listing; unit
   const path = `/items/${productId}/listings/${encodeURIComponent(l.listingId)}`;
   return (
     <div className="item" style={{ flexWrap: 'wrap' }}>
-      <span className="tile">{l.imageUrl ? <img src={l.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="cart" />}</span>
+      <span className="tile">{l.imageUrl ? <ShopImage src={l.imageUrl} /> : <Icon name="cart" />}</span>
       <span className="item-main" style={{ flex: '1 1 180px' }}>
         <span className="item-name">{l.link ? <a href={l.link} target="_blank" rel="noreferrer">{l.name || l.listingId}</a> : (l.name || l.listingId)}</span>
         <span className="item-meta">
@@ -281,7 +287,7 @@ function ListingRow({ l, unit, shopId, shopName, productId }: { l: Listing; unit
             <span className="row" style={{ gap: 6, display: 'inline-flex' }}>1 pack = <Stepper small value={n} onChange={setN} min={0.001} label={`${unit} in one pack`} /> {unit}
               <button type="button" className="btn small" disabled={busy} onClick={() => void run(() => call('PATCH', path, { shopId, packQuantity: n }), 'Pack size saved').then(() => setFixing(false))}>Save</button></span>
           ) : (
-            <button type="button" className="link small" onClick={() => setFixing(true)}>1 pack = {l.packQuantity} {unit}{l.guessed ? ' (check this)' : ''}</button>
+            <button type="button" className="link small" onClick={() => setFixing(true)}>1 pack = {qty(l.packQuantity, unit)}{l.guessed ? ' (check this)' : ''}</button>
           ))}
         </span>
       </span>
@@ -311,13 +317,13 @@ function ShopListings({ product, provider, rules }: { product: ProductDetail; pr
         )}
       </div>
       {rules.listings.length > 0 && <div className="list">{rules.listings.map((l) => <ListingRow key={l.listingId} l={l} unit={unit} shopId={provider.shopId} shopName={provider.shopName} productId={id} />)}</div>}
-      <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (code.trim()) void run(() => call<{ message: string }>('POST', `/items/${id}/listings`, { shopId: provider.shopId, idOrLink: code.trim(), addToFavourites: favourite }), (r) => r.message).then((r) => r && setCode('')); }}>
-        <input className="input" value={code} onChange={(e) => setCode(e.target.value)} placeholder={`${provider.shopName} product code or link`} aria-label={`${provider.shopName} product code or link`} />
+      <form className="inputrow" style={{ flexWrap: 'wrap' }} onSubmit={(e) => { e.preventDefault(); if (code.trim()) void run(() => call<{ message: string }>('POST', `/items/${id}/listings`, { shopId: provider.shopId, idOrLink: code.trim(), addToFavourites: favourite }), (r) => r.message).then((r) => r && setCode('')); }}>
+        <input className="input" style={{ flex: '1 1 160px', minWidth: 0 }} value={code} onChange={(e) => setCode(e.target.value)} placeholder={`${provider.shopName} product code or link`} aria-label={`${provider.shopName} product code or link`} />
         <button className="btn small" disabled={busy || !code.trim()}>{busy ? 'Looking…' : 'Link'}</button>
       </form>
       {canFavourite && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} />Also add it to my {provider.shopName} favourites</label>}
       {rules.listings.length > 0 && (
-        <div className="numfield"><span><b>Target price at {provider.shopName}</b><small>Leave empty to use the item's</small></span>
+        <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Target price at {provider.shopName}</b><small>Leave empty to use the item's</small></span>
           <PriceBox value={rules.targetPrice} unit={unit} label={`Target price at ${provider.shopName}`} onSave={(v) => void setRules({ targetPrice: v }, v === null ? 'Using the item\'s target price' : 'Target price saved')} /></div>
       )}
     </div>
@@ -338,9 +344,9 @@ function OnlineShoppingPanel({ product }: { product: ProductDetail }) {
       <div className="label">Online shopping</div>
       <div className="card pad stack" style={{ gap: 14 }}>
         <div className="list">
-          <div className="numfield"><span><b>On offer at</b><small>This price or less counts as an offer</small></span>
+          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>On offer at</b><small>This price or less counts as an offer</small></span>
             <PriceBox value={f.targetPrice ?? null} unit={unit} label="Target price" onSave={(v) => void setRules({ targetPrice: v }, v === null ? 'Target price cleared' : 'Target price saved')} /></div>
-          <div className="numfield"><span><b>Stock up to, on offer</b><small>{normal ? `Normally up to ${normal}` : 'Set the normal amount with Edit'}</small></span>
+          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Stock up to, on offer</b><small>{normal ? `Normally up to ${normal}` : 'Set the normal amount with Edit'}</small></span>
             {f.offerStockUpTo == null
               ? <button type="button" className="btn small" onClick={() => void setRules({ offerStockUpTo: Math.max(1, (normal ?? 1) * 3) }, 'On-offer amount set')}>Set</button>
               : <div className="row"><Stepper value={f.offerStockUpTo} onChange={(n) => void setRules({ offerStockUpTo: n }, '')} label="stock up to when on offer" /><button type="button" className="link small" onClick={() => void setRules({ offerStockUpTo: null }, 'On-offer amount cleared')}>Clear</button></div>}
@@ -544,7 +550,7 @@ function FavouritesPending() {
       <div className="list">
         {shown.map((f) => (
           <div className="item" key={f.id} style={{ flexWrap: 'wrap' }}>
-            <span className="tile">{f.imageUrl ? <img src={f.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="cart" />}</span>
+            <span className="tile">{f.imageUrl ? <ShopImage src={f.imageUrl} /> : <Icon name="cart" />}</span>
             <span className="item-main" style={{ flex: '1 1 180px' }}>
               <span className="item-name">{f.name}</span>
               <span className="item-meta">

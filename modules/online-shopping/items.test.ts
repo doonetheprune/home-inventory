@@ -50,7 +50,7 @@ describe('online shopping: item settings', () => {
   it('links listings by code or link, one item per listing', async () => {
     const { core, tesco, loo } = await setup();
     const a = await call<{ message: string }>(core, 'POST', '/items/:productId/listings', { shopId: tesco.id, idOrLink: '1001' }, { productId: loo.id });
-    expect(a.message).toBe('Tesco Soft White Toilet Tissue 9 Rolls at Tesco is linked to Toilet roll (1 pack = 9 roll).');
+    expect(a.message).toBe('Tesco Soft White Toilet Tissue 9 Rolls at Tesco is linked to Toilet roll (1 pack = 9 rolls).');
     await call(core, 'POST', '/items/:productId/listings', { shopId: tesco.id, idOrLink: 'https://www.tesco.com/groceries/en-GB/products/1002' }, { productId: loo.id });
     const f = await fields(core, loo.id);
     expect(f.shops[tesco.id]!.listings.map((l) => [l.listingId, l.packQuantity, l.guessed])).toEqual([['1001', 9, false], ['1002', 24, false]]);
@@ -69,7 +69,7 @@ describe('online shopping: item settings', () => {
   it('adds to the shop\'s favourites while linking, when asked', async () => {
     const { core, shop, tesco, loo } = await setup();
     const r = await call<{ message: string }>(core, 'POST', '/items/:productId/listings', { shopId: tesco.id, idOrLink: '1002', addToFavourites: true }, { productId: loo.id });
-    expect(r.message).toBe('Andrex Classic Clean Toilet Tissue 24 Rolls at Tesco is linked to Toilet roll (1 pack = 24 roll) and added to your Tesco favourites.');
+    expect(r.message).toBe('Andrex Classic Clean Toilet Tissue 24 Rolls at Tesco is linked to Toilet roll (1 pack = 24 rolls) and added to your Tesco favourites.');
     expect(shop.state.favourites).toEqual(['1002']);
   });
 
@@ -77,7 +77,7 @@ describe('online shopping: item settings', () => {
     const { core, tesco } = await setup();
     await core.products.create({ name: 'Baked beans', unit: 'tin' });
     const r = await core.assistant.call('link_listing', { item: 'baked beans', id_or_link: '3001', shop: 'tesco' });
-    expect(r.text).toBe('Heinz Baked Beanz 4 X 415G at Tesco is linked to Baked beans (1 pack = 4 tin: check this). Ask how many tin one pack holds if that\'s wrong, and say it with pack_quantity.');
+    expect(r.text).toBe('Heinz Baked Beanz 4 X 415G at Tesco is linked to Baked beans (1 pack = 4 tins: check this). Ask how many tin one pack holds if that\'s wrong, and say it with pack_quantity.');
     const beans = await core.resolve.product('baked beans');
     await call(core, 'PATCH', '/items/:productId/listings/:listingId', { shopId: tesco.id, packQuantity: 4 }, { productId: beans.id, listingId: '3001' });
     expect((await fields(core, beans.id)).shops[tesco.id]!.listings[0]).toMatchObject({ packQuantity: 4, guessed: false });

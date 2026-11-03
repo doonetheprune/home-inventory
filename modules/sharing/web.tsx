@@ -36,7 +36,7 @@ function PendingPage() {
         <p className="small muted">Links shared from your phone to Home Assistant. Put each on the wish list, or add it to Larder if you've got it.</p>
         {isLoading && <Loading />}
         {data && !data.length && (
-          <Empty title="Nothing pending">
+          <Empty title="No shared links waiting">
             <span className="muted small">On Android, share a page from a shop's app or Chrome to Home Assistant, and it waits here.</span>
           </Empty>
         )}
