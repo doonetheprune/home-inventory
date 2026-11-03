@@ -38,4 +38,6 @@ Larder fetches the shared page and its picture itself, so it only goes to the pu
 
 ## Hooks used
 
+Offers the `sharing.pending` slot on the Pending page (with an empty id), where other modules show their own waiting things (online shopping's shop favourites).
+
 `addRoute`, `collection`, `productFields` (`sharing`), `ctx.fetch`, `core.lookup.savePhotoFromLink` / `forgetPhoto`, `core.products.create` / `updateField`, `core.homeAssistant.appPath()`, `publish`; on the web, a page next to the Wish list (`section: 'wishlist'`), `wishListPanels`, a product panel, and `useAddItem` with `photoFileId` and `onSaved`.

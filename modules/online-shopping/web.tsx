@@ -1,12 +1,13 @@
 /**
  * Online shopping in the app: Settings → Shopping providers (where each
- * provider runs, its token, waking its machine, Test connection), an item's
- * listings and buying rules on its page, and planning or filling the basket
- * beside a shop's shopping list.
+ * provider runs, its token, waking its machine, Test connection, dismissed
+ * favourites), an item's listings and buying rules on its page, planning or
+ * filling the basket beside a shop's shopping list, and shop favourites in Pending.
  */
 import { useEffect, useState } from 'react';
 import {
-  api, defineWebModule, Icon, Pill, Seg, Sheet, Stepper, Switch, money, shortDate, useAction, useQuery, useQueryClient, useShops, type ProductDetail, type ShoppingList,
+  api, defineWebModule, Empty, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops,
+  type ProductDetail, type ProductSummary, type ShoppingList,
 } from '@larder/web-sdk';
 
 const call = <T,>(method: string, path: string, body?: unknown) => api.modules.call<T>('online-shopping', method, path, body);
@@ -168,6 +169,33 @@ function MultibuySetting({ admin }: { admin: boolean }) {
   );
 }
 
+interface Favourite {
+  id: string; shopId: string; shopName: string; listingId: string; name: string; packSize: { amount: number; unit: 'kg' | 'l' | 'each' } | null;
+  link: string; imageUrl: string | null; price: number | null; loyaltyPrice: number | null; foundAt: string;
+}
+
+function DismissedFavourites() {
+  const { run, busy } = useAction();
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery({ queryKey: ['online-shopping', 'dismissed'], queryFn: () => call<Array<Favourite & { dismissedAt: string }>>('GET', '/dismissed') });
+  if (!data?.length) return null;
+  return (
+    <div className="stack" style={{ gap: 6, marginTop: 10 }}>
+      <button type="button" className="link small" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'} {data.length} dismissed favourite{data.length === 1 ? '' : 's'}</button>
+      {open && (
+        <div className="list">
+          {data.map((d) => (
+            <div className="item" key={d.id}>
+              <span className="item-main"><span className="item-name">{d.name}</span><span className="item-meta">{d.shopName} · dismissed {shortDate(d.dismissedAt.slice(0, 10))}</span></span>
+              <button type="button" className="btn small ghost" disabled={busy} onClick={() => void run(() => call('DELETE', `/dismissed/${encodeURIComponent(d.id)}`), `${d.name} is back in Pending`)}><Icon name="undo" size="sm" />Undo</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
   const { data } = useProviders();
   const [editing, setEditing] = useState<ProviderView | 'new' | null>(null);
@@ -182,6 +210,7 @@ function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
       {data.providers.length > 0 && <div className="list">{data.providers.map((p) => <ProviderRow key={p.id} p={p} admin={admin} onEdit={() => setEditing(p)} />)}</div>}
       {admin && <button type="button" className="btn small" style={{ marginTop: 10 }} onClick={() => setEditing('new')}><Icon name="plus" size="sm" />Add automated shopping provider</button>}
       {data.providers.length > 0 && <MultibuySetting admin={admin} />}
+      {data.providers.length > 0 && <DismissedFavourites />}
       {editing && (
         <Sheet title={editing === 'new' ? 'Add a shopping provider' : `${editing.shopName} provider`} onClose={() => setEditing(null)}>
           <ProviderForm editing={editing === 'new' ? null : editing} list={data} onDone={() => setEditing(null)} />
@@ -421,9 +450,151 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Pending: shop favourites not linked to anything yet                 */
+/* ------------------------------------------------------------------ */
+
+function usePendingFavourites() {
+  return useQuery({ queryKey: ['online-shopping', 'pending'], queryFn: () => call<Favourite[]>('GET', '/pending') });
+}
+
+/** "Tesco Closed Cup Mushrooms 300G" → "Closed Cup Mushrooms"; the full name is kept as its brand. */
+function plainName(name: string): string {
+  const out = name
+    .replace(/^(tesco( finest| organic| everyday value)?|asda|sainsbury'?s|waitrose|ocado|morrisons|aldi|lidl|co-?op)\s+/i, '')
+    .replace(/\s+\d+(\.\d+)?\s*(x\s*\d+(\.\d+)?\s*)?(g|kg|ml|l|ltr|litres?|cl|pack|pk|rolls?|tins?|bags?|eggs?|pints?|tablets?|pods?)\b.*$/i, '')
+    .trim();
+  return out || name;
+}
+
+/** What it's counted in: g or ml for weights and volumes, rolls for "9 Rolls", else each. */
+function unitFor(f: Favourite): string {
+  if (f.packSize?.unit === 'kg') return 'g';
+  if (f.packSize?.unit === 'l') return 'ml';
+  const counted = /\b\d+\s*(roll|tin|bag|bottle|tablet|egg|can|pod|sachet|capsule|bar)s?\b/i.exec(f.name);
+  return counted ? counted[1]!.toLowerCase() : 'each';
+}
+
+const sizeText = (p: Favourite['packSize']) => (!p ? '' : p.unit === 'each' ? `${p.amount}` : p.amount < 1 ? `${Math.round(p.amount * 1000)} ${p.unit === 'kg' ? 'g' : 'ml'}` : `${p.amount} ${p.unit}`);
+
+/** Picks an item to link a favourite to. */
+function LinkSheet({ f, onClose }: { f: Favourite; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [q, setQ] = useState(f.name.replace(/^(tesco|asda|sainsbury'?s|waitrose|ocado)\s+/i, '').split(/\s+/).slice(0, 2).join(' '));
+  const items = useQuery({ queryKey: ['products', 'all-for-link'], queryFn: () => api.products.list({ status: 'all' }) }).data ?? [];
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = items.filter((s: ProductSummary) => words.every((w) => `${s.product.name} ${s.product.aliases.join(' ')}`.toLowerCase().includes(w))).slice(0, 30);
+  return (
+    <Sheet title={`Link ${f.name}`} onClose={onClose}>
+      <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find the item" aria-label="Find the item" autoFocus />
+      <div className="list" style={{ marginTop: 10 }}>
+        {shown.map((s: ProductSummary) => (
+          <button type="button" key={s.product.id} className="item" disabled={busy} style={{ width: '100%', textAlign: 'left' }}
+            onClick={() => void run(() => call<{ message: string }>('POST', `/pending/${encodeURIComponent(f.id)}/link`, { productId: s.product.id }), (r) => r.message).then((r) => r && onClose())}>
+            <span className="item-main"><span className="item-name">{s.product.name}</span><span className="item-meta">Counted in {s.product.unit}</span></span>
+            <Icon name="chev" size="sm" />
+          </button>
+        ))}
+        {!shown.length && <p className="small muted">No item matches. Try fewer words, or add it as a new item.</p>}
+      </div>
+    </Sheet>
+  );
+}
+
+function FavouritesPending() {
+  const { data } = usePendingFavourites();
+  const providers = useProviders().data?.providers ?? [];
+  const { run, busy } = useAction();
+  const addItem = useAddItem();
+  const [filter, setFilter] = useState('');
+  const [linking, setLinking] = useState<Favourite | null>(null);
+  if (!providers.length) return null;
+  const all = data ?? [];
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = all.filter((f) => words.every((w) => f.name.toLowerCase().includes(w)));
+
+  /** A new item, filled in from the favourite, with the shop's picture; saving links it and takes it out of Pending. */
+  const asNewItem = (f: Favourite) => run(async () => {
+    const { photoFileId } = await call<{ photoFileId: string | null }>('POST', `/pending/${encodeURIComponent(f.id)}/photo`);
+    addItem({
+      name: plainName(f.name),
+      brand: f.name,
+      unit: unitFor(f),
+      preferredShopIds: [f.shopId],
+      photoFileId,
+      links: [f.link],
+      note: `From your ${f.shopName} favourites. Give it a plain name ("Mushrooms") and say what it's counted in; saving links it to this ${f.shopName} product.`,
+      onSaved: (productId) => call('POST', `/pending/${encodeURIComponent(f.id)}/added`, { productId }),
+    });
+  });
+
+  return (
+    <div className="section" style={{ marginTop: 18 }}>
+      <div className="label">Shop favourites{all.length ? ` (${all.length})` : ''}</div>
+      <p className="small muted">Favourites at your online shops that aren't linked to anything in Larder yet. Make one a new item, link it to an item you have, or dismiss it (it won't come back; undo in Settings).</p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        {providers.filter((p) => !p.status?.capabilities.length || p.status.capabilities.includes('favourites')).map((p) => (
+          <button key={p.id} type="button" className="btn small" disabled={busy} onClick={() => void run(() => call<{ message: string }>('POST', `/shops/${p.shopId}/favourites/sync`, {}), (r) => r.message)}>
+            <Icon name="download" size="sm" />{busy ? 'Reading…' : `Bring in ${p.shopName} favourites`}
+          </button>
+        ))}
+        {all.length > 8 && <input className="input" style={{ flex: '1 1 200px' }} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" aria-label="Filter favourites" />}
+      </div>
+      {data && !all.length && <p className="small muted">None waiting.</p>}
+      <div className="list">
+        {shown.map((f) => (
+          <div className="item" key={f.id} style={{ flexWrap: 'wrap' }}>
+            <span className="tile">{f.imageUrl ? <img src={f.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="cart" />}</span>
+            <span className="item-main" style={{ flex: '1 1 180px' }}>
+              <span className="item-name">{f.name}</span>
+              <span className="item-meta">
+                <a href={f.link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{f.shopName}</a>
+                {f.packSize ? ` · ${sizeText(f.packSize)}` : ''}{f.price !== null ? ` · ${money(f.price, 'GBP')}` : ''}{f.loyaltyPrice !== null ? ` (${money(f.loyaltyPrice, 'GBP')} with card)` : ''}
+              </span>
+            </span>
+            <div className="row" style={{ gap: 6, rowGap: 6, marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn small primary" disabled={busy} onClick={() => void asNewItem(f)}><Icon name="plus" size="sm" />New item</button>
+              <button type="button" className="btn small" disabled={busy} onClick={() => setLinking(f)}><Icon name="link" size="sm" />Link to an item</button>
+              <button type="button" className="iconbtn ghost" aria-label={`Dismiss ${f.name}`} disabled={busy} onClick={() => void run(() => call('POST', `/pending/${encodeURIComponent(f.id)}/dismiss`), `${f.name} dismissed`)}><Icon name="x" size="sm" /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {linking && <LinkSheet f={linking} onClose={() => setLinking(null)} />}
+    </div>
+  );
+}
+
+/** Pending for favourites, when the Sharing module (which has the Pending page) is off. */
+function FavouritesPage() {
+  return (
+    <>
+      <Header title="Shop favourites" back="/more" />
+      <div className="content" style={{ maxWidth: 860 }}><FavouritesPending /></div>
+    </>
+  );
+}
+
+/** On the Wish list: how many favourites are waiting. */
+function FavouritesOnWishList() {
+  const n = usePendingFavourites().data?.length ?? 0;
+  const sharing = useModuleEnabled('sharing');
+  if (!n) return null;
+  return (
+    <Link className="card pad" to={sharing ? '/m/sharing/' : '/m/online-shopping/favourites'} style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+      <Icon name="cart" />
+      <span style={{ flex: 1, minWidth: 0 }}><b>{n === 1 ? '1 shop favourite' : `${n} shop favourites`} in Pending</b><br /><span className="small muted">Make them items, link them to items, or dismiss them</span></span>
+      <Icon name="chev" size="sm" />
+    </Link>
+  );
+}
+
 export default defineWebModule({
   id: 'online-shopping',
   settingsPanels: [ShoppingProvidersSettings],
   productPanels: [OnlineShoppingPanel],
   shoppingPanels: [OnlineBasketPanel],
+  panels: [{ slot: 'sharing.pending', component: FavouritesPending }],
+  pages: [{ path: '/favourites', title: 'Shop favourites', hidden: true, component: FavouritesPage }],
+  wishListPanels: [FavouritesOnWishList],
 });

@@ -22,6 +22,15 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 - **Stock up to** (the normal amount) is the item's own setting, beside **Running low below** on Edit: Larder's shopping lists suggest topping up to it at every shop, not just back to the minimum. Example: loo roll, minimum 4, stock up to 12, on offer 36.
 - **Use picture** makes a listing's picture the item's photo.
 
+## Favourites into Pending
+
+- **Bring in favourites** (`sync_favourites`, a button on the Pending page, or the Home Assistant action `larder.online_shopping_sync_favourites` on a schedule) reads the provider's favourites, fresh from the shop. If the shop can't be reached, the provider's older copy is used and the answer says so.
+- A favourite already linked to an item is left out. Any other waits in **Pending**, the Sharing module's list next to the Wish list (or its own **Shop favourites** page, linked from the Wish list, when Sharing is off), with its name, pack size, price, picture and link. The Wish list says how many are waiting.
+- From Pending: **New item** opens Add item filled in: a plain name ("Closed Cup Mushrooms" from "Tesco Closed Cup Mushrooms 300G"), the full name as its brand, g or ml for weights and volumes, the shop, the link and the shop's picture as its photo. Saving links it and takes it out of Pending. **Link to an item** links it to one Larder has. **Dismiss** (×) forgets it for good, by shop and code; dismissals are listed in Settings → Shopping providers with **Undo**, which puts it back in Pending.
+- A favourite taken out of the shop's favourites since leaves Pending at the next fresh sync.
+- When the shop gives a product a new code it shows up as a new favourite. Linking it to the item replaces the item's gone listing (the only one, or the gone one with the same pack size).
+- **Add to favourites** from Larder: pasting a code or link onto an item can also add it to the shop's favourites (Online shopping on the item's page, or `link_listing`), and `add_to_favourites` adds one by code or link, linking it to an item if named, else leaving it in Pending. A provider without `add_favourites` says so.
+
 ## Delivery slots and "do me a shop"
 
 1. The person asks an assistant for a shop. `start_shop` uses the default online shop unless one is named, checks it's ready (waking its computer), and says to ask when they'd like it delivered.
@@ -65,15 +74,21 @@ In the app, beside a shop's shopping list: **Plan basket**, **Fill basket**, and
 | `start_shop` | Begin "do me a shop": ready?, then when, then the free slots |
 | `list_slots` | Free delivery slots for a day, in everyday words or YYYY-MM-DD |
 | `book_slot` | Book one from the last list, once the person agrees |
+| `sync_favourites` | Bring the shop's favourites into Pending |
+| `add_to_favourites` | Add a product to the shop's favourites by code or link, linking it to an item or leaving it in Pending |
 | `plan_basket` | What would go in the basket, without adding anything |
 | `fill_basket` | Plan and add it, recording it as on the way |
 | `shop_status` | How a plan or fill is going, by `job_id` or the shop's latest |
 
 Tools wait up to 50 seconds for a shop, then answer "Still working…" with a `job_id` for `shop_status`.
 
+## Home Assistant
+
+Action `larder.online_shopping_sync_favourites` (`shop`, optional): for a weekly automation.
+
 ## Events
 
-`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ shop, run_id, items, total, failed, relink, slot, summary }`, for a notification. `online-shopping.slot_booked`: `{ shop, slot, reference, reserved_until }`. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
+`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ shop, run_id, items, total, failed, relink, slot, summary }`, for a notification. `online-shopping.slot_booked`: `{ shop, slot, reference, reserved_until }`. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 
 ## Routes
 
@@ -97,13 +112,19 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 | `GET /shops/:shopId/slots?when=` | Free and taken slots for a day |
 | `POST /shops/:shopId/book` | `{ slotId }` from the last list |
 | `GET /shops/:shopId/booking` | The booked slot, while it's to come |
+| `GET /pending` | Shop favourites waiting in Pending |
+| `POST /shops/:shopId/favourites/sync` | `{ refresh? }`: bring them in |
+| `POST /pending/:id/link` | `{ productId }`: link it to an item |
+| `POST /pending/:id/photo`, `POST /pending/:id/added` | Save its picture for Add item; then `{ productId }` of the item made |
+| `POST /pending/:id/dismiss` | Never suggest it again |
+| `GET /dismissed`, `DELETE /dismissed/:id` | Dismissed ones, and undoing one |
 | `GET /runs/:id`, `GET /shops/:shopId/latest` | How it's going: `{ status, step, plan, added, failed, summary, error }` |
 
 ## Data
 
 `product.fields['online-shopping']`: `{ shops: { <shopId>: { listings: [{ listingId, name, packQuantity, guessed, packSize, link, imageUrl, deadSince, addedAt }], packRule, fixedListingId, targetPrice } }, offerStockUpTo, targetPrice }`. Prices are per one of the item's unit. The item's own `stockUpTo` (core) is the normal stock-up amount.
 
-`online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's last list of slots), `online-shopping:settings` (`options`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`. Tokens are kept in Larder's data folder, so they're in backups.
+`online-shopping:pending` and `online-shopping:dismissed` (favourites, by `<shopId>:<code>`), `online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's last list of slots), `online-shopping:settings` (`options`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`. Tokens are kept in Larder's data folder, so they're in backups.
 
 ## Settings
 
@@ -111,4 +132,4 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 
 ## Hooks used
 
-`addRoute` (`admin` for changes), `addTool`, `collection`, `productFields`, `publish`, `core.products.updateField`, `core.lookup.savePhotoFromLink`, `core.stock.expect`, `core.shopping.forShop`, `core.history.product`, `ctx.fetch` (to reach the providers), `ctx.core.homeAssistant.callService` (waking and sleep), `ctx.core.resolve.shop` / `.product`, `ctx.core.shops`; on the web, a Settings panel, a product panel and a shopping panel.
+`addRoute` (`admin` for changes), `addTool`, `collection`, `productFields`, `publish`, `core.products.updateField`, `core.lookup.savePhotoFromLink`, `core.stock.expect`, `core.shopping.forShop`, `core.history.product`, `ctx.fetch` (to reach the providers), `ctx.core.homeAssistant.callService` (waking and sleep), `ctx.core.resolve.shop` / `.product`, `ctx.core.shops`; `addAction`; on the web, a Settings panel, a product panel, a shopping panel, a panel in the `sharing.pending` slot, a hidden page and a Wish list panel.

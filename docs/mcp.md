@@ -95,6 +95,10 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, at the amounts made, applied only once the person agrees (recipes module) |
 | `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
 | `set_recipe_scenarios` | Put a recipe in scenarios (Christmas), and keep it only there if wanted (recipes module) |
+| `start_shop` / `list_slots` / `book_slot` | "Do me a shop": is the online shop ready (waking its computer), when, the free delivery slots that day, and booking one once the person agrees (online shopping module) |
+| `plan_basket` / `fill_basket` / `shop_status` | What's low or on offer at its target price, planned or put in the online basket and recorded as on the way; how it's going (online shopping module) |
+| `provider_status` / `get_product` / `link_listing` / `set_buying_rules` | The online shop's provider, its products, linking them to items, and the target price, on-offer amount and pack rule (online shopping module) |
+| `sync_favourites` / `add_to_favourites` | Shop favourites into Pending; adding one by code or link (online shopping module) |
 
 Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
 

@@ -3,7 +3,7 @@
  * Larder. A link to it from the Wish list, and where an item came from on its page.
  */
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, money, shortDate, useAction, useAddItem, useQuery, type ProductDetail,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, ModulePanels, money, shortDate, useAction, useAddItem, useQuery, type ProductDetail,
 } from '@larder/web-sdk';
 
 interface SharedFrom { url: string; site: string; app: string | null; device: string | null; sharedAt: string; price: number | null; currency: string | null }
@@ -65,6 +65,8 @@ function PendingPage() {
             </div>
           ))}
         </div>
+        {/* Other modules' waiting things, e.g. shop favourites from online shopping. */}
+        <ModulePanels slot="sharing.pending" id="" />
       </div>
     </>
   );

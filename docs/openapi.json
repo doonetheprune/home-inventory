@@ -1510,6 +1510,184 @@
           "results"
         ]
       },
+      "PendingFavouriteInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PendingFavouriteInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt"
+        ]
+      },
+      "DismissedFavouriteInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/DismissedFavouriteInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "dismissedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt",
+          "dismissedAt"
+        ]
+      },
       "OnlineShopPlanInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/OnlineShopPlanInput",
@@ -5361,6 +5539,188 @@
           "finishedAt",
           "unseen",
           "results"
+        ],
+        "additionalProperties": false
+      },
+      "PendingFavourite": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PendingFavourite",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt"
+        ],
+        "additionalProperties": false
+      },
+      "DismissedFavourite": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/DismissedFavourite",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "dismissedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt",
+          "dismissedAt"
         ],
         "additionalProperties": false
       },
@@ -19923,6 +20283,559 @@
                     "booking"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending": {
+      "get": {
+        "summary": "Shop favourites waiting in Pending: not linked to any item, not dismissed",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingFavourite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/favourites/sync": {
+      "post": {
+        "summary": "Read the shop's favourites and put new, unlinked ones in Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "refresh: false uses the provider's copy without asking the shop (quicker). Favourites already linked to an item, or dismissed, are left out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shop": {
+                      "type": "string"
+                    },
+                    "added": {
+                      "type": "number"
+                    },
+                    "pending": {
+                      "type": "number"
+                    },
+                    "linked": {
+                      "type": "number"
+                    },
+                    "dismissed": {
+                      "type": "number"
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    },
+                    "fetchedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "shop",
+                    "added",
+                    "pending",
+                    "linked",
+                    "dismissed",
+                    "stale",
+                    "fetchedAt",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/link": {
+      "post": {
+        "summary": "Link a pending favourite to an item you have; it leaves Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "A new code for a product that has gone replaces the item's gone listing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "listing": {
+                      "type": "object",
+                      "properties": {
+                        "listingId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "packQuantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "guessed": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "packSize": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kg",
+                                    "l",
+                                    "each"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "link": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "imageUrl": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deadSince": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "listingId",
+                        "name",
+                        "packQuantity",
+                        "guessed",
+                        "packSize",
+                        "link",
+                        "imageUrl",
+                        "deadSince",
+                        "addedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "listing",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/photo": {
+      "post": {
+        "summary": "Save a pending favourite's picture as a Larder photo, for the item about to be made from it",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "photoFileId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "photoFileId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/added": {
+      "post": {
+        "summary": "A pending favourite became a new item (through the Add item page): it's linked and leaves Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "listing": {
+                      "type": "object",
+                      "properties": {
+                        "listingId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "packQuantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "guessed": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "packSize": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kg",
+                                    "l",
+                                    "each"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "link": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "imageUrl": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deadSince": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "listingId",
+                        "name",
+                        "packQuantity",
+                        "guessed",
+                        "packSize",
+                        "link",
+                        "imageUrl",
+                        "deadSince",
+                        "addedAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "listing"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/dismiss": {
+      "post": {
+        "summary": "Not wanted: it leaves Pending and isn't suggested again (undo in Settings)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingFavourite"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/dismissed": {
+      "get": {
+        "summary": "Favourites dismissed from Pending, newest first",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DismissedFavourite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/dismissed/{id}": {
+      "delete": {
+        "summary": "Undo a dismissal: the favourite is back in Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingFavourite"
                 }
               }
             }

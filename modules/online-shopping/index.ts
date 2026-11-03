@@ -6,6 +6,8 @@
  * rules and makes every decision.
  */
 import { defineModule } from '@larder/core';
+import { createFavourites } from './favourites';
+import { favouriteFeatures } from './favourites-api';
 import { OnlineFields } from './items';
 import { itemFeatures } from './items-api';
 import { providerFeatures } from './providers-api';
@@ -31,5 +33,6 @@ export default defineModule({
     const shops = createShops(ctx, services);
     shopFeatures(ctx, services, shops);
     slotFeatures(ctx, services, shops);
+    favouriteFeatures(ctx, services, createFavourites(ctx, services));
   },
 });

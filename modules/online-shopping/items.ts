@@ -125,8 +125,13 @@ export function createItems(ctx: ModuleContext) {
           guessed: o.packQuantity !== undefined ? false : old && !old.guessed ? false : guess.guessed,
           addedAt: old?.addedAt ?? ctx.core.now(),
         });
-        if (!old && rules.listings.length >= 12) throw new ValidationError(`${item.name} already has 12 listings at this shop. Remove one first.`);
-        const listings = old ? rules.listings.map((l) => (l.listingId === p.listing_id ? listing! : l)) : [...rules.listings, listing];
+        // A new code for a product that has gone replaces it: the one dead listing, or the dead one with the same pack size.
+        const dead = old ? [] : rules.listings.filter((l) => l.deadSince);
+        const replaced = dead.length === 1 ? dead[0] : dead.find((l) => Math.abs(l.packQuantity - listing!.packQuantity) <= listing!.packQuantity * 0.01);
+        const kept = replaced ? rules.listings.filter((l) => l !== replaced) : rules.listings;
+        if (!old && kept.length >= 12) throw new ValidationError(`${item.name} already has 12 listings at this shop. Remove one first.`);
+        const listings = old ? kept.map((l) => (l.listingId === p.listing_id ? listing! : l)) : [...kept, listing];
+        if (replaced && rules.fixedListingId === replaced.listingId) rules.fixedListingId = p.listing_id;
         return { ...f, shops: { ...f.shops, [shopId]: { ...rules, listings } } };
       });
       return { product: updated, listing: listing! };
