@@ -22,6 +22,15 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 - **Stock up to** (the normal amount) is the item's own setting, beside **Running low below** on Edit: Larder's shopping lists suggest topping up to it at every shop, not just back to the minimum. Example: loo roll, minimum 4, stock up to 12, on offer 36.
 - **Use picture** makes a listing's picture the item's photo.
 
+## Delivery slots and "do me a shop"
+
+1. The person asks an assistant for a shop. `start_shop` uses the default online shop unless one is named, checks it's ready (waking its computer), and says to ask when they'd like it delivered.
+2. With `when` ("tomorrow evening", "friday", "12 Nov", a date), it lists the free slots that day, in the shop's own words for the day ("Friday 6 November, evening (17:00 onwards)") so a misread shows. `list_slots` does the same on its own.
+3. The assistant suggests one and books it with `book_slot` once the person agrees. Only a slot from the last list can be booked (Larder needs to know when it is). The booking is kept for that provider until its day has passed; plans and fills check offers for that day and record deliveries as expected then, with the booking reference.
+4. `fill_basket` runs the order logic, fills the basket, records the expected deliveries and answers the summary; then the computer goes back to sleep when set up.
+
+The person says when they're free; Larder doesn't look at calendars. A provider without `slot_booking` says to book on the shop's website. In the app, the shopping panel shows the booked slot and **Book a delivery slot** (type when, pick one).
+
 ## Order logic
 
 `plan.ts`, on its own so it's tested on its own. For each item with a listing at the shop:
@@ -53,6 +62,9 @@ In the app, beside a shop's shopping list: **Plan basket**, **Fill basket**, and
 | `get_product` | A shop's product by code or link: name, pack, prices, link, picture, and the item it's linked to |
 | `link_listing` | Link a shop's product to an item (and add it to favourites), with `pack_quantity` when the pack size isn't clear |
 | `set_buying_rules` | Target price, on-offer stock-up amount, pack rule and a shop's own target price. The minimum and normal stock-up amount are `change_item`'s (`stock_up_to`) |
+| `start_shop` | Begin "do me a shop": ready?, then when, then the free slots |
+| `list_slots` | Free delivery slots for a day, in everyday words or YYYY-MM-DD |
+| `book_slot` | Book one from the last list, once the person agrees |
 | `plan_basket` | What would go in the basket, without adding anything |
 | `fill_basket` | Plan and add it, recording it as on the way |
 | `shop_status` | How a plan or fill is going, by `job_id` or the shop's latest |
@@ -61,7 +73,7 @@ Tools wait up to 50 seconds for a shop, then answer "Still working…" with a `j
 
 ## Events
 
-`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ shop, run_id, items, total, failed, relink, slot, summary }`, for a notification. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
+`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ shop, run_id, items, total, failed, relink, slot, summary }`, for a notification. `online-shopping.slot_booked`: `{ shop, slot, reference, reserved_until }`. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 
 ## Routes
 
@@ -82,13 +94,16 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 | `POST /items/:productId/shop-image` | `{ shopId, listingId }`: the listing's picture becomes the item's photo |
 | `GET /options`, `PUT /options` | `{ multibuyOverPercent }` (changing it is for admins) |
 | `POST /shops/:shopId/plan`, `POST /shops/:shopId/fill` | Start one; answers the run at once |
+| `GET /shops/:shopId/slots?when=` | Free and taken slots for a day |
+| `POST /shops/:shopId/book` | `{ slotId }` from the last list |
+| `GET /shops/:shopId/booking` | The booked slot, while it's to come |
 | `GET /runs/:id`, `GET /shops/:shopId/latest` | How it's going: `{ status, step, plan, added, failed, summary, error }` |
 
 ## Data
 
 `product.fields['online-shopping']`: `{ shops: { <shopId>: { listings: [{ listingId, name, packQuantity, guessed, packSize, link, imageUrl, deadSince, addedAt }], packRule, fixedListingId, targetPrice } }, offerStockUpTo, targetPrice }`. Prices are per one of the item's unit. The item's own `stockUpTo` (core) is the normal stock-up amount.
 
-`online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:settings` (`options`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`. Tokens are kept in Larder's data folder, so they're in backups.
+`online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's last list of slots), `online-shopping:settings` (`options`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`. Tokens are kept in Larder's data folder, so they're in backups.
 
 ## Settings
 

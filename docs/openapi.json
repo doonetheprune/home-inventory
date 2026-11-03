@@ -19645,6 +19645,291 @@
         }
       }
     },
+    "/api/v1/modules/online-shopping/shops/{shopId}/slots": {
+      "get": {
+        "summary": "Delivery slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "when",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string"
+                    },
+                    "described": {
+                      "type": "string"
+                    },
+                    "slots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string"
+                          },
+                          "end": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "price",
+                          "available"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "described",
+                    "slots"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/book": {
+      "post": {
+        "summary": "Book a delivery slot from the last list",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "slotId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking": {
+                      "type": "object",
+                      "properties": {
+                        "slotId": {
+                          "type": "string"
+                        },
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "default": null,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "reservedUntil": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "bookedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "slotId",
+                        "start",
+                        "end",
+                        "price",
+                        "reference",
+                        "reservedUntil",
+                        "bookedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "booking",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/booking": {
+      "get": {
+        "summary": "The delivery slot booked at a shop, while it's still to come",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "slotId": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            },
+                            "price": {
+                              "default": null,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "reference": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reservedUntil": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "bookedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "slotId",
+                            "start",
+                            "end",
+                            "price",
+                            "reference",
+                            "reservedUntil",
+                            "bookedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "booking"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/template/count": {
       "get": {
         "summary": "How many stock changes have happened since the module was switched on",

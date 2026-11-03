@@ -332,6 +332,41 @@ interface Run {
   summary: string | null; plan: { total: number; items: unknown[] } | null; error: { code: string; message: string } | null;
 }
 
+interface Booking { slotId: string; start: string; end: string; price: number | null; reference: string | null; reservedUntil: string | null }
+interface Slot { id: string; start: string; end: string; price: number; available: boolean }
+
+const slotWhen = (b: { start: string; end: string }) =>
+  `${new Date(`${b.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}, ${b.start.slice(11, 16)}–${b.end.slice(11, 16)}`;
+
+function SlotSheet({ shopId, shopName, onClose }: { shopId: string; shopName: string; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [when, setWhen] = useState('');
+  const [found, setFound] = useState<{ described: string; date: string; slots: Slot[] } | null>(null);
+  const free = found?.slots.filter((x) => x.available) ?? [];
+  return (
+    <Sheet title={`Book a ${shopName} delivery`} onClose={onClose}>
+      <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (when.trim()) void run(() => call<{ described: string; date: string; slots: Slot[] }>('GET', `/shops/${shopId}/slots?when=${encodeURIComponent(when.trim())}`)).then((r) => r && setFound(r)); }}>
+        <input className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="tomorrow evening, friday, 12 Nov…" aria-label="When" autoFocus />
+        <button className="btn small" disabled={busy || !when.trim()}>{busy && !found ? 'Looking…' : 'Find slots'}</button>
+      </form>
+      {found && (
+        <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+          <b>{found.described || shortDate(found.date)}</b>
+          {!free.length && <p className="small muted">No slots free then. Try another day or time.</p>}
+          <div className="list">
+            {free.map((x) => (
+              <div className="item" key={x.id}>
+                <span className="item-main"><span className="item-name">{x.start.slice(11, 16)}–{x.end.slice(11, 16)}</span><span className="item-meta">{x.price ? money(x.price, 'GBP') : 'Free'}</span></span>
+                <button type="button" className="btn small primary" disabled={busy} onClick={() => void run(() => call<{ message: string }>('POST', `/shops/${shopId}/book`, { slotId: x.id }), (r) => r.message).then((r) => r && onClose())}>Book</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   const provider = useProviders().data?.providers.find((p) => p.shopId === list.shop.id);
   const qc = useQueryClient();
@@ -344,7 +379,10 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
     refetchInterval: (q) => (q.state.data?.run?.status === 'running' ? 3000 : false),
   });
   const r = latest.data?.run ?? null;
+  const booked = useQuery({ queryKey: ['online-shopping', 'booking', list.shop.id], queryFn: () => call<{ booking: Booking | null }>('GET', `/shops/${list.shop.id}/booking`), enabled: !!provider }).data?.booking ?? null;
   const [shown, setShown] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const canBook = !provider?.status?.capabilities.length || provider.status.capabilities.includes('slot_booking');
   useEffect(() => {
     // A filled basket changes what's expected: refresh lists and items once it's done.
     if (r && r.status !== 'running') void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'online-shopping' && q.queryKey[0] !== 'auth' });
@@ -357,6 +395,14 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <span><b>Online at {list.shop.name}</b><br /><span className="small muted">What's low, plus anything on offer at its target price. Stops at the basket: you check it and pay.</span></span>
       </div>
+      {canBook && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Icon name="truck" size="sm" />
+          <span className="small grow">{booked ? <>Delivery booked: <b>{slotWhen(booked)}</b>{booked.reference ? ` (ref ${booked.reference})` : ''}</> : 'No delivery slot booked. Offers are checked for today.'}</span>
+          <button type="button" className="btn small ghost" onClick={() => setBooking(true)}>{booked ? 'Change slot' : 'Book a delivery slot'}</button>
+        </div>
+      )}
+      {booking && <SlotSheet shopId={list.shop.id} shopName={list.shop.name} onClose={() => setBooking(false)} />}
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button type="button" className="btn small" disabled={busy || running} onClick={() => void start('plan')}><Icon name="search" size="sm" />Plan basket</button>
         <button type="button" className="btn small primary" disabled={busy || running} onClick={() => { if (confirm(`Fill your ${list.shop.name} basket now? What goes in is recorded as on the way.`)) void start('fill'); }}><Icon name="cart" size="sm" />Fill basket</button>
