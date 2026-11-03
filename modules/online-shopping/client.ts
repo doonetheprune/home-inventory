@@ -31,6 +31,8 @@ export interface ProviderAddress {
   token: string;
   /** For messages, e.g. "the Tesco provider". */
   label: string;
+  /** Reached through the Larder Automations hub, whose own errors carry no contract version. */
+  hub?: boolean;
 }
 
 const MINUTE = 60_000;
@@ -76,15 +78,20 @@ export function providerClient(doFetch: typeof fetch, p: ProviderAddress) {
     const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
     if (!json || typeof json !== 'object') throw new ProviderError(`${cap(p.label)} at ${shortAddress(p.url)} didn't answer like a Larder shopping provider. Check the address.`, 'bad_answer');
     const version = typeof json.contract_version === 'string' ? json.contract_version : null;
+    // Errors first: the Larder Automations hub answers its own (wrong token, no such automation) without a contract version.
+    if (!res.ok && (version || p.hub)) {
+      const e = ErrorBody.safeParse(json.error);
+      if (res.status === 401 || e.data?.code === 'unauthorised') {
+        throw new ProviderError(p.hub
+          ? `Larder Automations didn't accept Larder's token. Copy the token from its menu (Copy token) into Settings → Larder Automations.`
+          : `${cap(p.label)} didn't accept Larder's token. Check the token in Settings → Online shops matches the provider's AUTH_TOKEN.`, 'unauthorised');
+      }
+      if (e.success) throw new ProviderError(e.data.message, e.data.code, res.status >= 400 && res.status < 600 ? res.status : 502);
+      if (version) throw new ProviderError(`${cap(p.label)} answered ${res.status} to ${method} ${path.split('?')[0]}.`, 'provider_error');
+    }
     if (!version) throw new ProviderError(`${cap(p.label)} at ${shortAddress(p.url)} didn't answer like a Larder shopping provider. Check the address.`, 'bad_answer');
     if (Number(version.split('.')[0]) !== CONTRACT_MAJOR) {
       throw new ProviderError(`${cap(p.label)} speaks contract ${version}, and this Larder understands ${CONTRACT_MAJOR}.x. Update whichever is older so they match.`, 'contract_mismatch');
-    }
-    if (!res.ok) {
-      const e = ErrorBody.safeParse(json.error);
-      if (res.status === 401 || e.data?.code === 'unauthorised') throw new ProviderError(`${cap(p.label)} didn't accept Larder's token. Check the token in Settings → Shopping providers matches the provider's AUTH_TOKEN.`, 'unauthorised');
-      if (e.success) throw new ProviderError(e.data.message, e.data.code, res.status >= 400 && res.status < 600 ? res.status : 502);
-      throw new ProviderError(`${cap(p.label)} answered ${res.status} to ${method} ${path.split('?')[0]}.`, 'provider_error');
     }
     const parsed = schema.safeParse(json);
     if (!parsed.success) throw new ProviderError(`${cap(p.label)} sent an answer Larder couldn't read (${parsed.error.issues[0]?.path.join('.') || 'body'}: ${parsed.error.issues[0]?.message}).`, 'bad_answer');

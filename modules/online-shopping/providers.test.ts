@@ -70,7 +70,7 @@ describe('online shopping: providers', () => {
     const { core, tesco, shop } = await setup({ host: null });
     const p = await add(core, tesco.id, { token: 'wrong' });
     const wrong = await call<{ message: string }>(core, 'POST', '/providers/:id/test', {}, { id: p.id });
-    expect(wrong.message).toBe('The Tesco provider didn\'t accept Larder\'s token. Check the token in Settings → Shopping providers matches the provider\'s AUTH_TOKEN.');
+    expect(wrong.message).toBe('The Tesco provider didn\'t accept Larder\'s token. Check the token in Settings → Online shops matches the provider\'s AUTH_TOKEN.');
 
     await call(core, 'PATCH', '/providers/:id', { token: 'secret' }, { id: p.id });
     shop.state.loggedIn = false;
@@ -116,7 +116,7 @@ describe('online shopping: providers', () => {
 
   it('picks the default shop, or the one named, and says when there is none', async () => {
     const { core, tesco } = await setup();
-    await expect(core.assistant.call('provider_status', {})).rejects.toThrow('No online shop is set up yet. Add one in Settings → Shopping providers.');
+    await expect(core.assistant.call('provider_status', {})).rejects.toThrow('No online shop is set up yet. Set up Larder Automations in Settings, then link its automations to your shops.');
     await add(core, tesco.id);
     await core.shops.addPreset('Aldi');
     await expect(core.assistant.call('provider_status', { shop: 'aldi' })).rejects.toThrow('Larder can\'t shop online at Aldi yet.');

@@ -1,5 +1,5 @@
 /**
- * Settings → Shopping providers (adding, changing and testing them) and the
+ * Settings → Online shops (adding, changing and testing providers) and the
  * provider_status tool.
  */
 import { z } from 'zod';
@@ -21,8 +21,8 @@ export function providerFeatures(ctx: ModuleContext, { providers }: Services) {
   });
 
   ctx.addRoute({
-    method: 'POST', path: '/providers', summary: 'Add an automated shopping provider', admin: true,
-    description: 'One per shop. The address is where the provider runs (e.g. 192.168.1.231:8710) and the token is its AUTH_TOKEN. The first one added is the default.',
+    method: 'POST', path: '/providers', summary: 'Add a shopping provider: link a Larder Automations automation to a shop, or one at its own address', admin: true,
+    description: 'One per shop, the first added is the default. For an automation on Larder Automations, give automation (e.g. "tesco"): it uses the hub\'s address, token and waking. Otherwise give the address it runs at (e.g. 192.168.1.231:8710) and its token (AUTH_TOKEN).',
     body: ProviderInput, response: ProviderView,
     async handler({ body }) {
       return providers.view(await providers.create(body));
@@ -53,17 +53,19 @@ export function providerFeatures(ctx: ModuleContext, { providers }: Services) {
     response: z.object({ provider: ProviderView, woke: z.boolean(), filledWake: z.boolean(), message: z.string() }),
     async handler({ params, body }) {
       const r = await providers.check(await providers.get(params.id), { wake: body?.wake ?? false });
-      return { provider: await providers.view(r.provider), woke: r.woke, filledWake: r.filledWake, message: statusText(r.provider, r.woke, r.filledWake) };
+      const view = await providers.view(r.provider);
+      return { provider: view, woke: r.woke, filledWake: r.filledWake, message: statusText(r.provider, view, r.woke, r.filledWake) };
     },
   });
 
-  function statusText(p: Provider, woke: boolean, filledWake: boolean): string {
+  function statusText(p: Provider, view: ProviderView, woke: boolean, filledWake: boolean): string {
     const s = p.status!;
     const parts: string[] = [];
     if (woke) parts.push('Woke it.');
     if (s.ok) parts.push(`${s.name ?? 'The provider'} ${s.version ?? ''} is ready (contract ${s.contractVersion ?? '?'}).`.replace(/\s+\(/, ' ('));
     else parts.push(s.message ?? 'It isn\'t ready.');
-    if (filledWake) parts.push(`Larder will wake it with a magic packet to ${p.wake?.mac} when it doesn't answer.`);
+    // An automation's waking is the hub's, which the view shows.
+    if (filledWake) parts.push(`Larder will wake ${p.automation ? 'the Mac' : 'it'} with a magic packet to ${view.wake?.mac} when it doesn't answer.`);
     return parts.join(' ');
   }
 

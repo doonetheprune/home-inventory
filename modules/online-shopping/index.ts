@@ -8,6 +8,7 @@
 import { defineModule } from '@larder/core';
 import { createFavourites } from './favourites';
 import { favouriteFeatures } from './favourites-api';
+import { hubFeatures } from './hub-api';
 import { OnlineFields } from './items';
 import { itemFeatures } from './items-api';
 import { providerFeatures } from './providers-api';
@@ -16,6 +17,7 @@ import { createShops } from './shop';
 import { shopFeatures } from './shop-api';
 import { slotFeatures } from './slots-api';
 
+export { HubView } from './hub';
 export { ProviderView } from './providers';
 export { OnlineFields } from './items';
 
@@ -28,6 +30,7 @@ export default defineModule({
   productFields: OnlineFields,
   setup(ctx) {
     const services = createServices(ctx);
+    hubFeatures(ctx, services);
     providerFeatures(ctx, services);
     itemFeatures(ctx, services);
     const shops = createShops(ctx, services);

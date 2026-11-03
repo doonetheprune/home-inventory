@@ -61,6 +61,18 @@ describe('online shopping: delivery slots and "do me a shop"', () => {
     expect(entry?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30' });
   });
 
+  it('books a slot from a day looked at before another (the app shows a few days)', async () => {
+    const { core, shop, tesco } = await setup();
+    const slots = (when: string) => core.modules.routes().find((r) => r.moduleId === 'online-shopping' && r.route.path === '/shops/:shopId/slots')!.route.handler({ body: undefined, query: { when }, params: { shopId: tesco.id }, userId: null });
+    await slots('2026-10-30');
+    const friday = shop.state.slots;
+    shop.state.slots = [{ id: 's31', start: '2026-10-31T09:00:00+00:00', end: '2026-10-31T10:00:00+00:00', price: 0, available: true }];
+    await slots('2026-10-31');
+    shop.state.slots = [...friday, ...shop.state.slots];
+    const r = await call<{ message: string }>(core, 'POST', '/shops/:shopId/book', { slotId: 's17' }, { shopId: tesco.id });
+    expect(r.message).toMatch(/^Booked Friday 30 October, 17:00–18:00 at Tesco/);
+  });
+
   it('passes on a slot that has gone, and a provider that can\'t book', async () => {
     const { core, shop } = await setup();
     await core.assistant.call('list_slots', { when: 'friday' });
