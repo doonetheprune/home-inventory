@@ -274,3 +274,54 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await expect(page.getByRole('textbox', { name: 'Zones (configuration.yaml)' })).toHaveValue(/zone:/);
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
 });
+
+test('adds an item from a photo, offering to add its shop', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Oat drink ${info.project.name}`;
+  const shop = `Corner shop ${info.project.name}`;
+  // The AI itself is stood in for: Larder's own pages and saving are real.
+  const off = { keySet: false, keyHint: null, keyFrom: null, model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { provider: 'claude', ready: true, claude: { keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null }, gemini: off } }));
+  let sent = '';
+  await page.route('**/api/v1/modules/ai/identify', (r) => {
+    sent = (r.request().postDataJSON() as { image: string }).image;
+    return r.fulfill({ json: { readable: true, name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', categoryId: null, shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false }, provider: 'claude', model: 'claude-haiku-5-5' } });
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: /Add by photo/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Take a photo' })).toBeVisible();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('ai-gallery').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+
+  const ask = page.getByRole('dialog', { name: `Add ${shop}?` });
+  await expect(ask).toBeVisible();
+  // The photo was shrunk to a JPEG on the phone before it was sent.
+  expect(Buffer.from(sent, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  await ask.getByRole('button', { name: `Add ${shop}` }).click();
+
+  await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+  await expect(page.getByText('Read from your photo by Claude')).toBeVisible();
+  await expect(page.getByLabel('Other names')).toHaveValue('oat milk');
+  await expect(page.getByRole('button', { name: shop })).toHaveClass(/on/);
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+});
+
+test('settings choose the AI and keep each one\'s key and model', async ({ page }, info) => {
+  test.skip(info.project.name === 'phone', 'Once is enough: settings are the same on both');
+  await signIn(page);
+  await page.goto('/#/settings');
+  await expect(page.getByText('Read photos with')).toBeVisible();
+  await page.getByRole('group', { name: 'AI for photos' }).getByRole('button', { name: 'Gemini' }).click();
+  await expect(page.getByText('Add a Gemini key below')).toBeVisible();
+  // A key is saved but never shown again; listing models fails here (no internet), and says so.
+  await page.getByLabel('Gemini API key').fill('AIza-not-a-real-key-1234');
+  await page.getByLabel('Gemini API key').press('Enter');
+  await expect(page.getByText('Saved (…1234)')).toBeVisible();
+  await expect(page.getByLabel('Gemini API key')).toHaveValue('');
+  await expect(page.getByText('Add by photo is ready')).toBeVisible();
+  await page.getByRole('group', { name: 'AI for photos' }).getByRole('button', { name: 'Off' }).click();
+  await expect(page.getByText('Saved (…1234)')).toBeVisible();
+});

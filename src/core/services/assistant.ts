@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import type { Automation } from './automation';
-import type { createCategoryService } from './catalogue';
+import { SHOP_PRESETS, type createCategoryService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import type { Resolver } from './resolve';
@@ -119,10 +119,11 @@ export function createAssistant(deps: {
   shopping: ReturnType<typeof createShoppingService>;
   search: ReturnType<typeof createSearchService>;
   categories: ReturnType<typeof createCategoryService>;
+  shops: ReturnType<typeof createShopService>;
   automation: Automation;
   resolve: Resolver;
 }) {
-  const { ctx, products, shopping, search, categories, automation, resolve } = deps;
+  const { ctx, products, shopping, search, categories, shops, automation, resolve } = deps;
   const tools: Array<{ tool: AssistantTool; module: string | null; enabled: () => boolean }> = [];
 
   function addTool<I extends z.ZodObject>(tool: AssistantTool<I>, module: string | null = null, enabled: () => boolean = () => true) {
@@ -177,9 +178,26 @@ export function createAssistant(deps: {
     },
   });
 
+  /**
+   * A shop for a new item. One Larder doesn't have is only added when the
+   * person has agreed (`create`); otherwise the assistant is told to ask.
+   */
+  async function findShop(name: string, create: boolean, categoryId: string | null): Promise<{ id: string; name: string; made: boolean }> {
+    try {
+      const s = await resolve.shop(name);
+      return { id: s.id, name: s.name, made: false };
+    } catch (err) {
+      if (!(err instanceof LarderError) || err.code !== 'not_found') throw err;
+      if (!create) throw new LarderError(`${err.message} Ask whether to add "${name.trim()}" as a shop, then call add_item again with new_shop: true, or leave the shop out.`, 404, 'not_found');
+      const preset = SHOP_PRESETS.find((p) => p.name.toLowerCase().replace(/['’]/g, '') === name.trim().toLowerCase().replace(/['’]/g, ''));
+      const s = preset ? await shops.addPreset(preset.name) : await shops.create({ name: name.trim(), sells: categoryId ? [categoryId] : [] });
+      return { id: s.id, name: s.name, made: true };
+    }
+  }
+
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). Then use add_stock to say how many there are, or add_expected if it\'s on order.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Then use add_stock to say how many there are, or add_expected if it\'s on order.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -189,8 +207,10 @@ export function createAssistant(deps: {
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
+      new_shop: z.boolean().optional().describe('True to add the shop to Larder if it isn\'t there yet. Only after the person has said yes'),
       shop_code: z.string().max(40).optional().describe('That shop\'s product code (e.g. a Toolstation item number), used to match order emails'),
       barcode: z.string().max(64).optional(),
+      brand: z.string().max(160).optional().describe('The brand and pack as on the label, e.g. "Heinz Baked Beanz 415 g". Saved as the item\'s brand, with the barcode'),
       wish_list: z.boolean().optional().describe('True to put it on the wish list instead (wanted, none yet)'),
     }),
     async run(i) {
@@ -204,19 +224,21 @@ export function createAssistant(deps: {
         categoryId = cat.id;
       }
       const place = i.usual_place ? await resolve.place(i.usual_place) : null;
-      const shop = i.shop ? await resolve.shop(i.shop) : null;
-      if (i.shop_code && !shop) throw new ValidationError('A shop code needs the shop it belongs to.');
-      // Check the barcode before creating anything, so a clash doesn't leave a half-made item.
+      if (i.shop_code && !i.shop) throw new ValidationError('A shop code needs the shop it belongs to.');
+      // Check the barcode before creating anything (a shop included), so a clash doesn't leave a half-made item.
       const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
       if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
+      const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
-      if (i.barcode || i.shop_code) {
-        await products.addVariant(p.id, { name: p.name, barcodes: i.barcode ? [i.barcode] : [], shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [] });
+      const brand = i.brand?.trim();
+      if (i.barcode || i.shop_code || brand) {
+        await products.addVariant(p.id, { name: brand || p.name, barcodes: i.barcode ? [i.barcode] : [], shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [] });
       }
-      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}. It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name } };
+      const shopNote = shop?.made ? ` Added ${shop.name} to the shops.` : '';
+      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}.${shopNote} It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name } };
     },
   });
 

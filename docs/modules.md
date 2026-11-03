@@ -78,8 +78,15 @@ export default defineWebModule({
     { path: '/:id', title: 'One thing', component: Detail },                   // params: useModuleParams().id; not linked
     { path: '/new', title: 'New thing', hidden: true, component: Editor },     // not linked
   ],
+  addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
+  settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
 });
 ```
+
+- `addActions` are more ways to add things, shown on Home beside Add by name and in the desktop sidebar. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
+- `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
+- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then.
+- `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 
 Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
 
@@ -106,4 +113,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `printing` | QR label sheets for places and items (Avery L7160, L7163, L7651, plain A4) |
 | `recipes` | Saved recipes, what's missing, scaling by ingredient ratios and named presets, and taking ingredients out of stock after cooking once confirmed |
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
+| `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
 | `_template` | Example to copy (off by default) |
