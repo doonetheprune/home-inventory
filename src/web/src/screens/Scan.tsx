@@ -6,7 +6,7 @@ import { api, ApiError } from '../api';
 import { Icon } from '../icons';
 import { qty, stockText } from '../format';
 import { useBarcodeScanner } from '../components/useBarcodeScanner';
-import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useCategories, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
+import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
 
 type Mode = 'add' | 'use' | 'move' | 'putaway' | 'look';
 const MODES: Array<[Mode, string]> = [['add', 'Add'], ['use', 'Use'], ['move', 'Move'], ['putaway', 'Put away'], ['look', 'Look up']];
@@ -99,7 +99,8 @@ export function Scan() {
           <div className="card hint"><Icon name="keyboard" size="sm" /><span>Using a USB or Bluetooth scanner? Just scan on any screen. Larder picks it up and opens the result here.</span></div>
         </div>
 
-        <div className="section">
+        {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
+        <div className={`section ${looking || result || pending ? 'scan-result' : ''}`}>
           {looking && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
           {!looking && pending && !result && (
             <div className="sheet-card">
@@ -112,7 +113,7 @@ export function Scan() {
             <div className="card empty">
               <b>Ready</b>
               <span className="muted small">
-                {mode === 'add' && 'Scan something to add it. Scan a shelf label first to put everything you scan after it on that shelf.'}
+                {mode === 'add' && 'Scan something, then Add, then the next. Scan a shelf label first to put everything after it on that shelf; anything without a place waits under Stock → To tidy.'}
                 {mode === 'use' && 'Scan something you’ve used up.'}
                 {mode === 'move' && 'Scan the item you’re taking somewhere, then scan where it’s going. It will show as out of place.'}
                 {mode === 'putaway' && 'Scan the item, then the shelf it lives on.'}
@@ -145,7 +146,7 @@ function ResultCard({ r, mode, target, onClearTarget, onDone, onIdentified, pend
 }) {
   if (r.kind === 'product') return <ProductResult s={r.product} variantName={r.variant?.name ?? null} code={r.code} mode={mode} target={target} onDone={onDone} pending={pending} setPending={setPending} />;
   if (r.kind === 'place') return <PlaceResult place={r.place} path={r.path} mode={mode} onClearTarget={onClearTarget} onDone={onDone} />;
-  return <NewCodeResult r={r} onIdentified={onIdentified} />;
+  return <NewCodeResult r={r} mode={mode} target={target} onDone={onDone} onIdentified={onIdentified} />;
 }
 
 function ProductResult({ s, variantName, code, mode, target, onDone, pending, setPending }: {
@@ -188,11 +189,9 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
   return (
     <div className="sheet-card">
       {header}
-      <p className="small muted">You have {stockText(s)}.{s.status.low ? ' Running low.' : ''}</p>
+      <p className="small"><span className="pill p-ok">In Larder</span> <span className="muted">You have {stockText(s)}.{s.status.low ? ' Running low.' : ''}</span></p>
       <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
-      {!use && (
-        <label className="field"><span>Where</span><PlaceSelect value={placeId} onChange={setPlaceId} places={places} /></label>
-      )}
+      {!use && <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (use && available <= 0)} onClick={() => run(
@@ -203,6 +202,23 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Where scanned stock goes, as a line rather than a picker: the shelf scanned
+ * last, or the item's usual place. "Change" opens the picker for the odd one;
+ * anything without a place can be sorted later (Stock → To tidy).
+ */
+function WhereLine({ placeId, onChange, places }: { placeId: string | null; onChange: (id: string | null) => void; places: ReturnType<typeof usePlaces> }) {
+  const [open, setOpen] = useState(false);
+  const place = places.find((p) => p.id === placeId);
+  if (open) return <label className="field"><span>Where</span><PlaceSelect value={placeId} onChange={(v) => { onChange(v); setOpen(false); }} places={places} /></label>;
+  return (
+    <p className="small muted" style={{ margin: 0 }}>
+      {place ? <>Goes to <b style={{ color: 'var(--ink)' }}>{place.path}</b>.</> : 'No place yet: sort it later under Stock → To tidy.'}{' '}
+      <button type="button" className="link small" onClick={() => setOpen(true)}>{place ? 'Change' : 'Choose'}</button>
+    </p>
   );
 }
 
@@ -220,28 +236,43 @@ function PlaceResult({ place, path, mode, onClearTarget, onDone }: { place: Plac
   );
 }
 
-function NewCodeResult({ r, onIdentified }: { r: Extract<IdentifyResult, { kind: 'external' | 'unknown' }>; onIdentified: (r: IdentifyResult) => void }) {
-  const categories = useCategories();
+/** Lookup providers by the names people know them by. */
+const PROVIDER_NAMES: Record<string, string> = { openfoodfacts: 'Open Food Facts', openbeautyfacts: 'Open Beauty Facts', openproductsfacts: 'Open Products Facts' };
+
+function NewCodeResult({ r, mode, target, onDone, onIdentified }: {
+  r: Extract<IdentifyResult, { kind: 'external' | 'unknown' }>; mode: Mode; target: { id: string; label: string } | null; onDone: () => void; onIdentified: (r: IdentifyResult) => void;
+}) {
+  const places = usePlaces();
   const { run, busy } = useAction();
   const external = r.kind === 'external' ? r.result : null;
   const [name, setName] = useState(external ? external.name : '');
   const [choice, setChoice] = useState<string>(r.kind === 'external' && r.suggestions[0] ? r.suggestions[0].product.id : 'new');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [n, setN] = useState(1);
+  const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
   const dq = useDebounced(name.trim(), 250);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: r.kind === 'unknown' && dq.length > 2 });
   const candidates: ProductSummary[] = r.kind === 'external' ? r.suggestions : (data?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? []).slice(0, 3);
   const variantName = external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : name;
+  const adding = mode === 'add';
+  const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
 
+  /** Remembers the barcode (a new item, or a brand of one you have) and, when adding, adds the stock too: one press. */
   async function save() {
-    const res = await run(() => api.remember({
-      barcode: r.code,
-      productId: choice !== 'new' ? choice : undefined,
-      create: choice === 'new' ? { name: name.trim(), categoryId } : undefined,
-      variantName: variantName || name.trim(),
-      imageUrl: external?.imageUrl ?? null,
-      source: external?.provider,
-    }), 'Saved. Next time this barcode is instant.');
-    if (res) onIdentified({ kind: 'product', code: r.code, product: res.product, variant: res.variant });
+    const res = await run(async () => {
+      const remembered = await api.remember({
+        barcode: r.code,
+        productId: choice !== 'new' ? choice : undefined,
+        create: choice === 'new' ? { name: name.trim() } : undefined,
+        variantName: variantName || name.trim(),
+        imageUrl: external?.imageUrl ?? null,
+        source: external?.provider,
+      });
+      const after = adding ? await api.stock.add({ productId: remembered.product.product.id, quantity: n, placeId: placeId ?? remembered.product.product.defaultPlaceId }) : null;
+      return { remembered, after };
+    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
+    if (!res) return;
+    if (adding) onDone();
+    else onIdentified({ kind: 'product', code: r.code, product: res.remembered.product, variant: res.remembered.variant });
   }
 
   return (
@@ -249,33 +280,49 @@ function NewCodeResult({ r, onIdentified }: { r: Extract<IdentifyResult, { kind:
       <div className="match">
         <span className="tile lg">{external?.imageUrl ? <img src={external.imageUrl} alt="" /> : <Icon name={external ? 'scan' : 'info'} size="lg" />}</span>
         <div className="item-main">
-          <h3>{external ? [external.brand, external.name].filter(Boolean).join(' ') : 'New one on us'}</h3>
-          <div className="src">{external && <span className="pill p-ok">{external.provider}</span>}{external?.quantityText && <span>{external.quantityText}</span>}<code>{r.code}</code></div>
+          <h3>{external ? [external.brand, external.name].filter(Boolean).join(' ') : 'New to Larder'}</h3>
+          <div className="src">{external?.quantityText && <span>{external.quantityText}</span>}<code>{r.code}</code></div>
         </div>
       </div>
-      {r.kind === 'unknown' && (
-        <p className="small muted">
-          {r.providersTried.length ? `${r.providersTried.join(', ')} ${r.providersTried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
-          {r.providersFailed.length ? `Couldn't reach ${r.providersFailed.join(', ')} just now. ` : ''}
-          {!r.providersTried.length && !r.providersFailed.length ? "Larder doesn't know this code yet. " : ''}
-          Name it once and Larder will remember it.
-        </p>
-      )}
-      <label className="field"><span>{external ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external} /></label>
-      <div className="field"><span>Is it a brand of something you already have?</span>
-        <div className="stack" style={{ gap: 8 }}>
-          {candidates.map((c) => (
-            <button key={c.product.id} type="button" className={`choice ${choice === c.product.id ? 'on' : ''}`} onClick={() => setChoice(c.product.id)}>
-              <span className="radio" /><span className="item-main"><span className="item-name">{c.product.name}</span><span className="item-meta">You have {stockText(c)} · adds this barcode as a brand</span></span>
-            </button>
-          ))}
-          <button type="button" className={`choice ${choice === 'new' ? 'on' : ''}`} onClick={() => setChoice('new')}><span className="radio" /><span className="item-main"><span className="item-name">No, it’s something new</span><span className="item-meta">Creates “{name.trim() || 'a new item'}”</span></span></button>
+      <p className="small">
+        <span className="pill p-wish">New</span>{' '}
+        <span className="muted">
+          {r.kind === 'external' ? `Not in Larder yet. Found in ${PROVIDER_NAMES[r.result.provider] ?? r.result.provider}.` : (
+            <>
+              {r.providersTried.length ? `${r.providersTried.join(', ')} ${r.providersTried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
+              {r.providersFailed.length ? `Couldn't reach ${r.providersFailed.join(', ')} just now. ` : ''}
+              {!r.providersTried.length && !r.providersFailed.length ? "Larder doesn't know this code yet. " : ''}
+              Name it once and Larder will remember it.
+            </>
+          )}
+        </span>
+      </p>
+      <label className="field"><span>{external ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !busy && (choice !== 'new' || name.trim())) void save(); }} /></label>
+      {candidates.length > 0 && (
+        <div className="field"><span>Is it a brand of something you already have?</span>
+          <div className="stack" style={{ gap: 8 }}>
+            {candidates.map((c) => (
+              <button key={c.product.id} type="button" className={`choice ${choice === c.product.id ? 'on' : ''}`} onClick={() => setChoice(c.product.id)}>
+                <span className="radio" /><span className="item-main"><span className="item-name">{c.product.name}</span><span className="item-meta">You have {stockText(c)} · adds this barcode as a brand</span></span>
+              </button>
+            ))}
+            <button type="button" className={`choice ${choice === 'new' ? 'on' : ''}`} onClick={() => setChoice('new')}><span className="radio" /><span className="item-main"><span className="item-name">No, it’s something new</span><span className="item-meta">Creates “{name.trim() || 'a new item'}”</span></span></button>
+          </div>
         </div>
-      </div>
-      {choice === 'new' && (
-        <div className="chips wrap">{categories.map((c) => <button key={c.id} type="button" className={`chip sm ${categoryId === c.id ? 'on' : ''}`} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>{c.name}</button>)}</div>
       )}
-      <button type="button" className="btn primary block" disabled={busy || (choice === 'new' && !name.trim())} onClick={save}>Save and continue</button>
+      {adding && (
+        <>
+          <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} max={99999} label="quantity" /></div>
+          <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />
+        </>
+      )}
+      <div className="btnrow">
+        <button type="button" className="btn" onClick={onDone}>Skip</button>
+        <button type="button" className="btn primary" disabled={busy || (choice === 'new' && !name.trim())} onClick={() => void save()}>
+          {adding ? (into ? `Add ${n} to ${into.product.name}` : `Add ${n}`) : 'Save and continue'}
+        </button>
+      </div>
     </div>
   );
 }

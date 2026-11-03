@@ -54,7 +54,7 @@ export const VariantCreate = Variant.omit({ id: true, productId: true, createdAt
 export const VariantPatch = patchOf(VariantCreate);
 
 export const ProductFilter = z.object({
-  status: z.enum(['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock']).default('all'),
+  status: z.enum(['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_tidy']).default('all'),
   categoryId: Id.optional(),
   placeId: Id.optional(),
 });

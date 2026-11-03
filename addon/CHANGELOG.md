@@ -2,6 +2,8 @@
 
 ## 0.5.1
 
+- **Quicker scanning:** scan, Add, next. A barcode that's new to Larder is named (from Open Food Facts when it knows it), remembered and added in one press, instead of Save and then Add. The card says plainly whether it's **In Larder** or **New**, where it goes is one line (the shelf you scanned, or its usual place) with **Change** for the odd one, and on a phone it sits at the bottom of the screen so Add is always in reach.
+- **To tidy:** a filter on Stock for things added in a hurry: stock with no place, or no type yet.
 - **Add by photo opens the camera straight away**, like the barcode scanner, instead of the phone's photo picker (which the Home Assistant app opened for both buttons). **Upload a photo** is its own button for a photo you already have.
 - A volume button takes the photo too, like a phone's camera app, where the phone passes the button to the page. Space does on a keyboard.
 - **Rotate photo:** turn a photo that came out sideways, on the Add item page before saving, or on the item's page afterwards.

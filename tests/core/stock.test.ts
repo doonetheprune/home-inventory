@@ -219,3 +219,25 @@ describe('stock', () => {
     expect((await core.products.summary(beans.id)).expected).toBe(4);
   });
 });
+
+describe('to tidy', () => {
+  it('lists owned items with stock that has no place, or no type, for tidying after a quick scan', async () => {
+    const core = await makeCore();
+    const food = await category(core, 'Food');
+    const shelf = await core.places.create({ name: 'Pantry' });
+    const tidy = await core.products.create({ name: 'Tidy beans', categoryId: food.id });
+    await core.stock.add({ productId: tidy.id, quantity: 2, placeId: shelf.id });
+    const noPlace = await core.products.create({ name: 'Scanned soup', categoryId: food.id });
+    await core.stock.add({ productId: noPlace.id, quantity: 1 });
+    const noType = await core.products.create({ name: 'Mystery jar' });
+    await core.products.create({ name: 'Wanted lamp', wish: true });
+
+    const names = (await core.products.list({ status: 'to_tidy' })).map((s) => s.product.name);
+    expect(names).toEqual(['Mystery jar', 'Scanned soup']);
+    // Putting it somewhere tidies it.
+    await core.products.update(noType.id, { categoryId: food.id });
+    const entry = (await core.products.get(noPlace.id)).entries[0]!;
+    await core.stock.updateEntry(entry.id, { placeId: shelf.id });
+    expect(await core.products.list({ status: 'to_tidy' })).toEqual([]);
+  });
+});

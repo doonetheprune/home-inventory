@@ -56,6 +56,7 @@ These follow from the decisions above; the owner can change any of them.
 - **Barcode lookups** ask Open Food Facts, Open Beauty Facts and Open Products Facts in turn (4 seconds each). Answers and misses are cached; misses are retried after 7 days.
 - **Licence:** MIT (the owner's choice, made when the repo went public).
 - **Sharing from a phone** (the `sharing` module): Android's share menu → Home Assistant, which the integration forwards to Larder. A shared link waits in **Pending**, a list next to the Wish list (the owner's choice), and from there goes on the wish list or into Larder (the Add item page, filled in). The item keeps the link and where it came from (shop, app, phone, when, the price then). Not a separate Larder entry in the share menu, which would need Larder at its own https address outside Home Assistant.
+- **Scanning is scan, Add, next** (the owner's way of working): a new barcode is named, remembered and added in one press; how many is on the card, but where it goes is a line with "Change", not a picker, and its type isn't asked. Tidying up (places, types) happens later, under Stock → **To tidy**. On a phone the result docks at the bottom of the screen.
 - **No HACS check in CI** (the owner doesn't use HACS: the add-on installs the integration). The integration can still be added to HACS by hand as a custom repository.
 
 ## Phase 2: how it was built

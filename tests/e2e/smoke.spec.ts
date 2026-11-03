@@ -62,11 +62,14 @@ test('scans a known barcode by typing it and adds stock', async ({ page }) => {
   await page.getByLabel('Barcode or code').fill('5029053038889');
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  // Plainly already in Larder, and where it goes is a line, not a picker.
+  await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
+  await expect(page.getByText('Goes to')).toBeVisible();
   await page.getByRole('button', { name: /^Add 1 roll/ }).click();
   await expect(page.locator('.toast')).toContainText('Ready for the next scan');
 });
 
-test('names an unknown barcode once and remembers it', async ({ page }, info) => {
+test('adds an unknown barcode in one go, remembers it, and leaves the tidying for later', async ({ page }, info) => {
   await signIn(page);
   await page.goto('/#/scan');
   // Local-only code (letters), so no lookup provider is asked.
@@ -74,14 +77,20 @@ test('names an unknown barcode once and remembers it', async ({ page }, info) =>
   const name = `Chopped tomatoes ${info.project.name}`;
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.locator('.sheet-card .pill', { hasText: 'New' })).toBeVisible();
   await page.getByLabel('What is it?').fill(name);
-  await page.getByRole('button', { name: 'Save and continue' }).click();
-  await expect(page.getByRole('heading', { name })).toBeVisible();
-  // Next time it's instant.
-  await page.getByRole('button', { name: 'Skip' }).click();
+  // One press names it, remembers the barcode and adds the stock; then it's ready for the next scan.
+  await page.getByRole('button', { name: 'Add 1', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 · ${name}. Ready for the next scan.`);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  // Next time it's instant, and known.
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.getByRole('heading', { name })).toBeVisible();
+  await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
+  // No place and no type yet: it waits under To tidy.
+  await page.goto('/#/stock?status=to_tidy');
+  await expect(page.locator('.item-name').filter({ hasText: name })).toBeVisible();
 });
 
 test('shopping: tick, done, gone from the list', async ({ page }) => {
