@@ -37,7 +37,7 @@ export default defineModule({
 | `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files. Optionally add `search({ name, brand })`, returning products of that brand (`{ name, brands, quantityText, imageUrl }`, best first), to find a photo for an item added by name and brand; Larder checks the brand and name again before using one |
 | `ctx.addSearchSection({ id, title, order, documents?, results })` | Add a section to search everywhere. `documents()` feeds the shared fuzzy index (types must start with your section id); `results()` turns hits into rows. Core orders: stock 10, shopping 20, places 30, wish list 50, shops 60. Scenarios will use 40 and recipes 70 |
 | `ctx.fetch` | Reach web services (maps, lookups). Use it rather than the global `fetch`, so tests can stand in for the internet |
-| `ctx.core.homeAssistant` | Home Assistant, when Larder can reach it (the add-on always can; elsewhere `LARDER_HA_URL` and `LARDER_HA_TOKEN`), else `null`: home location, people and their phones, saving zones and automations. See `HomeAssistantPort` in `src/core/ports.ts` and the shop locations module |
+| `ctx.core.homeAssistant` | Home Assistant, when Larder can reach it (the add-on always can; elsewhere `LARDER_HA_URL` and `LARDER_HA_TOKEN`), else `null`: home location, people and their phones, saving zones and automations, and running an action (`callService`, e.g. a wake-on-LAN packet). See `HomeAssistantPort` in `src/core/ports.ts`, and the shop locations and online shopping modules |
 | `ctx.config` | Settings from `LARDER_MODULE_<ID>_<KEY>` environment variables (keys lower-cased) |
 | `ctx.isEnabled()` | Whether the module is on right now |
 | `ctx.addSensor({ id, name, description, icon?, unit?, read })` | A sensor for Home Assistant (and MQTT). `id` is snake_case and starts with your module id (`batteries_low` for `batteries`). `read()` returns `{ state, attributes? }`; keep attributes small. The integration creates the entity without any change on its side. Hidden while the module is off |
@@ -124,4 +124,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
 | `sharing` | Links shared to the Home Assistant app from a phone wait in Pending, named from the page with its picture and price, to go on the wish list or into Larder |
+| `online-shopping` | Fills an online basket (Tesco first) from what's low or on offer through a shopping provider on the network, books delivery slots, and brings shop favourites into Pending |
 | `_template` | Example to copy (off by default) |

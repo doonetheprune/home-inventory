@@ -82,6 +82,7 @@ function homeAssistant(o: { refuse?: boolean; loads?: boolean; home?: { latitude
       automations.delete(id);
     },
     appPath: async () => '/hassio/ingress/abc_larder',
+    callService: async () => {},
   };
   return { port, zones, automations };
 }

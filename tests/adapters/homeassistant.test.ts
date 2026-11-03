@@ -147,6 +147,15 @@ describe('Home Assistant adapter', () => {
     });
   });
 
+  it('runs an action, and refuses names that aren\'t one', async () => {
+    const log: Array<{ method: string; url: string; body?: unknown }> = [];
+    const ha = createHomeAssistant({ url: 'http://ha:8123', token: 'good', fetch: fakeFetch({ 'POST /api/services/wake_on_lan/send_magic_packet': [] }, log) });
+    await ha.callService('wake_on_lan', 'send_magic_packet', { mac: '4c:32:75:00:00:00' });
+    expect(log[0]).toMatchObject({ method: 'POST', url: 'http://ha:8123/api/services/wake_on_lan/send_magic_packet', body: { mac: '4c:32:75:00:00:00' } });
+    await expect(ha.callService('switch', 'turn_on/../../x', {})).rejects.toBeInstanceOf(HomeAssistantError);
+    await expect(ha.callService('script', 'missing', {})).rejects.toBeInstanceOf(HomeAssistantError);
+  });
+
   it('saves an automation and waits for Home Assistant to load it', async () => {
     let loaded = false;
     const log: Array<{ method: string; url: string; body?: unknown }> = [];

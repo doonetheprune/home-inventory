@@ -218,6 +218,11 @@ export interface HomeAssistantPort {
   removeAutomation(id: string): Promise<void>;
   /** Where Larder opens inside Home Assistant (the add-on's panel), for links in notifications. */
   appPath(): Promise<string | null>;
+  /**
+   * Runs one of Home Assistant's actions, e.g. ("switch", "turn_on", { entity_id: "switch.mac_mini" })
+   * or ("wake_on_lan", "send_magic_packet", { mac: "4c:32:75:00:00:00" }). Resolves once Home Assistant has run it.
+   */
+  callService(domain: string, service: string, data: Record<string, unknown>): Promise<void>;
 }
 
 export interface HomeAssistantPerson {
