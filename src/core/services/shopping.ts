@@ -18,7 +18,9 @@ function itemsFor(world: World, shop: Shop | null): ShoppingItem[] {
     if (!reason) continue;
     const shops = eligibleShops(product, world.shops);
     if (shop ? !shops.some((s) => s.id === shop.id) : shops.length) continue;
-    const short = product.minQuantity !== null ? Math.ceil(roundQty(product.minQuantity - summary.inStock - summary.expected)) : 0;
+    // Back up to the stock-up amount, or the minimum (records from before it existed have neither field set).
+    const level = Math.max(product.minQuantity ?? 0, product.stockUpTo ?? 0);
+    const short = level > 0 ? Math.ceil(roundQty(level - summary.inStock - summary.expected - summary.pending)) : 0;
     out.push({ summary, quantity: Math.max(1, short), reason, anyShop: product.preferredShopIds.length === 0 });
   }
   return out;

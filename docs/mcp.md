@@ -74,14 +74,15 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |
 | `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat) |
 | `move_item` | Move something for now (out of place) or for good |
-| `add_expected` | Record an order that hasn't arrived (it counts towards stock). Takes shop codes from order emails |
+| `add_expected` | Record an order that hasn't arrived (it counts towards stock). Takes shop codes from order emails. Something in a pending order from the same shop is confirmed instead of added again |
 | `mark_arrived` | A delivery (or part of one) arrived |
+| `confirm_order` / `cancel_order` | A pending order (e.g. a filled online basket) went ahead and is on its way, or didn't and is removed |
 | `add_to_shopping_list` / `remove_from_shopping_list` | Put something on the list that isn't low, or take it off again |
 | `put_back` | Something out of place is back where it lives |
 | `mark_charged` / `renew` | Rechargeables charged; a renewal (insurance, MOT) renewed |
 | `shopping_list` | What to buy at a shop, or which shop to go to |
 | `expiring` | What to use soon, and renewals coming up |
-| `deliveries` / `recent_changes` | Orders on the way; what changed in stock lately (all, or one item) |
+| `deliveries` / `recent_changes` | Orders on the way and pending orders; what changed in stock lately (all, or one item) |
 | `list_shops` / `add_shop` / `change_shop` / `remove_shop` | Shops and what they sell. Common UK shops (Tesco, Aldi, Screwfix…) come with what they usually sell |
 | `list_places` / `add_place` / `add_storage_grid` / `change_place` / `remove_place` | Places, nested, with label codes; shelving with numbered spots in one go; only empty places can be removed |
 | `list_categories` / `add_category` / `change_category` / `remove_category` | Categories, and how early their items are flagged before expiry |
@@ -96,6 +97,10 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, at the amounts made, applied only once the person agrees (recipes module) |
 | `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
 | `set_recipe_scenarios` | Put a recipe in scenarios (Christmas), and keep it only there if wanted (recipes module) |
+| `start_shop` / `list_slots` / `book_slot` | "Do me a shop": is the online shop ready (waking its computer), when, the free delivery slots that day, and booking one once the person agrees (online shopping module) |
+| `plan_basket` / `fill_basket` / `shop_status` | What's low or on offer at its target price, planned or put in the online basket and recorded as on the way; how it's going (online shopping module) |
+| `provider_status` / `get_product` / `link_listing` / `set_buying_rules` | The online shop's provider, its products, linking them to items, and the target price, on-offer amount and pack rule (online shopping module) |
+| `sync_favourites` / `add_to_favourites` | Shop favourites into Pending; adding one by code or link (online shopping module) |
 
 Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
 
@@ -112,6 +117,8 @@ The assistant then offers to keep those amounts as a preset (`save_recipe_preset
 When an assistant connects, Larder also tells it how the house works: names not ids, never guess between close matches, quantities are in each item's own unit, search before adding something new.
 
 ## Email orders
+
+**Pending orders:** a filled online basket (the online shopping module) is a pending order until it's checked out: it counts towards stock, so it isn't ordered twice, but it isn't on the way. When the order email's automation calls `add_expected` for something in a pending order from the same shop (the same source, or the same first word: "Tesco" confirms "Tesco delivery"), that's confirmed rather than added again. What's left pending afterwards was probably taken out of the basket: confirm or remove it.
 
 The brief's separate "read order emails" automation (not part of Larder) can call `add_expected` with the shop code from the email, for example Toolstation's item number. When Larder knows that code (on the item's brand, under Brands & barcodes), it finds the item; when it doesn't, the tool says so, and the automation can `search`, then `add_item` with `shop` and `shop_code` so it's matched next time.
 

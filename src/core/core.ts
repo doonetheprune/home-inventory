@@ -48,6 +48,8 @@ export interface CoreApi {
   instanceId(): Promise<string>;
   history: {
     recent(limit?: number): Promise<Movement[]>;
+    /** One item's stock changes, newest first (e.g. to work out how fast it's used). */
+    product(productId: string, limit?: number): Promise<Movement[]>;
   };
   modules: ModuleRegistry;
   events: {
@@ -108,6 +110,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     },
     history: {
       recent: (limit = 50) => ctx.storage.movements.listRecent(limit),
+      product: (productId, limit = 200) => ctx.storage.movements.listByProduct(productId, limit),
     },
     modules,
     events: { subscribe: (h) => ctx.events.subscribe(h) },

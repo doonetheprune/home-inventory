@@ -1510,6 +1510,688 @@
           "results"
         ]
       },
+      "PendingFavouriteInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PendingFavouriteInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt"
+        ]
+      },
+      "DismissedFavouriteInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/DismissedFavouriteInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "dismissedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt",
+          "dismissedAt"
+        ]
+      },
+      "OnlineShopPlanInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopPlanInput",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "offer",
+                    "low",
+                    "manual"
+                  ]
+                },
+                "have": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "number"
+                },
+                "needed": {
+                  "type": "number"
+                },
+                "unitPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "targetPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "capped": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "listingId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "packs": {
+                        "type": "number"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "cost": {
+                        "type": "number"
+                      },
+                      "deal": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "roundedForDeal": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "listingId",
+                      "name",
+                      "packs",
+                      "quantity",
+                      "cost",
+                      "deal",
+                      "roundedForDeal"
+                    ]
+                  }
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "cost": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "unit",
+                "reason",
+                "have",
+                "level",
+                "needed",
+                "unitPrice",
+                "targetPrice",
+                "capped",
+                "lines",
+                "quantity",
+                "cost"
+              ]
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ]
+            }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ]
+            }
+          },
+          "relink": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingId": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingId",
+                "listingName"
+              ]
+            }
+          },
+          "otherDeals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "text"
+              ]
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "listing_id": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "listing_id",
+                "quantity"
+              ]
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "skipped",
+          "unavailable",
+          "relink",
+          "otherDeals",
+          "lines",
+          "total"
+        ]
+      },
+      "OnlineShopRunInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopRunInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "fill"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "step": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryDate": {
+            "type": "string"
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "default": null,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "reference": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "reservedUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slotId",
+                  "start",
+                  "end",
+                  "reference",
+                  "reservedUntil",
+                  "bookedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnlineShopPlanInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unmatched": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name"
+              ]
+            }
+          },
+          "elsewhere": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "shops": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "shops"
+              ]
+            }
+          },
+          "added": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ]
+            }
+          },
+          "failed": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "error",
+                "message"
+              ]
+            }
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "providerId",
+          "kind",
+          "status",
+          "step",
+          "startedAt",
+          "finishedAt",
+          "deliveryDate",
+          "booking",
+          "plan",
+          "summary",
+          "error"
+        ]
+      },
       "CategoryInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/CategoryInput",
@@ -1755,6 +2437,18 @@
             ]
           },
           "minQuantity": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stockUpTo": {
             "default": null,
             "anyOf": [
               {
@@ -2098,7 +2792,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -2321,6 +3016,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -2471,7 +3170,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -2559,6 +3259,10 @@
             "type": "number"
           },
           "expected": {
+            "type": "number"
+          },
+          "pending": {
+            "default": 0,
             "type": "number"
           },
           "charged": {
@@ -2945,6 +3649,18 @@
           },
           "quantity": {
             "type": "number"
+          },
+          "since": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3013,6 +3729,13 @@
             }
           },
           "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryInput"
+            }
+          },
+          "pendingOrders": {
+            "default": [],
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DeliveryInput"
@@ -4874,6 +5597,712 @@
         ],
         "additionalProperties": false
       },
+      "PendingFavourite": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PendingFavourite",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt"
+        ],
+        "additionalProperties": false
+      },
+      "DismissedFavourite": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/DismissedFavourite",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "listingId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "packSize": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "kg",
+                      "l",
+                      "each"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "loyaltyPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "foundAt": {
+            "type": "string"
+          },
+          "dismissedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "listingId",
+          "name",
+          "packSize",
+          "link",
+          "imageUrl",
+          "price",
+          "loyaltyPrice",
+          "foundAt",
+          "dismissedAt"
+        ],
+        "additionalProperties": false
+      },
+      "OnlineShopPlan": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopPlan",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "offer",
+                    "low",
+                    "manual"
+                  ]
+                },
+                "have": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "number"
+                },
+                "needed": {
+                  "type": "number"
+                },
+                "unitPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "targetPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "capped": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "listingId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "packs": {
+                        "type": "number"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "cost": {
+                        "type": "number"
+                      },
+                      "deal": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "roundedForDeal": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "listingId",
+                      "name",
+                      "packs",
+                      "quantity",
+                      "cost",
+                      "deal",
+                      "roundedForDeal"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "cost": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "unit",
+                "reason",
+                "have",
+                "level",
+                "needed",
+                "unitPrice",
+                "targetPrice",
+                "capped",
+                "lines",
+                "quantity",
+                "cost"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "relink": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingId": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingId",
+                "listingName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "otherDeals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "listing_id": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "listing_id",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "skipped",
+          "unavailable",
+          "relink",
+          "otherDeals",
+          "lines",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "OnlineShopRun": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopRun",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "fill"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "step": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryDate": {
+            "type": "string"
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "default": null,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "reference": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "reservedUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slotId",
+                  "start",
+                  "end",
+                  "price",
+                  "reference",
+                  "reservedUntil",
+                  "bookedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnlineShopPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unmatched": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "elsewhere": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "shops": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "shops"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "added": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "failed": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "error",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "providerId",
+          "kind",
+          "status",
+          "step",
+          "startedAt",
+          "finishedAt",
+          "deliveryDate",
+          "booking",
+          "plan",
+          "unmatched",
+          "elsewhere",
+          "added",
+          "failed",
+          "summary",
+          "error"
+        ],
+        "additionalProperties": false
+      },
       "Category": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/Category",
@@ -5147,6 +6576,18 @@
               }
             ]
           },
+          "stockUpTo": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preferredShopIds": {
             "default": [],
             "type": "array",
@@ -5243,6 +6684,7 @@
           "unit",
           "shelfLifeDays",
           "minQuantity",
+          "stockUpTo",
           "preferredShopIds",
           "notes",
           "photoFileIds",
@@ -5507,7 +6949,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -5747,6 +7190,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -5797,6 +7244,7 @@
           "category",
           "inStock",
           "expected",
+          "pending",
           "charged",
           "flat",
           "nextExpiry",
@@ -5898,7 +7346,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -5997,6 +7446,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -6071,6 +7524,7 @@
           "category",
           "inStock",
           "expected",
+          "pending",
           "charged",
           "flat",
           "nextExpiry",
@@ -6392,13 +7846,26 @@
           },
           "quantity": {
             "type": "number"
+          },
+          "since": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "source",
           "eta",
           "itemCount",
-          "quantity"
+          "quantity",
+          "since"
         ],
         "additionalProperties": false
       },
@@ -6467,6 +7934,13 @@
               "$ref": "#/components/schemas/Delivery"
             }
           },
+          "pendingOrders": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Delivery"
+            }
+          },
           "shopping": {
             "$ref": "#/components/schemas/ShoppingSummary"
           }
@@ -6478,6 +7952,7 @@
           "low",
           "outOfPlace",
           "deliveries",
+          "pendingOrders",
           "shopping"
         ],
         "additionalProperties": false
@@ -8564,6 +10039,18 @@
                       }
                     ]
                   },
+                  "stockUpTo": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "preferredShopIds": {
                     "default": [],
                     "type": "array",
@@ -8751,6 +10238,17 @@
                     ]
                   },
                   "minQuantity": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "stockUpTo": {
                     "anyOf": [
                       {
                         "type": "number",
@@ -9555,7 +11053,7 @@
         "tags": [
           "Stock"
         ],
-        "description": "Expected stock counts towards stock when deciding what is low.",
+        "description": "Expected stock counts towards stock when deciding what is low. `pending: true` makes it a pending order (not confirmed yet); otherwise any of it in a pending order from the same shop is confirmed rather than added again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9610,6 +11108,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "pending": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -9641,6 +11142,7 @@
         "tags": [
           "Stock"
         ],
+        "description": "By source, it's what was confirmed from that order, or the whole pending order if none was; `pendingLeft` counts unconfirmed entries left pending.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9689,11 +11191,15 @@
                       "items": {
                         "$ref": "#/components/schemas/ProductSummary"
                       }
+                    },
+                    "pendingLeft": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "arrived",
-                    "products"
+                    "products",
+                    "pendingLeft"
                   ],
                   "additionalProperties": false
                 }
@@ -9719,6 +11225,161 @@
                   "items": {
                     "$ref": "#/components/schemas/Delivery"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders": {
+      "get": {
+        "summary": "Pending orders: ordered but not confirmed yet",
+        "tags": [
+          "Stock"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Delivery"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders/confirm": {
+      "post": {
+        "summary": "Confirm pending orders: they're on their way",
+        "tags": [
+          "Stock"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "entryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "confirmed": {
+                      "type": "number"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProductSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "confirmed",
+                    "products"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders/cancel": {
+      "post": {
+        "summary": "Remove pending orders that didn't go ahead",
+        "tags": [
+          "Stock"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "entryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "number"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProductSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "removed",
+                    "products"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -10242,6 +11903,18 @@
                         ]
                       },
                       "minQuantity": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "stockUpTo": {
                         "default": null,
                         "anyOf": [
                           {
@@ -15882,6 +17555,3895 @@
                     "removed"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/providers": {
+      "get": {
+        "summary": "Shopping providers, and the types that can be added",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "tesco",
+                              "other"
+                            ]
+                          },
+                          "shopId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "isDefault": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "wake": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "entityId": {
+                                    "default": null,
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "maxLength": 200,
+                                        "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "mac": {
+                                    "default": null,
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "broadcastAddress": {
+                                    "default": null,
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "maxLength": 60
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "timeoutSeconds": {
+                                    "default": 180,
+                                    "type": "integer",
+                                    "minimum": 10,
+                                    "maximum": 900
+                                  }
+                                },
+                                "required": [
+                                  "entityId",
+                                  "mac",
+                                  "broadcastAddress",
+                                  "timeoutSeconds"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sleepEntityId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "loyaltyPrices": {
+                            "default": true,
+                            "type": "boolean"
+                          },
+                          "status": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkedAt": {
+                                    "type": "string"
+                                  },
+                                  "ok": {
+                                    "type": "boolean"
+                                  },
+                                  "message": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reachable": {
+                                    "type": "boolean"
+                                  },
+                                  "loggedIn": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "default": null,
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "version": {
+                                    "default": null,
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "contractVersion": {
+                                    "default": null,
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "currency": {
+                                    "default": null,
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "capabilities": {
+                                    "default": [],
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "host": {
+                                    "default": null,
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "mac": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "address": {
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "mac",
+                                          "address"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "checkedAt",
+                                  "ok",
+                                  "message",
+                                  "reachable",
+                                  "loggedIn",
+                                  "name",
+                                  "version",
+                                  "contractVersion",
+                                  "currency",
+                                  "capabilities",
+                                  "host"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "shopName": {
+                            "type": "string"
+                          },
+                          "tokenHint": {
+                            "type": "string"
+                          },
+                          "canWake": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "shopId",
+                          "isDefault",
+                          "url",
+                          "wake",
+                          "sleepEntityId",
+                          "loyaltyPrices",
+                          "status",
+                          "createdAt",
+                          "shopName",
+                          "tokenHint",
+                          "canWake"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "shop": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "name",
+                          "shop"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "providers",
+                    "types"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add an automated shopping provider (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "One per shop. The address is where the provider runs (e.g. 192.168.1.231:8710) and the token is its AUTH_TOKEN. The first one added is the default.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "tesco",
+                      "other"
+                    ]
+                  },
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  },
+                  "address": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "wake": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "entityId": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200,
+                                "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "mac": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "broadcastAddress": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 60
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "timeoutSeconds": {
+                            "default": 180,
+                            "type": "integer",
+                            "minimum": 10,
+                            "maximum": 900
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sleepEntityId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "loyaltyPrices": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "shopId",
+                  "address",
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "tesco",
+                        "other"
+                      ]
+                    },
+                    "shopId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "isDefault": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "wake": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "entityId": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 200,
+                                  "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "mac": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "broadcastAddress": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "timeoutSeconds": {
+                              "default": 180,
+                              "type": "integer",
+                              "minimum": 10,
+                              "maximum": 900
+                            }
+                          },
+                          "required": [
+                            "entityId",
+                            "mac",
+                            "broadcastAddress",
+                            "timeoutSeconds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sleepEntityId": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "loyaltyPrices": {
+                      "default": true,
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "checkedAt": {
+                              "type": "string"
+                            },
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "message": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reachable": {
+                              "type": "boolean"
+                            },
+                            "loggedIn": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "contractVersion": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "currency": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "capabilities": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "host": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "mac": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "address": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "mac",
+                                    "address"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "checkedAt",
+                            "ok",
+                            "message",
+                            "reachable",
+                            "loggedIn",
+                            "name",
+                            "version",
+                            "contractVersion",
+                            "currency",
+                            "capabilities",
+                            "host"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "shopName": {
+                      "type": "string"
+                    },
+                    "tokenHint": {
+                      "type": "string"
+                    },
+                    "canWake": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "shopId",
+                    "isDefault",
+                    "url",
+                    "wake",
+                    "sleepEntityId",
+                    "loyaltyPrices",
+                    "status",
+                    "createdAt",
+                    "shopName",
+                    "tokenHint",
+                    "canWake"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/providers/{id}": {
+      "patch": {
+        "summary": "Change a shopping provider (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "tesco",
+                      "other"
+                    ]
+                  },
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  },
+                  "address": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "wake": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "entityId": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200,
+                                "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "mac": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "broadcastAddress": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 60
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "timeoutSeconds": {
+                            "default": 180,
+                            "type": "integer",
+                            "minimum": 10,
+                            "maximum": 900
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sleepEntityId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "loyaltyPrices": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "tesco",
+                        "other"
+                      ]
+                    },
+                    "shopId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "isDefault": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "wake": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "entityId": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 200,
+                                  "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "mac": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "broadcastAddress": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 60
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "timeoutSeconds": {
+                              "default": 180,
+                              "type": "integer",
+                              "minimum": 10,
+                              "maximum": 900
+                            }
+                          },
+                          "required": [
+                            "entityId",
+                            "mac",
+                            "broadcastAddress",
+                            "timeoutSeconds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sleepEntityId": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "loyaltyPrices": {
+                      "default": true,
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "checkedAt": {
+                              "type": "string"
+                            },
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "message": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reachable": {
+                              "type": "boolean"
+                            },
+                            "loggedIn": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "contractVersion": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "currency": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "capabilities": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "host": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "mac": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "address": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "mac",
+                                    "address"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "checkedAt",
+                            "ok",
+                            "message",
+                            "reachable",
+                            "loggedIn",
+                            "name",
+                            "version",
+                            "contractVersion",
+                            "currency",
+                            "capabilities",
+                            "host"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "shopName": {
+                      "type": "string"
+                    },
+                    "tokenHint": {
+                      "type": "string"
+                    },
+                    "canWake": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "shopId",
+                    "isDefault",
+                    "url",
+                    "wake",
+                    "sleepEntityId",
+                    "loyaltyPrices",
+                    "status",
+                    "createdAt",
+                    "shopName",
+                    "tokenHint",
+                    "canWake"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a shopping provider (its items keep their listings) (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/providers/{id}/test": {
+      "post": {
+        "summary": "Test the connection: health and manifest, saved as its status (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "With wake: true, wakes the machine through Home Assistant first if it doesn't answer (this can take a few minutes). Fills in waking from the provider's manifest when it isn't set up.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "wake": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "tesco",
+                            "other"
+                          ]
+                        },
+                        "shopId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "isDefault": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "wake": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "entityId": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 200,
+                                      "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "mac": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "broadcastAddress": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 60
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "timeoutSeconds": {
+                                  "default": 180,
+                                  "type": "integer",
+                                  "minimum": 10,
+                                  "maximum": 900
+                                }
+                              },
+                              "required": [
+                                "entityId",
+                                "mac",
+                                "broadcastAddress",
+                                "timeoutSeconds"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sleepEntityId": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "loyaltyPrices": {
+                          "default": true,
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "checkedAt": {
+                                  "type": "string"
+                                },
+                                "ok": {
+                                  "type": "boolean"
+                                },
+                                "message": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "reachable": {
+                                  "type": "boolean"
+                                },
+                                "loggedIn": {
+                                  "type": [
+                                    "boolean",
+                                    "null"
+                                  ]
+                                },
+                                "name": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "version": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "contractVersion": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "currency": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "capabilities": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "host": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "mac": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "address": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "mac",
+                                        "address"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "checkedAt",
+                                "ok",
+                                "message",
+                                "reachable",
+                                "loggedIn",
+                                "name",
+                                "version",
+                                "contractVersion",
+                                "currency",
+                                "capabilities",
+                                "host"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "shopName": {
+                          "type": "string"
+                        },
+                        "tokenHint": {
+                          "type": "string"
+                        },
+                        "canWake": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "shopId",
+                        "isDefault",
+                        "url",
+                        "wake",
+                        "sleepEntityId",
+                        "loyaltyPrices",
+                        "status",
+                        "createdAt",
+                        "shopName",
+                        "tokenHint",
+                        "canWake"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "woke": {
+                      "type": "boolean"
+                    },
+                    "filledWake": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "woke",
+                    "filledWake",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/items/{productId}/listings": {
+      "post": {
+        "summary": "Link a shop's product to an item by its code or link",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "Looks the product up with the shop's provider (adding it to the shop's favourites too with addToFavourites), and works out how many of the item one pack gives from its pack size (check it when it says guessed). A code or link the shop doesn't know is refused, never guessed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "idOrLink": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "addToFavourites": {
+                    "type": "boolean"
+                  },
+                  "packQuantity": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "shopId",
+                  "idOrLink"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "listing": {
+                      "type": "object",
+                      "properties": {
+                        "listingId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "packQuantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "guessed": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "packSize": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kg",
+                                    "l",
+                                    "each"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "link": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "imageUrl": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deadSince": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "listingId",
+                        "name",
+                        "packQuantity",
+                        "guessed",
+                        "packSize",
+                        "link",
+                        "imageUrl",
+                        "deadSince",
+                        "addedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "fields": {
+                      "type": "object",
+                      "properties": {
+                        "shops": {
+                          "default": {},
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "listings": {
+                                "default": [],
+                                "maxItems": 12,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "listingId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 200
+                                    },
+                                    "name": {
+                                      "default": "",
+                                      "type": "string",
+                                      "maxLength": 300
+                                    },
+                                    "packQuantity": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 1000000
+                                    },
+                                    "guessed": {
+                                      "default": false,
+                                      "type": "boolean"
+                                    },
+                                    "packSize": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "amount": {
+                                              "type": "number",
+                                              "exclusiveMinimum": 0
+                                            },
+                                            "unit": {
+                                              "type": "string",
+                                              "enum": [
+                                                "kg",
+                                                "l",
+                                                "each"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "amount",
+                                            "unit"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "link": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 2000
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "imageUrl": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 2000
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "deadSince": {
+                                      "default": null,
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "addedAt": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "listingId",
+                                    "name",
+                                    "packQuantity",
+                                    "guessed",
+                                    "packSize",
+                                    "link",
+                                    "imageUrl",
+                                    "deadSince",
+                                    "addedAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "packRule": {
+                                "default": "cheapest",
+                                "type": "string",
+                                "enum": [
+                                  "fixed",
+                                  "cheapest"
+                                ]
+                              },
+                              "fixedListingId": {
+                                "default": null,
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "targetPrice": {
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "listings",
+                              "packRule",
+                              "fixedListingId",
+                              "targetPrice"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "offerStockUpTo": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "targetPrice": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "shops",
+                        "offerStockUpTo",
+                        "targetPrice"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "listing",
+                    "fields",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/items/{productId}/listings/{listingId}": {
+      "patch": {
+        "summary": "Say how many of the item one pack of a listing gives",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "packQuantity": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "shopId",
+                  "packQuantity"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "listingId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shops": {
+                      "default": {},
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "listings": {
+                            "default": [],
+                            "maxItems": 12,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "listingId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "name": {
+                                  "default": "",
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "packQuantity": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 1000000
+                                },
+                                "guessed": {
+                                  "default": false,
+                                  "type": "boolean"
+                                },
+                                "packSize": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "number",
+                                          "exclusiveMinimum": 0
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kg",
+                                            "l",
+                                            "each"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "amount",
+                                        "unit"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "link": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "imageUrl": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "deadSince": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "addedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "listingId",
+                                "name",
+                                "packQuantity",
+                                "guessed",
+                                "packSize",
+                                "link",
+                                "imageUrl",
+                                "deadSince",
+                                "addedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "packRule": {
+                            "default": "cheapest",
+                            "type": "string",
+                            "enum": [
+                              "fixed",
+                              "cheapest"
+                            ]
+                          },
+                          "fixedListingId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "targetPrice": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "listings",
+                          "packRule",
+                          "fixedListingId",
+                          "targetPrice"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "offerStockUpTo": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetPrice": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "shops",
+                    "offerStockUpTo",
+                    "targetPrice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unlink a listing from an item",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "listingId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shops": {
+                      "default": {},
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "listings": {
+                            "default": [],
+                            "maxItems": 12,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "listingId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "name": {
+                                  "default": "",
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "packQuantity": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 1000000
+                                },
+                                "guessed": {
+                                  "default": false,
+                                  "type": "boolean"
+                                },
+                                "packSize": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "number",
+                                          "exclusiveMinimum": 0
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kg",
+                                            "l",
+                                            "each"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "amount",
+                                        "unit"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "link": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "imageUrl": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "deadSince": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "addedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "listingId",
+                                "name",
+                                "packQuantity",
+                                "guessed",
+                                "packSize",
+                                "link",
+                                "imageUrl",
+                                "deadSince",
+                                "addedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "packRule": {
+                            "default": "cheapest",
+                            "type": "string",
+                            "enum": [
+                              "fixed",
+                              "cheapest"
+                            ]
+                          },
+                          "fixedListingId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "targetPrice": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "listings",
+                          "packRule",
+                          "fixedListingId",
+                          "targetPrice"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "offerStockUpTo": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetPrice": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "shops",
+                    "offerStockUpTo",
+                    "targetPrice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/items/{productId}/shops/{shopId}": {
+      "put": {
+        "summary": "Set an item's pack rule and target price at one shop",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "packRule: fixed (always one listing, fixedListingId or the first) or cheapest (the cheapest mix of listings that covers what's needed). targetPrice is per one of the item's unit and overrides the item's own (null to use it).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "packRule": {
+                    "type": "string",
+                    "enum": [
+                      "fixed",
+                      "cheapest"
+                    ]
+                  },
+                  "fixedListingId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "targetPrice": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shops": {
+                      "default": {},
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "listings": {
+                            "default": [],
+                            "maxItems": 12,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "listingId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "name": {
+                                  "default": "",
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "packQuantity": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 1000000
+                                },
+                                "guessed": {
+                                  "default": false,
+                                  "type": "boolean"
+                                },
+                                "packSize": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "number",
+                                          "exclusiveMinimum": 0
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kg",
+                                            "l",
+                                            "each"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "amount",
+                                        "unit"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "link": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "imageUrl": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "deadSince": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "addedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "listingId",
+                                "name",
+                                "packQuantity",
+                                "guessed",
+                                "packSize",
+                                "link",
+                                "imageUrl",
+                                "deadSince",
+                                "addedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "packRule": {
+                            "default": "cheapest",
+                            "type": "string",
+                            "enum": [
+                              "fixed",
+                              "cheapest"
+                            ]
+                          },
+                          "fixedListingId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "targetPrice": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "listings",
+                          "packRule",
+                          "fixedListingId",
+                          "targetPrice"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "offerStockUpTo": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetPrice": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "shops",
+                    "offerStockUpTo",
+                    "targetPrice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/items/{productId}/rules": {
+      "put": {
+        "summary": "Set an item's target price and on-offer stock-up amount",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "targetPrice is per one of the item's unit: at or below it counts as on offer, and the order tops up to offerStockUpTo. The normal stock-up amount is the item's own stockUpTo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "offerStockUpTo": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "targetPrice": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shops": {
+                      "default": {},
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "listings": {
+                            "default": [],
+                            "maxItems": 12,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "listingId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "name": {
+                                  "default": "",
+                                  "type": "string",
+                                  "maxLength": 300
+                                },
+                                "packQuantity": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 1000000
+                                },
+                                "guessed": {
+                                  "default": false,
+                                  "type": "boolean"
+                                },
+                                "packSize": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "number",
+                                          "exclusiveMinimum": 0
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "enum": [
+                                            "kg",
+                                            "l",
+                                            "each"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "amount",
+                                        "unit"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "link": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "imageUrl": {
+                                  "default": null,
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "deadSince": {
+                                  "default": null,
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "addedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "listingId",
+                                "name",
+                                "packQuantity",
+                                "guessed",
+                                "packSize",
+                                "link",
+                                "imageUrl",
+                                "deadSince",
+                                "addedAt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "packRule": {
+                            "default": "cheapest",
+                            "type": "string",
+                            "enum": [
+                              "fixed",
+                              "cheapest"
+                            ]
+                          },
+                          "fixedListingId": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "targetPrice": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "listings",
+                          "packRule",
+                          "fixedListingId",
+                          "targetPrice"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "offerStockUpTo": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetPrice": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "shops",
+                    "offerStockUpTo",
+                    "targetPrice"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/items/{productId}/shop-image": {
+      "post": {
+        "summary": "Use a linked listing's picture as the item's photo",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "listingId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "shopId",
+                  "listingId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "photoFileIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "photoFileIds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/options": {
+      "get": {
+        "summary": "Household settings for online shopping",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "multibuyOverPercent": {
+                      "default": 25,
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200
+                    }
+                  },
+                  "required": [
+                    "multibuyOverPercent"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Change household settings for online shopping (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "multibuyOverPercent: how far over the stock-up amount rounding up to complete a multibuy may go (default 25).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "multibuyOverPercent": {
+                    "default": 25,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "multibuyOverPercent": {
+                      "default": 25,
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200
+                    }
+                  },
+                  "required": [
+                    "multibuyOverPercent"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/plan": {
+      "post": {
+        "summary": "Work out the basket at a shop without adding anything (answers at once; follow it with GET /runs/:id)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/fill": {
+      "post": {
+        "summary": "Plan and fill the basket at a shop (answers at once; follow it with GET /runs/:id)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "What goes in is recorded as expected deliveries from \"<shop> delivery\". Stops at the basket: nobody pays.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/runs/{id}": {
+      "get": {
+        "summary": "How a shop is going, or how it went",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/latest": {
+      "get": {
+        "summary": "The latest shop at a shop, if any",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/OnlineShopRun"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "run"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/slots": {
+      "get": {
+        "summary": "Delivery slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "when",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string"
+                    },
+                    "described": {
+                      "type": "string"
+                    },
+                    "slots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string"
+                          },
+                          "end": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "price",
+                          "available"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "described",
+                    "slots"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/book": {
+      "post": {
+        "summary": "Book a delivery slot from the last list",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "slotId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking": {
+                      "type": "object",
+                      "properties": {
+                        "slotId": {
+                          "type": "string"
+                        },
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "default": null,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "reservedUntil": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "bookedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "slotId",
+                        "start",
+                        "end",
+                        "price",
+                        "reference",
+                        "reservedUntil",
+                        "bookedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "booking",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/booking": {
+      "get": {
+        "summary": "The delivery slot booked at a shop, while it's still to come",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "slotId": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            },
+                            "price": {
+                              "default": null,
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "reference": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "reservedUntil": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "bookedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "slotId",
+                            "start",
+                            "end",
+                            "price",
+                            "reference",
+                            "reservedUntil",
+                            "bookedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "booking"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending": {
+      "get": {
+        "summary": "Shop favourites waiting in Pending: not linked to any item, not dismissed",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingFavourite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/favourites/sync": {
+      "post": {
+        "summary": "Read the shop's favourites and put new, unlinked ones in Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "refresh: false uses the provider's copy without asking the shop (quicker). Favourites already linked to an item, or dismissed, are left out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shop": {
+                      "type": "string"
+                    },
+                    "added": {
+                      "type": "number"
+                    },
+                    "pending": {
+                      "type": "number"
+                    },
+                    "linked": {
+                      "type": "number"
+                    },
+                    "dismissed": {
+                      "type": "number"
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    },
+                    "fetchedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "shop",
+                    "added",
+                    "pending",
+                    "linked",
+                    "dismissed",
+                    "stale",
+                    "fetchedAt",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/link": {
+      "post": {
+        "summary": "Link a pending favourite to an item you have; it leaves Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "A new code for a product that has gone replaces the item's gone listing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "listing": {
+                      "type": "object",
+                      "properties": {
+                        "listingId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "packQuantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "guessed": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "packSize": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kg",
+                                    "l",
+                                    "each"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "link": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "imageUrl": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deadSince": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "listingId",
+                        "name",
+                        "packQuantity",
+                        "guessed",
+                        "packSize",
+                        "link",
+                        "imageUrl",
+                        "deadSince",
+                        "addedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "listing",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/photo": {
+      "post": {
+        "summary": "Save a pending favourite's picture as a Larder photo, for the item about to be made from it",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "photoFileId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "photoFileId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/added": {
+      "post": {
+        "summary": "A pending favourite became a new item (through the Add item page): it's linked and leaves Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "listing": {
+                      "type": "object",
+                      "properties": {
+                        "listingId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "name": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "packQuantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "guessed": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "packSize": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kg",
+                                    "l",
+                                    "each"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "link": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "imageUrl": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 2000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "deadSince": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "listingId",
+                        "name",
+                        "packQuantity",
+                        "guessed",
+                        "packSize",
+                        "link",
+                        "imageUrl",
+                        "deadSince",
+                        "addedAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "listing"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/pending/{id}/dismiss": {
+      "post": {
+        "summary": "Not wanted: it leaves Pending and isn't suggested again (undo in Settings)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingFavourite"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/dismissed": {
+      "get": {
+        "summary": "Favourites dismissed from Pending, newest first",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DismissedFavourite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/dismissed/{id}": {
+      "delete": {
+        "summary": "Undo a dismissal: the favourite is back in Pending",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingFavourite"
                 }
               }
             }

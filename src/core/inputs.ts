@@ -119,8 +119,23 @@ export const StockExpect = z.object({
   reference: z.string().max(80).nullable().optional(),
   eta: IsoDate.nullable().optional(),
   placeId: Id.nullable().optional(),
+  /**
+   * Not confirmed yet (a filled online basket before checkout): a pending order. Without it,
+   * stock in a pending order from the same shop is confirmed first rather than added again.
+   */
+  pending: z.boolean().optional(),
 });
 export type StockExpect = z.input<typeof StockExpect>;
+
+/** Which pending orders to confirm or remove: a whole order by its source, some entries, or one item's. */
+export const StockOrders = z
+  .object({
+    source: z.string().min(1).max(80).optional(),
+    entryIds: z.array(Id).optional(),
+    productId: Id.optional(),
+  })
+  .refine((v) => v.source || v.entryIds?.length || v.productId, 'Say which order, entries or item');
+export type StockOrders = z.input<typeof StockOrders>;
 
 export const StockArrive = z
   .object({

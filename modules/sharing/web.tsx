@@ -3,7 +3,7 @@
  * Larder. A link to it from the Wish list, and where an item came from on its page.
  */
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, money, shortDate, useAction, useAddItem, useQuery, type ProductDetail,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, ModulePanels, money, shortDate, useAction, useAddItem, useQuery, type ProductDetail,
 } from '@larder/web-sdk';
 
 interface SharedFrom { url: string; site: string; app: string | null; device: string | null; sharedAt: string; price: number | null; currency: string | null }
@@ -36,7 +36,7 @@ function PendingPage() {
         <p className="small muted">Links shared from your phone to Home Assistant. Put each on the wish list, or add it to Larder if you've got it.</p>
         {isLoading && <Loading />}
         {data && !data.length && (
-          <Empty title="Nothing pending">
+          <Empty title="No shared links waiting">
             <span className="muted small">On Android, share a page from a shop's app or Chrome to Home Assistant, and it waits here.</span>
           </Empty>
         )}
@@ -65,6 +65,8 @@ function PendingPage() {
             </div>
           ))}
         </div>
+        {/* Other modules' waiting things, e.g. shop favourites from online shopping. */}
+        <ModulePanels slot="sharing.pending" id="" />
       </div>
     </>
   );

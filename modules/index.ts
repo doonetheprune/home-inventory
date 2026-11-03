@@ -15,6 +15,7 @@ import mqttModule from './mqtt';
 import shopLocations from './shop-locations';
 import ai from './ai';
 import sharing from './sharing';
+import onlineShopping from './online-shopping';
 import template from './_template';
 
-export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, batteries, scenarios, printing, recipes, mqttModule, shopLocations, ai, sharing, template];
+export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, batteries, scenarios, printing, recipes, mqttModule, shopLocations, ai, sharing, onlineShopping, template];

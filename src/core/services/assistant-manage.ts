@@ -293,7 +293,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_item', title: 'Change an item', destructive: true,
-    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, shelf life, usual place, which shops to buy it from, notes, wish list or rechargeable. Only the fields given change.',
+    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, usual place, which shops to buy it from, notes, wish list or rechargeable. Only the fields given change.',
     input: z.object({
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
@@ -301,6 +301,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       unit: z.string().min(1).max(20).optional().describe('What it\'s counted in, e.g. roll, tin, kg'),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Every other name people use (replaces the old list)'),
       minimum: z.number().min(0).nullable().optional().describe('Running low below this many; null to never count as low'),
+      stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
       usual_place: z.string().max(200).nullable().optional().describe('Where it usually lives; null for nowhere in particular. This doesn\'t move stock (use move_item)'),
       shops: z.array(z.string().max(80)).max(10).optional().describe('Every shop to buy it from (replaces the old list); [] for any shop that sells its category'),
@@ -320,6 +321,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       const next = await products.update(p.id, {
         ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit ? { unit: i.unit } : {}),
         ...(i.aliases ? { aliases: i.aliases } : {}), ...(i.minimum !== undefined ? { minQuantity: i.minimum } : {}),
+        ...(i.stock_up_to !== undefined ? { stockUpTo: i.stock_up_to } : {}),
         ...(i.shelf_life_days !== undefined ? { shelfLifeDays: i.shelf_life_days } : {}), ...(defaultPlaceId !== undefined ? { defaultPlaceId } : {}),
         ...(preferredShopIds ? { preferredShopIds } : {}), ...(i.notes !== undefined ? { notes: i.notes } : {}),
         ...(i.wish_list !== undefined ? { wish: i.wish_list } : {}), ...(i.rechargeable !== undefined ? { rechargeable: i.rechargeable } : {}),
@@ -330,6 +332,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (preferredShopIds) said.push(d.product.preferredShopIds.length ? `bought from ${andList(d.shops.map((s) => s.name))}` : 'from any shop that sells it');
       if (defaultPlaceId !== undefined) said.push(defaultPlaceId ? `usually lives in ${(await places.list()).find((x) => x.id === defaultPlaceId)?.path}` : 'no usual place');
       if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${amount(i.minimum, next.unit)}`);
+      if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
       return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.`, data: { id: next.id, name: next.name } };
     },
   });
@@ -415,13 +418,14 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'deliveries', title: 'Deliveries on the way', readOnly: true,
-    description: 'Orders that haven\'t arrived yet, by where they\'re coming from, with when they\'re due.',
+    description: 'Orders that haven\'t arrived yet, by where they\'re coming from, with when they\'re due; and pending orders waiting to be confirmed (confirm_order) or removed (cancel_order).',
     input: z.object({}),
     async run() {
-      const list = await stock.deliveries();
-      if (!list.length) return { text: 'Nothing is on the way.', data: { deliveries: [] } };
-      const text = list.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.eta ? `, due ${d.eta} (${daysBetween(ctx.today(), d.eta) < 0 ? 'late' : `in ${daysBetween(ctx.today(), d.eta)} days`})` : ''}`).join('\n');
-      return { text, data: { deliveries: list.map((d) => ({ source: d.source, eta: d.eta, items: d.itemCount, quantity: d.quantity })) } };
+      const [list, pending] = await Promise.all([stock.deliveries(), stock.pendingOrders()]);
+      if (!list.length && !pending.length) return { text: 'Nothing is on the way.', data: { deliveries: [], pending: [] } };
+      const lines = list.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.eta ? `, due ${d.eta} (${daysBetween(ctx.today(), d.eta) < 0 ? 'late' : `in ${daysBetween(ctx.today(), d.eta)} days`})` : ''}`);
+      if (pending.length) lines.push('Pending orders (not confirmed yet):', ...pending.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.since ? `, since ${d.since.slice(0, 10)}` : ''}`));
+      return { text: lines.join('\n') || 'Nothing is on the way.', data: { deliveries: list.map((d) => ({ source: d.source, eta: d.eta, items: d.itemCount, quantity: d.quantity })), pending: pending.map((d) => ({ source: d.source, since: d.since, items: d.itemCount, quantity: d.quantity })) } };
     },
   });
 

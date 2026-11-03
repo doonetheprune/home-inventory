@@ -18,7 +18,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
 import { loadWorld, needsBuying, summarise } from './world';
-import { amount, daysBetween } from '../util';
+import { amount, daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
 
@@ -149,6 +149,14 @@ export function createAutomation(deps: {
     },
   });
   addSensor({
+    id: 'pending_orders', name: 'Pending orders', icon: 'mdi:cart-clock', unit: 'orders',
+    description: 'Orders waiting to be confirmed or removed in Larder, e.g. a filled online basket not checked out yet.',
+    async read() {
+      const list = await stock.pendingOrders();
+      return { state: list.length, attributes: { orders: list.slice(0, LIST_LIMIT).map((d) => ({ source: d.source, since: d.since, items: d.itemCount })) } };
+    },
+  });
+  addSensor({
     id: 'deliveries', name: 'Deliveries on the way', icon: 'mdi:truck-delivery', unit: 'deliveries',
     description: 'Orders that have been placed but not arrived yet.',
     async read() {
@@ -208,7 +216,7 @@ export function createAutomation(deps: {
     },
   });
   addAction({
-    id: 'add_expected', name: 'Add expected delivery', description: 'Record something ordered but not arrived yet. It counts towards stock, so it isn\'t bought twice.',
+    id: 'add_expected', name: 'Add expected delivery', description: 'Record something ordered but not arrived yet. It counts towards stock, so it isn\'t bought twice. If it\'s in a pending order from the same shop (a filled online basket), that is confirmed instead of adding it again.',
     input: z.object({
       item: Item, quantity: Quantity,
       source: z.string().min(1).max(80).describe('Where it\'s coming from, e.g. "Tesco delivery" or "Amazon"'),
@@ -217,8 +225,40 @@ export function createAutomation(deps: {
     }),
     async run(i) {
       const p = await resolve.product(i.item);
+      const was = (await products.summary(p.id)).pending;
       const s = await stock.expect({ productId: p.id, quantity: i.quantity, source: i.source, reference: i.reference, eta: i.eta });
-      return { message: `${p.name}: ${amount(i.quantity, p.unit)} expected from ${i.source}.`, ...itemInfo(s) };
+      const confirmed = Math.max(0, roundQty(was - s.pending));
+      const more = roundQty(i.quantity - confirmed);
+      const message = confirmed
+        ? `${p.name}: ${amount(confirmed, p.unit)} in the pending order confirmed, now on the way${more > 0 ? `, and ${amount(more, p.unit)} more expected from ${i.source}` : ''}.`
+        : `${p.name}: ${amount(i.quantity, p.unit)} expected from ${i.source}.`;
+      return { message, confirmed, ...itemInfo(s) };
+    },
+  });
+  addAction({
+    id: 'confirm_order', name: 'Confirm order', description: 'A pending order went ahead (e.g. the online basket was checked out): it\'s on its way. A whole order by its source, or one item\'s.',
+    input: z.object({
+      source: z.string().max(80).optional().describe('The order, e.g. "Tesco delivery"'),
+      item: Item.optional().describe('Or one item in it'),
+    }),
+    async run(i) {
+      if (!i.source && !i.item) throw new LarderError('Say which order (source) or which item to confirm.', 400, 'invalid');
+      const productId = i.item ? (await resolve.product(i.item)).id : undefined;
+      const r = await stock.confirmOrders({ source: i.source, productId });
+      return { message: `Confirmed, on the way: ${r.products.map((s) => s.product.name).join(', ')}.`, confirmed: r.confirmed, items: r.products.map(itemInfo) };
+    },
+  });
+  addAction({
+    id: 'cancel_order', name: 'Remove pending order', description: 'A pending order didn\'t go ahead (the basket wasn\'t checked out): it stops counting towards stock, so what\'s still low is bought next time.',
+    input: z.object({
+      source: z.string().max(80).optional().describe('The order, e.g. "Tesco delivery"'),
+      item: Item.optional().describe('Or one item in it'),
+    }),
+    async run(i) {
+      if (!i.source && !i.item) throw new LarderError('Say which order (source) or which item to remove.', 400, 'invalid');
+      const productId = i.item ? (await resolve.product(i.item)).id : undefined;
+      const r = await stock.cancelOrders({ source: i.source, productId });
+      return { message: `Removed from the pending order: ${r.products.map((s) => s.product.name).join(', ')}.`, removed: r.removed, items: r.products.map(itemInfo) };
     },
   });
   addAction({
@@ -233,7 +273,8 @@ export function createAutomation(deps: {
       const productId = i.item ? (await resolve.product(i.item)).id : undefined;
       const r = await stock.arrive({ source: i.source, productId, quantity: i.quantity });
       const names = r.products.map((s) => s.product.name);
-      return { message: `Arrived: ${names.join(', ')}.`, arrived: r.arrived, items: r.products.map(itemInfo) };
+      const left = r.pendingLeft ? ` ${r.pendingLeft} more from that order ${r.pendingLeft === 1 ? 'was' : 'were'} never confirmed and ${r.pendingLeft === 1 ? 'is' : 'are'} still pending: confirm or remove ${r.pendingLeft === 1 ? 'it' : 'them'}.` : '';
+      return { message: `Arrived: ${names.join(', ')}.${left}`, arrived: r.arrived, pending_left: r.pendingLeft, items: r.products.map(itemInfo) };
     },
   });
   addAction({

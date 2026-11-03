@@ -52,10 +52,11 @@ All on one **Larder** device. Each number comes with the items behind it as attr
 
 | Sensor | Number | Attributes |
 |---|---|---|
-| `sensor.larder_running_low` | Items below their minimum (deliveries on the way count) | `items`: item, in_stock, expected, minimum, unit |
+| `sensor.larder_running_low` | Items below their minimum (deliveries on the way and pending orders count) | `items`: item, in_stock, expected, minimum, unit |
 | `sensor.larder_use_soon` | Items expiring soon, already expired, or due for renewal | `items`: item, expires_on, days, category, place |
 | `sensor.larder_out_of_place` | Things somewhere other than their usual place | `items`: item, usually, now |
 | `sensor.larder_shopping_list` | Everything to buy | `suggested_shop`, `shops` (how many each can supply), `no_shop` |
+| `sensor.larder_pending_orders` | Orders not confirmed yet (e.g. a filled online basket before checkout) | `orders`: source, since, items |
 | `sensor.larder_deliveries_on_the_way` | Orders not arrived yet | `deliveries`: source, eta, items |
 | `sensor.larder_batteries_low` | Devices with a low battery (battery linking module) | `devices`: device, battery, advice, message |
 
@@ -75,6 +76,8 @@ Every action can return Larder's answer, including a `message` for a notificatio
 | `larder.put_back` | item |
 | `larder.add_expected` | item, quantity (1), source, reference, eta |
 | `larder.mark_arrived` | source, or item and quantity |
+| `larder.confirm_order` | source, or item: a pending order went ahead and is on its way |
+| `larder.cancel_order` | source, or item: a pending order didn't go ahead |
 | `larder.add_to_shopping_list` / `larder.remove_from_shopping_list` | item |
 | `larder.mark_charged` | item, quantity (1) |
 | `larder.renew` | item |

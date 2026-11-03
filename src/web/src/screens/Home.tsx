@@ -115,6 +115,24 @@ export function Home() {
       </div>
 
       <div className="section h-coming">
+        {d.pendingOrders.length > 0 && (
+          <>
+            <div className="label">Pending orders</div>
+            <p className="muted small" style={{ marginTop: 0 }}>Ordered, not confirmed: they count as bought, so nothing is ordered twice. Confirm once checked out, or remove if it didn't go ahead.</p>
+            <div className="list" style={{ marginBottom: 16 }}>
+              {d.pendingOrders.map((o) => (
+                <div className="item" key={o.source} style={{ flexWrap: 'wrap' }}>
+                  <span className="tile"><Icon name="cart" /></span>
+                  <span className="item-main" style={{ flex: '1 1 140px' }}><span className="item-name">{o.source} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'}</span><span className="item-meta">{o.since ? `Since ${dayDate(o.since.slice(0, 10))}` : 'Waiting'}{o.eta ? ` · due ${dayDate(o.eta)}` : ''}</span></span>
+                  <span className="row" style={{ gap: 6, marginLeft: 'auto' }}>
+                    <button className="btn small primary" type="button" onClick={() => run(() => api.stock.confirmOrders({ source: o.source }), `${o.source} confirmed: on the way`)}>Confirm</button>
+                    <button className="btn small ghost" type="button" onClick={() => run(() => api.stock.cancelOrders({ source: o.source }), `${o.source} removed. Anything still low is bought next time.`)}>Remove</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         <div className="label">On the way</div>
         {d.deliveries.length ? (
           <div className="list">
@@ -122,7 +140,7 @@ export function Home() {
               <div className="item" key={del.source}>
                 <span className="tile"><Icon name="truck" /></span>
                 <span className="item-main"><span className="item-name">{del.source} · {del.itemCount} item{del.itemCount === 1 ? '' : 's'}</span><span className="item-meta">{del.eta ? dayDate(del.eta) : 'No date given'} · {num(del.quantity)} in total</span></span>
-                <button className="btn small" type="button" onClick={() => run(() => api.stock.arrive({ source: del.source }), (r) => `${r.arrived} item${r.arrived === 1 ? '' : 's'} from ${del.source} moved into stock`)}>Arrived</button>
+                <button className="btn small" type="button" onClick={() => run(() => api.stock.arrive({ source: del.source }), (r) => `${r.arrived} item${r.arrived === 1 ? '' : 's'} from ${del.source} moved into stock${r.pendingLeft ? `. ${r.pendingLeft} never confirmed: still pending` : ''}`)}>Arrived</button>
               </div>
             ))}
           </div>

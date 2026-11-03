@@ -16,7 +16,7 @@ export function createHomeService(ctx: CoreContext, stock: ReturnType<typeof cre
       const expiring = owned.filter((s) => s.status.expiringSoon).sort((a, b) => (a.daysToExpiry ?? 0) - (b.daysToExpiry ?? 0));
       const low = owned.filter((s) => s.status.low).sort((a, b) => a.inStock + a.expected - (b.inStock + b.expected) || a.product.name.localeCompare(b.product.name));
       const outOfPlace = owned.filter((s) => s.status.outOfPlace);
-      const [deliveries, shoppingSummary] = await Promise.all([stock.deliveries(), shopping.summary()]);
+      const [deliveries, pendingOrders, shoppingSummary] = await Promise.all([stock.deliveries(), stock.pendingOrders(), shopping.summary()]);
       return {
         today: world.today,
         counts: {
@@ -31,6 +31,7 @@ export function createHomeService(ctx: CoreContext, stock: ReturnType<typeof cre
         low: low.slice(0, LIMIT),
         outOfPlace: outOfPlace.slice(0, LIMIT),
         deliveries,
+        pendingOrders,
         shopping: shoppingSummary,
       };
     },

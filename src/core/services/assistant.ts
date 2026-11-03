@@ -67,7 +67,7 @@ export const ASSISTANT_INSTRUCTIONS = [
   'Before adding something new with add_item, search for it: it may already exist under another name.',
   'Anything about an item can be changed later with change_item (its shop, usual place, minimum, category, name).',
   'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
-  'Low stock counts deliveries on the way. Wish list items are things to buy that the house has none of yet.',
+  'Low stock counts deliveries on the way and pending orders (ordered, not confirmed). Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
 
 const Item = z.string().min(1).max(200).describe('The item, by name or alias (e.g. "loo roll"), barcode, shop code or id');
@@ -86,6 +86,7 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   const parts = [`${p.name}: ${amount(s.inStock, p.unit)}`];
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${amount(s.expected, p.unit)} on the way`);
+  if (s.pending) parts.push(`${amount(s.pending, p.unit)} in a pending order`);
   if (s.places.length) parts.push(`in ${s.places.map((x) => x.path).join(' and ')}`);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
   if (s.status.low) parts.push('running low');
@@ -107,7 +108,9 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
     }
   }
   for (const e of d.entries.filter((x) => x.status === 'expected')) lines.push(`- ${amount(e.quantity, p.unit)} expected from ${e.expected?.source ?? 'an order'}${e.expected?.eta ? ` on ${e.expected.eta}` : ''}${e.expected?.reference ? ` (order ${e.expected.reference})` : ''}`);
+  for (const e of d.entries.filter((x) => x.status === 'pending')) lines.push(`- ${amount(e.quantity, p.unit)} in a pending order (${e.expected?.source ?? 'an order'}, not confirmed yet)`);
   if (p.minQuantity) lines.push(`Running low below ${amount(p.minQuantity, p.unit)}${d.status.low ? ': it is low now' : ''}.`);
+  if (p.stockUpTo) lines.push(`Stock up to ${amount(p.stockUpTo, p.unit)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
@@ -178,7 +181,7 @@ export function createAssistant(deps: {
       return {
         text: detailText(ctx, d),
         data: {
-          id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity,
+          id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity, stock_up_to: p.stockUpTo ?? null,
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
         },
@@ -212,6 +215,7 @@ export function createAssistant(deps: {
       unit: z.string().max(20).optional().describe('What it\'s counted in, e.g. tin, roll, kg, L (default: each)'),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Other names people use'),
       minimum: z.number().min(0).optional().describe('Running low below this many'),
+      stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
@@ -233,7 +237,7 @@ export function createAssistant(deps: {
       if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
-        name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
+        name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
@@ -262,6 +266,8 @@ export function createAssistant(deps: {
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
+  fromAction('confirm_order', 'confirm_order', 'Confirm a pending order', 'A pending order (e.g. a filled online basket) was checked out, so it\'s on its way: give the source for all of it, or one item.');
+  fromAction('cancel_order', 'cancel_order', 'Remove a pending order', 'A pending order didn\'t go ahead (the basket wasn\'t checked out): give the source for all of it, or one item. What\'s still low is bought next time.', true);
   fromAction('add_to_shopping_list', 'add_to_shopping_list', 'Put on the shopping list', 'Put an item on the shopping list even though it isn\'t low.');
   fromAction('remove_from_shopping_list', 'remove_from_shopping_list', 'Take off the shopping list', 'Take an item that was put on the shopping list by hand off it again. Items that are low stay on until restocked.', true);
   fromAction('put_back', 'put_back', 'Put an item back', 'Something that was out of place is back in its usual place.');

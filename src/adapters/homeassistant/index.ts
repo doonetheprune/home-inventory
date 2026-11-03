@@ -196,5 +196,10 @@ export function createHomeAssistant(o: HomeAssistantOptions): HomeAssistantPort 
       const info = await rest<{ data?: { slug?: string } }>('GET', '/addons/self/info', undefined, o.supervisor.url, o.supervisor.token).catch(() => null);
       return info?.data?.slug ? `/hassio/ingress/${info.data.slug}` : null;
     },
+
+    async callService(domain, service, data) {
+      if (!/^[a-z0-9_]+$/.test(domain) || !/^[a-z0-9_]+$/.test(service)) throw new HomeAssistantError(`"${domain}.${service}" isn't a Home Assistant action.`);
+      await rest('POST', `/api/services/${domain}/${service}`, data);
+    },
   };
 }

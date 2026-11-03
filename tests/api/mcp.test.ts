@@ -42,7 +42,7 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
     expect(names).toEqual([
-      'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'move_item', 'add_expected', 'mark_arrived', 'add_to_shopping_list',
+      'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'move_item', 'add_expected', 'mark_arrived', 'confirm_order', 'cancel_order', 'add_to_shopping_list',
       'remove_from_shopping_list', 'put_back', 'mark_charged', 'renew', 'shopping_list', 'expiring',
       'list_shops', 'add_shop', 'change_shop', 'remove_shop', 'list_places', 'add_place', 'add_storage_grid', 'change_place', 'remove_place',
       'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
@@ -58,7 +58,7 @@ describe('MCP server', () => {
     // Clients may skip asking before tools that only add; ones that take away or overwrite say so.
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
-      'use_stock', 'move_item', 'mark_arrived', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
+      'use_stock', 'move_item', 'mark_arrived', 'cancel_order', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
       'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
     ]);
   });

@@ -8,7 +8,7 @@
 import type { Movement, Product, ProductSummary, StockEntry } from '../model';
 import { StockEntry as StockEntrySchema } from '../model';
 import * as In from '../inputs';
-import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockReturn, StockUse } from '../inputs';
+import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
 import { addDays, newId, roundQty } from '../util';
 import type { CoreContext } from './context';
@@ -51,6 +51,15 @@ function useOrder(a: StockEntry, b: StockEntry): number {
 function where(e: StockEntry): string | null {
   return e.currentPlaceId ?? e.placeId;
 }
+
+/** The same shop's order: the same source, or the same first word ("Tesco order" and "Tesco delivery"). */
+function sameOrder(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase();
+  const y = b.trim().toLowerCase();
+  return x === y || x.split(/\s+/)[0] === y.split(/\s+/)[0];
+}
+
+const sameSource = (a: string | undefined, b: string | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 function plural(n: number, unit: string): string {
   if (n === 1 || ['L', 'ml', 'kg', 'g', 'm'].includes(unit)) return `${n} ${unit}`;
@@ -121,6 +130,39 @@ export function createStockService(ctx: CoreContext) {
   function clearFlags(product: Product): Partial<Product> | undefined {
     if (!product.wish && !product.onShoppingList) return undefined;
     return { wish: false, onShoppingList: false };
+  }
+
+  /** Pending entries chosen by source (a whole order), entry ids, or one item's (optionally from one source). */
+  async function pendingEntries(raw: StockOrders): Promise<StockEntry[]> {
+    const input = In.StockOrders.parse(raw);
+    const waiting = (await ctx.storage.stock.list()).filter((e) => e.status === 'pending');
+    const chosen = input.entryIds?.length
+      ? waiting.filter((e) => input.entryIds!.includes(e.id))
+      : waiting.filter((e) => (!input.productId || e.productId === input.productId) && (!input.source || sameSource(e.expected?.source, input.source)));
+    if (!chosen.length) throw new ValidationError(input.source ? `Nothing from ${input.source} is waiting to be confirmed.` : 'There\'s no pending order like that.');
+    return chosen;
+  }
+
+  function byProduct(entries: StockEntry[]): Map<string, Set<string>> {
+    const out = new Map<string, Set<string>>();
+    for (const e of entries) (out.get(e.productId) ?? out.set(e.productId, new Set()).get(e.productId)!).add(e.id);
+    return out;
+  }
+
+  async function grouped(status: 'expected' | 'pending') {
+    const entries = (await ctx.storage.stock.list()).filter((e) => e.status === status && e.expected);
+    const groups = new Map<string, { source: string; eta: string | null; products: Set<string>; quantity: number; since: string | null }>();
+    for (const e of entries) {
+      const g = groups.get(e.expected!.source) ?? { source: e.expected!.source, eta: null, products: new Set(), quantity: 0, since: null };
+      if (e.expected!.eta && (!g.eta || e.expected!.eta < g.eta)) g.eta = e.expected!.eta;
+      if (!g.since || e.addedAt < g.since) g.since = e.addedAt;
+      g.products.add(e.productId);
+      g.quantity = roundQty(g.quantity + e.quantity);
+      groups.set(g.source, g);
+    }
+    return [...groups.values()]
+      .map((g) => ({ source: g.source, eta: g.eta, itemCount: g.products.size, quantity: g.quantity, since: g.since }))
+      .sort((a, b) => (a.eta ?? '9999').localeCompare(b.eta ?? '9999') || a.source.localeCompare(b.source));
   }
 
   async function newEntry(t: Txn, input: ReturnType<typeof In.StockAdd.parse>): Promise<{ entry: StockEntry; move: Movement }> {
@@ -312,29 +354,86 @@ export function createStockService(ctx: CoreContext) {
       return commit(t, t.original.filter((e) => e.id !== entryId), [movement(t.product, 'remove', -entry.quantity, { entryId, fromPlaceId: where(entry) })], 'remove');
     },
 
-    /** Ordered but not here yet. Counts towards stock when deciding what's low. */
+    /**
+     * Ordered but not here yet. Counts towards stock when deciding what's low. With `pending`,
+     * it's a pending order (not confirmed). Without, any of it waiting in a pending order from
+     * the same shop is confirmed rather than added again (an order email confirming a filled basket).
+     */
     async expect(raw: StockExpect): Promise<ProductSummary> {
       const input = In.StockExpect.parse(raw);
       const t = await begin(input.productId);
       const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
       await assertPlace(placeId);
-      const entry = StockEntrySchema.parse({
-        id: newId(), productId: t.product.id, quantity: input.quantity, placeId, addedAt: ctx.now(), status: 'expected',
-        expected: { source: input.source.trim(), reference: input.reference ?? null, eta: input.eta ?? null },
-        charge: t.product.rechargeable ? 'charged' : null,
-      });
-      return commit(t, [...t.original, entry], [movement(t.product, 'expect', input.quantity, { entryId: entry.id, note: input.source })], 'expect');
+      const work = t.original.map((e) => ({ ...e }));
+      let left = input.quantity;
+      if (!input.pending) {
+        const waiting = work.filter((e) => e.status === 'pending' && e.expected && sameOrder(e.expected.source, input.source)).sort((a, b) => a.addedAt.localeCompare(b.addedAt));
+        for (const e of waiting) {
+          if (left <= EPS) break;
+          const q = Math.min(e.quantity, left);
+          const confirmed: StockEntry = { ...e, id: q < e.quantity ? newId() : e.id, quantity: q, status: 'expected', expected: { source: e.expected!.source, reference: input.reference ?? e.expected!.reference, eta: input.eta ?? e.expected!.eta } };
+          if (q < e.quantity) {
+            e.quantity = roundQty(e.quantity - q);
+            work.push(confirmed);
+          } else Object.assign(e, confirmed);
+          left = roundQty(left - q);
+        }
+      }
+      const movements: Movement[] = [];
+      if (left > EPS) {
+        const entry = StockEntrySchema.parse({
+          id: newId(), productId: t.product.id, quantity: left, placeId, addedAt: ctx.now(), status: input.pending ? 'pending' : 'expected',
+          expected: { source: input.source.trim(), reference: input.reference ?? null, eta: input.eta ?? null },
+          charge: t.product.rechargeable ? 'charged' : null,
+        });
+        work.push(entry);
+        movements.push(movement(t.product, 'expect', left, { entryId: entry.id, note: input.pending ? `${input.source} (pending)` : input.source }));
+      }
+      return commit(t, work, movements, 'expect');
+    },
+
+    /** Pending orders confirmed: they're on their way. */
+    async confirmOrders(raw: StockOrders): Promise<{ confirmed: number; products: ProductSummary[] }> {
+      const chosen = await pendingEntries(raw);
+      const world = await loadWorld(ctx);
+      const changes: Change[] = [];
+      for (const [productId, ids] of byProduct(chosen)) {
+        const t = txn(world, productId);
+        changes.push({ t, next: t.original.map((e) => (ids.has(e.id) ? { ...e, status: 'expected' as const } : { ...e })), movements: [], kind: 'expect' });
+      }
+      return { confirmed: chosen.length, products: await commitAll(changes) };
+    },
+
+    /** Pending orders that didn't go ahead: they no longer count towards stock. */
+    async cancelOrders(raw: StockOrders): Promise<{ removed: number; products: ProductSummary[] }> {
+      const chosen = await pendingEntries(raw);
+      const world = await loadWorld(ctx);
+      const changes: Change[] = [];
+      for (const [productId, ids] of byProduct(chosen)) {
+        const t = txn(world, productId);
+        const gone = t.original.filter((e) => ids.has(e.id));
+        changes.push({
+          t, next: t.original.filter((e) => !ids.has(e.id)), kind: 'remove',
+          movements: gone.map((e) => movement(t.product, 'remove', -e.quantity, { entryId: e.id, note: `Order not placed: ${e.expected?.source ?? ''}`.trim() })),
+        });
+      }
+      return { removed: chosen.length, products: await commitAll(changes) };
     },
 
     /** Expected stock arrived: it becomes real stock. */
-    async arrive(raw: StockArrive): Promise<{ arrived: number; products: ProductSummary[] }> {
+    async arrive(raw: StockArrive): Promise<{ arrived: number; products: ProductSummary[]; pendingLeft: number }> {
       const input = In.StockArrive.parse(raw);
       if (input.quantity !== undefined && !input.productId) throw new ValidationError('Say which product arrived when only part of a delivery is here.');
-      const all = (await ctx.storage.stock.list()).filter((e) => e.status === 'expected');
+      // Pending orders arrive too: by entry or item (it's here, so it was ordered), and by source
+      // when none of that order was confirmed. When some was, the unconfirmed rest stays pending.
+      const all = (await ctx.storage.stock.list()).filter((e) => e.status === 'expected' || e.status === 'pending');
       let chosen: Array<{ entry: StockEntry; quantity: number }>;
+      let pendingLeft = 0;
       if (input.entryIds?.length) chosen = all.filter((e) => input.entryIds!.includes(e.id)).map((entry) => ({ entry, quantity: entry.quantity }));
       else if (input.productId) {
-        const mine = all.filter((e) => e.productId === input.productId && (!input.source || e.expected?.source === input.source)).sort((a, b) => (a.expected?.eta ?? '9999').localeCompare(b.expected?.eta ?? '9999'));
+        const mine = all
+          .filter((e) => e.productId === input.productId && (!input.source || e.expected?.source === input.source))
+          .sort((a, b) => (a.status === b.status ? 0 : a.status === 'expected' ? -1 : 1) || (a.expected?.eta ?? '9999').localeCompare(b.expected?.eta ?? '9999'));
         let left = input.quantity ?? mine.reduce((n, e) => n + e.quantity, 0);
         chosen = [];
         for (const entry of mine) {
@@ -343,7 +442,12 @@ export function createStockService(ctx: CoreContext) {
           left = roundQty(left - q);
           chosen.push({ entry, quantity: q });
         }
-      } else chosen = all.filter((e) => e.expected?.source === input.source).map((entry) => ({ entry, quantity: entry.quantity }));
+      } else {
+        const confirmed = all.filter((e) => e.status === 'expected' && sameSource(e.expected?.source, input.source));
+        const waiting = all.filter((e) => e.status === 'pending' && sameSource(e.expected?.source, input.source));
+        pendingLeft = confirmed.length ? waiting.length : 0;
+        chosen = (confirmed.length ? confirmed : waiting).map((entry) => ({ entry, quantity: entry.quantity }));
+      }
       if (!chosen.length) throw new ValidationError(input.source ? `Nothing is expected from ${input.source}.` : 'Nothing matching is expected.');
 
       const byProduct = new Map<string, typeof chosen>();
@@ -368,7 +472,7 @@ export function createStockService(ctx: CoreContext) {
         changes.push({ t, next: work, movements, kind: 'arrive', productUpdate: clearFlags(t.product) });
       }
       const products = await commitAll(changes);
-      return { arrived: chosen.length, products };
+      return { arrived: chosen.length, products, pendingLeft };
     },
 
     /** Renewals (insurance, MOT): restart the clock from today. */
@@ -390,24 +494,15 @@ export function createStockService(ctx: CoreContext) {
       return commit(t, [...kept, entry], movements, 'renew', clearFlags(t.product));
     },
 
-    async deliveries() {
-      const expected = (await ctx.storage.stock.list()).filter((e) => e.status === 'expected' && e.expected);
-      const groups = new Map<string, { source: string; eta: string | null; products: Set<string>; quantity: number }>();
-      for (const e of expected) {
-        const g = groups.get(e.expected!.source) ?? { source: e.expected!.source, eta: null, products: new Set(), quantity: 0 };
-        if (e.expected!.eta && (!g.eta || e.expected!.eta < g.eta)) g.eta = e.expected!.eta;
-        g.products.add(e.productId);
-        g.quantity = roundQty(g.quantity + e.quantity);
-        groups.set(g.source, g);
-      }
-      return [...groups.values()]
-        .map((g) => ({ source: g.source, eta: g.eta, itemCount: g.products.size, quantity: g.quantity }))
-        .sort((a, b) => (a.eta ?? '9999').localeCompare(b.eta ?? '9999') || a.source.localeCompare(b.source));
-    },
+    /** Deliveries on the way (confirmed), by source. */
+    deliveries: () => grouped('expected'),
+
+    /** Pending orders (not confirmed yet), by source, to confirm or remove. */
+    pendingOrders: () => grouped('pending'),
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'arrive', 'renew'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

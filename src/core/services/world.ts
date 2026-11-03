@@ -76,6 +76,7 @@ export function summarise(world: World, product: Product): ProductSummary {
   const inStockEntries = entries.filter((e) => e.status === 'in_stock' && e.quantity > 0);
   const inStock = roundQty(inStockEntries.reduce((n, e) => n + e.quantity, 0));
   const expected = roundQty(entries.filter((e) => e.status === 'expected').reduce((n, e) => n + e.quantity, 0));
+  const pending = roundQty(entries.filter((e) => e.status === 'pending').reduce((n, e) => n + e.quantity, 0));
   const charged = product.rechargeable ? roundQty(inStockEntries.filter((e) => e.charge !== 'flat').reduce((n, e) => n + e.quantity, 0)) : null;
   const flat = product.rechargeable ? roundQty(inStockEntries.filter((e) => e.charge === 'flat').reduce((n, e) => n + e.quantity, 0)) : null;
 
@@ -86,7 +87,8 @@ export function summarise(world: World, product: Product): ProductSummary {
   const warn = category?.warnDays ?? world.warnDays;
 
   const min = product.minQuantity;
-  const low = !product.wish && min !== null && min > 0 && roundQty(inStock + expected) < min;
+  // On order counts, confirmed or not, so nothing is bought twice.
+  const low = !product.wish && min !== null && min > 0 && roundQty(inStock + expected + pending) < min;
 
   const byPlace = new Map<string, number>();
   const nowIn = new Set<string>();
@@ -108,6 +110,7 @@ export function summarise(world: World, product: Product): ProductSummary {
     category,
     inStock,
     expected,
+    pending,
     charged,
     flat,
     nextExpiry,
@@ -133,7 +136,7 @@ export function eligibleShops(product: Product, shops: Shop[]): Shop[] {
 
 export function needsBuying(s: ProductSummary): 'low' | 'out' | 'manual' | null {
   if (s.product.wish) return null;
-  if (s.status.low) return s.inStock + s.expected <= 0 ? 'out' : 'low';
+  if (s.status.low) return s.inStock + s.expected + s.pending <= 0 ? 'out' : 'low';
   if (s.product.onShoppingList) return 'manual';
   return null;
 }

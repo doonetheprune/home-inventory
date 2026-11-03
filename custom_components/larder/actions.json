@@ -134,7 +134,7 @@
   {
     "id": "add_expected",
     "name": "Add expected delivery",
-    "description": "Record something ordered but not arrived yet. It counts towards stock, so it isn't bought twice.",
+    "description": "Record something ordered but not arrived yet. It counts towards stock, so it isn't bought twice. If it's in a pending order from the same shop (a filled online basket), that is confirmed instead of adding it again.",
     "module": null,
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -173,6 +173,52 @@
         "item",
         "source"
       ]
+    }
+  },
+  {
+    "id": "confirm_order",
+    "name": "Confirm order",
+    "description": "A pending order went ahead (e.g. the online basket was checked out): it's on its way. A whole order by its source, or one item's.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "The order, e.g. \"Tesco delivery\"",
+          "type": "string",
+          "maxLength": 80
+        },
+        "item": {
+          "description": "Or one item in it",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    }
+  },
+  {
+    "id": "cancel_order",
+    "name": "Remove pending order",
+    "description": "A pending order didn't go ahead (the basket wasn't checked out): it stops counting towards stock, so what's still low is bought next time.",
+    "module": null,
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "The order, e.g. \"Tesco delivery\"",
+          "type": "string",
+          "maxLength": 80
+        },
+        "item": {
+          "description": "Or one item in it",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
     }
   },
   {
@@ -354,6 +400,23 @@
       "required": [
         "device"
       ]
+    }
+  },
+  {
+    "id": "online_shopping_sync_favourites",
+    "name": "Bring in shop favourites",
+    "description": "Reads an online shop's favourites and puts new ones (not linked to an item, not dismissed) in Larder's Pending list. For a schedule, e.g. weekly.",
+    "module": "online-shopping",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "shop": {
+          "description": "The shop, e.g. Tesco. Leave out for the default online shop",
+          "type": "string",
+          "maxLength": 80
+        }
+      }
     }
   }
 ]
