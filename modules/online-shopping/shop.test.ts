@@ -55,21 +55,43 @@ describe('online shopping: planning and filling a basket', () => {
     expect(Object.values(f.shops)[0]!.listings[0]!.deadSince).toBe('2026-10-28T09:00:00.000Z');
   });
 
-  it('fills the basket, records what is on the way and announces it', async () => {
+  it('fills the basket as a pending order, announces it, and doesn\'t buy it twice', async () => {
     const { core, shop, loo } = await setup();
     const r = await core.assistant.call('fill_basket', { shop: 'tesco' });
     expect(r.text.split('\n')[0]).toBe('Added 1 item to your Tesco basket, about £12.00:');
-    expect(r.text).toContain('No delivery slot is booked yet.\nThey\'re expected from "Tesco delivery". Check the basket on Tesco\'s website and pay there.');
+    expect(r.text).toContain('No delivery slot is booked yet.\nCheck the basket on Tesco\'s website and pay there. Until then it\'s a pending "Tesco delivery" order in Larder (not bought again, not on its way yet): confirm it once you\'ve checked out (the order email does too), or remove it if you don\'t go ahead.');
     expect([...shop.state.basket]).toEqual([['1001', 1], ['1002', 1]]);
-    const s = await core.products.summary(loo.id);
-    expect(s).toMatchObject({ inStock: 3, expected: 33 });
-    expect((await core.stock.deliveries())[0]).toMatchObject({ source: 'Tesco delivery', quantity: 33 });
+    expect(await core.products.summary(loo.id)).toMatchObject({ inStock: 3, expected: 0, pending: 33 });
+    expect(await core.stock.deliveries()).toEqual([]);
+    expect((await core.stock.pendingOrders())[0]).toMatchObject({ source: 'Tesco delivery', itemCount: 1, quantity: 33 });
     const event = core.events.log.find((e) => e.type === 'online-shopping.basket_filled');
-    expect(event?.data).toMatchObject({ shop: 'Tesco', items: 1, total: 12, relink: 1 });
+    expect(event?.data).toMatchObject({ shop: 'Tesco', items: 1, total: 12, relink: 1, pending_order: 'Tesco delivery' });
 
-    // Done: the next plan finds the loo roll covered by what's on the way.
+    // The pending order counts: the next plan doesn't buy it again.
     const again = await core.assistant.call('plan_basket', {});
     expect(again.text.split('\n')[0]).toBe('Nothing needs buying at Tesco right now.');
+
+    // Checked out: confirmed, it's on its way.
+    expect((await core.assistant.call('confirm_order', { source: 'Tesco delivery' })).text).toBe('Confirmed, on the way: Toilet roll.');
+    expect(await core.products.summary(loo.id)).toMatchObject({ expected: 33, pending: 0 });
+  });
+
+  it('a pending order that didn\'t go ahead is removed, and bought next time', async () => {
+    const { core, shop, loo } = await setup();
+    await core.assistant.call('fill_basket', {});
+    shop.state.basket.clear();
+    expect((await core.assistant.call('cancel_order', { source: 'tesco delivery' })).text).toBe('Removed from the pending order: Toilet roll.');
+    expect(await core.products.summary(loo.id)).toMatchObject({ inStock: 3, expected: 0, pending: 0 });
+    expect((await core.assistant.call('plan_basket', {})).text.split('\n')[0]).toBe('Planned: 1 item at Tesco, about £12.00:');
+  });
+
+  it('the order email confirms the pending order rather than adding it again', async () => {
+    const { core, loo } = await setup();
+    await core.assistant.call('fill_basket', {});
+    const r = await core.assistant.call('add_expected', { item: 'toilet roll', quantity: 33, source: 'Tesco', reference: 'TSC-998', eta: '2026-10-30' });
+    expect(r.text).toBe('Toilet roll: 33 rolls in the pending order confirmed, now on the way.');
+    const entries = (await core.products.get(loo.id)).entries.filter((e) => e.status !== 'in_stock');
+    expect(entries.map((e) => [e.status, e.quantity, e.expected])).toEqual([['expected', 33, { source: 'Tesco delivery', reference: 'TSC-998', eta: '2026-10-30' }]]);
   });
 
   it('only buys what belongs on that shop\'s list, and says which linked items are bought elsewhere', async () => {

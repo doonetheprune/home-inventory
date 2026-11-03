@@ -134,7 +134,8 @@ export function createShops(ctx: ModuleContext, s: Services) {
         continue;
       }
       const c: Candidate = {
-        productId: p.id, name: p.name, unit: p.unit, inStock: sum.inStock, expected: sum.expected,
+        // On order counts whether it's confirmed or still pending (a basket not checked out).
+        productId: p.id, name: p.name, unit: p.unit, inStock: sum.inStock, expected: sum.expected + (sum.pending ?? 0),
         minimum: p.minQuantity, stockUpTo: p.stockUpTo ?? null, offerStockUpTo: f.offerStockUpTo, targetPrice: rules.targetPrice ?? f.targetPrice,
         manual: p.onShoppingList, shelfLifeDays: p.shelfLifeDays, dailyUse: null, packRule: rules.packRule, fixedListingId: rules.fixedListingId,
         listings: rules.listings.map((l) => ({ listingId: l.listingId, name: l.name || l.listingId, packQuantity: l.packQuantity })),
@@ -148,7 +149,7 @@ export function createShops(ctx: ModuleContext, s: Services) {
     return { candidates: out, unmatched, elsewhere };
   }
 
-  /** Records what went into the basket as expected stock, item by item. */
+  /** Records what went into the basket as a pending order, item by item, until it's confirmed or removed. */
   async function expectDeliveries(run: Run, p: Plan, result: z.infer<typeof BasketAddResult>): Promise<Pick<Run, 'added' | 'failed'>> {
     const left = new Map<string, number>();
     for (const a of result.added) left.set(a.listing_id, (left.get(a.listing_id) ?? 0) + a.quantity);
@@ -167,7 +168,7 @@ export function createShops(ctx: ModuleContext, s: Services) {
       quantity = Math.round(quantity * 1000) / 1000;
       if (quantity <= 0) continue;
       await ctx.core.stock.expect({
-        productId: item.productId, quantity, source: `${run.shopName} delivery`,
+        productId: item.productId, quantity, source: `${run.shopName} delivery`, pending: true,
         reference: run.booking?.reference ?? null, eta: run.booking ? run.booking.start.slice(0, 10) : null,
       });
       added.push({ productId: item.productId, name: item.name, quantity, unit: item.unit });
@@ -218,6 +219,7 @@ export function createShops(ctx: ModuleContext, s: Services) {
         await update({ status: 'done', step: 'Basket filled', ...got, finishedAt: ctx.core.now() });
         current = await save({ ...current, summary: summary(current, await s.currency(), woke) });
         ctx.publish('online-shopping.basket_filled', {
+          pending_order: `${run.shopName} delivery`,
           shop: run.shopName, run_id: run.id, items: got.added.length, total: p.total, failed: got.failed.length,
           relink: p.relink.length, slot: run.booking ? slotText(run.booking) : null, summary: current.summary,
         });
@@ -314,7 +316,7 @@ export function summary(run: Run, currency: string, woke = false): string {
   }
   if (run.kind === 'fill' && run.status === 'done' && p?.items.length) {
     lines.push(run.booking ? `Delivery slot booked: ${slotText(run.booking)}${run.booking.reference ? ` (ref ${run.booking.reference})` : ''}.` : 'No delivery slot is booked yet.');
-    lines.push(`They're expected from "${run.shopName} delivery". Check the basket on ${run.shopName}'s website and pay there.`);
+    lines.push(`Check the basket on ${run.shopName}'s website and pay there. Until then it's a pending "${run.shopName} delivery" order in Larder (not bought again, not on its way yet): confirm it once you've checked out (the order email does too), or remove it if you don't go ahead.`);
   }
   return lines.join('\n');
 }

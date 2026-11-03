@@ -2792,7 +2792,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -3015,6 +3016,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -3165,7 +3170,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -3253,6 +3259,10 @@
             "type": "number"
           },
           "expected": {
+            "type": "number"
+          },
+          "pending": {
+            "default": 0,
             "type": "number"
           },
           "charged": {
@@ -3639,6 +3649,18 @@
           },
           "quantity": {
             "type": "number"
+          },
+          "since": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3707,6 +3729,13 @@
             }
           },
           "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeliveryInput"
+            }
+          },
+          "pendingOrders": {
+            "default": [],
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DeliveryInput"
@@ -6920,7 +6949,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -7160,6 +7190,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -7210,6 +7244,7 @@
           "category",
           "inStock",
           "expected",
+          "pending",
           "charged",
           "flat",
           "nextExpiry",
@@ -7311,7 +7346,8 @@
             "type": "string",
             "enum": [
               "in_stock",
-              "expected"
+              "expected",
+              "pending"
             ]
           },
           "expected": {
@@ -7410,6 +7446,10 @@
           "expected": {
             "type": "number"
           },
+          "pending": {
+            "default": 0,
+            "type": "number"
+          },
           "charged": {
             "type": [
               "number",
@@ -7484,6 +7524,7 @@
           "category",
           "inStock",
           "expected",
+          "pending",
           "charged",
           "flat",
           "nextExpiry",
@@ -7805,13 +7846,26 @@
           },
           "quantity": {
             "type": "number"
+          },
+          "since": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "source",
           "eta",
           "itemCount",
-          "quantity"
+          "quantity",
+          "since"
         ],
         "additionalProperties": false
       },
@@ -7880,6 +7934,13 @@
               "$ref": "#/components/schemas/Delivery"
             }
           },
+          "pendingOrders": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Delivery"
+            }
+          },
           "shopping": {
             "$ref": "#/components/schemas/ShoppingSummary"
           }
@@ -7891,6 +7952,7 @@
           "low",
           "outOfPlace",
           "deliveries",
+          "pendingOrders",
           "shopping"
         ],
         "additionalProperties": false
@@ -10991,7 +11053,7 @@
         "tags": [
           "Stock"
         ],
-        "description": "Expected stock counts towards stock when deciding what is low.",
+        "description": "Expected stock counts towards stock when deciding what is low. `pending: true` makes it a pending order (not confirmed yet); otherwise any of it in a pending order from the same shop is confirmed rather than added again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -11046,6 +11108,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "pending": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -11077,6 +11142,7 @@
         "tags": [
           "Stock"
         ],
+        "description": "By source, it's what was confirmed from that order, or the whole pending order if none was; `pendingLeft` counts unconfirmed entries left pending.",
         "requestBody": {
           "required": true,
           "content": {
@@ -11125,11 +11191,15 @@
                       "items": {
                         "$ref": "#/components/schemas/ProductSummary"
                       }
+                    },
+                    "pendingLeft": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "arrived",
-                    "products"
+                    "products",
+                    "pendingLeft"
                   ],
                   "additionalProperties": false
                 }
@@ -11155,6 +11225,161 @@
                   "items": {
                     "$ref": "#/components/schemas/Delivery"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders": {
+      "get": {
+        "summary": "Pending orders: ordered but not confirmed yet",
+        "tags": [
+          "Stock"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Delivery"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders/confirm": {
+      "post": {
+        "summary": "Confirm pending orders: they're on their way",
+        "tags": [
+          "Stock"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "entryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "confirmed": {
+                      "type": "number"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProductSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "confirmed",
+                    "products"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/orders/cancel": {
+      "post": {
+        "summary": "Remove pending orders that didn't go ahead",
+        "tags": [
+          "Stock"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "entryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "number"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProductSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "removed",
+                    "products"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }

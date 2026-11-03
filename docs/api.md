@@ -14,7 +14,7 @@ Everything the web app does goes through the REST API, so integrations can do it
 | Call | Does |
 |---|---|
 | `GET /search?q=loo` | Search everything; results in sections (stock, shopping, places, wish, shops, plus modules) |
-| `GET /home` | Use soon, running low, out of place, deliveries, which shop to go to |
+| `GET /home` | Use soon, running low, out of place, pending orders, deliveries, which shop to go to |
 | `GET /products?status=low` | Products with stock summaries (`all`, `low`, `expiring`, `out_of_place`, `expected`, `wish`, `in_stock`, `to_tidy`: owned items with stock that has no place, or no category) |
 | `GET /products/{id}` | One product: stock by place, brands and barcodes, shops, history |
 | `POST /products` | New product `{ name, aliases, categoryId, unit, minQuantity, shelfLifeDays, preferredShopIds, defaultPlaceId, wish }` |

@@ -24,6 +24,7 @@ function reason(i: ShoppingItem): string {
   if (s.product.minQuantity !== null) parts.push(`low below ${num(s.product.minQuantity)}`);
   if (s.product.stockUpTo != null) parts.push(`stock up to ${num(s.product.stockUpTo)}`);
   if (s.expected) parts.push(`${num(s.expected)} on the way`);
+  if (s.pending) parts.push(`${num(s.pending)} in a pending order`);
   return parts.join(' · ');
 }
 

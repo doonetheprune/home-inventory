@@ -36,7 +36,7 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 1. The person asks an assistant for a shop. `start_shop` uses the default online shop unless one is named, checks it's ready (waking its computer), and says to ask when they'd like it delivered.
 2. With `when` ("tomorrow evening", "friday", "12 Nov", a date), it lists the free slots that day, in the shop's own words for the day ("Friday 6 November, evening (17:00 onwards)") so a misread shows. `list_slots` does the same on its own.
 3. The assistant suggests one and books it with `book_slot` once the person agrees. Only a slot from the last list can be booked (Larder needs to know when it is). The booking is kept for that provider until its day has passed; plans and fills check offers for that day and record deliveries as expected then, with the booking reference.
-4. `fill_basket` runs the order logic, fills the basket, records the expected deliveries and answers the summary; then the computer goes back to sleep when set up.
+4. `fill_basket` runs the order logic, fills the basket, records it as a pending order and answers the summary; then the computer goes back to sleep when set up. The person checks out on the shop's website; the order email (or Confirm) makes the pending order on its way.
 
 The person says when they're free; Larder doesn't look at calendars. A provider without `slot_booking` says to book on the shop's website. In the app, the shopping panel shows the booked slot and **Book a delivery slot** (type when, pick one).
 
@@ -57,7 +57,7 @@ Worked examples (the tests): loo roll, minimum 4, stock up to 12, 36 on offer, t
 
 ## A shop
 
-**Plan basket** works the basket out without adding anything; **Fill basket** also adds it. Both run in the background, one at a time per provider: wake and check the provider (stopping with what to do when it's logged out), quote, plan, then (filling) add and wait for the provider's job. Everything added is recorded as expected stock from "Tesco delivery", with the booked slot's date and reference when there is one, so it counts towards stock straight away and the order confirmation email or a scan marks it arrived. Then, with **Sleep after** set and nothing else running there, the computer is put back to sleep.
+**Plan basket** works the basket out without adding anything; **Fill basket** also adds it. Both run in the background, one at a time per provider: wake and check the provider (stopping with what to do when it's logged out), quote, plan, then (filling) add and wait for the provider's job. Everything added becomes a **pending order** from "Tesco delivery" (a core stock state), with the booked slot's date and reference when there is one: it counts towards stock straight away, so nothing is ordered twice, online or in a shop, but it isn't on the way until it's confirmed. Once checked out, **Confirm** it (Home, the item's page, `confirm_order`, or the order email's automation calling `add_expected`, which confirms rather than adds); if the basket wasn't checked out, **Remove** it (`cancel_order`) and anything still low is bought next time. Then, with **Sleep after** set and nothing else running there, the computer is put back to sleep.
 
 The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items low at that shop but not linked to anything there, low items linked there but bought at another shop, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
 
@@ -88,7 +88,7 @@ Action `larder.online_shopping_sync_favourites` (`shop`, optional): for a weekly
 
 ## Events
 
-`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ shop, run_id, items, total, failed, relink, slot, summary }`, for a notification. `online-shopping.slot_booked`: `{ shop, slot, reference, reserved_until }`. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
+`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ pending_order, shop, run_id, items, total, failed, relink, slot, summary }`, for a notification (with `sensor.larder_pending_orders` for a reminder to confirm it). `online-shopping.slot_booked`: `{ shop, slot, reference, reserved_until }`. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 
 ## Routes
 
@@ -132,4 +132,4 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 
 ## Hooks used
 
-`addRoute` (`admin` for changes), `addTool`, `collection`, `productFields`, `publish`, `core.products.updateField`, `core.lookup.savePhotoFromLink`, `core.stock.expect`, `core.shopping.forShop`, `core.history.product`, `ctx.fetch` (to reach the providers), `ctx.core.homeAssistant.callService` (waking and sleep), `ctx.core.resolve.shop` / `.product`, `ctx.core.shops`; `addAction`; on the web, a Settings panel, a product panel, a shopping panel, a panel in the `sharing.pending` slot, a hidden page and a Wish list panel.
+`addRoute` (`admin` for changes), `addTool`, `collection`, `productFields`, `publish`, `core.products.updateField`, `core.lookup.savePhotoFromLink`, `core.stock.expect` (`pending`), `core.shopping.forShop`, `core.history.product`, `ctx.fetch` (to reach the providers), `ctx.core.homeAssistant.callService` (waking and sleep), `ctx.core.resolve.shop` / `.product`, `ctx.core.shops`; `addAction`; on the web, a Settings panel, a product panel, a shopping panel, a panel in the `sharing.pending` slot, a hidden page and a Wish list panel.

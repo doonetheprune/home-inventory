@@ -126,7 +126,12 @@ export const ExpectedInfo = z.object({
 });
 export type ExpectedInfo = z.infer<typeof ExpectedInfo>;
 
-export const StockStatus = z.enum(['in_stock', 'expected']);
+/**
+ * in_stock: in the house. expected: ordered and on its way. pending: ordered but not
+ * confirmed yet (a filled online basket before checkout): it counts towards stock so it
+ * isn't bought twice, but isn't on its way until confirmed.
+ */
+export const StockStatus = z.enum(['in_stock', 'expected', 'pending']);
 export const Charge = z.enum(['charged', 'flat']);
 
 /** A batch of a product in one place. */
@@ -233,6 +238,8 @@ export const ProductSummary = z.object({
   /** Stock in the house (charged + flat for rechargeables). */
   inStock: z.number(),
   expected: z.number(),
+  /** In pending orders: ordered but not confirmed. Counts towards stock like expected. */
+  pending: z.number().default(0),
   charged: z.number().nullable(),
   flat: z.number().nullable(),
   nextExpiry: IsoDate.nullable(),
@@ -318,6 +325,8 @@ export const Delivery = z.object({
   eta: IsoDate.nullable(),
   itemCount: z.number(),
   quantity: z.number(),
+  /** When the oldest of it was ordered (for pending orders: how long it has waited). */
+  since: IsoDateTime.nullable().default(null),
 });
 export type Delivery = z.infer<typeof Delivery>;
 
@@ -328,6 +337,8 @@ export const Dashboard = z.object({
   low: z.array(ProductSummary),
   outOfPlace: z.array(ProductSummary),
   deliveries: z.array(Delivery),
+  /** Orders waiting to be confirmed or removed (e.g. a filled online basket). */
+  pendingOrders: z.array(Delivery).default([]),
   shopping: ShoppingSummary,
 });
 export type Dashboard = z.infer<typeof Dashboard>;

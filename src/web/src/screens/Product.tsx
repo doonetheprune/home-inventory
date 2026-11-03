@@ -28,8 +28,9 @@ export function ProductPage() {
 
   const inStock = p.entries.filter((e) => e.status === 'in_stock');
   const expected = p.entries.filter((e) => e.status === 'expected');
+  const pending = p.entries.filter((e) => e.status === 'pending');
   const min = p.product.minQuantity ?? 0;
-  const scale = Math.max(min, p.inStock + p.expected, 1);
+  const scale = Math.max(min, p.inStock + p.expected + p.pending, 1);
   const renewal = p.category?.name === 'Renewals';
   const unit = p.product.unit;
 
@@ -85,12 +86,12 @@ export function ProductPage() {
               </div>
               <StatusPills s={p} />
             </div>
-            {(min > 0 || p.expected > 0) && (
-              <div className="meter" aria-hidden="true"><i style={{ width: `${(p.inStock / scale) * 100}%`, background: p.status.low ? 'var(--low)' : 'var(--accent)' }} /><i style={{ width: `${(p.expected / scale) * 100}%`, background: 'var(--coming)', opacity: 0.45 }} /></div>
+            {(min > 0 || p.expected > 0 || p.pending > 0) && (
+              <div className="meter" aria-hidden="true"><i style={{ width: `${(p.inStock / scale) * 100}%`, background: p.status.low ? 'var(--low)' : 'var(--accent)' }} /><i style={{ width: `${((p.expected + p.pending) / scale) * 100}%`, background: 'var(--coming)', opacity: 0.45 }} /></div>
             )}
             <div className="small muted">
               {min > 0 ? <>Low below {qty(min, unit)}. </> : null}
-              {p.expected > 0 ? <>With {qty(p.expected, unit)} on the way you'll have {num(p.inStock + p.expected)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
+              {p.expected + p.pending > 0 ? <>With {qty(p.expected + p.pending, unit)} {p.pending ? (p.expected ? `on order (${num(p.pending)} not confirmed)` : 'in a pending order') : 'on the way'} you'll have {num(p.inStock + p.expected + p.pending)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
               {p.nextExpiry ? <> {renewal ? 'Renews' : 'Next to expire'}: {longDate(p.nextExpiry)}.</> : null}
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
@@ -109,7 +110,7 @@ export function ProductPage() {
 
           <div className="section">
             <div className="label">Where it is {!renewal && <button type="button" className="link" onClick={() => setSheet('elsewhere')}>Add somewhere else</button>}</div>
-            {inStock.length === 0 && expected.length === 0 ? <p className="muted small">None in the house.</p> : (
+            {inStock.length === 0 && expected.length === 0 && pending.length === 0 ? <p className="muted small">None in the house.</p> : (
               <div className="list">
                 {inStock.map((e) => <EntryRow key={e.id} p={p} e={e} />)}
                 {expected.map((e) => (
@@ -118,6 +119,17 @@ export function ProductPage() {
                     <span className="item-main"><span className="item-name">Expected · {e.expected?.source}</span><span className="item-meta">{e.expected?.eta ? `Due ${shortDate(e.expected.eta)}` : 'No date'}{e.place ? ` · goes to ${e.place.path}` : ''}</span></span>
                     <span className="qty">{num(e.quantity)}</span>
                     <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.arrive({ entryIds: [e.id] }), 'Arrived and added to stock')}>Arrived</button>
+                  </div>
+                ))}
+                {pending.map((e) => (
+                  <div className="loc-row" key={e.id} style={{ flexWrap: 'wrap' }}>
+                    <span className="code" style={{ background: 'var(--coming-bg)', color: 'var(--coming)' }}>ORD</span>
+                    <span className="item-main"><span className="item-name">Pending order · {e.expected?.source}</span><span className="item-meta">Not confirmed yet{e.expected?.eta ? ` · due ${shortDate(e.expected.eta)}` : ''}</span></span>
+                    <span className="qty">{num(e.quantity)}</span>
+                    <span className="row" style={{ gap: 6 }}>
+                      <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.confirmOrders({ entryIds: [e.id] }), 'Confirmed: on the way')}>Confirm</button>
+                      <button type="button" className="btn small ghost" disabled={busy} onClick={() => run(() => api.stock.cancelOrders({ entryIds: [e.id] }), 'Removed from the pending order')}>Remove</button>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -311,7 +323,7 @@ function MoveSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
 
 function ExpectSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
   const { run, busy } = useAction();
-  const [n, setN] = useState(Math.max(1, (p.product.stockUpTo ?? p.product.minQuantity ?? 1) - p.inStock - p.expected));
+  const [n, setN] = useState(Math.max(1, (p.product.stockUpTo ?? p.product.minQuantity ?? 1) - p.inStock - p.expected - p.pending));
   const [source, setSource] = useState(p.shops[0] ? `${p.shops[0].name} delivery` : '');
   const [eta, setEta] = useState('');
   return (

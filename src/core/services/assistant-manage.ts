@@ -418,13 +418,14 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'deliveries', title: 'Deliveries on the way', readOnly: true,
-    description: 'Orders that haven\'t arrived yet, by where they\'re coming from, with when they\'re due.',
+    description: 'Orders that haven\'t arrived yet, by where they\'re coming from, with when they\'re due; and pending orders waiting to be confirmed (confirm_order) or removed (cancel_order).',
     input: z.object({}),
     async run() {
-      const list = await stock.deliveries();
-      if (!list.length) return { text: 'Nothing is on the way.', data: { deliveries: [] } };
-      const text = list.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.eta ? `, due ${d.eta} (${daysBetween(ctx.today(), d.eta) < 0 ? 'late' : `in ${daysBetween(ctx.today(), d.eta)} days`})` : ''}`).join('\n');
-      return { text, data: { deliveries: list.map((d) => ({ source: d.source, eta: d.eta, items: d.itemCount, quantity: d.quantity })) } };
+      const [list, pending] = await Promise.all([stock.deliveries(), stock.pendingOrders()]);
+      if (!list.length && !pending.length) return { text: 'Nothing is on the way.', data: { deliveries: [], pending: [] } };
+      const lines = list.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.eta ? `, due ${d.eta} (${daysBetween(ctx.today(), d.eta) < 0 ? 'late' : `in ${daysBetween(ctx.today(), d.eta)} days`})` : ''}`);
+      if (pending.length) lines.push('Pending orders (not confirmed yet):', ...pending.map((d) => `- ${d.source}: ${d.itemCount} item${d.itemCount === 1 ? '' : 's'}${d.since ? `, since ${d.since.slice(0, 10)}` : ''}`));
+      return { text: lines.join('\n') || 'Nothing is on the way.', data: { deliveries: list.map((d) => ({ source: d.source, eta: d.eta, items: d.itemCount, quantity: d.quantity })), pending: pending.map((d) => ({ source: d.source, since: d.since, items: d.itemCount, quantity: d.quantity })) } };
     },
   });
 

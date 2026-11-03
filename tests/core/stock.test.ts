@@ -80,6 +80,64 @@ describe('stock', () => {
     expect(core.events.log.some((e) => e.type === 'stock.restocked')).toBe(true);
   });
 
+  describe('pending orders', () => {
+    it('count towards stock and the shopping list, but are not on the way until confirmed', async () => {
+      const tesco = await core.shops.addPreset('Tesco');
+      const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll', minQuantity: 9, stockUpTo: 12, preferredShopIds: [tesco.id] });
+      await core.stock.add({ productId: loo.id, quantity: 2 });
+      const s = await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', pending: true });
+      expect(s).toMatchObject({ inStock: 2, expected: 0, pending: 9, status: { low: false, hasExpected: false } });
+      expect((await core.shopping.forShop(tesco.id)).count).toBe(0);
+      expect(await core.stock.deliveries()).toEqual([]);
+      expect(await core.stock.pendingOrders()).toEqual([{ source: 'Tesco delivery', eta: null, itemCount: 1, quantity: 9, since: '2026-10-28T09:00:00.000Z' }]);
+      expect((await core.home.dashboard()).pendingOrders).toHaveLength(1);
+
+      const r = await core.stock.confirmOrders({ source: 'tesco delivery' });
+      expect(r.confirmed).toBe(1);
+      expect(r.products[0]).toMatchObject({ expected: 9, pending: 0 });
+      expect(await core.stock.pendingOrders()).toEqual([]);
+    });
+
+    it('can be removed when they did not go ahead, and things are low again', async () => {
+      const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll', minQuantity: 9 });
+      await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', pending: true });
+      const r = await core.stock.cancelOrders({ productId: loo.id });
+      expect(r.products[0]).toMatchObject({ pending: 0, status: { low: true } });
+      await expect(core.stock.cancelOrders({ source: 'Tesco delivery' })).rejects.toThrow('Nothing from Tesco delivery is waiting to be confirmed.');
+    });
+
+    it('an order email for the same shop confirms what is pending rather than adding it again', async () => {
+      const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll' });
+      await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', pending: true });
+      // Only 6 went ahead, plus 3 more added on the website; and an Aldi order doesn't touch it.
+      await core.stock.expect({ productId: loo.id, quantity: 2, source: 'Aldi' });
+      const s = await core.stock.expect({ productId: loo.id, quantity: 6, source: 'Tesco order', reference: 'T-1', eta: '2026-10-30' });
+      expect(s).toMatchObject({ expected: 8, pending: 3 });
+      const d = await core.products.get(loo.id);
+      expect(d.entries.map((e) => [e.status, e.quantity, e.expected?.source, e.expected?.reference]).sort((a, b) => String(a).localeCompare(String(b)))).toEqual([
+        ['expected', 2, 'Aldi', null], ['expected', 6, 'Tesco delivery', 'T-1'], ['pending', 3, 'Tesco delivery', null],
+      ]);
+    });
+
+    it('arrive with a delivery: all of it if nothing was confirmed, else only what was', async () => {
+      const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll' });
+      const beans = await core.products.create({ name: 'Beans', unit: 'tin' });
+      await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', pending: true });
+      await core.stock.expect({ productId: beans.id, quantity: 4, source: 'Tesco delivery', pending: true });
+      expect(await core.stock.arrive({ source: 'Tesco delivery' })).toMatchObject({ arrived: 2, pendingLeft: 0 });
+
+      await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', pending: true });
+      await core.stock.expect({ productId: beans.id, quantity: 4, source: 'Tesco delivery', pending: true });
+      await core.stock.confirmOrders({ productId: beans.id });
+      const r = await core.stock.arrive({ source: 'Tesco delivery' });
+      expect(r).toMatchObject({ arrived: 1, pendingLeft: 1 });
+      expect(await core.products.summary(loo.id)).toMatchObject({ inStock: 9, pending: 9 });
+      // Scanning it in: it's here, so it was ordered.
+      await core.stock.arrive({ productId: loo.id, quantity: 9 });
+      expect(await core.products.summary(loo.id)).toMatchObject({ inStock: 18, pending: 0 });
+    });
+  });
+
   it('turns an expected delivery into real stock when it arrives', async () => {
     const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll' });
     const beans = await core.products.create({ name: 'Beans', unit: 'tin', shelfLifeDays: 700 });

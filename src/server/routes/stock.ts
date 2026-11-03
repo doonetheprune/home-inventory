@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Delivery, Id, ProductSummary, Purchase, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockReturn, StockUse,
+  Delivery, Id, ProductSummary, Purchase, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse,
   type CoreApi,
 } from '@larder/core';
 import type { ZodApp } from '../app';
@@ -19,12 +19,23 @@ export function registerStockRoutes(app: ZodApp, { core }: { core: CoreApi }) {
   app.post('/stock/return', { schema: { tags, summary: 'Put out-of-place stock back in its usual place', body: StockReturn, response: res } }, (r) => core.stock.returnHome(r.body));
   app.post('/stock/charge', { schema: { tags, summary: 'Rechargeables: mark flat ones as charged', body: StockCharge, response: res } }, (r) => core.stock.charge(r.body));
   app.post('/stock/expect', {
-    schema: { tags, summary: 'Record stock that has been ordered but not arrived', description: 'Expected stock counts towards stock when deciding what is low.', body: StockExpect, response: res },
+    schema: { tags, summary: 'Record stock that has been ordered but not arrived', description: 'Expected stock counts towards stock when deciding what is low. `pending: true` makes it a pending order (not confirmed yet); otherwise any of it in a pending order from the same shop is confirmed rather than added again.', body: StockExpect, response: res },
   }, (r) => core.stock.expect(r.body));
   app.post('/stock/arrive', {
-    schema: { tags, summary: 'A delivery (or part of one) arrived', body: StockArrive, response: { 200: z.object({ arrived: z.number(), products: z.array(ProductSummary) }) } },
+    schema: {
+      tags, summary: 'A delivery (or part of one) arrived',
+      description: 'By source, it\'s what was confirmed from that order, or the whole pending order if none was; `pendingLeft` counts unconfirmed entries left pending.',
+      body: StockArrive, response: { 200: z.object({ arrived: z.number(), products: z.array(ProductSummary), pendingLeft: z.number() }) },
+    },
   }, (r) => core.stock.arrive(r.body));
   app.get('/stock/deliveries', { schema: { tags, summary: 'Deliveries on the way', response: { 200: z.array(Delivery) } } }, () => core.stock.deliveries());
+  app.get('/stock/orders', { schema: { tags, summary: 'Pending orders: ordered but not confirmed yet', response: { 200: z.array(Delivery) } } }, () => core.stock.pendingOrders());
+  app.post('/stock/orders/confirm', {
+    schema: { tags, summary: 'Confirm pending orders: they\'re on their way', body: StockOrders, response: { 200: z.object({ confirmed: z.number(), products: z.array(ProductSummary) }) } },
+  }, (r) => core.stock.confirmOrders(r.body));
+  app.post('/stock/orders/cancel', {
+    schema: { tags, summary: 'Remove pending orders that didn\'t go ahead', body: StockOrders, response: { 200: z.object({ removed: z.number(), products: z.array(ProductSummary) }) } },
+  }, (r) => core.stock.cancelOrders(r.body));
   app.post('/products/:id/renew', { schema: { tags, summary: 'Renewals: restart the clock from today', params: IdParams, response: res } }, (r) => core.stock.renew(r.params.id));
   app.patch('/stock/entries/:id', { schema: { tags, summary: 'Edit one batch (amount, expiry, place)', params: IdParams, body: StockEntryPatch, response: res } }, (r) => core.stock.updateEntry(r.params.id, r.body));
   app.delete('/stock/entries/:id', { schema: { tags, summary: 'Remove one batch', params: IdParams, response: res } }, (r) => core.stock.removeEntry(r.params.id));

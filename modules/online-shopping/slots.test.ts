@@ -57,7 +57,7 @@ describe('online shopping: delivery slots and "do me a shop"', () => {
     const filled = await core.assistant.call('fill_basket', {});
     expect(filled.text.split('\n')[0]).toBe('Added 1 item to your Tesco basket, about £12.00, for delivery Friday 30 October, 17:00–18:00:');
     expect(filled.text).toContain('Delivery slot booked: Friday 30 October, 17:00–18:00 (ref TSC-1234).');
-    const entry = (await core.products.get(loo.id)).entries.find((e) => e.status === 'expected');
+    const entry = (await core.products.get(loo.id)).entries.find((e) => e.status === 'pending');
     expect(entry?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30' });
   });
 
