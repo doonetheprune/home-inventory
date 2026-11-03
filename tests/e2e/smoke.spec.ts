@@ -191,6 +191,54 @@ test('keeps a recipe for its scenario, and lists recipes on the items they use',
   await expect(page.getByRole('link', { name: new RegExp(title) })).toBeVisible();
 });
 
+test('scales a recipe by its presets and by what you have, and keeps it as the default', async ({ page, isMobile }) => {
+  // Phone and desktop share one server, so each run saves its own preset.
+  const name = isMobile ? 'Brunch phone' : 'Brunch desktop';
+  await signIn(page);
+  await page.goto('/#/m/recipes/');
+  await page.getByRole('link', { name: /Pancakes/ }).click();
+  const amounts = page.getByRole('group', { name: 'Amounts' });
+  await amounts.getByRole('button', { name: 'As saved' }).click();
+  await expect(page.getByText('100 g plain flour')).toBeVisible();
+  await amounts.getByRole('button', { name: /Family/ }).click();
+  await expect(page.getByText('200 g plain flour')).toBeVisible();
+  await expect(page.getByText('4 eggs')).toBeVisible();
+
+  await amounts.getByRole('button', { name: /I've got/ }).click();
+  await page.getByLabel('Ingredient').selectOption('eggs');
+  await page.getByLabel('How many').fill('3');
+  await page.getByRole('button', { name: 'Work it out' }).click();
+  await expect(page.getByText('150 g plain flour')).toBeVisible();
+  await expect(page.getByText('450 ml milk')).toBeVisible();
+  await expect(page.getByText('From 3 eggs (×1.5)')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Save as preset' }).click();
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('switch', { name: 'Use it by default' }).click();
+  await page.getByRole('button', { name: 'Save preset' }).click();
+  await expect(page.locator('.toast')).toContainText(`Saved the ${name} preset`);
+  await expect(amounts.getByRole('button', { name: new RegExp(name) })).toHaveAttribute('aria-pressed', 'true');
+
+  // Opened again, it starts on the default preset.
+  await page.reload();
+  await expect(page.getByText(`The ${name} preset (×1.5), the default.`)).toBeVisible();
+  await expect(page.getByText('150 g plain flour')).toBeVisible();
+  await page.getByRole('button', { name: 'Cooked it' }).click();
+  await expect(page.getByText('This is what Larder will take out of stock.')).toBeVisible();
+  await expect(page.locator('.sheet').getByText('Free-range eggs')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // The editor keeps the presets, and can change which is the default.
+  await page.getByRole('link', { name: 'Edit' }).click();
+  const presetRow = (preset: string) => page.locator('.inputrow').filter({ has: page.locator(`input[aria-label="Preset name"][value="${preset}"]`) });
+  await expect(presetRow(name).getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'true');
+  await presetRow('Family').getByRole('button', { name: 'Default' }).click();
+  await expect(presetRow(name).getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('The Family preset (×2), the default.')).toBeVisible();
+  await expect(page.getByText('200 g plain flour')).toBeVisible();
+});
+
 /** The id of an example item, for going straight to its page. */
 async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
@@ -253,4 +301,65 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await page.getByRole('button', { name: 'Show the YAML' }).click();
   await expect(page.getByRole('textbox', { name: 'Zones (configuration.yaml)' })).toHaveValue(/zone:/);
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
+});
+
+test('adds an item from a photo, offering to add its shop', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Oat drink ${info.project.name}`;
+  const shop = `Corner shop ${info.project.name}`;
+  // The AI itself is stood in for: Larder's own pages and saving are real.
+  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
+  let sent = '';
+  await page.route('**/api/v1/modules/ai/identify', (r) => {
+    sent = (r.request().postDataJSON() as { image: string }).image;
+    return r.fulfill({ json: { readable: true, name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', categoryId: null, shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false }, provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }] } });
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: /Add by photo/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Take a photo' })).toBeVisible();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('ai-gallery').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+
+  const ask = page.getByRole('dialog', { name: `Add ${shop}?` });
+  await expect(ask).toBeVisible();
+  // The photo was shrunk to a JPEG on the phone before it was sent.
+  expect(Buffer.from(sent, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  await ask.getByRole('button', { name: `Add ${shop}` }).click();
+
+  await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+  // Claude was asked first and couldn't, so Gemini read it, and the page says why.
+  await expect(page.getByText("Read from your photo by Gemini. Claude couldn't read the photo: Your credit balance is too low.")).toBeVisible();
+  await expect(page.getByLabel('Other names')).toHaveValue('oat milk');
+  await expect(page.getByRole('button', { name: shop })).toHaveClass(/on/);
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+});
+
+test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {
+  test.skip(info.project.name === 'phone', 'Once is enough: settings are the same on both');
+  await signIn(page);
+  await page.goto('/#/settings');
+  await expect(page.getByText('Add a key to Claude or Gemini to use Add by photo.')).toBeVisible();
+  // A key is saved but never shown again.
+  await page.getByLabel('Gemini API key').fill('AIza-not-a-real-key-1234');
+  await page.getByLabel('Gemini API key').press('Enter');
+  await expect(page.getByText('Saved (…1234)')).toBeVisible();
+  await expect(page.getByLabel('Gemini API key')).toHaveValue('');
+  await expect(page.getByText('1. Claude')).toBeVisible();
+  await expect(page.getByText('Needs an API key')).toBeVisible();
+  await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Ask first' }).click();
+  await expect(page.getByText('1. Gemini')).toBeVisible();
+  await expect(page.getByText('2. Claude')).toBeVisible();
+
+  await page.getByRole('switch', { name: 'Use Gemini' }).click();
+  await expect(page.getByText('Off for now. Its key and model are kept.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Every AI with a key is switched off, so Add by photo is hidden.')).toBeVisible();
+  await expect(page.getByText('Saved (…1234)')).toBeVisible();
+  await page.getByRole('switch', { name: 'Use Gemini' }).click();
+  await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
 });

@@ -2,11 +2,20 @@
 
 ## 0.5.0
 
+- **Add by photo:** take a photo of the pack and Claude or Gemini reads it: the name, brand and size, what it's counted in, its category, roughly how long it keeps, and the shop for a shop's own brand. You check it on the Add item page before saving, and the photo becomes the item's photo. If it's a shop you haven't got, Larder asks whether to add it. A barcode in the photo is read on the phone, and if it's something you already have, Larder offers that instead.
+- Settings → AI: Claude and Gemini, each with its own API key and model, asked in the order you set. If the first can't (out of credit, say), the next reads the photo, and Larder tells you why. Switch either off for a while without losing its key or model. Larder lists the models each one offers; Claude starts on Haiku 5.5, Gemini on its newest Flash model. Keys are never shown again once saved.
+- Assistants can add an item's brand, and ask before adding a shop Larder doesn't have.
 - Claude (and other assistants) can do what the app does: add and change shops, places and categories; change anything about an item after adding it (its shop, usual place, minimum…); remove items; brands and barcodes; correct stock; see deliveries and recent changes; make and change scenarios; shop for a recipe.
-- Adding an item with a shop, place or category that isn't set up yet no longer leaves it out: Claude is told to offer to add it first.
+- Adding an item with a place or category that isn't set up yet no longer leaves it out: Claude is told to offer to add it first.
 - Items Claude adds get a photo: from the barcode, like a scan, or, given the brand ("Flahavan's porridge"), from that brand's product in Open Food Facts. With no barcode or brand there's no photo, rather than some other brand's.
 - An item's page lists the saved recipes that use it, and a recipe's ingredients open their items.
 - Recipes can belong to scenarios, and be kept for them only, so a Halloween recipe isn't on the Recipes list at Christmas. A scenario's page lists its recipes and can add one.
+
+## 0.4.2
+
+- Recipes can have ratios: how much of each ingredient goes in (2 eggs, 100 g flour, 300 ml milk). Tell your assistant "I've only got 2 eggs" and Larder works out the rest, converting between g and kg, ml and pints, tsp and tbsp. In the app, **I've got…** does the same.
+- Keep amounts you make often as presets ("Just me", "Family"), and pick one as the default: it's shown, cooked and used by assistants unless you ask for another. Assistants offer to save a preset after working amounts out, and ask which one when there's no default.
+- Assistants can change a saved recipe, for example to add ratios to one saved before.
 
 ## 0.4.1
 

@@ -105,6 +105,23 @@ describe('MCP server', () => {
     r = await client.callTool({ name: 'search', arguments: { query: 'spaghetti hoops' } });
     expect(text(r)).not.toContain('Spaghetti hoops');
 
+    // From a photo of the pack: the brand is kept, and a shop Larder doesn't have is only added once the person says so.
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', unit: 'carton' } });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain('Ask whether to add "Waitrose" as a shop, then call add_item again with new_shop: true');
+    r = await client.callTool({ name: 'search', arguments: { query: 'oat drink' } });
+    expect(text(r)).not.toContain('Oat drink');
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', new_shop: true, unit: 'carton', category: 'Food' } });
+    expect(text(r)).toBe('Added Oat drink. Added Waitrose to the shops. It has no stock yet: use add_stock to say how many.');
+    r = await client.callTool({ name: 'get_item', arguments: { item: 'oat drink' } });
+    expect(text(r)).toContain('Buy from: Waitrose.');
+    expect(text(r)).toContain('Brands: Oatly Barista Edition 1 L.');
+    r = await client.callTool({ name: 'search', arguments: { query: 'oatly' } });
+    expect(text(r)).toContain('Oat drink');
+    // A shop on the presets list comes with what it sells.
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Lidl tea bags', shop: 'lidl', new_shop: true, brand: 'Lidl 80 Tea Bags' } });
+    expect(text(r)).toContain('Added Lidl to the shops.');
+
     // Order emails mention shop codes.
     r = await client.callTool({ name: 'add_expected', arguments: { item: '4088600214568', quantity: 4, source: 'Aldi order', eta: '2026-11-01' } });
     expect(text(r)).toBe('Chopped tomatoes: 4 tins expected from Aldi order.');
@@ -131,7 +148,7 @@ describe('MCP server', () => {
   it('offers to add a shop that isn\'t set up, instead of leaving it out', async () => {
     let r: Any = await client.callTool({ name: 'add_item', arguments: { name: 'Cling film', category: 'Household', unit: 'roll', shop: 'Tesco' } });
     expect(r.isError).toBe(true);
-    expect(text(r)).toBe('Larder doesn\'t know a shop called "Tesco". The shops are Aldi. Tesco is one of the common UK shops: ask if they want it added with add_shop (it comes with what it usually sells), then try again.');
+    expect(text(r)).toBe('Larder doesn\'t know a shop called "Tesco". The shops are Aldi, Waitrose and Lidl. Ask whether to add "Tesco" as a shop, then call add_item again with new_shop: true, or leave the shop out.');
     r = await client.callTool({ name: 'search', arguments: { query: 'cling film' } });
     expect(text(r)).not.toContain('Cling film');
     r = await client.callTool({ name: 'add_shop', arguments: { name: 'tesco' } });
@@ -149,7 +166,8 @@ describe('MCP server', () => {
 
   it('changes anything about an item after it was added', async () => {
     await client.callTool({ name: 'add_item', arguments: { name: 'Porridge oats', category: 'Food', unit: 'kg' } });
-    let r: Any = await client.callTool({ name: 'change_item', arguments: { item: 'oats', minimum: 2, shops: ['aldi', 'tesco'] } });
+    // "porridge oats", as "oats" could be the oat drink too.
+    let r: Any = await client.callTool({ name: 'change_item', arguments: { item: 'porridge oats', minimum: 2, shops: ['aldi', 'tesco'] } });
     expect(text(r)).toBe('Porridge oats is updated: bought from Aldi and Tesco, low below 2 kg.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'porridge oats' } });
     expect(text(r)).toContain('Running low below 2 kg: it is low now.');

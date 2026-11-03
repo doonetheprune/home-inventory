@@ -23,6 +23,13 @@ export interface WebModule {
   pages?: Array<{ path: string; title: string; icon?: string; component: ComponentType; section?: 'organise' | 'print'; subtitle?: string; hidden?: boolean }>;
   /** Panels on other modules' pages, at the slots those pages offer (e.g. recipes on a scenario). */
   panels?: SlotPanel[];
+  /**
+   * More ways to add things, shown on Home beside Add by name and in the desktop sidebar.
+   * `path` is one of this module's pages. `useShown` (a hook) can hide it, e.g. until set up.
+   */
+  addActions?: Array<{ path: string; title: string; subtitle: string; icon?: string; useShown?: () => boolean }>;
+  /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
+  settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
 }
 
 export function defineWebModule(m: WebModule): WebModule {
@@ -35,6 +42,8 @@ export { Icon } from '../icons';
 export { QrCode } from './qr';
 export { useModuleParams, PrintSetup } from './page';
 export { ModulePanels, useModuleEnabled, type SlotPanel } from './panels';
+export { useAddItem, type AddItemDraft } from '../drafts';
+export { readBarcode } from '../components/useBarcodeScanner';
 export { Header, Empty } from '../ui';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';

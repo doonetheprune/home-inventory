@@ -65,6 +65,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const ctx = createContext(deps);
   const modules = createModuleRegistry(ctx, options);
   const categories = createCategoryService(ctx);
+  const shops = createShopService(ctx);
   const products = createProductService(ctx, (f) => modules.validateFields(f));
   const stock = createStockService(ctx);
   const shopping = createShoppingService(ctx, stock);
@@ -73,7 +74,6 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const home = createHomeService(ctx, stock, shopping);
   const resolve = createResolver(ctx, search, lookup);
   const automation = createAutomation({ ctx, products, stock, shopping, resolve });
-  const shops = createShopService(ctx);
   const places = createPlaceService(ctx);
 
   const core: CoreApi = {

@@ -383,7 +383,7 @@ describe('lookup photos', () => {
     const detail = await core.products.get(item.product.id);
     const photo = item.product.photoFileIds[0]!;
     expect([...(await core.adapters.files.get(photo))!.data]).toEqual([...jpeg(3)]);
-    expect(detail.variants).toMatchObject([{ name: "Flahavan's Porridge oat", barcodes: [], photoFileId: photo, imageUrl: 'https://images.example/flahavans.jpg', source: 'fake' }]);
+    expect(detail.variants).toMatchObject([{ name: "Flahavan's", barcodes: [], photoFileId: photo, imageUrl: 'https://images.example/flahavans.jpg', source: 'fake' }]);
     expect(searched).toEqual(["Flahavan's"]);
   });
 

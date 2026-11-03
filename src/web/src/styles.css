@@ -222,6 +222,8 @@ textarea.input { min-height: 84px; resize: vertical; }
 .act b { font-family: var(--f-display); font-size: 17px; }
 .act span { font-size: 12.5px; color: var(--ink-2); }
 .act.big { grid-row: span 2; background: var(--accent); color: var(--accent-ink); border-color: transparent; min-height: 182px; position: relative; overflow: hidden; }
+/* A module's extra way to add (Add by photo) makes a third row beside Scan. */
+.actions:has(> .act:nth-child(4)) .act.big { grid-row: span 3; }
 .act.big span { color: inherit; opacity: .8; }
 .act.big b { font-size: 26px; }
 .act.big .bars { position: absolute; right: -6px; top: 14px; width: 90px; height: 70px; opacity: .22;
@@ -355,6 +357,7 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   .tab.scan .fab .i { width: 22px; height: 22px; }
   .side-label { display: inline; }
   .side-add { order: 2; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); font-weight: 700; font-size: 14px; }
+  .side-add + .side-add { margin-top: -6px; }
   .side-group { order: 4; display: flex; flex-direction: column; gap: 2px; }
   .side-group .tab { order: 0; }
   .side-head { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2); padding: 18px 12px 6px; }

@@ -67,7 +67,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 |---|---|
 | `search` | Find items, places and shops by any words. Typos are fine |
 | `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, shops, notes |
-| `add_item` | Add something Larder doesn't know yet. A shop, place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
+| `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them). From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
 | `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, usual place, shops to buy it from, notes, wish list, rechargeable |
 | `remove_item` | Remove an item with all its stock |
 | `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
@@ -90,8 +90,9 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
 | `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |
 | `make_scenario` / `change_scenario` / `remove_scenario` / `add_to_scenario` / `remove_from_scenario` | Making and changing scenarios (scenarios module) |
-| `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house (recipes module) |
-| `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, applied only once the person agrees (recipes module) |
+| `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house. Ingredients can have ratios, so `get_recipe` works out the amounts from what you have ("only 2 eggs"), a preset, servings or times (recipes module) |
+| `save_recipe_preset` / `forget_recipe_preset` | Keep amounts you make often under a name ("Family", "Just me"), and choose the default one (recipes module) |
+| `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, at the amounts made, applied only once the person agrees (recipes module) |
 | `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
 | `set_recipe_scenarios` | Put a recipe in scenarios (Christmas), and keep it only there if wanted (recipes module) |
 
@@ -100,6 +101,12 @@ Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switc
 ### Recipes from what's in the house
 
 Ask "what could I cook with what needs using up?" The assistant calls `expiring` and `search`, suggests something, and if you like it, `save_recipe`. After cooking, "I made the traybake for 6" leads to `propose_cooking`; it shows what will come out of stock and asks you before `confirm_cooking`.
+
+### Ratios and presets
+
+When a recipe's ingredients have ratios (2 eggs to 100 g flour to 300 ml milk), say "I've only got 2 eggs" and the assistant calls `get_recipe` with `have`; Larder works out the rest, so small local models don't have to do the maths. Give more than one ("2 eggs and 150 g flour") and whichever runs out first sets the amounts. Weights and volumes convert (kg to g, pints to ml, tbsp to tsp).
+
+The assistant then offers to keep those amounts as a preset (`save_recipe_preset`). One preset can be the default: `get_recipe` and `propose_cooking` use it unless you ask for another ("the family one"). When a recipe has presets but no default, `get_recipe` tells the assistant to ask which you'd like. To add ratios to a recipe saved before, ask the assistant to; it changes the recipe with `save_recipe` and keeps everything else.
 
 When an assistant connects, Larder also tells it how the house works: names not ids, never guess between close matches, quantities are in each item's own unit, search before adding something new.
 

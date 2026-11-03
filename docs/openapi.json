@@ -811,6 +811,23 @@
                 "optional": {
                   "default": false,
                   "type": "boolean"
+                },
+                "ratio": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ratioUnit": {
+                  "default": "",
+                  "type": "string",
+                  "maxLength": 20
                 }
               },
               "required": [
@@ -851,6 +868,36 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "presets": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "times": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "name",
+                "times"
+              ]
+            }
+          },
+          "defaultPreset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "scenarioIds": {
             "default": [],
@@ -954,6 +1001,30 @@
                 },
                 "optional": {
                   "type": "boolean"
+                },
+                "ratio": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "ratioUnit": {
+                  "type": "string"
+                },
+                "shown": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "scales": {
+                  "type": "boolean"
+                },
+                "need": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -965,7 +1036,13 @@
                 "unit",
                 "inStock",
                 "status",
-                "optional"
+                "optional",
+                "ratio",
+                "ratioUnit",
+                "shown",
+                "label",
+                "scales",
+                "need"
               ]
             }
           },
@@ -1003,6 +1080,36 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "presets": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "times": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "name",
+                "times"
+              ]
+            }
+          },
+          "defaultPreset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "scenarioIds": {
             "default": [],
             "type": "array",
@@ -1021,6 +1128,53 @@
             "items": {
               "type": "string"
             }
+          },
+          "scale": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "saved",
+                  "preset",
+                  "servings",
+                  "times",
+                  "have"
+                ]
+              },
+              "times": {
+                "type": "number"
+              },
+              "preset": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "servings": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "by": {
+                "type": "string"
+              },
+              "limitedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "times",
+              "preset",
+              "servings",
+              "by",
+              "limitedBy"
+            ]
           },
           "scenarios": {
             "type": "array",
@@ -1051,6 +1205,7 @@
           "createdAt",
           "updatedAt",
           "missing",
+          "scale",
           "scenarios",
           "hidden"
         ]
@@ -1074,6 +1229,21 @@
               "number",
               "null"
             ]
+          },
+          "times": {
+            "default": 1,
+            "type": "number"
+          },
+          "preset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "default": "",
+            "type": "string"
           },
           "items": {
             "type": "array",
@@ -3952,6 +4122,23 @@
                 "optional": {
                   "default": false,
                   "type": "boolean"
+                },
+                "ratio": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ratioUnit": {
+                  "default": "",
+                  "type": "string",
+                  "maxLength": 20
                 }
               },
               "required": [
@@ -3959,7 +4146,9 @@
                 "productId",
                 "quantity",
                 "amount",
-                "optional"
+                "optional",
+                "ratio",
+                "ratioUnit"
               ],
               "additionalProperties": false
             }
@@ -3998,6 +4187,37 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "presets": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "times": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "name",
+                "times"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "defaultPreset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "scenarioIds": {
             "default": [],
             "type": "array",
@@ -4024,6 +4244,8 @@
           "updatedAt",
           "lastCookedAt",
           "timesCooked",
+          "presets",
+          "defaultPreset",
           "scenarioIds",
           "scenarioOnly"
         ],
@@ -4109,6 +4331,30 @@
                 },
                 "optional": {
                   "type": "boolean"
+                },
+                "ratio": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "ratioUnit": {
+                  "type": "string"
+                },
+                "shown": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "scales": {
+                  "type": "boolean"
+                },
+                "need": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -4120,7 +4366,13 @@
                 "unit",
                 "inStock",
                 "status",
-                "optional"
+                "optional",
+                "ratio",
+                "ratioUnit",
+                "shown",
+                "label",
+                "scales",
+                "need"
               ],
               "additionalProperties": false
             }
@@ -4159,6 +4411,37 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "presets": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "times": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "name",
+                "times"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "defaultPreset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "scenarioIds": {
             "default": [],
             "type": "array",
@@ -4177,6 +4460,54 @@
             "items": {
               "type": "string"
             }
+          },
+          "scale": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "saved",
+                  "preset",
+                  "servings",
+                  "times",
+                  "have"
+                ]
+              },
+              "times": {
+                "type": "number"
+              },
+              "preset": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "servings": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "by": {
+                "type": "string"
+              },
+              "limitedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "times",
+              "preset",
+              "servings",
+              "by",
+              "limitedBy"
+            ],
+            "additionalProperties": false
           },
           "scenarios": {
             "type": "array",
@@ -4213,9 +4544,12 @@
           "updatedAt",
           "lastCookedAt",
           "timesCooked",
+          "presets",
+          "defaultPreset",
           "scenarioIds",
           "scenarioOnly",
           "missing",
+          "scale",
           "scenarios",
           "hidden"
         ],
@@ -4240,6 +4574,21 @@
               "number",
               "null"
             ]
+          },
+          "times": {
+            "default": 1,
+            "type": "number"
+          },
+          "preset": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "default": "",
+            "type": "string"
           },
           "items": {
             "type": "array",
@@ -4287,6 +4636,9 @@
           "recipeId",
           "recipe",
           "servings",
+          "times",
+          "preset",
+          "from",
           "items",
           "skipped",
           "expiresAt"
@@ -12238,7 +12590,7 @@
     },
     "/api/v1/modules/recipes": {
       "get": {
-        "summary": "Saved recipes, with what's missing for each",
+        "summary": "Saved recipes, with what's missing for each (at its default preset)",
         "tags": [
           "Module: recipes"
         ],
@@ -12366,6 +12718,24 @@
                         },
                         "optional": {
                           "type": "boolean"
+                        },
+                        "ratio": {
+                          "description": "How much goes in for the recipe as saved, in ratioUnit (2 eggs, 100 g flour)",
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "maximum": 1000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "ratioUnit": {
+                          "description": "g, kg, oz, lb, ml, l, tsp, tbsp, fl oz, pint or a word like \"slice\"; empty for a count",
+                          "type": "string",
+                          "maxLength": 20
                         }
                       },
                       "required": [
@@ -12384,6 +12754,41 @@
                   "source": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "presets": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60
+                        },
+                        "times": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000,
+                          "description": "How many times the recipe as saved"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "times"
+                      ]
+                    }
+                  },
+                  "defaultPreset": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "scenarioIds": {
                     "maxItems": 20,
@@ -12421,7 +12826,7 @@
     },
     "/api/v1/modules/recipes/{id}": {
       "get": {
-        "summary": "A recipe, with what's in the house",
+        "summary": "A recipe, with what's in the house, at its default preset",
         "tags": [
           "Module: recipes"
         ],
@@ -12455,6 +12860,7 @@
         "tags": [
           "Module: recipes"
         ],
+        "description": "Presets and the default preset are kept unless given.",
         "requestBody": {
           "required": true,
           "content": {
@@ -12518,6 +12924,24 @@
                         },
                         "optional": {
                           "type": "boolean"
+                        },
+                        "ratio": {
+                          "description": "How much goes in for the recipe as saved, in ratioUnit (2 eggs, 100 g flour)",
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "maximum": 1000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "ratioUnit": {
+                          "description": "g, kg, oz, lb, ml, l, tsp, tbsp, fl oz, pint or a word like \"slice\"; empty for a count",
+                          "type": "string",
+                          "maxLength": 20
                         }
                       },
                       "required": [
@@ -12536,6 +12960,41 @@
                   "source": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "presets": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 60
+                        },
+                        "times": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000,
+                          "description": "How many times the recipe as saved"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "times"
+                      ]
+                    }
+                  },
+                  "defaultPreset": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "scenarioIds": {
                     "maxItems": 20,
@@ -12625,12 +13084,312 @@
         }
       }
     },
+    "/api/v1/modules/recipes/{id}/scale": {
+      "post": {
+        "summary": "A recipe worked out for another amount",
+        "tags": [
+          "Module: recipes"
+        ],
+        "description": "Give one of: a preset, servings, times (2 doubles it), or `have` (how much there is of some ingredients; the rest follows from the ratios, so none needs more). None gives the default preset.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "description": "A saved preset, by name, e.g. \"family\"",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "servings": {
+                    "description": "How many it is for, when the recipe says how many it serves",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "times": {
+                    "description": "How many times the recipe as saved: 2 doubles it, 0.5 halves it, 1 is the amounts as saved",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "have": {
+                    "description": "How much they have of some ingredients, e.g. only 2 eggs: the rest is worked out from the ratios so that none needs more than this",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ingredient": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "description": "The ingredient, e.g. \"eggs\""
+                        },
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "description": "e.g. \"g\", \"kg\", \"ml\", \"tbsp\"; leave out for a count (2 eggs)",
+                          "type": "string",
+                          "maxLength": 20
+                        }
+                      },
+                      "required": [
+                        "ingredient",
+                        "amount"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/recipes/{id}/presets": {
+      "post": {
+        "summary": "Save amounts as a preset, or change which is the default",
+        "tags": [
+          "Module: recipes"
+        ],
+        "description": "How much is given as for /scale (times, servings or have). Saving an existing name replaces it; with no amount, only `default` changes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "servings": {
+                    "description": "How many it is for, when the recipe says how many it serves",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "times": {
+                    "description": "How many times the recipe as saved: 2 doubles it, 0.5 halves it, 1 is the amounts as saved",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "have": {
+                    "description": "How much they have of some ingredients, e.g. only 2 eggs: the rest is worked out from the ratios so that none needs more than this",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ingredient": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "description": "The ingredient, e.g. \"eggs\""
+                        },
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "description": "e.g. \"g\", \"kg\", \"ml\", \"tbsp\"; leave out for a count (2 eggs)",
+                          "type": "string",
+                          "maxLength": 20
+                        }
+                      },
+                      "required": [
+                        "ingredient",
+                        "amount"
+                      ]
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "description": "What to call it, e.g. \"Family\" or \"Just me\""
+                  },
+                  "default": {
+                    "description": "true to use it whenever no other amount is asked for; false to stop",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/recipes/{id}/presets/{name}": {
+      "delete": {
+        "summary": "Forget a preset",
+        "tags": [
+          "Module: recipes"
+        ],
+        "description": "If it was the default, the amounts as saved are used again.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "in": "path",
+            "name": "name",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/recipes/{id}/missing-to-list": {
       "post": {
         "summary": "Put the missing ingredients on the shopping list",
         "tags": [
           "Module: recipes"
         ],
+        "description": "At the default preset, or the amount given (as for /scale).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "description": "A saved preset, by name, e.g. \"family\"",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "servings": {
+                    "description": "How many it is for, when the recipe says how many it serves",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "times": {
+                    "description": "How many times the recipe as saved: 2 doubles it, 0.5 halves it, 1 is the amounts as saved",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "have": {
+                    "description": "How much they have of some ingredients, e.g. only 2 eggs: the rest is worked out from the ratios so that none needs more than this",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ingredient": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "description": "The ingredient, e.g. \"eggs\""
+                        },
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "description": "e.g. \"g\", \"kg\", \"ml\", \"tbsp\"; leave out for a count (2 eggs)",
+                          "type": "string",
+                          "maxLength": 20
+                        }
+                      },
+                      "required": [
+                        "ingredient",
+                        "amount"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -12675,6 +13434,7 @@
         "tags": [
           "Module: recipes"
         ],
+        "description": "At the default preset, or the amount given (as for /scale).",
         "requestBody": {
           "required": true,
           "content": {
@@ -12682,10 +13442,54 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "preset": {
+                    "description": "A saved preset, by name, e.g. \"family\"",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
                   "servings": {
+                    "description": "How many it is for, when the recipe says how many it serves",
                     "type": "integer",
                     "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991
+                    "maximum": 1000
+                  },
+                  "times": {
+                    "description": "How many times the recipe as saved: 2 doubles it, 0.5 halves it, 1 is the amounts as saved",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000
+                  },
+                  "have": {
+                    "description": "How much they have of some ingredients, e.g. only 2 eggs: the rest is worked out from the ratios so that none needs more than this",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ingredient": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120,
+                          "description": "The ingredient, e.g. \"eggs\""
+                        },
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "description": "e.g. \"g\", \"kg\", \"ml\", \"tbsp\"; leave out for a count (2 eggs)",
+                          "type": "string",
+                          "maxLength": 20
+                        }
+                      },
+                      "required": [
+                        "ingredient",
+                        "amount"
+                      ]
+                    }
                   }
                 }
               }
@@ -13765,6 +14569,614 @@
                     "zones",
                     "automation",
                     "placeholders"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai": {
+      "get": {
+        "summary": "Which AIs read photos for Add by photo, in what order, and whether they are set up (never the keys)",
+        "tags": [
+          "Module: ai"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "claude",
+                            "gemini"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "claude": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "gemini": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "ready",
+                    "order",
+                    "first",
+                    "claude",
+                    "gemini"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/settings": {
+      "put": {
+        "summary": "Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model (admin)",
+        "tags": [
+          "Module: ai"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "order": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    }
+                  },
+                  "claude": {
+                    "type": "object",
+                    "properties": {
+                      "apiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 300,
+                            "pattern": "^\\S+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "pattern": "^[A-Za-z0-9._:@/-]+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "gemini": {
+                    "type": "object",
+                    "properties": {
+                      "apiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 300,
+                            "pattern": "^\\S+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "pattern": "^[A-Za-z0-9._:@/-]+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "claude",
+                            "gemini"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "claude": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "gemini": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "keySet": {
+                          "type": "boolean"
+                        },
+                        "keyHint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keyFrom": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "app",
+                                "env"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "keySet",
+                        "keyHint",
+                        "keyFrom",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "ready",
+                    "order",
+                    "first",
+                    "claude",
+                    "gemini"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/models": {
+      "get": {
+        "summary": "The models Claude or Gemini offers that can read photos, using the saved key (also checks the key works) (admin)",
+        "tags": [
+          "Module: ai"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "claude",
+                "gemini"
+              ]
+            },
+            "in": "query",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "default": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "models",
+                    "default"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/identify": {
+      "post": {
+        "summary": "Read a photo of something and say what it is (nothing is saved)",
+        "tags": [
+          "Module: ai"
+        ],
+        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "minLength": 100,
+                    "maxLength": 1900000
+                  }
+                },
+                "required": [
+                  "image"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readable": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "brand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "categoryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shelfLifeDays": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "shop": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "preset": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "id",
+                            "preset"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "gemini"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "readable",
+                    "name",
+                    "brand",
+                    "unit",
+                    "categoryId",
+                    "shelfLifeDays",
+                    "aliases",
+                    "shop",
+                    "provider",
+                    "model",
+                    "skipped"
                   ],
                   "additionalProperties": false
                 }

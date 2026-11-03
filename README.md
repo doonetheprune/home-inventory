@@ -4,6 +4,7 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 
 - **Search first.** One search bar for everything, typo-tolerant ("bog rol" finds toilet roll), with + and − right in the results. On a laptop: type, press ↑ three times, Enter, and three are added.
 - **Scan.** Phone camera, USB or Bluetooth scanners, QR shelf labels. Unknown barcodes are looked up in Open Food Facts (and friends), or named once and remembered.
+- **Add by photo.** Snap the pack and Claude or Gemini (your own API key) fills in the name, brand, size, category and shelf life, for you to check.
 - **Places.** Rooms, cupboards, shelves and boxes, with short codes (G2-4). Set up racking in one go. Things can be out of place: usually in the shed, now in the kitchen.
 - **Shopping by shop.** "I'm going to Aldi" lists everything low that Aldi can supply. Deliveries on the way count, so you don't buy twice. Tick items off and they go into stock.
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
@@ -58,3 +59,7 @@ npm run dev        # API :8080 + web app :5173
 npm test           # unit, contract, API and module tests
 npm run test:e2e   # browser tests, phone and desktop
 ```
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
