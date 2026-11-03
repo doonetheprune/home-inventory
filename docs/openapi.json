@@ -14414,7 +14414,7 @@
     },
     "/api/v1/modules/ai": {
       "get": {
-        "summary": "Which AI is used for Add by photo, and whether it is set up (never the keys)",
+        "summary": "Which AIs read photos for Add by photo, in what order, and whether they are set up (never the keys)",
         "tags": [
           "Module: ai"
         ],
@@ -14426,7 +14426,20 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "provider": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
                       "anyOf": [
                         {
                           "type": "string",
@@ -14440,12 +14453,12 @@
                         }
                       ]
                     },
-                    "ready": {
-                      "type": "boolean"
-                    },
                     "claude": {
                       "type": "object",
                       "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
                         "keySet": {
                           "type": "boolean"
                         },
@@ -14477,6 +14490,7 @@
                         }
                       },
                       "required": [
+                        "enabled",
                         "keySet",
                         "keyHint",
                         "keyFrom",
@@ -14487,6 +14501,9 @@
                     "gemini": {
                       "type": "object",
                       "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
                         "keySet": {
                           "type": "boolean"
                         },
@@ -14518,6 +14535,7 @@
                         }
                       },
                       "required": [
+                        "enabled",
                         "keySet",
                         "keyHint",
                         "keyFrom",
@@ -14527,8 +14545,9 @@
                     }
                   },
                   "required": [
-                    "provider",
                     "ready",
+                    "order",
+                    "first",
                     "claude",
                     "gemini"
                   ],
@@ -14542,7 +14561,7 @@
     },
     "/api/v1/modules/ai/settings": {
       "put": {
-        "summary": "Choose the AI, and set or forget an API key or model for Claude or Gemini (admin)",
+        "summary": "Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model (admin)",
         "tags": [
           "Module: ai"
         ],
@@ -14553,19 +14572,17 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "provider": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": [
-                          "claude",
-                          "gemini"
-                        ]
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                  "order": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    }
                   },
                   "claude": {
                     "type": "object",
@@ -14595,6 +14612,9 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
                       }
                     }
                   },
@@ -14626,6 +14646,9 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
                       }
                     }
                   }
@@ -14642,7 +14665,20 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "provider": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "order": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "claude",
+                          "gemini"
+                        ]
+                      }
+                    },
+                    "first": {
                       "anyOf": [
                         {
                           "type": "string",
@@ -14656,12 +14692,12 @@
                         }
                       ]
                     },
-                    "ready": {
-                      "type": "boolean"
-                    },
                     "claude": {
                       "type": "object",
                       "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
                         "keySet": {
                           "type": "boolean"
                         },
@@ -14693,6 +14729,7 @@
                         }
                       },
                       "required": [
+                        "enabled",
                         "keySet",
                         "keyHint",
                         "keyFrom",
@@ -14703,6 +14740,9 @@
                     "gemini": {
                       "type": "object",
                       "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
                         "keySet": {
                           "type": "boolean"
                         },
@@ -14734,6 +14774,7 @@
                         }
                       },
                       "required": [
+                        "enabled",
                         "keySet",
                         "keyHint",
                         "keyFrom",
@@ -14743,8 +14784,9 @@
                     }
                   },
                   "required": [
-                    "provider",
                     "ready",
+                    "order",
+                    "first",
                     "claude",
                     "gemini"
                   ],
@@ -14821,11 +14863,11 @@
     },
     "/api/v1/modules/ai/identify": {
       "post": {
-        "summary": "Read a photo of something with the chosen AI and say what it is (nothing is saved)",
+        "summary": "Read a photo of something and say what it is (nothing is saved)",
         "tags": [
           "Module: ai"
         ],
-        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The answer fills in the Add item page: check it, then save it as usual.",
+        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14932,6 +14974,29 @@
                     },
                     "model": {
                       "type": "string"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "gemini"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -14944,7 +15009,8 @@
                     "aliases",
                     "shop",
                     "provider",
-                    "model"
+                    "model",
+                    "skipped"
                   ],
                   "additionalProperties": false
                 }

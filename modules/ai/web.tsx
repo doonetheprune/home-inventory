@@ -5,13 +5,13 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  api, ApiError, defineWebModule, Empty, ErrorBox, Header, Icon, Link, ProductTile, Seg, Sheet, readBarcode, useAction, useAddItem, useQuery, useQueryClient,
+  api, ApiError, defineWebModule, Empty, ErrorBox, Header, Icon, Link, ProductTile, Sheet, Switch, readBarcode, useAction, useAddItem, useQuery, useQueryClient,
   type AddItemDraft, type ProductSummary,
 } from '@larder/web-sdk';
 
 type ProviderId = 'claude' | 'gemini';
-interface ProviderStatus { keySet: boolean; keyHint: string | null; keyFrom: 'app' | 'env' | null; model: string | null }
-interface Status { provider: ProviderId | null; ready: boolean; claude: ProviderStatus; gemini: ProviderStatus }
+interface ProviderStatus { enabled: boolean; keySet: boolean; keyHint: string | null; keyFrom: 'app' | 'env' | null; model: string | null }
+interface Status { ready: boolean; order: ProviderId[]; first: ProviderId | null; claude: ProviderStatus; gemini: ProviderStatus }
 interface Identified {
   readable: boolean;
   name: string;
@@ -23,6 +23,8 @@ interface Identified {
   shop: { name: string; id: string | null; preset: boolean } | null;
   provider: ProviderId;
   model: string;
+  /** AIs asked first that couldn't read it, and why. */
+  skipped: Array<{ provider: ProviderId; message: string }>;
 }
 
 const NAMES: Record<ProviderId, string> = { claude: 'Claude', gemini: 'Gemini' };
@@ -127,7 +129,8 @@ function AddByPhoto() {
       barcode,
       photo,
       source: r.provider,
-      note: `Read from your photo by ${NAMES[r.provider]}. Check it before adding.`,
+      // Say when the first AI couldn't (out of credit, say), so it can be sorted out.
+      note: `Read from your photo by ${NAMES[r.provider]}.${r.skipped.map((x) => ` ${x.message}`).join('')} Check it before adding.`,
     };
     if (!r.readable) setStep({ kind: 'unsure', preview: shown, draft });
     else next(draft, r.shop, shown);
@@ -176,7 +179,7 @@ function AddByPhoto() {
         {pickers}
         {step.kind === 'pick' && (
           <>
-            <p className="muted">Take a photo of the front of the pack. {status.data?.provider ? NAMES[status.data.provider] : 'The AI'} reads it and fills in the details for you to check.</p>
+            <p className="muted">Take a photo of the front of the pack. {status.data?.first ? NAMES[status.data.first] : 'The AI'} reads it and fills in the details for you to check.</p>
             <button type="button" className="btn primary block" onClick={() => camera.current?.click()}><Icon name="camera" />Take a photo</button>
             <button type="button" className="btn block" onClick={() => gallery.current?.click()}>Choose a photo</button>
           </>
@@ -241,7 +244,7 @@ function AddByPhoto() {
 /* Settings                                                            */
 /* ------------------------------------------------------------------ */
 
-function ProviderSettings({ id, s, admin, chosen }: { id: ProviderId; s: ProviderStatus; admin: boolean; chosen: boolean }) {
+function ProviderSettings({ id, s, status, position, admin }: { id: ProviderId; s: ProviderStatus; status: Status; position: number; admin: boolean }) {
   const { run, busy } = useAction();
   const [key, setKey] = useState('');
   const models = useQuery({
@@ -252,28 +255,37 @@ function ProviderSettings({ id, s, admin, chosen }: { id: ProviderId; s: Provide
     staleTime: 10 * 60_000,
   });
   const name = NAMES[id];
-  const save = (body: Record<string, unknown>, done: string) => run(() => call<Status>('PUT', '/settings', { [id]: body }), done);
+  const save = (body: Record<string, unknown>, done: string) => run(() => call<Status>('PUT', '/settings', body), done);
   const list = models.data?.models ?? [];
   const current = s.model ?? '';
   const defaultName = models.data ? list.find((m) => m.id === models.data!.default)?.name ?? models.data.default : null;
+  const state = !s.enabled ? 'Off for now. Its key and model are kept.'
+    : !s.keySet ? 'Needs an API key'
+    : status.first === id ? 'Asked first'
+    : `Asked when ${status.first ? NAMES[status.first] : 'the one above'} can't, e.g. out of credit`;
 
   return (
-    <div className="list" style={chosen ? undefined : { opacity: 0.85 }}>
-      <div className="numfield" style={{ flexWrap: 'wrap' }}>
+    <div className="list">
+      <div className="toggle">
+        <span className="grow"><b>{position + 1}. {name}</b><br /><span className="small muted">{state}</span></span>
+        {admin && position > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => void save({ order: [id] }, `${name} is asked first`)}>Ask first</button>}
+        <Switch checked={s.enabled} label={`Use ${name}`} onChange={(v) => { if (admin && !busy) void save({ [id]: { enabled: v } }, v ? `${name} is on` : `${name} is off for now. Its key and model are kept.`); }} />
+      </div>
+      <div className="numfield" style={{ flexWrap: 'wrap', opacity: s.enabled ? 1 : 0.6 }}>
         <span><b>{name} API key</b><small>{s.keySet ? (s.keyFrom === 'env' ? `Set on the server (${s.keyHint})` : `Saved (${s.keyHint})`) : <>Get one at <a href={KEY_SITES[id].url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{KEY_SITES[id].text}</a></>}</small></span>
         {admin && (
-          <form className="inputrow" style={{ flex: 1, minWidth: 280, maxWidth: 440 }} onSubmit={(e) => { e.preventDefault(); if (key.trim()) void save({ apiKey: key.trim() }, `${name} key saved`).then((r) => r && setKey('')); }}>
+          <form className="inputrow" style={{ flex: 1, minWidth: 280, maxWidth: 440 }} onSubmit={(e) => { e.preventDefault(); if (key.trim()) void save({ [id]: { apiKey: key.trim() } }, `${name} key saved`).then((r) => r && setKey('')); }}>
             <input className="input" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={s.keySet ? 'Replace the key' : 'Paste the key'} aria-label={`${name} API key`} />
             <button className="btn small" disabled={busy || !key.trim()}>Save</button>
-            {s.keyFrom === 'app' && <button type="button" className="btn small ghost" disabled={busy} onClick={() => void save({ apiKey: null }, `${name} key removed`)}>Remove</button>}
+            {s.keyFrom === 'app' && <button type="button" className="btn small ghost" disabled={busy} onClick={() => void save({ [id]: { apiKey: null } }, `${name} key removed`)}>Remove</button>}
           </form>
         )}
       </div>
       {s.keySet && (
-        <div className="numfield" style={{ flexWrap: 'wrap' }}>
+        <div className="numfield" style={{ flexWrap: 'wrap', opacity: s.enabled ? 1 : 0.6 }}>
           <span><b>{name} model</b><small>{models.isError ? (models.error instanceof Error ? models.error.message : 'Couldn’t list the models.') : id === 'claude' ? 'Haiku is quick and costs a fraction of a penny a photo' : 'Flash is quick and cheap'}</small></span>
           {admin ? (
-            <select className="input" style={{ width: 'auto', maxWidth: 320 }} value={current} disabled={busy || models.isLoading} aria-label={`${name} model`} onChange={(e) => void save({ model: e.target.value || null }, `${name} will use ${e.target.value ? list.find((m) => m.id === e.target.value)?.name ?? e.target.value : 'its default model'}`)}>
+            <select className="input" style={{ width: 'auto', maxWidth: 320 }} value={current} disabled={busy || models.isLoading} aria-label={`${name} model`} onChange={(e) => void save({ [id]: { model: e.target.value || null } }, `${name} will use ${e.target.value ? list.find((m) => m.id === e.target.value)?.name ?? e.target.value : 'its default model'}`)}>
               <option value="">{models.isLoading ? 'Loading…' : `Default${defaultName ? ` (${defaultName})` : ''}`}</option>
               {current && !list.some((m) => m.id === current) && <option value={current}>{current}</option>}
               {list.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -286,24 +298,17 @@ function ProviderSettings({ id, s, admin, chosen }: { id: ProviderId; s: Provide
 }
 
 function AiSettings({ admin }: { admin: boolean }) {
-  const status = useStatus();
-  const { run, busy } = useAction();
-  const s = status.data;
+  const s = useStatus().data;
   if (!s) return null;
-  const choice = s.provider ?? 'off';
   return (
     <div className="section">
       <div className="label">AI</div>
-      <p className="small muted">For Add by photo. Photos go to the AI you choose, only when you use Add by photo, with your own API key. Larder never shows a saved key again.</p>
-      <div className="list">
-        <div className="numfield" style={{ flexWrap: 'wrap' }}>
-          <span><b>Read photos with</b><small>{s.ready ? 'Add by photo is ready' : s.provider ? `Add a ${NAMES[s.provider]} key below` : 'Off'}</small></span>
-          {admin ? (
-            <Seg label="AI for photos" value={choice} options={[['off', 'Off'], ['claude', 'Claude'], ['gemini', 'Gemini']]} onChange={(v) => { if (!busy) void run(() => call<Status>('PUT', '/settings', { provider: v === 'off' ? null : v }), v === 'off' ? 'Add by photo is off' : `Photos will be read by ${NAMES[v as ProviderId]}`); }} />
-          ) : <span>{s.provider ? NAMES[s.provider] : 'Off'}</span>}
-        </div>
-      </div>
-      {(['claude', 'gemini'] as const).map((id) => <ProviderSettings key={id} id={id} s={s[id]} admin={admin} chosen={s.provider === id} />)}
+      <p className="small muted">
+        For Add by photo. Larder asks these in order: if one can't (out of credit, say), the next reads the photo. Switch one off to stop using it for now; its key and model are kept.
+        {' '}Photos only go to these, only when you use Add by photo, with your own API keys. Larder never shows a saved key again.
+      </p>
+      {!s.ready && <p className="small"><b>{s.claude.keySet || s.gemini.keySet ? 'Every AI with a key is switched off, so Add by photo is hidden.' : 'Add a key to Claude or Gemini to use Add by photo.'}</b></p>}
+      {s.order.map((id, i) => <ProviderSettings key={id} id={id} s={s[id]} status={s} position={i} admin={admin} />)}
     </div>
   );
 }

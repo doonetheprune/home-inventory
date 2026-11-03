@@ -1,22 +1,33 @@
 /**
  * AI: add things by photo. Claude or Gemini, with the household's own API
- * key, reads the packaging and fills in the item's details. The key and the
- * model for each are chosen in Settings. Nothing is saved from a reading:
- * the app shows it on the Add item page to check first.
+ * key, reads the packaging and fills in the item's details. Each has its own
+ * key and model, can be switched off for now without losing them, and they're
+ * tried in the household's order: if the first can't (out of credit, busy),
+ * the next reads it. Nothing is saved from a reading: the app shows it on the
+ * Add item page to check first.
  */
 import { z } from 'zod';
 import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
 import { claude, gemini, PROVIDER_NAMES, type Photo, type Provider, type ProviderId, type Reading } from './providers';
 
 const ProviderName = z.enum(['claude', 'gemini']);
+const ALL: ProviderId[] = ['claude', 'gemini'];
 
 interface Saved {
-  provider: ProviderId | null;
+  /** Which to ask first, then next. Each AI appears once. */
+  order: ProviderId[];
+  /** Switched off for now: their keys and models are kept. */
+  off: ProviderId[];
   keys: Partial<Record<ProviderId, string>>;
   models: Partial<Record<ProviderId, string>>;
 }
 
+/** Every AI exactly once, in the saved order, any missing at the end. */
+const fullOrder = (order: readonly ProviderId[] | undefined) => [...new Set([...(order ?? []).filter((p) => ALL.includes(p)), ...ALL])];
+
 const ProviderStatus = z.object({
+  /** On: used when it has a key. Off keeps the key and model for later. */
+  enabled: z.boolean(),
   /** Whether there's a key, without ever sending it back. */
   keySet: z.boolean(),
   /** The key's last four characters, e.g. "…a1b2", so people can tell which one it is. */
@@ -28,9 +39,12 @@ const ProviderStatus = z.object({
 });
 
 const Status = z.object({
-  provider: ProviderName.nullable(),
-  /** A provider is chosen and has a key: Add by photo works. */
+  /** At least one AI is on and has a key: Add by photo works. */
   ready: z.boolean(),
+  /** The order they're asked in. */
+  order: z.array(ProviderName),
+  /** The one asked first: the first in the order that's on and has a key. */
+  first: ProviderName.nullable(),
   claude: ProviderStatus,
   gemini: ProviderStatus,
 });
@@ -42,6 +56,8 @@ const ProviderPatch = z.object({
   apiKey: ApiKey.nullable().optional(),
   /** A model id, or null for the default. */
   model: ModelId.nullable().optional(),
+  /** False to switch it off for now, keeping its key and model. */
+  enabled: z.boolean().optional(),
 });
 
 const Model = z.object({ id: z.string(), name: z.string() });
@@ -59,8 +75,11 @@ export const Identified = z.object({
   aliases: z.array(z.string()),
   /** The shop, for a shop's own brand: `id` is null when Larder doesn't have it yet. */
   shop: z.object({ name: z.string(), id: z.string().nullable(), preset: z.boolean() }).nullable(),
+  /** The AI that read it, and its model. */
   provider: ProviderName,
   model: z.string(),
+  /** AIs asked first that couldn't read it, and why (e.g. out of credit). */
+  skipped: z.array(z.object({ provider: ProviderName, message: z.string() })),
 });
 export type Identified = z.infer<typeof Identified>;
 
@@ -92,17 +111,21 @@ export default defineModule({
     const providers: Record<ProviderId, Provider> = { claude: claude(ctx.fetch), gemini: gemini(ctx.fetch) };
 
     async function saved(): Promise<Saved> {
-      return (await store.get('ai')) ?? { provider: null, keys: {}, models: {} };
+      const s = await store.get('ai');
+      return { order: fullOrder(s?.order), off: s?.off ?? [], keys: s?.keys ?? {}, models: s?.models ?? {} };
     }
     const envKey = (p: ProviderId) => ctx.config[`${p}_api_key`]?.trim() || null;
     const keyFor = (s: Saved, p: ProviderId) => s.keys[p] ?? envKey(p);
+    /** The AIs to ask, in order: on, and with a key. */
+    const usable = (s: Saved) => s.order.filter((p) => !s.off.includes(p) && !!keyFor(s, p));
 
     function status(s: Saved): z.infer<typeof Status> {
       const one = (p: ProviderId) => {
         const key = keyFor(s, p);
-        return { keySet: !!key, keyHint: key ? `…${key.slice(-4)}` : null, keyFrom: s.keys[p] ? 'app' as const : key ? 'env' as const : null, model: s.models[p] ?? null };
+        return { enabled: !s.off.includes(p), keySet: !!key, keyHint: key ? `…${key.slice(-4)}` : null, keyFrom: s.keys[p] ? 'app' as const : key ? 'env' as const : null, model: s.models[p] ?? null };
       };
-      return { provider: s.provider, ready: !!s.provider && !!keyFor(s, s.provider), claude: one('claude'), gemini: one('gemini') };
+      const use = usable(s);
+      return { ready: use.length > 0, order: s.order, first: use[0] ?? null, claude: one('claude'), gemini: one('gemini') };
     }
 
     function needKey(s: Saved, p: ProviderId): string {
@@ -114,7 +137,7 @@ export default defineModule({
     ctx.addRoute({
       method: 'GET',
       path: '/',
-      summary: 'Which AI is used for Add by photo, and whether it is set up (never the keys)',
+      summary: 'Which AIs read photos for Add by photo, in what order, and whether they are set up (never the keys)',
       response: Status,
       handler: async () => status(await saved()),
     });
@@ -122,23 +145,30 @@ export default defineModule({
     ctx.addRoute({
       method: 'PUT',
       path: '/settings',
-      summary: 'Choose the AI, and set or forget an API key or model for Claude or Gemini',
+      summary: 'Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model',
       admin: true,
-      body: z.object({ provider: ProviderName.nullable().optional(), claude: ProviderPatch.optional(), gemini: ProviderPatch.optional() }),
+      body: z.object({
+        /** First to ask, then next. AIs left out keep their place after these. */
+        order: z.array(ProviderName).min(1).max(ALL.length).refine((o) => new Set(o).size === o.length, 'Name each AI once.').optional(),
+        claude: ProviderPatch.optional(),
+        gemini: ProviderPatch.optional(),
+      }),
       response: Status,
       async handler({ body }) {
         const s = await saved();
-        const next: Saved = { provider: body.provider === undefined ? s.provider : body.provider, keys: { ...s.keys }, models: { ...s.models } };
-        for (const p of ['claude', 'gemini'] as const) {
+        const next: Saved = { order: body.order ? fullOrder([...body.order, ...s.order]) : s.order, off: [...s.off], keys: { ...s.keys }, models: { ...s.models } };
+        for (const p of ALL) {
           const patch = body[p];
           if (!patch) continue;
           if (patch.apiKey === null) delete next.keys[p];
           else if (patch.apiKey !== undefined) next.keys[p] = patch.apiKey;
           if (patch.model === null) delete next.models[p];
           else if (patch.model !== undefined) next.models[p] = patch.model;
+          if (patch.enabled === true) next.off = next.off.filter((x) => x !== p);
+          else if (patch.enabled === false && !next.off.includes(p)) next.off.push(p);
         }
         await store.put('ai', next);
-        ctx.log.info('AI settings changed', { provider: next.provider });
+        ctx.log.info('AI settings changed', { order: next.order, off: next.off });
         return status(next);
       },
     });
@@ -160,30 +190,49 @@ export default defineModule({
     ctx.addRoute({
       method: 'POST',
       path: '/identify',
-      summary: 'Read a photo of something with the chosen AI and say what it is (nothing is saved)',
-      description: 'Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The answer fills in the Add item page: check it, then save it as usual.',
+      summary: 'Read a photo of something and say what it is (nothing is saved)',
+      description: 'Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household\'s order; if one can\'t (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.',
       body: z.object({ image: z.string().min(100).max(MAX_PHOTO_CHARS) }),
       response: Identified,
       async handler({ body }) {
         const s = await saved();
-        if (!s.provider) throw new LarderError('Choose Claude or Gemini in Settings → AI to add things by photo.', 409, 'ai_not_set_up');
-        const p = s.provider;
-        const key = needKey(s, p);
-        const provider = providers[p];
-        let model = s.models[p];
-        if (!model) {
-          // Gemini's model names change often, so its default comes from the list; Claude's is fixed.
-          model = p === 'gemini' ? provider.defaultModel(await provider.listModels(key)) : provider.defaultModel([]);
-          await store.put('ai', { ...s, models: { ...s.models, [p]: model } });
-        }
+        const use = usable(s);
+        if (!use.length) throw new LarderError('Switch on Claude or Gemini in Settings → AI, with an API key, to add things by photo.', 409, 'ai_not_set_up');
+        const photo = photoFrom(body.image);
         const categories = await ctx.core.categories.list();
-        const reading = await provider.read(key, model, photoFrom(body.image), categories.map((c) => c.name));
-        return { ...(await tidy(reading, categories)), provider: p, model };
+        const skipped: Array<{ provider: ProviderId; message: string; error: LarderError }> = [];
+        for (const p of use) {
+          try {
+            const model = await modelFor(p, keyFor(s, p)!);
+            const reading = await providers[p].read(keyFor(s, p)!, model, photo, categories.map((c) => c.name));
+            return { ...(await tidy(reading, categories)), provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
+          } catch (err) {
+            // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
+            if (!(err instanceof LarderError)) throw err;
+            ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read a photo`, { message: err.message });
+            skipped.push({ provider: p, message: err.message, error: err });
+          }
+        }
+        const last = skipped[skipped.length - 1]!.error;
+        if (skipped.length === 1) throw last;
+        throw new LarderError(skipped.map((x) => x.message).join(' '), last.status, last.code);
       },
     });
 
+    /** The model to use: the chosen one, or the default (saved, so Settings shows it). */
+    async function modelFor(p: ProviderId, key: string): Promise<string> {
+      const s = await saved();
+      const chosen = s.models[p];
+      if (chosen) return chosen;
+      // Gemini's model names change often, so its default comes from Google's list; Claude's is fixed.
+      const model = p === 'gemini' ? providers[p].defaultModel(await providers[p].listModels(key)) : providers[p].defaultModel([]);
+      const now = await saved();
+      await store.put('ai', { ...now, models: { ...now.models, [p]: model } });
+      return model;
+    }
+
     /** Turns what the AI said into Larder's terms: the household's category and shop, sensible lengths. */
-    async function tidy(r: Reading, categories: Array<{ id: string; name: string }>): Promise<Omit<Identified, 'provider' | 'model'>> {
+    async function tidy(r: Reading, categories: Array<{ id: string; name: string }>): Promise<Omit<Identified, 'provider' | 'model' | 'skipped'>> {
       const name = sentence(cap(r.name, 120)) || 'Something';
       const category = r.category ? categories.find((c) => c.name.toLowerCase() === r.category!.trim().toLowerCase()) : undefined;
       const title = cap(r.title, 120);
