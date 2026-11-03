@@ -9,6 +9,7 @@ export interface ProductFormValue {
   unit: string;
   shelfLifeDays: number | null;
   minQuantity: number | null;
+  stockUpTo: number | null;
   preferredShopIds: string[];
   defaultPlaceId: string | null;
   notes: string;
@@ -20,7 +21,7 @@ export interface ProductFormValue {
 export const UNITS = ['each', 'pack', 'roll', 'tin', 'bottle', 'bag', 'box', 'jar', 'carton', 'tablet', 'dose', 'pair', 'battery', 'L', 'ml', 'kg', 'g', 'm'];
 
 export function emptyForm(name = ''): ProductFormValue {
-  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, minQuantity: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
+  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
 }
 
 export function toPayload(v: ProductFormValue) {
@@ -36,6 +37,7 @@ export function toPayload(v: ProductFormValue) {
     unit: v.unit.trim() || 'each',
     shelfLifeDays: v.shelfLifeDays,
     minQuantity: v.minQuantity,
+    stockUpTo: v.stockUpTo,
     preferredShopIds: v.preferredShopIds,
     defaultPlaceId: v.defaultPlaceId,
     notes: v.notes,
@@ -74,6 +76,9 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
         </div>
         <div className="numfield"><span><b>Running low below</b><small>Puts it on the shopping list</small></span>
           {value.minQuantity === null ? <button type="button" className="btn small" onClick={() => set('minQuantity', 1)}>Set</button> : <div className="row"><Stepper value={value.minQuantity} onChange={(n) => set('minQuantity', n)} label="minimum" /><button type="button" className="link small" onClick={() => set('minQuantity', null)}>Clear</button></div>}
+        </div>
+        <div className="numfield"><span><b>Stock up to</b><small>How many to have after buying more</small></span>
+          {value.stockUpTo === null ? <button type="button" className="btn small" onClick={() => set('stockUpTo', Math.max(1, (value.minQuantity ?? 0) * 3))}>Set</button> : <div className="row"><Stepper value={value.stockUpTo} onChange={(n) => set('stockUpTo', n)} label="stock up to" /><button type="button" className="link small" onClick={() => set('stockUpTo', null)}>Clear</button></div>}
         </div>
         <div className="numfield"><span><b>{renewal ? 'Renews every' : 'Shelf life'}</b><small>{renewal ? 'Days, e.g. 365 for yearly' : 'Days from when it’s added, for food and renewals'}</small></span>
           {value.shelfLifeDays === null ? <button type="button" className="btn small" onClick={() => set('shelfLifeDays', renewal ? 365 : 7)}>Set</button> : <div className="row"><Stepper value={value.shelfLifeDays} onChange={(n) => set('shelfLifeDays', Math.max(1, Math.round(n)))} min={1} label="shelf life in days" /><button type="button" className="link small" onClick={() => set('shelfLifeDays', null)}>Clear</button></div>}

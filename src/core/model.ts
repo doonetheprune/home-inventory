@@ -72,6 +72,8 @@ export const Product = z.object({
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
+  /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */
+  stockUpTo: z.number().min(0).nullable().default(null),
   /** Empty means it can come from any shop that sells its category. */
   preferredShopIds: z.array(Id).default([]),
   notes: z.string().max(5000).default(''),

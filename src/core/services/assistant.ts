@@ -108,6 +108,7 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   }
   for (const e of d.entries.filter((x) => x.status === 'expected')) lines.push(`- ${amount(e.quantity, p.unit)} expected from ${e.expected?.source ?? 'an order'}${e.expected?.eta ? ` on ${e.expected.eta}` : ''}${e.expected?.reference ? ` (order ${e.expected.reference})` : ''}`);
   if (p.minQuantity) lines.push(`Running low below ${amount(p.minQuantity, p.unit)}${d.status.low ? ': it is low now' : ''}.`);
+  if (p.stockUpTo) lines.push(`Stock up to ${amount(p.stockUpTo, p.unit)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
@@ -178,7 +179,7 @@ export function createAssistant(deps: {
       return {
         text: detailText(ctx, d),
         data: {
-          id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity,
+          id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity, stock_up_to: p.stockUpTo ?? null,
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
         },
@@ -212,6 +213,7 @@ export function createAssistant(deps: {
       unit: z.string().max(20).optional().describe('What it\'s counted in, e.g. tin, roll, kg, L (default: each)'),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Other names people use'),
       minimum: z.number().min(0).optional().describe('Running low below this many'),
+      stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
@@ -233,7 +235,7 @@ export function createAssistant(deps: {
       if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
-        name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
+        name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.

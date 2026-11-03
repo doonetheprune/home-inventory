@@ -1,10 +1,11 @@
 /**
  * Online shopping in the app: Settings → Shopping providers (where each
- * provider runs, its token, waking its machine, Test connection).
+ * provider runs, its token, waking its machine, Test connection), and an
+ * item's listings and buying rules on its page.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  api, defineWebModule, Icon, Pill, Seg, Sheet, Stepper, Switch, shortDate, useAction, useQuery, useShops,
+  api, defineWebModule, Icon, Pill, Seg, Sheet, Stepper, Switch, shortDate, useAction, useQuery, useShops, type ProductDetail,
 } from '@larder/web-sdk';
 
 const call = <T,>(method: string, path: string, body?: unknown) => api.modules.call<T>('online-shopping', method, path, body);
@@ -175,7 +176,140 @@ function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* An item's page: listings and buying rules                           */
+/* ------------------------------------------------------------------ */
+
+interface Listing {
+  listingId: string; name: string; packQuantity: number; guessed: boolean; link: string | null; imageUrl: string | null; deadSince: string | null;
+}
+interface ShopRules { listings: Listing[]; packRule: 'fixed' | 'cheapest'; fixedListingId: string | null; targetPrice: number | null }
+interface OnlineFields { shops: Record<string, ShopRules>; offerStockUpTo: number | null; targetPrice: number | null }
+
+const emptyRules: ShopRules = { listings: [], packRule: 'cheapest', fixedListingId: null, targetPrice: null };
+
+/** Prices are kept per one of the item's unit; things counted in g or ml are easier per kg or litre. */
+function pricePer(unit: string): { label: string; factor: number } {
+  const u = unit.toLowerCase();
+  if (u === 'g') return { label: 'a kg', factor: 1000 };
+  if (u === 'ml') return { label: 'a litre', factor: 1000 };
+  if (u === 'each') return { label: 'each', factor: 1 };
+  return { label: `a ${unit}`, factor: 1 };
+}
+
+/** A price box that saves when it loses focus or on Enter; empty clears it. */
+function PriceBox({ value, unit, onSave, label }: { value: number | null; unit: string; onSave: (v: number | null) => void; label: string }) {
+  const per = pricePer(unit);
+  const shown = value === null ? '' : String(Math.round(value * per.factor * 1000) / 1000);
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const save = () => {
+    const t = text.trim().replace(/^£/, '');
+    if (t === shown) return;
+    if (!t) return onSave(null);
+    const n = Number(t);
+    if (Number.isFinite(n) && n >= 0) onSave(n / per.factor);
+    else setText(shown);
+  };
+  return (
+    <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+      <span>£</span>
+      <input className="input" inputMode="decimal" style={{ width: 90 }} value={text} placeholder="Not set" aria-label={label}
+        onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
+      <span className="small muted">{per.label}</span>
+    </span>
+  );
+}
+
+function ListingRow({ l, unit, shopId, shopName, productId }: { l: Listing; unit: string; shopId: string; shopName: string; productId: string }) {
+  const { run, busy } = useAction();
+  const [fixing, setFixing] = useState(false);
+  const [n, setN] = useState(l.packQuantity);
+  const path = `/items/${productId}/listings/${encodeURIComponent(l.listingId)}`;
+  return (
+    <div className="item" style={{ flexWrap: 'wrap' }}>
+      <span className="tile">{l.imageUrl ? <img src={l.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="cart" />}</span>
+      <span className="item-main" style={{ flex: '1 1 180px' }}>
+        <span className="item-name">{l.link ? <a href={l.link} target="_blank" rel="noreferrer">{l.name || l.listingId}</a> : (l.name || l.listingId)}</span>
+        <span className="item-meta">
+          {l.deadSince ? <Pill kind="low">Gone from {shopName}: link the new one</Pill> : <>Code {l.listingId} · </>}
+          {!l.deadSince && (fixing ? (
+            <span className="row" style={{ gap: 6, display: 'inline-flex' }}>1 pack = <Stepper small value={n} onChange={setN} min={0.001} label={`${unit} in one pack`} /> {unit}
+              <button type="button" className="btn small" disabled={busy} onClick={() => void run(() => call('PATCH', path, { shopId, packQuantity: n }), 'Pack size saved').then(() => setFixing(false))}>Save</button></span>
+          ) : (
+            <button type="button" className="link small" onClick={() => setFixing(true)}>1 pack = {l.packQuantity} {unit}{l.guessed ? ' (check this)' : ''}</button>
+          ))}
+        </span>
+      </span>
+      <span className="row" style={{ gap: 6, marginLeft: 'auto' }}>
+        {l.imageUrl && <button type="button" className="btn small ghost" disabled={busy} onClick={() => void run(() => call('POST', `/items/${productId}/shop-image`, { shopId, listingId: l.listingId }), 'Using the shop\'s picture')}><Icon name="camera" size="sm" />Use picture</button>}
+        <button type="button" className="iconbtn ghost" aria-label={`Unlink ${l.name}`} disabled={busy} onClick={() => void run(() => call('DELETE', `${path}?shopId=${encodeURIComponent(shopId)}`), `${l.name || l.listingId} unlinked`)}><Icon name="x" size="sm" /></button>
+      </span>
+    </div>
+  );
+}
+
+function ShopListings({ product, provider, rules }: { product: ProductDetail; provider: ProviderView; rules: ShopRules }) {
+  const { run, busy } = useAction();
+  const [code, setCode] = useState('');
+  const [favourite, setFavourite] = useState(false);
+  const id = product.product.id;
+  const unit = product.product.unit;
+  const canFavourite = !provider.status?.capabilities.length || provider.status.capabilities.includes('add_favourites');
+  const setRules = (body: Partial<ShopRules>, done: string) => run(() => call('PUT', `/items/${id}/shops/${provider.shopId}`, body), done);
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <b>{provider.shopName}</b>
+        {rules.listings.length > 1 && (
+          <Seg<'cheapest' | 'fixed'> label="Which pack" value={rules.packRule} onChange={(v) => void setRules({ packRule: v }, v === 'fixed' ? 'Always the first pack' : 'The cheapest mix of packs')}
+            options={[['cheapest', 'Cheapest mix'], ['fixed', 'Always the first']]} />
+        )}
+      </div>
+      {rules.listings.length > 0 && <div className="list">{rules.listings.map((l) => <ListingRow key={l.listingId} l={l} unit={unit} shopId={provider.shopId} shopName={provider.shopName} productId={id} />)}</div>}
+      <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (code.trim()) void run(() => call<{ message: string }>('POST', `/items/${id}/listings`, { shopId: provider.shopId, idOrLink: code.trim(), addToFavourites: favourite }), (r) => r.message).then((r) => r && setCode('')); }}>
+        <input className="input" value={code} onChange={(e) => setCode(e.target.value)} placeholder={`${provider.shopName} product code or link`} aria-label={`${provider.shopName} product code or link`} />
+        <button className="btn small" disabled={busy || !code.trim()}>{busy ? 'Looking…' : 'Link'}</button>
+      </form>
+      {canFavourite && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} />Also add it to my {provider.shopName} favourites</label>}
+      {rules.listings.length > 0 && (
+        <div className="numfield"><span><b>Target price at {provider.shopName}</b><small>Leave empty to use the item's</small></span>
+          <PriceBox value={rules.targetPrice} unit={unit} label={`Target price at ${provider.shopName}`} onSave={(v) => void setRules({ targetPrice: v }, v === null ? 'Using the item\'s target price' : 'Target price saved')} /></div>
+      )}
+    </div>
+  );
+}
+
+function OnlineShoppingPanel({ product }: { product: ProductDetail }) {
+  const providers = useProviders().data?.providers ?? [];
+  const { run } = useAction();
+  if (!providers.length || product.product.wish) return null;
+  const f = (product.product.fields['online-shopping'] ?? {}) as Partial<OnlineFields>;
+  const id = product.product.id;
+  const unit = product.product.unit;
+  const normal = product.product.stockUpTo ?? product.product.minQuantity;
+  const setRules = (body: Partial<OnlineFields>, done: string) => run(() => call('PUT', `/items/${id}/rules`, body), done);
+  return (
+    <div className="section">
+      <div className="label">Online shopping</div>
+      <div className="card pad stack" style={{ gap: 14 }}>
+        <div className="list">
+          <div className="numfield"><span><b>On offer at</b><small>This price or less counts as an offer</small></span>
+            <PriceBox value={f.targetPrice ?? null} unit={unit} label="Target price" onSave={(v) => void setRules({ targetPrice: v }, v === null ? 'Target price cleared' : 'Target price saved')} /></div>
+          <div className="numfield"><span><b>Stock up to, on offer</b><small>{normal ? `Normally up to ${normal}` : 'Set the normal amount with Edit'}</small></span>
+            {f.offerStockUpTo == null
+              ? <button type="button" className="btn small" onClick={() => void setRules({ offerStockUpTo: Math.max(1, (normal ?? 1) * 3) }, 'On-offer amount set')}>Set</button>
+              : <div className="row"><Stepper value={f.offerStockUpTo} onChange={(n) => void setRules({ offerStockUpTo: n }, '')} label="stock up to when on offer" /><button type="button" className="link small" onClick={() => void setRules({ offerStockUpTo: null }, 'On-offer amount cleared')}>Clear</button></div>}
+          </div>
+        </div>
+        {providers.map((p) => <ShopListings key={p.id} product={product} provider={p} rules={{ ...emptyRules, ...(f.shops?.[p.shopId] ?? {}) }} />)}
+      </div>
+    </div>
+  );
+}
+
 export default defineWebModule({
   id: 'online-shopping',
   settingsPanels: [ShoppingProvidersSettings],
+  productPanels: [OnlineShoppingPanel],
 });

@@ -137,6 +137,7 @@ export function ProductPage() {
                 <dt>Counted in</dt><dd>{unit}</dd>
                 <dt>{renewal ? 'Renews every' : 'Shelf life'}</dt><dd>{p.product.shelfLifeDays ? `${p.product.shelfLifeDays} days` : <span className="muted">None</span>}</dd>
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
+                {p.product.stockUpTo != null && <><dt>Stock up to</dt><dd>{p.product.stockUpTo}</dd></>}
                 <dt>Buy from</dt><dd>{p.product.preferredShopIds.length ? p.shops.map((s) => s.name).join(', ') : p.shops.length ? `Any shop (${p.shops.map((s) => s.name).join(', ')})` : <span className="muted">No shop sells this category</span>}</dd>
                 <dt>New stock goes to</dt><dd>{p.product.defaultPlaceId ? (p.places.find((x) => x.id === p.product.defaultPlaceId)?.path ?? 'Set') : <span className="muted">Where most of it is</span>}</dd>
               </dl>
@@ -310,7 +311,7 @@ function MoveSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
 
 function ExpectSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
   const { run, busy } = useAction();
-  const [n, setN] = useState(Math.max(1, (p.product.minQuantity ?? 1) - p.inStock));
+  const [n, setN] = useState(Math.max(1, (p.product.stockUpTo ?? p.product.minQuantity ?? 1) - p.inStock - p.expected));
   const [source, setSource] = useState(p.shops[0] ? `${p.shops[0].name} delivery` : '');
   const [eta, setEta] = useState('');
   return (

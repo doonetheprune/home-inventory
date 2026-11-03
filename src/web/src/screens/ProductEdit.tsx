@@ -20,7 +20,7 @@ export function ProductEdit() {
   useEffect(() => {
     if (p && !form) {
       const x = p.product;
-      setForm({ name: x.name, aliases: x.aliases.join(', '), categoryId: x.categoryId, unit: x.unit, shelfLifeDays: x.shelfLifeDays, minQuantity: x.minQuantity, preferredShopIds: x.preferredShopIds, defaultPlaceId: x.defaultPlaceId, notes: x.notes, links: x.links.map((l) => l.url).join('\n'), wish: x.wish, rechargeable: x.rechargeable });
+      setForm({ name: x.name, aliases: x.aliases.join(', '), categoryId: x.categoryId, unit: x.unit, shelfLifeDays: x.shelfLifeDays, minQuantity: x.minQuantity, stockUpTo: x.stockUpTo ?? null, preferredShopIds: x.preferredShopIds, defaultPlaceId: x.defaultPlaceId, notes: x.notes, links: x.links.map((l) => l.url).join('\n'), wish: x.wish, rechargeable: x.rechargeable });
     }
   }, [p, form]);
 

@@ -54,6 +54,19 @@ describe('shopping lists', () => {
     expect(list.groups[1]?.items[0]?.quantity).toBe(4);
   });
 
+  it('suggests topping up to the stock-up amount, not just back to the minimum', async () => {
+    const roll = (await core.products.list()).find((s) => s.product.name === 'Kitchen roll')!;
+    await core.stock.add({ productId: roll.product.id, quantity: 1 });
+    const qty = async () => (await core.shopping.forShop(tesco)).groups[0]!.items.find((i) => i.summary.product.name === 'Kitchen roll')?.quantity;
+    expect(await qty()).toBe(1);
+    await core.products.update(roll.product.id, { stockUpTo: 6 });
+    expect(await qty()).toBe(5);
+    // Put on the list by hand while not low: still up to the stock-up amount.
+    await core.stock.add({ productId: roll.product.id, quantity: 2 });
+    await core.products.setOnList(roll.product.id, true);
+    expect(await qty()).toBe(3);
+  });
+
   it('buying ticks things off by adding them to stock', async () => {
     const list = await core.shopping.forShop(aldi);
     const bananas = list.groups[0]!.items[0]!.summary.product.id;
