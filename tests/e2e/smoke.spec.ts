@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /** Signs in (setting up the household the first time) and loads the example data once. */
 async function signIn(page: Page) {
@@ -303,28 +303,46 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
 });
 
-test('adds an item from a photo, offering to add its shop', async ({ page }, info) => {
+/** Stands in for the AI: Larder's own pages, camera and saving are real. */
+async function pretendAi(page: Page, answer: Record<string, unknown>) {
+  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
+  const sent: string[] = [];
+  await page.route('**/api/v1/modules/ai/identify', (r) => {
+    sent.push((r.request().postDataJSON() as { image: string }).image);
+    return r.fulfill({ json: { readable: true, brand: null, unit: 'each', categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', skipped: [], ...answer } });
+  });
+  return sent;
+}
+
+/** The size a photo on the page really is, so turning it can be checked. */
+const size = (img: Locator) => img.evaluate((el) => {
+  const i = el as unknown as { complete: boolean; naturalWidth: number; naturalHeight: number };
+  return i.complete && i.naturalWidth ? `${i.naturalWidth}x${i.naturalHeight}` : '';
+});
+
+test('adds an item from a photo taken with the camera, offering to add its shop', async ({ page }, info) => {
   await signIn(page);
   const name = `Oat drink ${info.project.name}`;
   const shop = `Corner shop ${info.project.name}`;
-  // The AI itself is stood in for: Larder's own pages and saving are real.
-  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
-  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
-  let sent = '';
-  await page.route('**/api/v1/modules/ai/identify', (r) => {
-    sent = (r.request().postDataJSON() as { image: string }).image;
-    return r.fulfill({ json: { readable: true, name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', categoryId: null, shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false }, provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }] } });
+  const sent = await pretendAi(page, {
+    name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false },
+    provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }],
   });
   await page.goto('/');
   await page.getByRole('link', { name: /Add by photo/ }).first().click();
-  await expect(page.getByRole('button', { name: 'Take a photo' })).toBeVisible();
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-  await page.getByTestId('ai-gallery').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+  // Straight into the camera, like the scanner, with uploading as the other way.
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Upload a photo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Take photo' })).toBeEnabled();
+  // A volume button takes the photo, like a phone's camera app.
+  await page.keyboard.press('AudioVolumeDown');
 
   const ask = page.getByRole('dialog', { name: `Add ${shop}?` });
   await expect(ask).toBeVisible();
-  // The photo was shrunk to a JPEG on the phone before it was sent.
-  expect(Buffer.from(sent, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  // The photo was shrunk to a JPEG on the phone before it was sent, and sent once.
+  expect(sent).toHaveLength(1);
+  expect(Buffer.from(sent[0]!, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
   await ask.getByRole('button', { name: `Add ${shop}` }).click();
 
   await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
@@ -332,10 +350,35 @@ test('adds an item from a photo, offering to add its shop', async ({ page }, inf
   await expect(page.getByText("Read from your photo by Gemini. Claude couldn't read the photo: Your credit balance is too low.")).toBeVisible();
   await expect(page.getByLabel('Other names')).toHaveValue('oat milk');
   await expect(page.getByRole('button', { name: shop })).toHaveClass(/on/);
+
+  // Turning the photo before saving: width and height swap.
+  const draftPhoto = page.getByRole('img', { name: 'Your photo' });
+  await expect.poll(() => size(draftPhoto)).toMatch(/^\d+x\d+$/);
+  const [w, h] = (await size(draftPhoto)).split('x');
+  await page.getByRole('button', { name: 'Rotate photo' }).click();
+  await expect.poll(() => size(draftPhoto)).toBe(`${h}x${w}`);
   await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
 
+  // Saved with the photo as it was turned, and it can be turned again from the item.
   await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
   await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+  const itemPhoto = page.getByRole('button', { name: 'Add a photo' }).locator('img');
+  await expect.poll(() => size(itemPhoto)).toBe(`${h}x${w}`);
+  await page.getByRole('button', { name: 'Rotate photo' }).click();
+  await expect(page.locator('.toast')).toContainText('Photo turned');
+  await expect.poll(() => size(itemPhoto)).toBe(`${w}x${h}`);
+});
+
+test('adds from an uploaded photo, and says when the AI can\'t make it out', async ({ page }, info) => {
+  test.skip(info.project.name === 'phone', 'Once is enough');
+  await signIn(page);
+  await pretendAi(page, { readable: false, name: 'Blurry thing' });
+  await page.goto('/#/m/ai/photo');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('ai-upload').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+  await expect(page.getByText("Claude couldn't make out what this is.")).toBeVisible();
+  await page.getByRole('button', { name: 'Take another' }).click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
 });
 
 test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {

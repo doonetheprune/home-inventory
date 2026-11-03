@@ -44,6 +44,7 @@ export { useModuleParams, PrintSetup } from './page';
 export { ModulePanels, useModuleEnabled, type SlotPanel } from './panels';
 export { useAddItem, type AddItemDraft } from '../drafts';
 export { readBarcode } from '../components/useBarcodeScanner';
+export { useCamera, grabFrame, rotatePhoto } from '../components/camera';
 export { Header, Empty } from '../ui';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';

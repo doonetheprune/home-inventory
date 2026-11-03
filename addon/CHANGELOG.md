@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- **Add by photo opens the camera straight away**, like the barcode scanner, instead of the phone's photo picker (which the Home Assistant app opened for both buttons). **Upload a photo** is its own button for a photo you already have.
+- A volume button takes the photo too, like a phone's camera app, where the phone passes the button to the page. Space does on a keyboard.
+- **Rotate photo:** turn a photo that came out sideways, on the Add item page before saving, or on the item's page afterwards.
+
 ## 0.5.0
 
 - **Add by photo:** take a photo of the pack and Claude or Gemini reads it: the name, brand and size, what it's counted in, its category, roughly how long it keeps, and the shop for a shop's own brand. You check it on the Add item page before saving, and the photo becomes the item's photo. If it's a shop you haven't got, Larder asks whether to add it. A barcode in the photo is read on the phone, and if it's something you already have, Larder offers that instead.
