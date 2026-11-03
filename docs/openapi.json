@@ -17618,6 +17618,965 @@
         }
       }
     },
+    "/api/v1/modules/online-shopping/hub": {
+      "get": {
+        "summary": "Larder Automations: where it runs (never its token) and its automations, with the shop each is linked to",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hub": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            },
+                            "wake": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "entityId": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 200,
+                                          "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "mac": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "broadcastAddress": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 60
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "timeoutSeconds": {
+                                      "default": 180,
+                                      "type": "integer",
+                                      "minimum": 10,
+                                      "maximum": 900
+                                    }
+                                  },
+                                  "required": [
+                                    "entityId",
+                                    "mac",
+                                    "broadcastAddress",
+                                    "timeoutSeconds"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "sleepEntityId": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "status": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "checkedAt": {
+                                      "type": "string"
+                                    },
+                                    "ok": {
+                                      "type": "boolean"
+                                    },
+                                    "message": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "reachable": {
+                                      "type": "boolean"
+                                    },
+                                    "version": {
+                                      "default": null,
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "extension": {
+                                      "default": null,
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "automations": {
+                                      "default": [],
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "version": {
+                                            "default": null,
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "running": {
+                                            "default": null,
+                                            "type": [
+                                              "boolean",
+                                              "null"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "name",
+                                          "version",
+                                          "running"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "checkedAt",
+                                    "ok",
+                                    "message",
+                                    "reachable",
+                                    "version",
+                                    "extension",
+                                    "automations"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tokenHint": {
+                              "type": "string"
+                            },
+                            "canWake": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "url",
+                            "wake",
+                            "sleepEntityId",
+                            "status",
+                            "tokenHint",
+                            "canWake"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "automations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "running": {
+                            "default": null,
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "providerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "version",
+                          "running",
+                          "providerId",
+                          "shopId",
+                          "shopName"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "hub",
+                    "automations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set where Larder Automations runs, its token and how to wake its Mac (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "The address is the Mac's (port 8700 unless given); the token is from the Larder Automations menu (Copy token). Leave the token out to keep the saved one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "wake": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "entityId": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200,
+                                "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "mac": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "broadcastAddress": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 60
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "timeoutSeconds": {
+                            "default": 180,
+                            "type": "integer",
+                            "minimum": 10,
+                            "maximum": 900
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sleepEntityId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "address"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hub": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            },
+                            "wake": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "entityId": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 200,
+                                          "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "mac": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "broadcastAddress": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 60
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "timeoutSeconds": {
+                                      "default": 180,
+                                      "type": "integer",
+                                      "minimum": 10,
+                                      "maximum": 900
+                                    }
+                                  },
+                                  "required": [
+                                    "entityId",
+                                    "mac",
+                                    "broadcastAddress",
+                                    "timeoutSeconds"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "sleepEntityId": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "status": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "checkedAt": {
+                                      "type": "string"
+                                    },
+                                    "ok": {
+                                      "type": "boolean"
+                                    },
+                                    "message": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "reachable": {
+                                      "type": "boolean"
+                                    },
+                                    "version": {
+                                      "default": null,
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "extension": {
+                                      "default": null,
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "automations": {
+                                      "default": [],
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "version": {
+                                            "default": null,
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "running": {
+                                            "default": null,
+                                            "type": [
+                                              "boolean",
+                                              "null"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "name",
+                                          "version",
+                                          "running"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "checkedAt",
+                                    "ok",
+                                    "message",
+                                    "reachable",
+                                    "version",
+                                    "extension",
+                                    "automations"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tokenHint": {
+                              "type": "string"
+                            },
+                            "canWake": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "url",
+                            "wake",
+                            "sleepEntityId",
+                            "status",
+                            "tokenHint",
+                            "canWake"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "automations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "running": {
+                            "default": null,
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "providerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "version",
+                          "running",
+                          "providerId",
+                          "shopId",
+                          "shopName"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "hub",
+                    "automations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Forget Larder Automations, and the shops linked to its automations (items keep their listings) (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/hub/test": {
+      "post": {
+        "summary": "Test Larder Automations: is it up, which automations it runs, is the Chrome extension connected (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "With wake: true, wakes the Mac through Home Assistant first if it doesn't answer. Fills in waking from the Mac's network card when it isn't set up.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "wake": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hub": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            },
+                            "wake": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "entityId": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 200,
+                                          "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "mac": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "pattern": "^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "broadcastAddress": {
+                                      "default": null,
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "maxLength": 60
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "timeoutSeconds": {
+                                      "default": 180,
+                                      "type": "integer",
+                                      "minimum": 10,
+                                      "maximum": 900
+                                    }
+                                  },
+                                  "required": [
+                                    "entityId",
+                                    "mac",
+                                    "broadcastAddress",
+                                    "timeoutSeconds"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "sleepEntityId": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "status": {
+                              "default": null,
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "checkedAt": {
+                                      "type": "string"
+                                    },
+                                    "ok": {
+                                      "type": "boolean"
+                                    },
+                                    "message": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "reachable": {
+                                      "type": "boolean"
+                                    },
+                                    "version": {
+                                      "default": null,
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "extension": {
+                                      "default": null,
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "automations": {
+                                      "default": [],
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "version": {
+                                            "default": null,
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "running": {
+                                            "default": null,
+                                            "type": [
+                                              "boolean",
+                                              "null"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "name",
+                                          "version",
+                                          "running"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "checkedAt",
+                                    "ok",
+                                    "message",
+                                    "reachable",
+                                    "version",
+                                    "extension",
+                                    "automations"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tokenHint": {
+                              "type": "string"
+                            },
+                            "canWake": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "url",
+                            "wake",
+                            "sleepEntityId",
+                            "status",
+                            "tokenHint",
+                            "canWake"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "automations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "running": {
+                            "default": null,
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "providerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "shopName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "version",
+                          "running",
+                          "providerId",
+                          "shopId",
+                          "shopName"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "woke": {
+                      "type": "boolean"
+                    },
+                    "filledWake": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hub",
+                    "automations",
+                    "woke",
+                    "filledWake",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/online-shopping/providers": {
       "get": {
         "summary": "Shopping providers, and the types that can be added",
@@ -17657,6 +18616,13 @@
                           "isDefault": {
                             "default": false,
                             "type": "boolean"
+                          },
+                          "automation": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "url": {
                             "type": "string"
@@ -17866,6 +18832,7 @@
                           "type",
                           "shopId",
                           "isDefault",
+                          "automation",
                           "url",
                           "wake",
                           "sleepEntityId",
@@ -17918,11 +18885,11 @@
         }
       },
       "post": {
-        "summary": "Add an automated shopping provider (admin)",
+        "summary": "Add a shopping provider: link a Larder Automations automation to a shop, or one at its own address (admin)",
         "tags": [
           "Module: online-shopping"
         ],
-        "description": "One per shop. The address is where the provider runs (e.g. 192.168.1.231:8710) and the token is its AUTH_TOKEN. The first one added is the default.",
+        "description": "One per shop, the first added is the default. For an automation on Larder Automations, give automation (e.g. \"tesco\"): it uses the hub's address, token and waking. Otherwise give the address it runs at (e.g. 192.168.1.231:8710) and its token (AUTH_TOKEN).",
         "requestBody": {
           "required": true,
           "content": {
@@ -17944,6 +18911,19 @@
                   },
                   "isDefault": {
                     "type": "boolean"
+                  },
+                  "automation": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60,
+                        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "address": {
                     "type": "string",
@@ -18028,9 +19008,7 @@
                 },
                 "required": [
                   "type",
-                  "shopId",
-                  "address",
-                  "token"
+                  "shopId"
                 ]
               }
             }
@@ -18064,6 +19042,13 @@
                     "isDefault": {
                       "default": false,
                       "type": "boolean"
+                    },
+                    "automation": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "url": {
                       "type": "string"
@@ -18273,6 +19258,7 @@
                     "type",
                     "shopId",
                     "isDefault",
+                    "automation",
                     "url",
                     "wake",
                     "sleepEntityId",
@@ -18318,6 +19304,19 @@
                   },
                   "isDefault": {
                     "type": "boolean"
+                  },
+                  "automation": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60,
+                        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "address": {
                     "type": "string",
@@ -18445,6 +19444,13 @@
                       "default": false,
                       "type": "boolean"
                     },
+                    "automation": {
+                      "default": null,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "url": {
                       "type": "string"
                     },
@@ -18653,6 +19659,7 @@
                     "type",
                     "shopId",
                     "isDefault",
+                    "automation",
                     "url",
                     "wake",
                     "sleepEntityId",
@@ -18775,6 +19782,13 @@
                         "isDefault": {
                           "default": false,
                           "type": "boolean"
+                        },
+                        "automation": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "url": {
                           "type": "string"
@@ -18984,6 +19998,7 @@
                         "type",
                         "shopId",
                         "isDefault",
+                        "automation",
                         "url",
                         "wake",
                         "sleepEntityId",

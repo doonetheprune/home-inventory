@@ -1,11 +1,13 @@
 /** What the module's routes and tools share. */
 import { LarderError, type ModuleContext } from '@larder/core';
 import type { ProviderClient } from './client';
+import { createHub } from './hub';
 import { createItems } from './items';
 import { createProviders, type Provider } from './providers';
 
 export function createServices(ctx: ModuleContext) {
-  const providers = createProviders(ctx);
+  const hub = createHub(ctx);
+  const providers = createProviders(ctx, hub);
   const items = createItems(ctx);
 
   /** The provider's client once it answers (waking it if needed) and is logged in; otherwise says why not. */
@@ -21,6 +23,6 @@ export function createServices(ctx: ModuleContext) {
 
   const currency = async () => (await ctx.core.settings.get()).currency;
 
-  return { providers, items, ready, can, currency };
+  return { hub, providers, items, ready, can, currency };
 }
 export type Services = ReturnType<typeof createServices>;

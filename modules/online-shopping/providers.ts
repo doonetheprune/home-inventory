@@ -1,12 +1,18 @@
 /**
  * Shopping providers: one per shop, each a small service on a machine on the
- * network that drives that shop's website. Larder keeps where each runs, its
- * token, how to wake the machine (through Home Assistant) and its last status.
+ * network that drives that shop's website. Most are automations on the
+ * Larder Automations hub (hub.ts), which gives their address, token and how to
+ * wake the Mac; one can also be reached at an address of its own. Larder keeps
+ * that, how to wake the machine (through Home Assistant) and its last status.
  */
 import { z } from 'zod';
 import { Id, LarderError, NotFoundError, ValidationError, newId, type ModuleContext, type Shop } from '@larder/core';
 import { ProviderError, normaliseAddress, providerClient, shortAddress, type ProviderClient } from './client';
 import type { Health, Manifest } from './contract';
+import type { HubStore } from './hub';
+import { WakeSettings, wakeMachine } from './wake';
+
+export { WakeSettings };
 
 /** Types offered under "Add automated shopping provider". Any provider keeping to the contract works as "another shop". */
 export const PROVIDER_TYPES = [
@@ -14,20 +20,6 @@ export const PROVIDER_TYPES = [
   { type: 'other', name: 'Another shop (any Larder shopping provider)', shop: null },
 ] as const;
 export const ProviderType = z.enum(['tesco', 'other']);
-
-const MAC = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i;
-
-export const WakeSettings = z.object({
-  /** A switch, button or script in Home Assistant that wakes the machine… */
-  entityId: z.string().trim().max(200).regex(/^[a-z_]+\.[a-z0-9_]+$/, 'Use an entity id like switch.mac_mini or script.wake_mac').nullable().default(null),
-  /** …or its MAC address, for Home Assistant's wake_on_lan.send_magic_packet. */
-  mac: z.string().trim().regex(MAC, 'Use a MAC address like 4c:32:75:12:34:56').nullable().default(null),
-  /** Where the magic packet goes, e.g. 192.168.1.255. Optional. */
-  broadcastAddress: z.string().trim().max(60).nullable().default(null),
-  /** How long to wait for it to answer after waking. */
-  timeoutSeconds: z.number().int().min(10).max(900).default(180),
-});
-export type WakeSettings = z.infer<typeof WakeSettings>;
 
 export const ProviderStatus = z.object({
   checkedAt: z.string(),
@@ -54,7 +46,9 @@ export const Provider = z.object({
   shopId: Id,
   /** Used when nobody names a shop. Only one is. */
   isDefault: z.boolean().default(false),
-  /** e.g. http://192.168.1.231:8710 */
+  /** The Larder Automations automation it is (e.g. "tesco"), reached through the hub; null for one at its own address. */
+  automation: z.string().nullable().default(null),
+  /** e.g. http://192.168.1.231:8710. Empty for an automation (the hub's address is used). */
   url: z.string(),
   token: z.string(),
   wake: WakeSettings.nullable().default(null),
@@ -76,46 +70,53 @@ export const ProviderView = Provider.omit({ token: true }).extend({
 });
 export type ProviderView = z.infer<typeof ProviderView>;
 
+const AutomationId = z.string().trim().min(1).max(60).regex(/^[a-z0-9][a-z0-9_-]*$/, 'An automation id is like "tesco"');
+
 export const ProviderInput = z.object({
   type: ProviderType,
   shopId: Id,
   isDefault: z.boolean().optional(),
-  address: z.string().min(1).max(300),
-  token: z.string().min(1).max(500),
+  /** An automation on Larder Automations (e.g. "tesco")… */
+  automation: AutomationId.nullable().optional(),
+  /** …or where a provider of its own runs, with its token. */
+  address: z.string().min(1).max(300).optional(),
+  token: z.string().min(1).max(500).optional(),
   wake: WakeSettings.nullable().optional(),
   sleepEntityId: z.string().trim().max(200).regex(/^[a-z_]+\.[a-z0-9_]+$/, 'Use an entity id like switch.mac_mini').nullable().optional(),
   loyaltyPrices: z.boolean().optional(),
 });
 export const ProviderPatch = ProviderInput.partial();
 
-/** What Home Assistant does to wake (or sleep) the machine with an entity. */
-function actionFor(entityId: string, sleep: boolean): [string, string] {
-  const domain = entityId.split('.')[0]!;
-  switch (domain) {
-    case 'switch': return ['switch', sleep ? 'turn_off' : 'turn_on'];
-    case 'button': case 'input_button': return [domain, 'press'];
-    case 'script': return ['script', 'turn_on'];
-    case 'automation': return ['automation', 'trigger'];
-    default: throw new ValidationError(`${entityId} isn't a switch, button, script or automation, so Larder can't use it to ${sleep ? 'put the machine to sleep' : 'wake the machine'}.`);
-  }
-}
+/** Where a provider is reached, and how its machine is woken: its own, or the hub's for an automation. */
+interface Reach { url: string; token: string; wake: WakeSettings | null; sleepEntityId: string | null; hub: boolean }
 
-export function createProviders(ctx: ModuleContext) {
+export function createProviders(ctx: ModuleContext, hub: HubStore) {
   const store = ctx.collection<Provider>('providers');
   /** Shops being worked on now, so the machine isn't put to sleep under another job. */
   const busy = new Map<string, number>();
   // How often to ask after waking; tests shorten it, and the wait.
   const pollMs = Number(ctx.config.wake_poll_ms ?? 5000);
-  const waitMs = (p: Provider) => (ctx.config.wake_timeout_ms ? Number(ctx.config.wake_timeout_ms) : (p.wake?.timeoutSeconds ?? 180) * 1000);
+  const waitMs = (r: Reach) => (ctx.config.wake_timeout_ms ? Number(ctx.config.wake_timeout_ms) : (r.wake?.timeoutSeconds ?? 180) * 1000);
 
   const all = async () => (await store.list()).map((d) => Provider.parse(d.data)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const shopName = async (shopId: string) => (await ctx.core.shops.list()).find((s) => s.id === shopId)?.name ?? 'shop';
   const label = async (p: Provider) => `the ${await shopName(p.shopId)} provider`;
 
+  async function reach(p: Provider): Promise<Reach> {
+    if (!p.automation) return { url: p.url, token: p.token, wake: p.wake, sleepEntityId: p.sleepEntityId, hub: false };
+    const h = await hub.get();
+    if (!h) throw new LarderError(`${cap(await label(p))} runs on Larder Automations, which isn't set up. Add it in Settings → Larder Automations.`, 409, 'no_provider');
+    return { url: `${h.url}/automations/${encodeURIComponent(p.automation)}`, token: h.token, wake: h.wake, sleepEntityId: h.sleepEntityId, hub: true };
+  }
+
   async function view(p: Provider, shops?: Shop[]): Promise<ProviderView> {
     const name = (shops ?? (await ctx.core.shops.list())).find((s) => s.id === p.shopId)?.name ?? 'Shop removed';
+    const r = await reach(p).catch(() => null);
     const { token, ...rest } = p;
-    return { ...rest, shopName: name, tokenHint: token.slice(-4), canWake: !!(p.wake?.entityId || p.wake?.mac) };
+    // An automation shows the hub's address and waking, which it uses.
+    const shown = r?.hub ? { url: r.url, wake: r.wake, sleepEntityId: r.sleepEntityId } : {};
+    const wake = r?.wake ?? p.wake;
+    return { ...rest, ...shown, shopName: name, tokenHint: p.automation ? '' : token.slice(-4), canWake: !!(wake?.entityId || wake?.mac) };
   }
 
   async function get(id: string): Promise<Provider> {
@@ -133,48 +134,27 @@ export function createProviders(ctx: ModuleContext) {
   }
 
   async function client(p: Provider): Promise<ProviderClient> {
-    return providerClient(ctx.fetch, { url: p.url, token: p.token, label: await label(p) });
+    const r = await reach(p);
+    return providerClient(ctx.fetch, { url: r.url, token: r.token, label: await label(p), hub: r.hub });
   }
 
   async function sendWake(p: Provider, sleep = false): Promise<void> {
-    const ha = ctx.core.homeAssistant;
-    const what = sleep ? 'put it to sleep' : 'wake it';
-    if (!ha) throw new LarderError(`Larder can't reach Home Assistant to ${what}. As an add-on it always can; elsewhere set LARDER_HA_URL and LARDER_HA_TOKEN.`, 503, 'no_home_assistant');
-    try {
-      if (sleep) {
-        const [domain, service] = actionFor(p.sleepEntityId!, true);
-        await ha.callService(domain, service, { entity_id: p.sleepEntityId });
-      } else if (p.wake?.entityId) {
-        const [domain, service] = actionFor(p.wake.entityId, false);
-        await ha.callService(domain, service, { entity_id: p.wake.entityId });
-      } else if (p.wake?.mac) {
-        await ha.callService('wake_on_lan', 'send_magic_packet', { mac: p.wake.mac, ...(p.wake.broadcastAddress ? { broadcast_address: p.wake.broadcastAddress } : {}) });
-      }
-    } catch (err) {
-      if (err instanceof LarderError) throw err;
-      const said = err instanceof Error ? err.message : String(err);
-      const noWol = !sleep && !p.wake?.entityId && /wake_on_lan|not found/i.test(said);
-      throw new LarderError(
-        noWol
-          ? `Home Assistant can't send a magic packet (${said}). Add the Wake on LAN integration in Home Assistant, or choose a switch or script to wake the machine instead.`
-          : `Home Assistant couldn't ${what}: ${said}`,
-        502, 'wake_failed',
-      );
-    }
+    await wakeMachine(ctx, await reach(p), sleep);
   }
 
   /** Answers health, waking the machine first if it doesn't answer and waking is set up. */
   async function awake(p: Provider, o: { wake?: boolean; onWaking?: () => void } = {}): Promise<{ health: Health; woke: boolean }> {
+    const r = await reach(p);
     const c = await client(p);
     try {
       return { health: await c.health(), woke: false };
     } catch (err) {
       if (!(err instanceof ProviderError) || err.code !== 'unreachable' || o.wake === false) throw err;
-      if (!p.wake?.entityId && !p.wake?.mac) throw new ProviderError(`${err.message} To have Larder wake it, set up waking in Settings → Shopping providers.`, 'unreachable', 503);
+      if (!r.wake?.entityId && !r.wake?.mac) throw new ProviderError(`${err.message} To have Larder wake it, set up waking in Settings → ${r.hub ? 'Larder Automations' : 'Online shops'}.`, 'unreachable', 503);
     }
     o.onWaking?.();
     await sendWake(p);
-    const timeout = waitMs(p);
+    const timeout = waitMs(r);
     const until = Date.now() + timeout;
     for (;;) {
       await new Promise((r) => setTimeout(r, pollMs));
@@ -184,9 +164,11 @@ export function createProviders(ctx: ModuleContext) {
         if (!(err instanceof ProviderError) || err.code !== 'unreachable') throw err;
       }
       if (Date.now() >= until) {
-        const secs = p.wake?.timeoutSeconds ?? 180;
+        const secs = r.wake?.timeoutSeconds ?? 180;
         const within = secs % 60 === 0 ? `${secs / 60} minute${secs === 60 ? '' : 's'}` : `${secs} seconds`;
-        throw new ProviderError(`Couldn't wake ${await label(p)}: it didn't answer within ${within} of waking. Check the machine is plugged in and on the network, and that the provider starts by itself.`, 'wake_timeout', 503);
+        throw new ProviderError(r.hub
+          ? `Couldn't wake ${await label(p)}: Larder Automations didn't answer within ${within} of waking the Mac. Check the Mac is plugged in and on the network, and that Larder Automations starts at login.`
+          : `Couldn't wake ${await label(p)}: it didn't answer within ${within} of waking. Check the machine is plugged in and on the network, and that the provider starts by itself.`, 'wake_timeout', 503);
       }
     }
   }
@@ -212,9 +194,16 @@ export function createProviders(ctx: ModuleContext) {
         checkedAt: ctx.core.now(), ok: !problem, message: problem, reachable: true, loggedIn: a.health.logged_in && a.health.session_valid,
         name: m.name, version: m.version, contractVersion: (m as { contract_version?: string }).contract_version ?? null, currency: m.currency, capabilities: m.capabilities, host: m.host,
       });
-      if (!p.wake && m.host?.mac) {
-        next = { ...next, wake: WakeSettings.parse({ mac: m.host.mac }) };
-        filledWake = true;
+      if (m.host?.mac) {
+        // An automation's machine is the hub's Mac: its waking is the hub's.
+        const h = p.automation ? await hub.get() : null;
+        if (h && !h.wake) {
+          await hub.update(h, { wake: WakeSettings.parse({ mac: m.host.mac }) });
+          filledWake = true;
+        } else if (!p.automation && !p.wake) {
+          next = { ...next, wake: WakeSettings.parse({ mac: m.host.mac }) };
+          filledWake = true;
+        }
       }
     } catch (err) {
       if (!(err instanceof LarderError)) throw err;
@@ -227,7 +216,10 @@ export function createProviders(ctx: ModuleContext) {
 
   /** Puts the machine back to sleep once nothing else is going on there. */
   async function sleepIfIdle(p: Provider): Promise<boolean> {
-    if (!p.sleepEntityId || (busy.get(p.id) ?? 0) > 0) return false;
+    const r = await reach(p);
+    // Every automation shares the hub's Mac, so none may be working.
+    const sharing = r.hub ? (await all()).filter((o) => o.automation) : [p];
+    if (!r.sleepEntityId || sharing.some((o) => (busy.get(o.id) ?? 0) > 0)) return false;
     const h = await (await client(p)).health().catch(() => null);
     if (!h || h.busy) return false;
     await sendWake(p, true);
@@ -254,6 +246,7 @@ export function createProviders(ctx: ModuleContext) {
     },
     shopName,
     label,
+    reach,
     client,
     awake,
     check,
@@ -268,17 +261,17 @@ export function createProviders(ctx: ModuleContext) {
     /** The provider for a shop named the way people say it, or the default one. */
     async resolve(shop?: string | null): Promise<{ provider: Provider; shop: Shop }> {
       const providers = await all();
-      if (!providers.length) throw new LarderError('No online shop is set up yet. Add one in Settings → Shopping providers.', 409, 'no_provider');
+      if (!providers.length) throw new LarderError('No online shop is set up yet. Set up Larder Automations in Settings, then link its automations to your shops.', 409, 'no_provider');
       if (!shop?.trim()) {
         const p = providers.find((x) => x.isDefault) ?? (providers.length === 1 ? providers[0] : undefined);
         if (!p) throw new LarderError(`Which shop? Larder can shop online at ${(await Promise.all(providers.map((x) => shopName(x.shopId)))).join(' or ')}.`, 400, 'which_shop');
         const s = (await ctx.core.shops.list()).find((x) => x.id === p.shopId);
-        if (!s) throw new LarderError('The default shopping provider\'s shop has been removed. Choose its shop again in Settings → Shopping providers.', 409, 'no_provider');
+        if (!s) throw new LarderError('The default shopping provider\'s shop has been removed. Choose its shop again in Settings → Larder Automations.', 409, 'no_provider');
         return { provider: p, shop: s };
       }
       const s = await ctx.core.resolve.shop(shop);
       const p = providers.find((x) => x.shopId === s.id);
-      if (!p) throw new LarderError(`Larder can't shop online at ${s.name} yet. Add a shopping provider for it in Settings → Shopping providers.`, 409, 'no_provider');
+      if (!p) throw new LarderError(`Larder can't shop online at ${s.name} yet. Link a Larder Automations automation to it in Settings.`, 409, 'no_provider');
       return { provider: p, shop: s };
     },
 
@@ -286,8 +279,9 @@ export function createProviders(ctx: ModuleContext) {
       const input = ProviderInput.parse(raw);
       if (!(await ctx.core.shops.list()).some((s) => s.id === input.shopId)) throw new NotFoundError('Shop', input.shopId);
       const first = !(await all()).length;
+      const where = await whereFrom(input.automation ?? null, input.address, input.token, null);
       return save(Provider.parse({
-        id: newId(), type: input.type, shopId: input.shopId, isDefault: input.isDefault ?? first, url: normaliseAddress(input.address), token: input.token.trim(),
+        id: newId(), type: input.type, shopId: input.shopId, isDefault: input.isDefault ?? first, ...where,
         wake: input.wake ?? null, sleepEntityId: input.sleepEntityId ?? null, loyaltyPrices: input.loyaltyPrices ?? true, status: null, createdAt: ctx.core.now(),
       }));
     },
@@ -295,14 +289,19 @@ export function createProviders(ctx: ModuleContext) {
     async update(id: string, raw: z.input<typeof ProviderPatch>): Promise<Provider> {
       const input = ProviderPatch.parse(raw);
       const cur = await get(id);
-      const moved = (input.address !== undefined && normaliseAddress(input.address) !== cur.url) || (input.token !== undefined && input.token.trim() !== cur.token);
+      const automation = input.automation !== undefined ? input.automation : cur.automation;
+      const where = automation
+        ? await whereFrom(automation, undefined, undefined, cur)
+        : input.address !== undefined || input.token !== undefined || cur.automation
+          ? await whereFrom(null, input.address ?? (cur.automation ? undefined : cur.url), input.token ?? (cur.automation ? undefined : cur.token), cur)
+          : { automation: null, url: cur.url, token: cur.token };
+      const moved = where.automation !== cur.automation || where.url !== cur.url || where.token !== cur.token;
       return save(Provider.parse({
         ...cur,
         ...(input.type ? { type: input.type } : {}),
         ...(input.shopId ? { shopId: input.shopId } : {}),
         ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
-        ...(input.address !== undefined ? { url: normaliseAddress(input.address) } : {}),
-        ...(input.token !== undefined ? { token: input.token.trim() } : {}),
+        ...where,
         ...(input.wake !== undefined ? { wake: input.wake } : {}),
         ...(input.sleepEntityId !== undefined ? { sleepEntityId: input.sleepEntityId } : {}),
         ...(input.loyaltyPrices !== undefined ? { loyaltyPrices: input.loyaltyPrices } : {}),
@@ -321,5 +320,20 @@ export function createProviders(ctx: ModuleContext) {
     /** "192.168.1.231:8710" */
     where: (p: Provider) => shortAddress(p.url),
   };
+
+  /** An automation on the hub (needs the hub, and one shop per automation), or an address and token of its own. */
+  async function whereFrom(automation: string | null, address: string | undefined, token: string | undefined, cur: Provider | null): Promise<Pick<Provider, 'automation' | 'url' | 'token'>> {
+    if (automation) {
+      if (!(await hub.get())) throw new ValidationError('Set up Larder Automations first (its address and token), then link its automations to shops.');
+      const other = (await all()).find((o) => o.automation === automation && o.id !== cur?.id);
+      if (other) throw new LarderError(`That automation already shops for ${await shopName(other.shopId)}. Unlink it there first.`, 409, 'conflict');
+      return { automation, url: '', token: '' };
+    }
+    if (!address?.trim()) throw new ValidationError('Give the address the provider runs at, e.g. 192.168.1.231:8710.');
+    if (!token?.trim()) throw new ValidationError('Give the provider\'s token (its AUTH_TOKEN).');
+    return { automation: null, url: normaliseAddress(address), token: token.trim() };
+  }
 }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export type Providers = ReturnType<typeof createProviders>;

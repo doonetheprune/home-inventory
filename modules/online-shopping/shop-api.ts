@@ -56,7 +56,7 @@ export function shopFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
     params: z.object({ shopId: Id }), response: Run,
     async handler({ params }) {
       const p = await providers.forShop(params.shopId);
-      if (!p) throw new LarderError('That shop has no shopping provider. Add one in Settings → Shopping providers.', 409, 'no_provider');
+      if (!p) throw new LarderError('That shop has no shopping provider. Link one to it in Settings → Larder Automations.', 409, 'no_provider');
       const shop = (await ctx.core.shops.list()).find((x) => x.id === params.shopId)!;
       return (await shops.start('plan', p, shop)).run;
     },
@@ -68,7 +68,7 @@ export function shopFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
     params: z.object({ shopId: Id }), response: Run,
     async handler({ params }) {
       const p = await providers.forShop(params.shopId);
-      if (!p) throw new LarderError('That shop has no shopping provider. Add one in Settings → Shopping providers.', 409, 'no_provider');
+      if (!p) throw new LarderError('That shop has no shopping provider. Link one to it in Settings → Larder Automations.', 409, 'no_provider');
       const shop = (await ctx.core.shops.list()).find((x) => x.id === params.shopId)!;
       return (await shops.start('fill', p, shop)).run;
     },

@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import type { PlaceRef, ProductSummary } from '@larder/core';
 import { api, ApiError } from './api';
 import { Icon } from './icons';
@@ -237,14 +238,16 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [onClose]);
-  return (
+  // On the body, so a sheet opened from a sticky side panel isn't held under the page.
+  return createPortal(
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-grip" />
         <div className="row"><h2 className="grow">{title}</h2><button type="button" className="iconbtn ghost" aria-label="Close" onClick={onClose}><Icon name="x" /></button></div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

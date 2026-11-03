@@ -1,12 +1,14 @@
 /**
- * Online shopping in the app: Settings → Shopping providers (where each
- * provider runs, its token, waking its machine, Test connection, dismissed
- * favourites), an item's listings and buying rules on its page, planning or
- * filling the basket beside a shop's shopping list, and shop favourites in Pending.
+ * Online shopping in the app: Settings → Larder Automations (the hub on the
+ * Mac: its address, token, waking the Mac, and which shop each automation
+ * shops for) and Online shops (a provider at its own address, dismissed
+ * favourites), an item's listings and buying rules on its page, starting a
+ * shop (a delivery slot, then the basket) beside a shop's shopping list, and
+ * shop favourites in Pending.
  */
 import { useEffect, useState } from 'react';
 import {
-  api, defineWebModule, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, qty, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops,
+  api, defineWebModule, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, qty, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops, useToast,
   type ProductDetail, type ProductSummary, type ShoppingList,
 } from '@larder/web-sdk';
 
@@ -19,13 +21,24 @@ interface Status {
   host: { mac: string | null; address: string | null } | null;
 }
 interface ProviderView {
-  id: string; type: 'tesco' | 'other'; shopId: string; shopName: string; isDefault: boolean; url: string; tokenHint: string;
+  id: string; type: 'tesco' | 'other'; shopId: string; shopName: string; isDefault: boolean; automation: string | null; url: string; tokenHint: string;
   wake: Wake | null; sleepEntityId: string | null; loyaltyPrices: boolean; status: Status | null; canWake: boolean;
 }
 interface ProviderList { providers: ProviderView[]; types: Array<{ type: 'tesco' | 'other'; name: string; shop: string | null }> }
 
 export function useProviders() {
   return useQuery({ queryKey: ['online-shopping', 'providers'], queryFn: () => call<ProviderList>('GET', '/providers') });
+}
+
+interface HubAutomation { id: string; name: string; version: string | null; running: boolean | null; providerId: string | null; shopId: string | null; shopName: string | null }
+interface HubView {
+  url: string; tokenHint: string; wake: Wake | null; sleepEntityId: string | null; canWake: boolean;
+  status: { checkedAt: string; ok: boolean; message: string | null; reachable: boolean; version: string | null; extension: boolean | null } | null;
+}
+interface HubAnswer { hub: HubView | null; automations: HubAutomation[] }
+
+function useHub() {
+  return useQuery({ queryKey: ['online-shopping', 'hub'], queryFn: () => call<HubAnswer>('GET', '/hub') });
 }
 
 const when = (iso: string) => `${shortDate(iso.slice(0, 10))} ${new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
@@ -38,7 +51,7 @@ function statusLine(p: ProviderView): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* Settings → Shopping providers                                        */
+/* Settings → Larder Automations and Online shops                       */
 /* ------------------------------------------------------------------ */
 
 function ProviderRow({ p, admin, onEdit }: { p: ProviderView; admin: boolean; onEdit: () => void }) {
@@ -53,7 +66,7 @@ function ProviderRow({ p, admin, onEdit }: { p: ProviderView; admin: boolean; on
     <div className="toggle" style={{ flexWrap: 'wrap', rowGap: 8 }}>
       <span className="grow" style={{ minWidth: 200 }}>
         <b>{p.shopName}</b>{p.isDefault && <> <Pill kind="ok">Default</Pill></>}
-        <br /><span className="small" style={{ color: p.status && !p.status.ok ? 'var(--low)' : undefined }}><span className="muted">{p.url.replace(/^https?:\/\//, '')} · </span>{statusLine(p)}</span>
+        <br /><span className="small" style={{ color: p.status && !p.status.ok ? 'var(--low)' : undefined }}><span className="muted">{p.automation ? `Larder Automations: ${p.automation}` : p.url.replace(/^https?:\/\//, '')} · </span>{statusLine(p)}</span>
       </span>
       {admin && (
         <span className="row" style={{ gap: 6 }}>
@@ -67,25 +80,67 @@ function ProviderRow({ p, admin, onEdit }: { p: ProviderView; admin: boolean; on
 }
 
 type WakeKind = 'none' | 'entity' | 'mac';
+interface WakeForm { kind: WakeKind; entityId: string; mac: string; broadcast: string; timeout: number; sleep: string }
 
-function ProviderForm({ editing, list, onDone }: { editing: ProviderView | null; list: ProviderList; onDone: () => void }) {
+const wakeForm = (w: Wake | null | undefined, sleep: string | null | undefined, hostMac?: string | null): WakeForm => ({
+  kind: w?.entityId ? 'entity' : w?.mac ? 'mac' : 'none', entityId: w?.entityId ?? '', mac: w?.mac ?? hostMac ?? '',
+  broadcast: w?.broadcastAddress ?? '', timeout: w?.timeoutSeconds ?? 180, sleep: sleep ?? '',
+});
+
+/** What's saved: the wake settings and the sleep entity. */
+const wakeBody = (f: WakeForm) => ({
+  wake: f.kind === 'none' ? null
+    : { entityId: f.kind === 'entity' ? f.entityId.trim() : null, mac: f.kind === 'mac' ? f.mac.trim() : null, broadcastAddress: f.kind === 'mac' && f.broadcast.trim() ? f.broadcast.trim() : null, timeoutSeconds: f.timeout },
+  sleepEntityId: f.sleep.trim() || null,
+});
+
+/** Waking a machine through Home Assistant, and putting it back to sleep. */
+function WakeFields({ f, onChange, what }: { f: WakeForm; onChange: (f: WakeForm) => void; what: string }) {
+  const set = (patch: Partial<WakeForm>) => onChange({ ...f, ...patch });
+  return (
+    <div className="section">
+      <div className="label">Waking {what}</div>
+      <p className="small muted">When it doesn't answer, Larder asks Home Assistant to wake {what}, then waits for it.</p>
+      <Seg<WakeKind> label="How to wake it" value={f.kind} onChange={(kind) => set({ kind })} options={[['none', 'Don\'t'], ['mac', 'Magic packet'], ['entity', 'Switch or script']]} />
+      {f.kind === 'mac' && (
+        <div className="stack" style={{ gap: 10, marginTop: 10 }}>
+          <label className="field"><span>MAC address</span><input className="input" value={f.mac} onChange={(e) => set({ mac: e.target.value })} placeholder="4c:32:75:12:34:56" required />
+            <small>Test connection fills this in. Needs Home Assistant's Wake on LAN integration.</small></label>
+          <label className="field"><span>Broadcast address (optional)</span><input className="input" value={f.broadcast} onChange={(e) => set({ broadcast: e.target.value })} placeholder="192.168.1.255" /></label>
+        </div>
+      )}
+      {f.kind === 'entity' && (
+        <label className="field" style={{ marginTop: 10 }}><span>Home Assistant entity</span><input className="input" value={f.entityId} onChange={(e) => set({ entityId: e.target.value })} placeholder="switch.mac_mini or script.wake_mac" required /></label>
+      )}
+      {f.kind !== 'none' && (
+        <div className="numfield" style={{ marginTop: 10 }}><span><b>Give up after</b><small>Seconds to wait for it to answer</small></span><Stepper value={f.timeout} onChange={(n) => set({ timeout: Math.max(10, Math.round(n)) })} min={10} max={900} step={30} label="seconds" /></div>
+      )}
+      <label className="field" style={{ marginTop: 10 }}><span>Sleep after (optional)</span>
+        <input className="input" value={f.sleep} onChange={(e) => set({ sleep: e.target.value })} placeholder="script.sleep_mac" />
+        <small>A switch, button or script to put it back to sleep after a shop, when nothing else is running.</small></label>
+    </div>
+  );
+}
+
+/**
+ * A provider: an automation on Larder Automations (`automation`, which only
+ * needs its shop), or one at an address of its own with its token and waking.
+ */
+function ProviderForm({ editing, list, automation, onDone }: { editing: ProviderView | null; list: ProviderList; automation?: { id: string; name: string } | null; onDone: () => void }) {
   const shops = useShops();
   const { run, busy } = useAction();
-  const [type, setType] = useState<'tesco' | 'other'>(editing?.type ?? 'tesco');
-  const presetName = list.types.find((t) => t.type === type)?.shop ?? null;
+  const onHub = automation ?? (editing?.automation ? { id: editing.automation, name: editing.shopName } : null);
+  const [type, setType] = useState<'tesco' | 'other'>(editing?.type ?? (onHub && onHub.id !== 'tesco' ? 'other' : 'tesco'));
+  // The shop an automation is named for (Tesco), or the provider type's.
+  const presetName = onHub ? (list.types.find((t) => t.type === onHub.id)?.shop ?? onHub.name) : (list.types.find((t) => t.type === type)?.shop ?? null);
   const preset = presetName ? shops.find((s) => s.name.toLowerCase() === presetName.toLowerCase()) : undefined;
+  const canAddPreset = !!presetName && list.types.some((t) => t.shop?.toLowerCase() === presetName.toLowerCase());
   const [shopId, setShopId] = useState<string>(editing?.shopId ?? '');
-  const chosenShop = shopId || (type === 'tesco' ? (preset?.id ?? `preset:${presetName}`) : '');
+  const chosenShop = shopId || (preset?.id ?? (canAddPreset && (onHub || type === 'tesco') ? `preset:${presetName}` : ''));
   const [isDefault, setDefault] = useState(editing?.isDefault ?? !list.providers.length);
   const [address, setAddress] = useState(editing?.url.replace(/^http:\/\//, '') ?? '');
   const [token, setToken] = useState('');
-  const w = editing?.wake;
-  const [wakeKind, setWakeKind] = useState<WakeKind>(w?.entityId ? 'entity' : w?.mac ? 'mac' : 'none');
-  const [entityId, setEntityId] = useState(w?.entityId ?? '');
-  const [mac, setMac] = useState(w?.mac ?? editing?.status?.host?.mac ?? '');
-  const [broadcast, setBroadcast] = useState(w?.broadcastAddress ?? '');
-  const [timeout, setTimeoutS] = useState(w?.timeoutSeconds ?? 180);
-  const [sleep, setSleep] = useState(editing?.sleepEntityId ?? '');
+  const [waking, setWaking] = useState(() => wakeForm(editing?.wake, editing?.sleepEntityId, editing?.status?.host?.mac));
   const [loyalty, setLoyalty] = useState(editing?.loyaltyPrices ?? true);
   const taken = new Set(list.providers.filter((p) => p.id !== editing?.id).map((p) => p.shopId));
 
@@ -93,66 +148,148 @@ function ProviderForm({ editing, list, onDone }: { editing: ProviderView | null;
     // A preset shop (Tesco) Larder doesn't have yet is added first.
     let shop = chosenShop;
     if (shop.startsWith('preset:')) shop = (await api.shops.addPreset(shop.slice('preset:'.length))).id;
-    const wake = wakeKind === 'none' ? null
-      : { entityId: wakeKind === 'entity' ? entityId.trim() : null, mac: wakeKind === 'mac' ? mac.trim() : null, broadcastAddress: wakeKind === 'mac' && broadcast.trim() ? broadcast.trim() : null, timeoutSeconds: timeout };
-    const body = { type, shopId: shop, isDefault, address, ...(token.trim() ? { token: token.trim() } : {}), wake, sleepEntityId: sleep.trim() || null, loyaltyPrices: loyalty };
+    const body = onHub
+      ? { type, shopId: shop, isDefault, automation: onHub.id, loyaltyPrices: loyalty }
+      : { type, shopId: shop, isDefault, automation: null, address, ...(token.trim() ? { token: token.trim() } : {}), ...wakeBody(waking), loyaltyPrices: loyalty };
     return editing ? call<ProviderView>('PATCH', `/providers/${editing.id}`, body) : call<ProviderView>('POST', '/providers', body);
   }
 
   return (
-    <form className="stack" style={{ gap: 16 }} onSubmit={(e) => { e.preventDefault(); void run(save, (p) => `${p.shopName} saved. Test the connection to check it.`).then((r) => r && onDone()); }}>
-      <label className="field"><span>Provider type</span>
-        <select className="input" value={type} onChange={(e) => { setType(e.target.value as 'tesco' | 'other'); setShopId(''); }}>
-          {list.types.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}
-        </select>
-      </label>
-      <label className="field"><span>Shop</span>
+    <form className="stack" style={{ gap: 16 }} onSubmit={(e) => { e.preventDefault(); void run(save, (p) => onHub ? `${onHub.name} shops for ${p.shopName} now.` : `${p.shopName} saved. Test the connection to check it.`).then((r) => r && onDone()); }}>
+      {!onHub && (
+        <label className="field"><span>Provider type</span>
+          <select className="input" value={type} onChange={(e) => { setType(e.target.value as 'tesco' | 'other'); setShopId(''); }}>
+            {list.types.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}
+          </select>
+        </label>
+      )}
+      <label className="field"><span>{onHub ? `The Larder shop ${onHub.name} shops for` : 'Shop'}</span>
         <select className="input" value={chosenShop} onChange={(e) => setShopId(e.target.value)} required>
           <option value="" disabled>Pick the shop it serves…</option>
-          {type === 'tesco' && !preset && presetName && <option value={`preset:${presetName}`}>{presetName} (add it)</option>}
+          {canAddPreset && !preset && <option value={`preset:${presetName}`}>{presetName} (add it)</option>}
           {shops.map((s) => <option key={s.id} value={s.id} disabled={taken.has(s.id)}>{s.name}{taken.has(s.id) ? ' (has one)' : ''}</option>)}
         </select>
         <small>Listings, deliveries and orders belong to this shop.</small>
       </label>
+      {!onHub && <>
       <label className="field"><span>Address</span>
         <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.1.231:8710" required autoComplete="off" />
         <small>Where the provider runs: its computer's address and port (8710 unless you changed it).</small>
       </label>
       <label className="field"><span>Token</span>
-        <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={editing ? `Saved (…${editing.tokenHint}). Paste to replace` : 'AUTH_TOKEN from the provider\'s .env'} required={!editing} autoComplete="off" />
+        <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={editing && !editing.automation ? `Saved (…${editing.tokenHint}). Paste to replace` : 'AUTH_TOKEN from the provider\'s .env'} required={!editing || !!editing.automation} autoComplete="off" />
       </label>
+      </>}
       <div className="list">
         <div className="toggle"><span><b>Default</b><br /><span className="small muted">Used when you don't name a shop</span></span><Switch checked={isDefault} onChange={setDefault} label="Default" /></div>
         <div className="toggle"><span><b>Loyalty prices</b><br /><span className="small muted">Count Clubcard prices and members' offers</span></span><Switch checked={loyalty} onChange={setLoyalty} label="Loyalty prices" /></div>
       </div>
 
-      <div className="section">
-        <div className="label">Waking its computer</div>
-        <p className="small muted">When it doesn't answer, Larder asks Home Assistant to wake the computer, then waits for it.</p>
-        <Seg<WakeKind> label="How to wake it" value={wakeKind} onChange={setWakeKind} options={[['none', 'Don\'t'], ['mac', 'Magic packet'], ['entity', 'Switch or script']]} />
-        {wakeKind === 'mac' && (
-          <div className="stack" style={{ gap: 10, marginTop: 10 }}>
-            <label className="field"><span>MAC address</span><input className="input" value={mac} onChange={(e) => setMac(e.target.value)} placeholder="4c:32:75:12:34:56" required />
-              <small>Test connection fills this in. Needs Home Assistant's Wake on LAN integration.</small></label>
-            <label className="field"><span>Broadcast address (optional)</span><input className="input" value={broadcast} onChange={(e) => setBroadcast(e.target.value)} placeholder="192.168.1.255" /></label>
-          </div>
-        )}
-        {wakeKind === 'entity' && (
-          <label className="field" style={{ marginTop: 10 }}><span>Home Assistant entity</span><input className="input" value={entityId} onChange={(e) => setEntityId(e.target.value)} placeholder="switch.mac_mini or script.wake_mac" required /></label>
-        )}
-        {wakeKind !== 'none' && (
-          <div className="numfield" style={{ marginTop: 10 }}><span><b>Give up after</b><small>Seconds to wait for it to answer</small></span><Stepper value={timeout} onChange={(n) => setTimeoutS(Math.max(10, Math.round(n)))} min={10} max={900} step={30} label="seconds" /></div>
-        )}
-        <label className="field" style={{ marginTop: 10 }}><span>Sleep after (optional)</span>
-          <input className="input" value={sleep} onChange={(e) => setSleep(e.target.value)} placeholder="script.sleep_mac" />
-          <small>A switch, button or script to put it back to sleep after a shop, when nothing else is running.</small></label>
-      </div>
+      {!onHub && <WakeFields f={waking} onChange={setWaking} what="its computer" />}
 
       <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
-        {editing ? <button type="button" className="btn ghost" disabled={busy} onClick={() => { if (confirm(`Remove the ${editing.shopName} provider? Items keep their listings.`)) void run(() => call('DELETE', `/providers/${editing.id}`), `${editing.shopName} provider removed`).then((r) => r && onDone()); }}><Icon name="trash" size="sm" />Remove</button> : <span />}
+        {editing ? <button type="button" className="btn ghost" disabled={busy} onClick={() => { if (confirm(onHub ? `Stop ${onHub.name} shopping for ${editing.shopName}? Items keep their listings.` : `Remove the ${editing.shopName} provider? Items keep their listings.`)) void run(() => call('DELETE', `/providers/${editing.id}`), onHub ? `${editing.shopName} unlinked` : `${editing.shopName} provider removed`).then((r) => r && onDone()); }}><Icon name="trash" size="sm" />{onHub ? 'Unlink' : 'Remove'}</button> : <span />}
         <button className="btn primary" disabled={busy || !chosenShop}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
+  );
+}
+
+function HubForm({ hub, onDone }: { hub: HubView | null; onDone: () => void }) {
+  const { run, busy } = useAction();
+  const [address, setAddress] = useState(hub?.url.replace(/^http:\/\//, '') ?? '');
+  const [token, setToken] = useState('');
+  const [waking, setWaking] = useState(() => wakeForm(hub?.wake, hub?.sleepEntityId));
+  const save = () => call<HubAnswer>('PUT', '/hub', { address, ...(token.trim() ? { token: token.trim() } : {}), ...wakeBody(waking) })
+    // Check it straight away, so its automations show.
+    .then(() => call<{ message: string }>('POST', '/hub/test', {}));
+  return (
+    <form className="stack" style={{ gap: 16 }} onSubmit={(e) => { e.preventDefault(); void run(save, (r) => r.message).then((r) => r && onDone()); }}>
+      <label className="field"><span>Address</span>
+        <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.1.231:8700" required autoComplete="off" />
+        <small>The Mac's address (Copy address in the Larder Automations menu). Port 8700 unless you changed it.</small>
+      </label>
+      <label className="field"><span>Token</span>
+        <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={hub ? `Saved (…${hub.tokenHint}). Paste to replace` : 'Copy token in the Larder Automations menu'} required={!hub} autoComplete="off" />
+      </label>
+      <WakeFields f={waking} onChange={setWaking} what="the Mac" />
+      <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
+        {hub ? <button type="button" className="btn ghost" disabled={busy} onClick={() => { if (confirm('Forget Larder Automations? Its shops stop shopping online; items keep their listings.')) void run(() => call('DELETE', '/hub'), 'Larder Automations forgotten').then((r) => r && onDone()); }}><Icon name="trash" size="sm" />Forget</button> : <span />}
+        <button className="btn primary" disabled={busy}>{busy ? 'Checking…' : 'Save and test'}</button>
+      </div>
+    </form>
+  );
+}
+
+function hubLine(h: HubView): string {
+  const s = h.status;
+  if (!s) return 'Not tested yet';
+  if (s.ok) return `Ready${s.version ? `: version ${s.version}` : ''} · checked ${when(s.checkedAt)}`;
+  return `${s.message ?? 'Not ready'} · checked ${when(s.checkedAt)}`;
+}
+
+/** Settings → Larder Automations: the hub on the Mac, and which shop each of its automations shops for. */
+function HubSettings({ admin, list }: { admin: boolean; list: ProviderList }) {
+  const { data } = useHub();
+  const { run, busy } = useAction();
+  const [editing, setEditing] = useState(false);
+  const [linking, setLinking] = useState<HubAutomation | null>(null);
+  const [asleep, setAsleep] = useState(false);
+  if (!data) return null;
+  const h = data.hub;
+  const test = (wake: boolean) => run(async () => {
+    const r = await call<HubAnswer & { message: string }>('POST', '/hub/test', { wake });
+    setAsleep(!r.hub?.status?.reachable && !!r.hub?.canWake);
+    return r;
+  }, (r) => r.message);
+  const linkedProvider = linking?.providerId ? list.providers.find((p) => p.id === linking.providerId) ?? null : null;
+  return (
+    <div className="section">
+      <div className="label">Larder Automations</div>
+      <p className="small muted">
+        The app on your Mac that fills online baskets: one automation per shop (Tesco first), driving the shop's website in Chrome, signed in as you.
+        {' '}Larder uses one address and token for it, and decides what to buy; you check the basket and pay.
+      </p>
+      {h ? (
+        <div className="list">
+          <div className="toggle" style={{ flexWrap: 'wrap', rowGap: 8 }}>
+            <span className="grow" style={{ minWidth: 200 }}>
+              <b>{h.url.replace(/^https?:\/\//, '')}</b>
+              <br /><span className="small" style={{ color: h.status && !h.status.ok ? 'var(--low)' : undefined }}>{hubLine(h)}</span>
+            </span>
+            {admin && (
+              <span className="row" style={{ gap: 6 }}>
+                {asleep && <button type="button" className="btn small primary" disabled={busy} onClick={() => void test(true)}>Wake and test</button>}
+                <button type="button" className="btn small" disabled={busy} onClick={() => void test(false)}>{busy ? 'Testing…' : 'Test connection'}</button>
+                <button type="button" className="btn small ghost" disabled={busy} onClick={() => setEditing(true)}><Icon name="edit" size="sm" />Edit</button>
+              </span>
+            )}
+          </div>
+          {data.automations.map((a) => (
+            <div className="toggle" key={a.id} style={{ flexWrap: 'wrap', rowGap: 8 }}>
+              <span className="grow" style={{ minWidth: 200 }}>
+                <b>{a.name}</b>{a.version ? <span className="small muted"> {a.version}</span> : null}{a.running === false && <> <Pill kind="low">Not running</Pill></>}
+                <br /><span className="small muted">{a.shopName ? <>Shops for <b>{a.shopName}</b></> : 'Not linked to a shop yet'}</span>
+              </span>
+              {admin && (
+                <button type="button" className={`btn small ${a.shopId ? 'ghost' : 'primary'}`} onClick={() => setLinking(a)}>
+                  <Icon name={a.shopId ? 'edit' : 'link'} size="sm" />{a.shopId ? 'Change' : 'Link to a shop'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        admin ? <button type="button" className="btn small primary" onClick={() => setEditing(true)}><Icon name="plus" size="sm" />Set up Larder Automations</button>
+          : <p className="small muted">Not set up. A household admin can set it up here.</p>
+      )}
+      {editing && <Sheet title="Larder Automations" onClose={() => setEditing(false)}><HubForm hub={h} onDone={() => setEditing(false)} /></Sheet>}
+      {linking && (
+        <Sheet title={`${linking.name}: which shop?`} onClose={() => setLinking(null)}>
+          <ProviderForm editing={linkedProvider} list={list} automation={{ id: linking.id, name: linking.name }} onDone={() => setLinking(null)} />
+        </Sheet>
+      )}
+    </div>
   );
 }
 
@@ -201,14 +338,16 @@ function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
   const [editing, setEditing] = useState<ProviderView | 'new' | null>(null);
   if (!data) return null;
   return (
+    <>
+    <HubSettings admin={admin} list={data} />
     <div className="section">
-      <div className="label">Shopping providers</div>
+      <div className="label">Online shops</div>
       <p className="small muted">
-        Online shops Larder can fill a basket at. Each is a small service on a computer on your network that drives one shop's website, signed in as you.
-        {' '}Larder decides what to buy; the provider stops at a full basket, and you check it and pay.
+        The shops Larder can fill a basket at: Larder Automations' automations once linked to a shop, and any provider running at an address of its own.
+        {' '}Larder decides what to buy; it stops at a full basket, and you check it and pay.
       </p>
       {data.providers.length > 0 && <div className="list">{data.providers.map((p) => <ProviderRow key={p.id} p={p} admin={admin} onEdit={() => setEditing(p)} />)}</div>}
-      {admin && <button type="button" className="btn small" style={{ marginTop: 10 }} onClick={() => setEditing('new')}><Icon name="plus" size="sm" />Add automated shopping provider</button>}
+      {admin && <button type="button" className="btn small ghost" style={{ marginTop: 10 }} onClick={() => setEditing('new')}><Icon name="plus" size="sm" />Add a provider at its own address</button>}
       {data.providers.length > 0 && <MultibuySetting admin={admin} />}
       {data.providers.length > 0 && <DismissedFavourites />}
       {editing && (
@@ -217,6 +356,7 @@ function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
         </Sheet>
       )}
     </div>
+    </>
   );
 }
 
@@ -373,28 +513,118 @@ interface Slot { id: string; start: string; end: string; price: number; availabl
 const slotWhen = (b: { start: string; end: string }) =>
   `${new Date(`${b.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}, ${b.start.slice(11, 16)}–${b.end.slice(11, 16)}`;
 
-function SlotSheet({ shopId, shopName, onClose }: { shopId: string; shopName: string; onClose: () => void }) {
-  const { run, busy } = useAction();
-  const [when, setWhen] = useState('');
-  const [found, setFound] = useState<{ described: string; date: string; slots: Slot[] } | null>(null);
-  const free = found?.slots.filter((x) => x.available) ?? [];
+/** The next week's days, from tomorrow: YYYY-MM-DD in this device's time, and a short label. */
+function nextDays(n = 7): Array<{ date: string; label: string }> {
+  const out: Array<{ date: string; label: string }> = [];
+  const d = new Date();
+  for (let i = 1; i <= n; i++) {
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    out.push({ date, label: i === 1 ? 'Tomorrow' : day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }) });
+  }
+  return out;
+}
+
+const partOfDay = (x: Slot) => { const h = Number(x.start.slice(11, 13)); return h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening'; };
+
+type DayAnswer = { described: string; date: string; slots: Slot[] };
+
+/** A day's free slots at the shop, to book one. */
+function DaySlots({ shopId, found, onBooked }: { shopId: string; found: DayAnswer; onBooked: (b: Booking) => void }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const free = found.slots.filter((x) => x.available);
+  const parts = ['Morning', 'Afternoon', 'Evening'].map((name) => ({ name, slots: free.filter((x) => partOfDay(x) === name) })).filter((g) => g.slots.length);
+  async function book(x: Slot) {
+    setBusy(true);
+    try {
+      const r = await call<{ message: string; booking: Booking }>('POST', `/shops/${shopId}/book`, { slotId: x.id });
+      toast(r.message);
+      onBooked(r.booking);
+      // Only the booking: refreshing everything would ask the shop for slots again.
+      void qc.invalidateQueries({ queryKey: ['online-shopping', 'booking', shopId] });
+    } catch (err) {
+      toast({ text: err instanceof Error ? err.message : 'Something went wrong.', error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
-    <Sheet title={`Book a ${shopName} delivery`} onClose={onClose}>
-      <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (when.trim()) void run(() => call<{ described: string; date: string; slots: Slot[] }>('GET', `/shops/${shopId}/slots?when=${encodeURIComponent(when.trim())}`)).then((r) => r && setFound(r)); }}>
-        <input className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="tomorrow evening, friday, 12 Nov…" aria-label="When" autoFocus />
-        <button className="btn small" disabled={busy || !when.trim()}>{busy && !found ? 'Looking…' : 'Find slots'}</button>
-      </form>
-      {found && (
-        <div className="stack" style={{ gap: 8, marginTop: 12 }}>
-          <b>{found.described || shortDate(found.date)}</b>
-          {!free.length && <p className="small muted">No slots free then. Try another day or time.</p>}
+    <div className="stack" style={{ gap: 10 }}>
+      <b>{found.described || shortDate(found.date)}</b>
+      {!free.length && <p className="small muted">No slots free that day. Try another day.</p>}
+      {parts.map((g) => (
+        <div key={g.name} className="stack" style={{ gap: 6 }}>
+          <span className="small muted">{g.name}</span>
           <div className="list">
-            {free.map((x) => (
+            {g.slots.map((x) => (
               <div className="item" key={x.id}>
                 <span className="item-main"><span className="item-name">{x.start.slice(11, 16)}–{x.end.slice(11, 16)}</span><span className="item-meta">{x.price ? money(x.price, 'GBP') : 'Free'}</span></span>
-                <button type="button" className="btn small primary" disabled={busy} onClick={() => void run(() => call<{ message: string }>('POST', `/shops/${shopId}/book`, { slotId: x.id }), (r) => r.message).then((r) => r && onClose())}>Book</button>
+                <button type="button" className="btn small primary" disabled={busy} onClick={() => void book(x)}>Book</button>
               </div>
             ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * "Do me a shop" in the app: pick a delivery slot from the next few days
+ * (or another day in words), then plan or fill the basket for it.
+ */
+function ShopSheet({ shopId, shopName, booked, canBook, startAt, onStart, onClose }: {
+  shopId: string; shopName: string; booked: Booking | null; canBook: boolean; startAt: 'slot' | 'basket';
+  onStart: (kind: 'plan' | 'fill') => void; onClose: () => void;
+}) {
+  const days = nextDays();
+  const [step, setStep] = useState<'slot' | 'basket'>(canBook ? startAt : 'basket');
+  const [day, setDay] = useState(days[0]!.date);
+  const [other, setOther] = useState('');
+  const [typed, setTyped] = useState<string | null>(null);
+  const [booking, setBooking] = useState<Booking | null>(booked);
+  const shown = typed ?? day;
+  // Each day is asked once while the sheet is open: the shop's website is slow, and it may wake the computer.
+  const [asked, setAsked] = useState<Record<string, { found?: DayAnswer; error?: string }>>({});
+  const answer = asked[shown];
+  useEffect(() => {
+    if (step !== 'slot' || asked[shown]) return;
+    setAsked((d) => ({ ...d, [shown]: {} }));
+    call<DayAnswer>('GET', `/shops/${shopId}/slots?when=${encodeURIComponent(shown)}`).then(
+      (found) => setAsked((d) => ({ ...d, [shown]: { found } })),
+      (err: unknown) => setAsked((d) => ({ ...d, [shown]: { error: err instanceof Error ? err.message : 'Couldn\'t get the slots.' } })),
+    );
+  }, [step, shown, shopId, asked]);
+  return (
+    <Sheet title={`Shop at ${shopName}`} onClose={onClose}>
+      {step === 'slot' ? (
+        <div className="stack" style={{ gap: 14 }}>
+          <span className="small muted">When would you like it delivered? Offers are checked for that day.</span>
+          <div className="chips wrap" role="tablist" aria-label="Delivery day">
+            {days.map((d) => <button type="button" role="tab" aria-selected={!typed && d.date === day} key={d.date} className={`chip ${!typed && d.date === day ? 'on' : ''}`} onClick={() => { setTyped(null); setDay(d.date); }}>{d.label}</button>)}
+          </div>
+          <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (other.trim()) setTyped(other.trim()); }}>
+            <input className="input" value={other} onChange={(e) => setOther(e.target.value)} placeholder="Another day: 'next tuesday evening', '20 Nov'…" aria-label="Another day" />
+            <button className="btn small" disabled={!other.trim()}>Find</button>
+          </form>
+          {answer?.found ? <DaySlots shopId={shopId} found={answer.found} onBooked={(b) => { setBooking(b); setStep('basket'); }} />
+            : answer?.error ? <p className="small" style={{ color: 'var(--low)' }}>{answer.error} <button type="button" className="link small" onClick={() => setAsked((d) => { const { [shown]: _, ...rest } = d; return rest; })}>Try again</button></p>
+              : <p className="small muted row" style={{ gap: 8 }}><span className="spinner" style={{ display: 'inline-block', width: 14, height: 14 }} /> Asking {shopName} for slots (this wakes its computer if it's asleep)…</p>}
+          {booking && <button type="button" className="link small" style={{ alignSelf: 'flex-start' }} onClick={() => setStep('basket')}>Keep {slotWhen(booking)}</button>}
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 14 }}>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <Icon name="truck" size="sm" />
+            <span className="grow small">{booking ? <>Delivery: <b>{slotWhen(booking)}</b>{booking.reference ? ` (ref ${booking.reference})` : ''}</> : canBook ? 'No delivery slot booked. Offers are checked for today.' : `Book a slot on ${shopName}'s website. Offers are checked for today.`}</span>
+            {canBook && <button type="button" className="btn small ghost" onClick={() => setStep('slot')}>{booking ? 'Change' : 'Pick a slot'}</button>}
+          </div>
+          <p className="small muted">Larder adds what's low, and anything on offer at its target price, to your {shopName} basket. It stops there: you check the basket and pay on {shopName}'s website.</p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={() => { onStart('fill'); onClose(); }}><Icon name="cart" size="sm" />Fill basket</button>
+            <button type="button" className="btn" onClick={() => { onStart('plan'); onClose(); }}><Icon name="search" size="sm" />Just plan it</button>
           </div>
         </div>
       )}
@@ -416,7 +646,7 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   const r = latest.data?.run ?? null;
   const booked = useQuery({ queryKey: ['online-shopping', 'booking', list.shop.id], queryFn: () => call<{ booking: Booking | null }>('GET', `/shops/${list.shop.id}/booking`), enabled: !!provider }).data?.booking ?? null;
   const [shown, setShown] = useState(false);
-  const [booking, setBooking] = useState(false);
+  const [sheet, setSheet] = useState<'slot' | 'basket' | null>(null);
   const canBook = !provider?.status?.capabilities.length || provider.status.capabilities.includes('slot_booking');
   useEffect(() => {
     // A filled basket changes what's expected: refresh lists and items once it's done.
@@ -427,21 +657,19 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   const running = r?.status === 'running';
   return (
     <div className="card pad stack" style={{ gap: 10 }}>
-      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <span><b>Online at {list.shop.name}</b><br /><span className="small muted">What's low, plus anything on offer at its target price. Stops at the basket: you check it and pay.</span></span>
-      </div>
+      <span><b>Online at {list.shop.name}</b><br /><span className="small muted">What's low, plus anything on offer at its target price. Stops at the basket: you check it and pay.</span></span>
       {canBook && (
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Icon name="truck" size="sm" />
-          <span className="small grow">{booked ? <>Delivery booked: <b>{slotWhen(booked)}</b>{booked.reference ? ` (ref ${booked.reference})` : ''}</> : 'No delivery slot booked. Offers are checked for today.'}</span>
-          <button type="button" className="btn small ghost" onClick={() => setBooking(true)}>{booked ? 'Change slot' : 'Book a delivery slot'}</button>
+          <span className="small grow">{booked ? <>Delivery booked: <b>{slotWhen(booked)}</b>{booked.reference ? ` (ref ${booked.reference})` : ''}</> : 'No delivery slot booked yet.'}</span>
+          {booked && <button type="button" className="btn small ghost" disabled={running} onClick={() => setSheet('slot')}>Change slot</button>}
         </div>
       )}
-      {booking && <SlotSheet shopId={list.shop.id} shopName={list.shop.name} onClose={() => setBooking(false)} />}
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn small primary" disabled={busy || running} onClick={() => setSheet(booked || !canBook ? 'basket' : 'slot')}><Icon name="cart" size="sm" />{booked ? 'Fill basket' : 'Start a shop'}</button>
         <button type="button" className="btn small" disabled={busy || running} onClick={() => void start('plan')}><Icon name="search" size="sm" />Plan basket</button>
-        <button type="button" className="btn small primary" disabled={busy || running} onClick={() => { if (confirm(`Fill your ${list.shop.name} basket now? What goes in is recorded as on the way.`)) void start('fill'); }}><Icon name="cart" size="sm" />Fill basket</button>
       </div>
+      {sheet && <ShopSheet shopId={list.shop.id} shopName={list.shop.name} booked={booked} canBook={canBook} startAt={sheet} onStart={(k) => void start(k)} onClose={() => setSheet(null)} />}
       {r && (
         <div className="stack" style={{ gap: 6 }}>
           <span className="small">
