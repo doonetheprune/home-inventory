@@ -1,8 +1,9 @@
 /**
  * The two AI services the module can use to read a photo: Claude (Anthropic)
- * and Gemini (Google). Each lists the models that can read photos and turns a
- * photo into a `Reading`. Both reach the internet only through the `fetch`
- * they're given, so tests can stand in for them.
+ * and Gemini (Google). Each lists the models that can read photos and answers
+ * a `Task` about a photo (what a pack is, what's on a receipt) in the task's
+ * shape. Both reach the internet only through the `fetch` they're given, so
+ * tests can stand in for them.
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
@@ -39,12 +40,23 @@ export interface ModelChoice {
 
 export const UNITS = ['each', 'pack', 'roll', 'tin', 'bottle', 'bag', 'box', 'jar', 'carton', 'tablet', 'dose', 'pair', 'battery', 'L', 'ml', 'kg', 'g', 'm'];
 
-const SYSTEM = 'You read photos of things being put away at home, for a UK household inventory app called Larder. Read the packaging and say what the item is. Use UK English and UK product names.';
+const SYSTEM = 'You read photos for a UK household inventory app called Larder: packs of things being put away at home, and receipts for what was bought. Use UK English and UK product names.';
+
+/** What's asked about a photo, and the shape of the answer. */
+export interface Task<T> {
+  /** The request that goes with the photo. */
+  prompt: string;
+  schema: z.ZodType<T>;
+  /** The same answer as a Gemini response schema (an OpenAPI subset). */
+  gemini: Record<string, unknown>;
+  /** How hard Claude thinks, where the model offers it. */
+  effort: 'low' | 'medium';
+}
 
 /** The request that goes with the photo. The household's own categories, so the answer uses one of them. */
 export function instructions(categories: string[]): string {
   return [
-    'What is this? Fill in each field:',
+    'This is a photo of something being put away at home. Read the packaging and say what it is. Fill in each field:',
     '- name: a plain generic name a person would search for, without brand or size, in sentence case, e.g. "Baked beans", "Toilet roll", "AA batteries", "Dog food".',
     '- title: the product as named on the pack, with its brand, e.g. "Heinz Baked Beanz in Tomato Sauce". Null if no brand or product name is visible.',
     '- size: the pack size as printed, e.g. "415 g", "4 x 415 g", "9 rolls", "1 L". Null if it is not visible.',
@@ -57,6 +69,9 @@ export function instructions(categories: string[]): string {
   ].join('\n');
 }
 
+/** What a pack is: the scanner's Read with AI. */
+export const packTask = (categories: string[]): Task<Reading> => ({ prompt: instructions(categories), schema: Reading, gemini: GEMINI_SCHEMA, effort: 'low' });
+
 export interface Provider {
   id: ProviderId;
   name: string;
@@ -64,7 +79,7 @@ export interface Provider {
   defaultModel(models: ModelChoice[]): string;
   /** Models that can read photos, newest first. Also checks the key works. */
   listModels(apiKey: string): Promise<ModelChoice[]>;
-  read(apiKey: string, model: string, photo: Photo, categories: string[]): Promise<Reading>;
+  read<T>(apiKey: string, model: string, photo: Photo, task: Task<T>): Promise<T>;
 }
 
 const failed = (message: string, status = 502, code = 'ai_failed') => new LarderError(message, status, code);
@@ -120,7 +135,7 @@ export function claude(doFetch: typeof fetch): Provider {
         throw explain(err);
       }
     },
-    async read(apiKey, model, photo, categories) {
+    async read<T>(apiKey: string, model: string, photo: Photo, task: Task<T>): Promise<T> {
       const c = client(apiKey);
       try {
         const res = await c.messages.parse({
@@ -131,16 +146,16 @@ export function claude(doFetch: typeof fetch): Provider {
             role: 'user',
             content: [
               { type: 'image', source: { type: 'base64', media_type: photo.mediaType, data: photo.data } },
-              { type: 'text', text: instructions(categories) },
+              { type: 'text', text: task.prompt },
             ],
           }],
           // Reading a label is a quick job: low effort keeps it fast and cheap where the model offers it.
-          output_config: { format: zodOutputFormat(Reading), ...((await takesEffort(c, model)) ? { effort: 'low' as const } : {}) },
+          output_config: { format: zodOutputFormat(task.schema), ...((await takesEffort(c, model)) ? { effort: task.effort } : {}) },
         });
         if (res.stop_reason === 'refusal') throw failed("Claude wouldn't read that photo. Try another, or fill it in by hand.", 422, 'ai_refused');
         if (res.stop_reason === 'max_tokens') throw failed("Claude's answer was cut short. Try again.");
         if (!res.parsed_output) throw failed("Claude's answer didn't make sense. Try again.");
-        return res.parsed_output;
+        return res.parsed_output as T;
       } catch (err) {
         throw explain(err);
       }
@@ -155,7 +170,7 @@ export function claude(doFetch: typeof fetch): Provider {
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 
 /** Reading as a Gemini response schema (an OpenAPI subset). */
-const GEMINI_SCHEMA = {
+export const GEMINI_SCHEMA = {
   type: 'OBJECT',
   properties: {
     readable: { type: 'BOOLEAN' },
@@ -230,14 +245,14 @@ export function gemini(doFetch: typeof fetch): Provider {
       }
       return out.sort((a, b) => b.id.localeCompare(a.id, 'en', { numeric: true }));
     },
-    async read(apiKey, model, photo, categories) {
+    async read<T>(apiKey: string, model: string, photo: Photo, task: Task<T>): Promise<T> {
       const r = await call<{
         promptFeedback?: { blockReason?: string };
         candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
       }>(apiKey, `/models/${encodeURIComponent(model)}:generateContent`, {
         systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: photo.mediaType, data: photo.data } }, { text: instructions(categories) }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: GEMINI_SCHEMA },
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: photo.mediaType, data: photo.data } }, { text: task.prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: task.gemini },
       });
       if (r.promptFeedback?.blockReason) throw failed("Gemini wouldn't read that photo. Try another, or fill it in by hand.", 422, 'ai_refused');
       const cand = r.candidates?.[0];
@@ -252,7 +267,7 @@ export function gemini(doFetch: typeof fetch): Provider {
       } catch {
         throw failed("Gemini's answer didn't make sense. Try again.");
       }
-      const ok = Reading.safeParse(parsed);
+      const ok = task.schema.safeParse(parsed);
       if (!ok.success) throw failed("Gemini's answer didn't make sense. Try again.");
       return ok.data;
     },

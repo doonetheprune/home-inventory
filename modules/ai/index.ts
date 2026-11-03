@@ -1,14 +1,15 @@
 /**
- * AI: add things by photo. Claude or Gemini, with the household's own API
- * key, reads the packaging and fills in the item's details. Each has its own
- * key and model, can be switched off for now without losing them, and they're
- * tried in the household's order: if the first can't (out of credit, busy),
- * the next reads it. Nothing is saved from a reading: the app shows it on the
- * Add item page to check first.
+ * AI: Claude or Gemini, with the household's own API key, reads photos: a
+ * pack, to name it in the scanner, or a receipt, to add what was bought to
+ * stock (receipts.ts). Each AI has its own key and model, can be switched off
+ * for now without losing them, and they're tried in the household's order: if
+ * the first can't (out of credit, busy), the next reads it. Nothing is saved
+ * from a reading: the app shows it to check first.
  */
 import { z } from 'zod';
 import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
-import { claude, gemini, PROVIDER_NAMES, type Photo, type Provider, type ProviderId, type Reading } from './providers';
+import { claude, gemini, packTask, PROVIDER_NAMES, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
+import { receipts, type Asked } from './receipts';
 
 const ProviderName = z.enum(['claude', 'gemini']);
 const ALL: ProviderId[] = ['claude', 'gemini'];
@@ -103,7 +104,7 @@ const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export default defineModule({
   id: 'ai',
   name: 'AI',
-  description: 'Add things by photo: Claude or Gemini reads the packaging and fills in the details. Needs your own API key (Settings → AI).',
+  description: 'Claude or Gemini reads photos: a pack, to name it in the scanner, or a receipt, to add what was bought to stock. Needs your own API key (Settings → AI).',
   version: '1.0.0',
   defaultEnabled: true,
   setup(ctx) {
@@ -195,29 +196,49 @@ export default defineModule({
       body: z.object({ image: z.string().min(100).max(MAX_PHOTO_CHARS) }),
       response: Identified,
       async handler({ body }) {
-        const s = await saved();
-        const use = usable(s);
-        if (!use.length) throw new LarderError('Switch on Claude or Gemini in Settings → AI, with an API key, to add things by photo.', 409, 'ai_not_set_up');
-        const photo = photoFrom(body.image);
         const categories = await ctx.core.categories.list();
-        const skipped: Array<{ provider: ProviderId; message: string; error: LarderError }> = [];
-        for (const p of use) {
-          try {
-            const model = await modelFor(p, keyFor(s, p)!);
-            const reading = await providers[p].read(keyFor(s, p)!, model, photo, categories.map((c) => c.name));
-            return { ...(await tidy(reading, categories)), provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
-          } catch (err) {
-            // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
-            if (!(err instanceof LarderError)) throw err;
-            ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read a photo`, { message: err.message });
-            skipped.push({ provider: p, message: err.message, error: err });
-          }
-        }
-        const last = skipped[skipped.length - 1]!.error;
-        if (skipped.length === 1) throw last;
-        throw new LarderError(skipped.map((x) => x.message).join(' '), last.status, last.code);
+        const { answer, ...by } = await ask(body.image, async () => packTask(categories.map((c) => c.name)));
+        return { ...(await tidy(answer, categories)), ...by };
       },
     });
+
+    /**
+     * Asks the AIs in the household's order about a photo (base64), until one answers. The task is
+     * made only once the photo has passed its checks, so nothing is looked up for a bad one.
+     */
+    async function ask<T>(image: string, task: () => Promise<Task<T>>): Promise<Asked<T>> {
+      const s = await saved();
+      const use = usable(s);
+      if (!use.length) throw new LarderError('Switch on Claude or Gemini in Settings → AI, with an API key, to read photos.', 409, 'ai_not_set_up');
+      const photo = photoFrom(image);
+      const asking = await task();
+      const skipped: Array<{ provider: ProviderId; message: string; error: LarderError }> = [];
+      for (const p of use) {
+        try {
+          const model = await modelFor(p, keyFor(s, p)!);
+          const answer = await providers[p].read(keyFor(s, p)!, model, photo, asking);
+          return { answer, provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
+        } catch (err) {
+          // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
+          if (!(err instanceof LarderError)) throw err;
+          ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read a photo`, { message: err.message });
+          skipped.push({ provider: p, message: err.message, error: err });
+        }
+      }
+      const last = skipped[skipped.length - 1]!.error;
+      if (skipped.length === 1) throw last;
+      throw new LarderError(skipped.map((x) => x.message).join(' '), last.status, last.code);
+    }
+
+    /** The household's shop with this name, or a known UK shop that could be added. */
+    async function shopFor(name: string | null): Promise<Identified['shop']> {
+      if (!name) return null;
+      const found = await ctx.core.resolve.shop(name).catch(() => null);
+      const preset = SHOP_PRESETS.find((x) => x.name.toLowerCase().replace(/['’]/g, '') === name.toLowerCase().replace(/['’]/g, ''));
+      return { name: found?.name ?? preset?.name ?? name, id: found?.id ?? null, preset: !found && !!preset };
+    }
+
+    receipts(ctx, { ask, shopFor });
 
     /** The model to use: the chosen one, or the default (saved, so Settings shows it). */
     async function modelFor(p: ProviderId, key: string): Promise<string> {
@@ -240,13 +261,7 @@ export default defineModule({
       // "Heinz Beanz 415g" already says "415 g".
       const squash = (x: string) => x.toLowerCase().replace(/\s+/g, '');
       const brand = cap([title, size && !squash(title).includes(squash(size)) ? size : ''].filter(Boolean).join(' '), 160) || null;
-      const shopName = cap(r.shop, 60);
-      let shop: Identified['shop'] = null;
-      if (shopName) {
-        const found = await ctx.core.resolve.shop(shopName).catch(() => null);
-        const preset = SHOP_PRESETS.find((x) => x.name.toLowerCase().replace(/['’]/g, '') === shopName.toLowerCase().replace(/['’]/g, ''));
-        shop = { name: found?.name ?? preset?.name ?? shopName, id: found?.id ?? null, preset: !found && !!preset };
-      }
+      const shop = await shopFor(cap(r.shop, 60) || null);
       const days = r.shelf_life_days;
       return {
         readable: r.readable,

@@ -11,6 +11,19 @@
 - **Shop favourites in Pending:** bring in your Tesco favourites (a button, Claude, or a Home Assistant automation on a schedule) and any not linked to an item wait in Pending, to become a new item (with the shop's picture), be linked to one, or be dismissed for good (undo in Settings).
 - Home Assistant gets `larder_online_shopping_basket_filled`, `_slot_booked`, `_favourites_pending` and `_failed` events (the last says when you need to log in to the shop again), and the action **Bring in shop favourites**.
 
+## 0.5.3
+
+- **Add from receipt:** take a photo of a till receipt (or an online order) and Claude or Gemini matches each line to the things you already keep, then adds what you tick to stock in one go, with the prices paid. Receipts are vague, so anything it can't place is shown as "Not in Larder" and left out; **Match** picks the item by hand. Nothing new is added from a receipt.
+- **It learns your shops' names:** once "ANDREX CLASSIC 9PK" at Tesco has been added as 9 toilet rolls, the next Tesco receipt matches it straight away ("as before"). Guesses are marked **Check** and left unticked.
+- Two packs of 9 rolls count as 18 rolls, weighed things by weight, and the same receipt added twice is spotted.
+- Assistants can add a receipt they've read with the new `add_receipt` tool.
+
+## 0.5.2
+
+- **Read with AI in the scanner:** a barcode Larder and Open Food Facts don't know has **Read it with AI** on its card. Point the camera at the front of the pack and Claude or Gemini names it; **Add 1** adds it and remembers the barcode, so next time it's known straight away.
+- **Add by photo is simpler:** it's now part of the scanner, with the same one-press card as a new barcode (check the name, how many, Add 1, next) instead of a separate camera and the Add item page. In Add mode, **Read with AI** sits under the camera for things without a barcode, with **Or upload a photo** for one you already have. A volume button or Space still takes it. Tidy places and types later under Stock → To tidy, as with scans.
+- A shop's own brand from a shop Larder doesn't have yet can be added from the card (**Add Tesco**).
+
 ## 0.5.1
 
 - **Quicker scanning:** scan, Add, next. A barcode that's new to Larder is named (from Open Food Facts when it knows it), remembered and added in one press, instead of Save and then Add. The card says plainly whether it's **In Larder** or **New**, where it goes is one line (the shelf you scanned, or its usual place) with **Change** for the odd one, and on a phone it sits at the bottom of the screen so Add is always in reach.

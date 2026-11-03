@@ -1,13 +1,12 @@
 /**
- * Add by photo, and the AI section in Settings. The photo is taken with a live
- * camera view (or uploaded), shrunk on the phone, read by the AIs in the
- * household's order, then opened on the Add item page to check before saving.
- * A barcode in the photo is read on the phone.
+ * The AI section in Settings, the photo reading behind the scanner's "Read with
+ * AI", and Add from receipt: a photo is shrunk on the phone and read by the AIs
+ * in the household's order. Add by photo (on Home) opens the scanner with the
+ * camera on.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  api, ApiError, defineWebModule, Empty, ErrorBox, Header, Icon, Link, ProductTile, Sheet, Switch, grabFrame, readBarcode, useAction, useAddItem, useCamera, useQuery, useQueryClient,
-  type AddItemDraft, type ProductSummary,
+  api, defineWebModule, grabFrame, Header, Icon, money, plural, Sheet, shortDate, Stepper, Switch, useAction, useCamera, useNavigate, useQuery, useShops, type PhotoReader,
 } from '@larder/web-sdk';
 
 type ProviderId = 'claude' | 'gemini';
@@ -43,7 +42,7 @@ function useStatus() {
 /* Photos                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Big enough to read small print, small enough to send quickly: about 1600 pixels on the long side, as a JPEG. */
+/** Big enough to read small print, small enough to send quickly: about 1600 pixels on the long side (a receipt, 2400), as a JPEG. */
 async function shrink(photo: Blob, longest = 1568): Promise<Blob> {
   const bitmap = await createImageBitmap(photo, { imageOrientation: 'from-image' });
   try {
@@ -68,25 +67,63 @@ function base64(blob: Blob): Promise<string> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Add by photo                                                        */
+/* Reading photos for the scanner                                      */
 /* ------------------------------------------------------------------ */
 
-type Step =
-  | { kind: 'camera' }
-  | { kind: 'reading'; preview: string }
-  | { kind: 'known'; preview: string; product: ProductSummary }
-  | { kind: 'unsure'; preview: string; draft: AddItemDraft }
-  | { kind: 'shop'; preview: string; draft: AddItemDraft; shop: NonNullable<Identified['shop']> }
-  | { kind: 'failed'; preview: string | null; message: string };
+/** The scanner's "Read with AI": the photo, shrunk here, goes to the AIs in the household's order. */
+const photoReader: PhotoReader = {
+  async status() {
+    const s = await call<Status>('GET', '/');
+    return { ready: s.ready, by: s.first ? NAMES[s.first] : null };
+  },
+  async read(photo) {
+    const small = await shrink(photo);
+    const r = await call<Identified>('POST', '/identify', { image: await base64(small) });
+    return {
+      readable: r.readable, name: r.name, brand: r.brand, unit: r.unit, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
+      by: NAMES[r.provider], notes: r.skipped.map((x) => x.message), photo: small,
+    };
+  },
+};
 
-/**
- * Keys that take the photo: Space, the volume buttons (like a phone's camera
- * app, where the phone passes them to the page), and a camera key.
- */
+/** Add by photo (from Home) is the scanner with the camera on: Read with AI is under it. */
+function AddByPhoto() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/scan?ai=1', { replace: true });
+  }, [navigate]);
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Add from receipt                                                    */
+/* ------------------------------------------------------------------ */
+
+interface ItemRef { id: string; name: string; unit: string }
+interface ReceiptLine { text: string; count: number; price: number | null; item: ItemRef | null; quantity: number; match: 'learnt' | 'sure' | 'guess' | 'none' }
+interface Receipt {
+  readable: boolean;
+  shop: { name: string; id: string | null; preset: boolean } | null;
+  date: string | null;
+  total: number | null;
+  lines: ReceiptLine[];
+  addedBefore: string | null;
+  receiptKey: string | null;
+  provider: ProviderId;
+  model: string;
+  skipped: Array<{ provider: ProviderId; message: string }>;
+}
+/** A line on the review list: `keep` adds it; `picked` when matched by hand. */
+interface Row extends Omit<ReceiptLine, 'match'> { key: number; match: ReceiptLine['match'] | 'picked'; keep: boolean }
+
 const SHUTTER_KEYS = new Set([' ', 'AudioVolumeDown', 'AudioVolumeUp', 'VolumeDown', 'VolumeUp', 'Camera']);
 
-/** The live camera with its shutter, like the barcode scanner's view. */
-function CameraView({ intro, onPhoto, onUpload, onRetry }: { intro: string; onPhoto: (photo: Blob) => void; onUpload: () => void; onRetry: () => void }) {
+function useCurrency(): string {
+  return useQuery({ queryKey: ['settings'], queryFn: api.settings.get, staleTime: 60_000 }).data?.currency ?? 'GBP';
+}
+
+/** The camera, taller than the scanner's, for a receipt: Take photo, a volume button or Space. */
+function ReceiptCamera({ onPhoto, onUpload, onRetry }: { onPhoto: (photo: Blob) => void; onUpload: () => void; onRetry: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const cam = useCamera(video, true);
   const [shooting, setShooting] = useState(false);
@@ -102,7 +139,6 @@ function CameraView({ intro, onPhoto, onUpload, onRetry }: { intro: string; onPh
   }
   const shootRef = useRef(shoot);
   shootRef.current = shoot;
-
   useEffect(() => {
     if (cam.state !== 'on') return;
     const onKey = (e: KeyboardEvent) => {
@@ -117,8 +153,8 @@ function CameraView({ intro, onPhoto, onUpload, onRetry }: { intro: string; onPh
   }, [cam.state]);
 
   return (
-    <>
-      <div className="viewfinder" aria-label="Camera">
+    <div className="stack">
+      <div className="viewfinder" aria-label="Camera" style={{ aspectRatio: '3 / 4', maxHeight: '58vh', margin: '0 auto', width: '100%' }}>
         <video ref={video} playsInline muted hidden={cam.state !== 'on'} />
         {cam.state !== 'on' && (
           <div className="vf-idle">
@@ -128,171 +164,214 @@ function CameraView({ intro, onPhoto, onUpload, onRetry }: { intro: string; onPh
           </div>
         )}
       </div>
-      <p className="small muted">{intro}</p>
+      <p className="small muted">Lay the receipt flat in good light and fill the frame with it. For a long one, do the top half, add it, then the bottom half.</p>
       <button type="button" className="btn primary block" disabled={cam.state !== 'on' || shooting} onClick={() => void shoot()}><Icon name="camera" />Take photo</button>
       <button type="button" className="btn block" onClick={onUpload}>Upload a photo</button>
-      {cam.state === 'on' && <p className="small muted" style={{ textAlign: 'center' }}>A volume button or Space takes the photo too, where your phone allows it.</p>}
-    </>
+    </div>
   );
 }
 
-function AddByPhoto() {
-  const status = useStatus();
-  const addItem = useAddItem();
-  const qc = useQueryClient();
+/** Which of the household's items a receipt line is, or none. */
+function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef | null) => void; onClose: () => void }) {
+  const items = useQuery({ queryKey: ['ai', 'receipt-items'], queryFn: () => api.products.list() }).data ?? [];
+  const [q, setQ] = useState('');
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = items.filter((s) => words.every((w) => [s.product.name, ...s.product.aliases].some((n) => n.toLowerCase().includes(w)))).slice(0, 40);
+  return (
+    <Sheet title="Which item is it?" onClose={onClose}>
+      <p className="small muted" style={{ margin: 0 }}>On the receipt: <b style={{ fontFamily: 'var(--mono, monospace)' }}>{row.text}</b>. Larder remembers your choice for this shop.</p>
+      <input className="input" autoFocus placeholder="Search your items" aria-label="Search your items" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="list" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
+        {shown.map((s) => (
+          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit })}>
+            <span className="item-main">
+              <span className="item-name">{s.product.name}</span>
+              <span className="item-meta">{s.product.aliases.length ? `Also ${s.product.aliases.join(', ')} · ` : ''}counted in {s.product.unit}</span>
+            </span>
+          </button>
+        ))}
+        {!shown.length && <div className="item"><span className="small muted">{items.length ? 'Nothing matches. Things not in Larder are left out.' : 'Loading…'}</span></div>}
+      </div>
+      {row.item && <button type="button" className="btn block ghost" onClick={() => onPick(null)}>Not in Larder: leave it out</button>}
+    </Sheet>
+  );
+}
+
+function ReceiptPage() {
+  const ready = !!useStatus().data?.ready;
+  const shops = useShops();
+  const currency = useCurrency();
   const { run, busy } = useAction();
-  const [step, setStep] = useState<Step>({ kind: 'camera' });
-  // A new key starts the camera afresh (Try again).
-  const [cameraKey, setCameraKey] = useState(0);
   const upload = useRef<HTMLInputElement>(null);
-  const preview = 'preview' in step ? step.preview : null;
-  useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview);
-  }, [preview]);
+  const [reading, setReading] = useState(false);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [shopId, setShopId] = useState('');
+  const [picking, setPicking] = useState<number | null>(null);
+  const [cameraKey, setCameraKey] = useState(0);
+  /** The shop of the last receipt, for the bottom half of a long one (which doesn't say). */
+  const lastShop = useRef('');
 
-  async function read(file: Blob) {
-    const shown = URL.createObjectURL(file);
-    setStep({ kind: 'reading', preview: shown });
-    let photo: Blob;
+  async function read(photo: Blob) {
+    setReading(true);
     try {
-      photo = await shrink(file);
-    } catch {
-      setStep({ kind: 'failed', preview: shown, message: "Larder can't open that photo. Take one with the camera, or use a JPEG or PNG." });
-      return;
+      const r = await run(async () => call<Receipt>('POST', '/receipt', { image: await base64(await shrink(photo, 2400)) }));
+      if (!r) return;
+      setReceipt(r);
+      // Matched before or certain: ticked. A guess is shown to check. Ticked nothing when it's been added before.
+      setRows(r.lines.map((l, key) => ({ ...l, key, keep: !r.addedBefore && (l.match === 'learnt' || l.match === 'sure') })));
+      setShopId(r.shop?.id ?? (r.shop ? '' : lastShop.current));
+    } finally {
+      setReading(false);
     }
-    // The barcode, read on the phone, says whether it's already in Larder; the AI reads the rest at the same time.
-    const known = readBarcode(file).then(async (barcode) => {
-      if (!barcode) return { barcode: null, product: null };
-      const found = await api.identify(barcode).catch(() => null);
-      return { barcode, product: found?.kind === 'product' ? found.product : null };
-    });
-    const reading = base64(photo).then((image) => call<Identified>('POST', '/identify', { image }));
-    const [{ barcode, product }, result] = await Promise.all([known, reading.then((r) => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e }))]);
-    if (product) {
-      setStep({ kind: 'known', preview: shown, product });
-      return;
-    }
-    if (!result.ok) {
-      setStep({ kind: 'failed', preview: shown, message: result.e instanceof ApiError ? result.e.message : 'Reading the photo went wrong. Try again.' });
-      return;
-    }
-    const r = result.r;
-    const draft: AddItemDraft = {
-      name: r.name,
-      aliases: r.aliases,
-      categoryId: r.categoryId,
-      unit: r.unit,
-      shelfLifeDays: r.shelfLifeDays,
-      preferredShopIds: r.shop?.id ? [r.shop.id] : [],
-      brand: r.brand,
-      barcode,
-      photo,
-      source: r.provider,
-      // Say when the first AI couldn't (out of credit, say), so it can be sorted out.
-      note: `Read from your photo by ${NAMES[r.provider]}.${r.skipped.map((x) => ` ${x.message}`).join('')} Check it before adding.`,
-    };
-    if (!r.readable) setStep({ kind: 'unsure', preview: shown, draft });
-    else next(draft, r.shop, shown);
   }
 
-  /** Asks about a shop Larder doesn't have yet, then opens Add item. */
-  function next(draft: AddItemDraft, shop: Identified['shop'], shown: string) {
-    if (shop && !shop.id) setStep({ kind: 'shop', preview: shown, draft, shop });
-    else addItem(draft, { replace: true });
+  const change = (key: number, patch: Partial<Row>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const kept = rows.filter((r) => r.keep && r.item && r.quantity > 0);
+  const matched = rows.filter((r) => r.item);
+  const unmatched = rows.filter((r) => !r.item);
+  const startAgain = () => { setReceipt(null); setRows([]); };
+
+  async function addShop() {
+    const s = receipt?.shop;
+    if (!s) return;
+    const made = await run(() => (s.preset ? api.shops.addPreset(s.name) : api.shops.create({ name: s.name })), `${s.name} added to your shops`);
+    if (made) setShopId(made.id);
   }
 
-  async function addShop(draft: AddItemDraft, shop: NonNullable<Identified['shop']>) {
-    const made = await run(() => (shop.preset ? api.shops.addPreset(shop.name) : api.shops.create({ name: shop.name, sells: draft.categoryId ? [draft.categoryId] : [] })), `${shop.name} added to your shops`);
-    if (!made) return;
-    await qc.invalidateQueries({ queryKey: ['shops'] });
-    addItem({ ...draft, preferredShopIds: [made.id] }, { replace: true });
-  }
-
-  // Upload is a plain file picker (the phone's photos or files); the camera is the live view above.
-  const picker = <input ref={upload} type="file" accept="image/*" hidden data-testid="ai-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void read(f); }} />;
-  const again = <div className="btnrow"><button type="button" className="btn primary" onClick={() => setStep({ kind: 'camera' })}><Icon name="camera" />Take another</button><button type="button" className="btn" onClick={() => upload.current?.click()}>Upload a photo</button></div>;
-  const photo = preview && <img src={preview} alt="Your photo" style={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 16, background: 'var(--surface)' }} />;
-
-  if (status.data && !status.data.ready) {
-    return (
-      <>
-        <Header title="Add by photo" back="/" />
-        <div className="content" style={{ maxWidth: 640 }}>
-          <Empty title="Choose an AI first">
-            <span className="small muted">Add by photo uses Claude or Gemini with your own API key. Set it up in Settings, under AI.</span>
-            <div className="btnrow"><Link className="btn primary small" to="/settings">Settings</Link><Link className="btn small" to="/add">Add by name instead</Link></div>
-          </Empty>
-        </div>
-      </>
+  async function add() {
+    if (!receipt || !kept.length) return;
+    const r = await run(
+      () => call<{ added: number; message: string }>('POST', '/receipt/add', {
+        shopId: shopId || null,
+        receiptKey: receipt.receiptKey,
+        lines: kept.map((x) => ({ productId: x.item!.id, quantity: x.quantity, price: x.price, text: x.text, count: x.count })),
+      }),
+      (x) => `${x.message} Ready for the next receipt.`,
     );
+    if (r) {
+      lastShop.current = shopId;
+      startAgain();
+    }
   }
+
+  const shopName = shops.find((s) => s.id === shopId)?.name ?? receipt?.shop?.name ?? null;
+  const by = receipt ? NAMES[receipt.provider] : null;
 
   return (
     <>
-      <Header title="Add by photo" back="/" />
-      <div className="content stack" style={{ maxWidth: 640, gap: 16 }}>
-        {picker}
-        {step.kind === 'camera' && status.data && (
-          <CameraView
-            key={cameraKey}
-            onRetry={() => setCameraKey((k) => k + 1)}
-            intro={`Fill the frame with the front of the pack. ${status.data.first ? NAMES[status.data.first] : 'The AI'} reads it and fills in the details for you to check.`}
-            onPhoto={(p) => void read(p)}
-            onUpload={() => upload.current?.click()}
-          />
+      <Header title="Add from receipt" back="/" />
+      <div className="content stack" style={{ maxWidth: 860 }}>
+        {!ready && <p className="small muted">Set up Claude or Gemini in Settings → AI to read receipts.</p>}
+        <input ref={upload} type="file" accept="image/*" hidden data-testid="receipt-upload"
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void read(f); }} />
+
+        {reading && (
+          <div className="card pad" style={{ display: 'grid', justifyItems: 'center', gap: 12, textAlign: 'center' }}>
+            <div className="spinner" />
+            <p className="small">Reading the receipt and matching it to your items…</p>
+          </div>
         )}
-        {step.kind === 'reading' && (
+
+        {!reading && !receipt && ready && <ReceiptCamera key={cameraKey} onPhoto={(p) => void read(p)} onUpload={() => upload.current?.click()} onRetry={() => setCameraKey((k) => k + 1)} />}
+
+        {!reading && receipt && (
           <>
-            {photo}
-            <div className="row" style={{ gap: 10, alignItems: 'center' }}><div className="spinner" aria-hidden="true" /><b>Reading the label…</b></div>
-          </>
-        )}
-        {step.kind === 'known' && (
-          <>
-            {photo}
             <div className="card pad stack" style={{ gap: 10 }}>
-              <span className="small muted">Already in Larder</span>
-              <div className="row" style={{ gap: 12, alignItems: 'center' }}><ProductTile s={step.product} /><b>{step.product.product.name}</b></div>
-              <div className="btnrow">
-                <button type="button" className="btn primary" disabled={busy} onClick={() => void run(() => api.stock.add({ productId: step.product.product.id, quantity: 1 }), `Added 1 ${step.product.product.name}`).then((r) => r && setStep({ kind: 'camera' }))}>Add 1</button>
-                <Link className="btn" to={`/products/${step.product.product.id}`}>Open</Link>
+              <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+                <Icon name="receipt" />
+                <span className="grow">
+                  <b>{shopName ?? 'Receipt'}</b>
+                  <br />
+                  <span className="small muted">
+                    {[receipt.date ? shortDate(receipt.date) : null, receipt.total !== null ? `${money(receipt.total, currency, 2)} in all` : null, `read by ${by}`].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
               </div>
+              <label className="row small" style={{ gap: 8 }}>
+                <span>Shop</span>
+                <select className="input" style={{ width: 'auto', flex: 1, maxWidth: 280 }} value={shopId} onChange={(e) => setShopId(e.target.value)} aria-label="Shop">
+                  <option value="">No shop</option>
+                  {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {receipt.shop && !receipt.shop.id && !shopId && <button type="button" className="btn small" disabled={busy} onClick={() => void addShop()}><Icon name="plus" size="sm" />Add {receipt.shop.name}</button>}
+              </label>
+              {receipt.addedBefore && (
+                <p className="small" style={{ margin: 0 }}><b>This looks like a receipt added on {shortDate(receipt.addedBefore.slice(0, 10))}.</b> Adding it again would count it twice, so nothing is ticked. Tick anything that wasn't added.</p>
+              )}
+              {!receipt.readable && <p className="small" style={{ margin: 0 }}><b>{by} couldn't read a receipt in that photo.</b> Try again flat, in good light, filling the frame.</p>}
+              {receipt.skipped.map((x) => <p key={x.provider} className="small muted" style={{ margin: 0 }}>{x.message}</p>)}
             </div>
-            {again}
-          </>
-        )}
-        {step.kind === 'unsure' && (
-          <>
-            {photo}
-            <div className="card pad stack" style={{ gap: 10 }}>
-              <b>{NAMES[step.draft.source as ProviderId] ?? 'The AI'} couldn't make out what this is.</b>
-              <span className="small muted">Its best guess is “{step.draft.name}”. Try a clearer photo of the front of the pack, or carry on and fix it by hand.</span>
-              <div className="btnrow"><button type="button" className="btn" onClick={() => addItem(step.draft, { replace: true })}>Use the guess</button></div>
-            </div>
-            {again}
-          </>
-        )}
-        {step.kind === 'failed' && (
-          <>
-            {photo}
-            <ErrorBox error={new Error(step.message)} />
-            {again}
-            <Link className="link small" to="/add">Add by name instead</Link>
-          </>
-        )}
-        {step.kind === 'shop' && (
-          <>
-            {photo}
-            <Sheet title={`Add ${step.shop.name}?`} onClose={() => addItem(step.draft, { replace: true })}>
-              <p>{step.shop.name} isn't one of your shops yet. Add it, so this goes on its shopping list?</p>
-              <div className="btnrow">
-                <button type="button" className="btn primary" disabled={busy} onClick={() => void addShop(step.draft, step.shop)}>Add {step.shop.name}</button>
-                <button type="button" className="btn" onClick={() => addItem(step.draft, { replace: true })}>Not now</button>
+
+            {matched.length > 0 && (
+              <div className="section">
+                <div className="label">In Larder · tick what to add</div>
+                <div className="list">
+                  {matched.map((r) => (
+                    <div key={r.key} className="item" style={{ flexWrap: 'wrap' }}>
+                      <button type="button" className="check" aria-label={`Add ${r.item!.name}`} aria-pressed={r.keep}
+                        style={r.keep ? { background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--accent-ink)' } : undefined}
+                        onClick={() => change(r.key, { keep: !r.keep })}><Icon name="check" size="sm" /></button>
+                      <span className="item-main" style={{ flex: '1 1 160px' }}>
+                        <span className="item-name">{r.item!.name}{r.match === 'guess' && <span className="pill p-soon" style={{ marginLeft: 8 }}>Check</span>}</span>
+                        <span className="item-meta">
+                          <span style={{ fontFamily: 'var(--mono, monospace)' }}>{r.text}</span>
+                          {r.price !== null ? ` · ${money(r.price, currency, 2)}` : ''}
+                          {r.match === 'learnt' ? ' · as before' : r.match === 'guess' ? ' · a guess' : ''}
+                        </span>
+                      </span>
+                      <span className="row" style={{ gap: 6, marginLeft: 'auto' }}>
+                        <Stepper small value={r.quantity} min={0} onChange={(n) => change(r.key, { quantity: n, keep: n > 0 })} label={`How many ${r.item!.name} (${r.item!.unit})`} />
+                        {r.item!.unit !== 'each' && <span className="small muted" style={{ minWidth: 34 }}>{plural(r.item!.unit, r.quantity)}</span>}
+                        <button type="button" className="btn small ghost" onClick={() => setPicking(r.key)}>Change</button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </Sheet>
+            )}
+
+            {unmatched.length > 0 && (
+              <div className="section">
+                <div className="label">Not in Larder · left out</div>
+                <p className="small muted" style={{ marginTop: 0 }}>Receipts are often vague. If one of these is something you keep, match it, and Larder remembers it for this shop.</p>
+                <div className="list">
+                  {unmatched.map((r) => (
+                    <div key={r.key} className="item">
+                      <span className="item-main">
+                        <span className="item-name" style={{ fontFamily: 'var(--mono, monospace)', fontWeight: 500 }}>{r.text}</span>
+                        {r.price !== null && <span className="item-meta">{money(r.price, currency, 2)}</span>}
+                      </span>
+                      <button type="button" className="btn small" onClick={() => setPicking(r.key)}>Match</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!rows.length && receipt.readable && <p className="small muted">Nothing on that receipt to add.</p>}
+            <div className="dock">
+              <button type="button" className="btn" disabled={busy} onClick={startAgain}>Start again</button>
+              <button type="button" className="btn primary" disabled={busy || !kept.length} onClick={() => void add()}>
+                {kept.length ? `Add ${kept.length === 1 ? '1 thing' : `${kept.length} things`} to stock` : 'Tick what to add'}
+              </button>
+            </div>
           </>
         )}
       </div>
+      {picking !== null && rows.find((r) => r.key === picking) && (
+        <PickItem
+          row={rows.find((r) => r.key === picking)!}
+          onClose={() => setPicking(null)}
+          onPick={(item) => {
+            const row = rows.find((r) => r.key === picking)!;
+            // Another item counted in something else: start from how many the receipt says.
+            const quantity = item && row.item?.unit === item.unit ? row.quantity : row.count;
+            change(row.key, item ? { item, quantity, match: 'picked', keep: true } : { item: null, quantity: row.count, match: 'none', keep: false });
+            setPicking(null);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -372,7 +451,14 @@ function AiSettings({ admin }: { admin: boolean }) {
 
 export default defineWebModule({
   id: 'ai',
-  pages: [{ path: '/photo', title: 'Add by photo', hidden: true, component: AddByPhoto }],
-  addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack and the details fill themselves in', icon: 'camera', useShown: () => !!useStatus().data?.ready }],
+  pages: [
+    { path: '/photo', title: 'Add by photo', hidden: true, component: AddByPhoto },
+    { path: '/receipt', title: 'Add from receipt', hidden: true, component: ReceiptPage },
+  ],
+  addActions: [
+    { path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack and the details fill themselves in', icon: 'camera', useShown: () => !!useStatus().data?.ready },
+    { path: '/receipt', title: 'Add from receipt', subtitle: 'What you bought, into stock', icon: 'receipt', useShown: () => !!useStatus().data?.ready },
+  ],
+  photoReader,
   settingsPanels: [AiSettings],
 });

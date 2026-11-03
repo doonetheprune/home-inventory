@@ -16860,6 +16860,335 @@
         }
       }
     },
+    "/api/v1/modules/ai/receipt": {
+      "post": {
+        "summary": "Read a photo of a receipt and match its lines to the household's items (nothing is added)",
+        "tags": [
+          "Module: ai"
+        ],
+        "description": "Send a photo as base64, as for /identify. Each line comes back matched to an item Larder has, or with none: receipts are often vague, and nothing new is made from one. Lines matched the same way before at that shop are matched without the AI's guess. Send the lines to keep to /receipt/add.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "minLength": 100,
+                    "maxLength": 1900000
+                  }
+                },
+                "required": [
+                  "image"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readable": {
+                      "type": "boolean"
+                    },
+                    "shop": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "preset": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "id",
+                            "preset"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "date": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "total": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "price": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "item": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "unit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "match": {
+                            "type": "string",
+                            "enum": [
+                              "learnt",
+                              "sure",
+                              "guess",
+                              "none"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "count",
+                          "price",
+                          "item",
+                          "quantity",
+                          "match"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "addedBefore": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "receiptKey": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "gemini"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "readable",
+                    "shop",
+                    "date",
+                    "total",
+                    "lines",
+                    "addedBefore",
+                    "receiptKey",
+                    "provider",
+                    "model",
+                    "skipped"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/receipt/add": {
+      "post": {
+        "summary": "Add the lines kept from a receipt to stock, with the prices paid",
+        "tags": [
+          "Module: ai"
+        ],
+        "description": "All the lines are added or none are. The prices are recorded as prices paid at the shop (the pricing module keeps them), and each line's text is remembered for that shop, so the next receipt matches it straight away.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shopId": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "receiptKey": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lines": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 99999
+                        },
+                        "price": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "count": {
+                          "default": 1,
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 999
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "quantity"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "lines"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "added": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/sharing/link": {
       "post": {
         "summary": "Put a shared link in Pending (from the Home Assistant app's share menu)",

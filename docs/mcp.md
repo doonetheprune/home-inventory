@@ -87,6 +87,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `list_places` / `add_place` / `add_storage_grid` / `change_place` / `remove_place` | Places, nested, with label codes; shelving with numbered spots in one go; only empty places can be removed |
 | `list_categories` / `add_category` / `change_category` / `remove_category` | Categories, and how early their items are flagged before expiry |
 | `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?" or "spinach is £4.40/kg here, is that good?", and making it the usual price. Both take the pack's unit (the item's own, g, kg, ml, l) (pricing module) |
+| `add_receipt` | Add a till receipt or online order the assistant has read to stock in one go, with the prices paid, by item names. Only items Larder has: if any line isn't one, nothing is added and it says which (ai module) |
 | `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
 | `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
 | `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |

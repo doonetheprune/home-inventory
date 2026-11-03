@@ -30,7 +30,7 @@ export default defineModule({
 
 | Hook | Use it to |
 |---|---|
-| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup` (including `savePhotoFromLink(url, label)`, which saves a picture from a public https address as a Larder photo, and `forgetPhoto(fileId)`, which deletes one that no item, brand or place uses), `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history` (`recent()`, and `product(id)` for one item's stock changes), `today()`, `now()`. Before fetching an address someone gave, check it with `publicWebAddress(url)` from `@larder/core` (https, a real domain, not the home network) |
+| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup` (including `savePhotoFromLink(url, label)`, which saves a picture from a public https address as a Larder photo, and `forgetPhoto(fileId)`, which deletes one that no item, brand or place uses), `home`, `resolve` (find things by name or code), `products.brandNames()` (every item's brand and pack names, by item id), `automation`, `nfc`, `settings`, `history` (`recent()`, and `product(id)` for one item's stock changes), `today()`, `now()`. Before fetching an address someone gave, check it with `publicWebAddress(url)` from `@larder/core` (https, a real domain, not the home network) |
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
@@ -82,6 +82,7 @@ export default defineWebModule({
   addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
   wishListPanels: [Waiting],     // at the top of the Wish list: () => JSX
+  photoReader: { status, read }, // lets the scanner name things from a photo (the ai module)
 });
 ```
 
@@ -90,6 +91,7 @@ export default defineWebModule({
 - A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
 - `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. `photoFileId` uses a photo already in Larder's files instead (a shared page's picture); `links`, `notes` and `defaultPlaceId` fill in more of the form; `onSaved(productId)` runs once the item is made (e.g. to take it out of Pending).
+- `photoReader` lets the scanner name things from a photo of the pack: `status()` says whether it's set up and who reads (`{ ready, by: 'Claude' }`); `read(photo)` answers a `PhotoReading` (name, brand, unit, categoryId, shelfLifeDays, aliases, shop, by, notes, and the smaller `photo` it sent, to keep). The scanner shows **Read with AI** while one is ready; `usePhotoReader()` gets it from any page. The ai module offers one.
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 - `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
 

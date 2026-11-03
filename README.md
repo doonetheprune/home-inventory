@@ -4,7 +4,8 @@ What you've got, and where. A self-hosted home inventory for everything in the h
 
 - **Search first.** One search bar for everything, typo-tolerant ("bog rol" finds toilet roll), with + and − right in the results. On a laptop: type, press ↑ three times, Enter, and three are added.
 - **Scan.** Phone camera, USB or Bluetooth scanners, QR shelf labels. Unknown barcodes are looked up in Open Food Facts (and friends), or named once and remembered.
-- **Add by photo.** Snap the pack and Claude or Gemini (your own API key) fills in the name, brand, size, category and shelf life, for you to check.
+- **Add by photo.** In the scanner, point the camera at the pack and Claude or Gemini (your own API key) names it, with its brand, size, category and shelf life, for one-press adding. It also names barcodes nothing else knows.
+- **Add from receipt.** Photograph a till receipt and the AI matches what you bought to the things you keep, with the prices paid, learning each shop's abbreviations. Anything it can't place is left out.
 - **Places.** Rooms, cupboards, shelves and boxes, with short codes (G2-4). Set up racking in one go. Things can be out of place: usually in the shed, now in the kitchen.
 - **Shopping by shop.** "I'm going to Aldi" lists everything low that Aldi can supply. Deliveries on the way count, so you don't buy twice. Tick items off and they go into stock.
 - **Unit prices.** "24 rolls for £8, is that cheaper than usual?"
