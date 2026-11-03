@@ -35,6 +35,7 @@ export function Scan() {
   const [target, setTarget] = useState<{ id: string; label: string } | null>(null);
   /** What the AI read from a photo, as a new item to check and add. */
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  const places = usePlaces();
   const video = useRef<HTMLVideoElement>(null);
   const upload = useRef<HTMLInputElement>(null);
   const { run } = useAction();
@@ -91,6 +92,18 @@ export function Scan() {
       setParams(next, { replace: true });
     }
   }, [params, identify, setParams]);
+
+  // Opened from a place ("Scan here", "Put away here"): it's where things go until another shelf is scanned.
+  const placeParam = params.get('place');
+  useEffect(() => {
+    if (!placeParam) return;
+    const p = places.find((x) => x.id === placeParam);
+    if (!p) return;
+    setTarget({ id: p.id, label: p.code ?? p.name });
+    const next = new URLSearchParams(params);
+    next.delete('place');
+    setParams(next, { replace: true });
+  }, [placeParam, places, params, setParams]);
 
   useEffect(() => {
     localStorage.setItem('larder.camera', camera ? 'on' : 'off');
@@ -176,7 +189,7 @@ export function Scan() {
             <video ref={video} playsInline muted hidden={state !== 'on'} />
             {state === 'on' && <><div className="frame-corners" />{!holding && <div className="line" />}</>}
             <div className="vf-top">
-              <span className="vf-chip"><Icon name={holding && camera ? 'clock' : MODE_CHIP[mode][0]} size="sm" />{holding && camera ? 'Paused: finish this one first' : pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : MODE_CHIP[mode][1]}</span>
+              <span className="vf-chip"><Icon name={holding && camera ? 'clock' : MODE_CHIP[mode][0]} size="sm" />{holding && camera ? 'Paused: finish this one first' : pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]}</span>
               {camera && <button type="button" className="vf-chip" onClick={() => setCamera(false)}>Stop camera</button>}
             </div>
             {state !== 'on' && (
@@ -211,7 +224,7 @@ export function Scan() {
           {!looking && pending && !result && (
             <div className="sheet-card">
               <div className="match"><ProductTile s={pending} size="lg" /><div className="item-main"><h3>{pending.product.name}</h3><span className="small muted">Scan the shelf label, or pick the place.</span></div></div>
-              <MovePicker p={pending} mode={mode} onDone={() => setPending(null)} />
+              <MovePicker p={pending} mode={mode} initial={target?.id ?? null} onDone={() => setPending(null)} />
             </div>
           )}
           {!looking && result && !aiDraft && <ResultCard r={result} mode={mode} target={target} onClearTarget={() => setTarget(null)} onDone={done} onIdentified={(r) => setResult(r)} pending={pending} setPending={setPending}
@@ -220,13 +233,13 @@ export function Scan() {
             <div className="card empty">
               <b>Ready</b>
               <span className="muted small">
-                {mode === 'add' && 'Scan something, then Add, then the next. Scan a shelf label first to put everything after it on that shelf; anything without a place waits under Stock → To tidy.'}
+                {mode === 'add' && 'Scan something, then Add, then the next. Scan a shelf label first to put everything after it on that shelf; anything without a place waits in Places → To sort.'}
                 {mode === 'use' && 'Scan something you’ve used up.'}
                 {mode === 'move' && 'Scan the item you’re taking somewhere, then scan where it’s going. It will show as out of place.'}
-                {mode === 'putaway' && 'Scan the item, then the shelf it lives on.'}
+                {mode === 'putaway' && (target ? `Scan each item, then Put away: it lives in ${target.label} from now on.` : 'Scan the item, then the shelf it lives on.')}
                 {mode === 'look' && 'Scan anything to see what it is and where it lives.'}
               </span>
-              {target && <span className="pill p-wish">Adding to {target.label} <button type="button" className="link small" onClick={() => setTarget(null)}>Clear</button></span>}
+              {target && (mode === 'add' || mode === 'putaway') && <span className="pill p-wish">{mode === 'add' ? 'Adding to' : 'Putting away in'} {target.label} <button type="button" className="link small" onClick={() => setTarget(null)}>Clear</button></span>}
             </div>
           )}
         </div>
@@ -235,10 +248,10 @@ export function Scan() {
   );
 }
 
-function MovePicker({ p, mode, onDone }: { p: ProductSummary; mode: Mode; onDone: () => void }) {
+function MovePicker({ p, mode, initial = null, onDone }: { p: ProductSummary; mode: Mode; initial?: string | null; onDone: () => void }) {
   const places = usePlaces();
   const { run, busy } = useAction();
-  const [to, setTo] = useState<string | null>(null);
+  const [to, setTo] = useState<string | null>(initial);
   return (
     <div className="inputrow">
       <PlaceSelect value={to} onChange={setTo} places={places} allowNone={false} label="Where it's going" />
@@ -292,7 +305,7 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
       <div className="sheet-card">
         {header}
         <p className="small muted">{pending ? 'Now scan the shelf label, or pick the place.' : ''}</p>
-        <MovePicker p={s} mode={mode} onDone={() => { setPending(null); onDone(); }} />
+        <MovePicker p={s} mode={mode} initial={target?.id ?? null} onDone={() => { setPending(null); onDone(); }} />
       </div>
     );
   }
@@ -320,7 +333,7 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
 /**
  * Where scanned stock goes, as a line rather than a picker: the shelf scanned
  * last, or the item's usual place. "Change" opens the picker for the odd one;
- * anything without a place can be sorted later (Stock → To tidy).
+ * anything without a place can be sorted later (Places → To sort).
  */
 function WhereLine({ placeId, onChange, places }: { placeId: string | null; onChange: (id: string | null) => void; places: ReturnType<typeof usePlaces> }) {
   const [open, setOpen] = useState(false);
@@ -328,7 +341,7 @@ function WhereLine({ placeId, onChange, places }: { placeId: string | null; onCh
   if (open) return <label className="field"><span>Where</span><PlaceSelect value={placeId} onChange={(v) => { onChange(v); setOpen(false); }} places={places} /></label>;
   return (
     <p className="small muted" style={{ margin: 0 }}>
-      {place ? <>Goes to <b style={{ color: 'var(--ink)' }}>{place.path}</b>.</> : 'No place yet: sort it later under Stock → To tidy.'}{' '}
+      {place ? <>Goes to <b style={{ color: 'var(--ink)' }}>{place.path}</b>.</> : 'No place yet: it waits in Places → To sort.'}{' '}
       <button type="button" className="link small" onClick={() => setOpen(true)}>{place ? 'Change' : 'Choose'}</button>
     </p>
   );

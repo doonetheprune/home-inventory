@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Category, CategoryCreate, CategoryPatch, GridCreate, Place, PlaceContents, PlaceCreate, PlaceNode, PlacePatch, PlaceRef, Shop, ShopCreate, ShopPatch,
+  Category, CategoryCreate, CategoryPatch, GridCreate, Place, PlaceContents, PlaceCreate, PlaceNode, PlacePatch, PlaceRef, PlaceToSort, Shop, ShopCreate, ShopPatch,
   type CoreApi,
 } from '@larder/core';
 import type { ZodApp } from '../app';
@@ -43,6 +43,7 @@ export function registerCatalogueRoutes(app: ZodApp, { core }: { core: CoreApi }
     app.post('/places/grid', {
       schema: { tags, summary: 'Set up grid storage, e.g. 4 shelves × 6 boxes → G1-1 … G4-6', body: GridCreate, response: { 200: z.object({ container: Place, places: z.array(Place) }) } },
     }, (r) => core.places.createGrid(r.body));
+    app.get('/places/to-sort', { schema: { tags, summary: 'Stock with no place yet ("To sort"), by item', response: { 200: PlaceToSort } } }, () => core.places.toSort());
     app.get('/places/:id', { schema: { tags, summary: "What's in a place (and what usually lives there)", params: IdParams, response: { 200: PlaceContents } } }, (r) => core.places.contents(r.params.id));
     app.patch('/places/:id', { schema: { tags, summary: 'Change a place', params: IdParams, body: PlacePatch, response: { 200: Place } } }, (r) => core.places.update(r.params.id, r.body));
     app.delete('/places/:id', { schema: { tags, summary: 'Remove an empty place', params: IdParams, response: { 200: Ok } } }, async (r) => {

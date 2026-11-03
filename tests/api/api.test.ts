@@ -172,6 +172,18 @@ describe('API', () => {
     expect(grid.places).toHaveLength(24);
   });
 
+  it('lists stock with no place as To sort, and puts it away from there', async () => {
+    const { call } = await makeApp({ auth: 'none' });
+    const shelf = (await call<Any>('POST', '/api/v1/places', { name: 'Shelf', code: 'U1' })).body;
+    const tea = (await call<Any>('POST', '/api/v1/products', { name: 'Tea bags', unit: 'box' })).body;
+    await call('POST', '/api/v1/stock/add', { productId: tea.id, quantity: 2, placeId: null });
+    const pile = (await call<Any>('GET', '/api/v1/places/to-sort')).body;
+    expect(pile.items).toHaveLength(1);
+    expect(pile.items[0]).toMatchObject({ quantity: 2, summary: { product: { name: 'Tea bags' } } });
+    expect((await call('POST', '/api/v1/stock/move', { productId: tea.id, toPlaceId: shelf.id, fromPlaceId: null, mode: 'permanent' })).status).toBe(200);
+    expect((await call<Any>('GET', '/api/v1/places/to-sort')).body.items).toEqual([]);
+  });
+
   it('saves the photo a barcode lookup found when a scanned item is named, and serves it from Larder', async () => {
     const jpeg = Buffer.from('ffd8ffe000104a464946', 'hex');
     const lookups = defineModule({

@@ -9735,6 +9735,51 @@
         }
       }
     },
+    "/api/v1/places/to-sort": {
+      "get": {
+        "summary": "Stock with no place yet (\"To sort\"), by item",
+        "tags": [
+          "Places"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "$ref": "#/components/schemas/ProductSummary"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "summary",
+                          "quantity"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/places/{id}": {
       "get": {
         "summary": "What's in a place (and what usually lives there)",
@@ -10922,9 +10967,16 @@
                     "exclusiveMinimum": 0
                   },
                   "fromPlaceId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "mode": {
                     "default": "temporary",

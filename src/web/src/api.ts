@@ -3,7 +3,7 @@
  * Home Assistant ingress and reverse proxies.
  */
 import type {
-  Category, Dashboard, IdentifyResult, PlaceContents, PlaceNodeT, PlaceRef, Place, Product, ProductCreate, ProductDetail, ProductSummary,
+  Category, Dashboard, IdentifyResult, PlaceContents, PlaceNodeT, PlaceRef, PlaceToSort, Place, Product, ProductCreate, ProductDetail, ProductSummary,
   SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase,
 } from '@larder/core';
 
@@ -97,6 +97,7 @@ export const api = {
     list: () => get<PlaceRef[]>('/places'),
     tree: () => get<PlaceNodeT[]>('/places/tree'),
     contents: (id: string) => get<PlaceContents>(`/places/${id}`),
+    toSort: () => get<PlaceToSort>('/places/to-sort'),
     create: (b: { name: string; parentId?: string | null; code?: string | null; notes?: string }) => post<Place>('/places', b),
     update: (id: string, b: Partial<Place>) => patch<Place>(`/places/${id}`, b),
     remove: (id: string) => del(`/places/${id}`),
@@ -117,7 +118,7 @@ export const api = {
   stock: {
     add: (b: { productId: string; quantity: number; placeId?: string | null; expiresOn?: string | null; variantId?: string | null }) => post<ProductSummary>('/stock/add', b),
     use: (b: { productId: string; quantity: number; placeId?: string }) => post<ProductSummary>('/stock/use', b),
-    move: (b: { productId: string; toPlaceId: string; quantity?: number; fromPlaceId?: string; mode: 'temporary' | 'permanent' }) => post<ProductSummary>('/stock/move', b),
+    move: (b: { productId: string; toPlaceId: string; quantity?: number; fromPlaceId?: string | null; mode: 'temporary' | 'permanent' }) => post<ProductSummary>('/stock/move', b),
     returnHome: (b: { productId: string; entryId?: string }) => post<ProductSummary>('/stock/return', b),
     charge: (b: { productId: string; quantity: number }) => post<ProductSummary>('/stock/charge', b),
     expect: (b: { productId: string; quantity: number; source: string; eta?: string | null }) => post<ProductSummary>('/stock/expect', b),

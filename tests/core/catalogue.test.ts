@@ -47,6 +47,23 @@ describe('places', () => {
     await core.places.remove(room.id);
     expect((await core.places.get(shelf.id)).parentId).toBeNull();
   });
+
+  it('keeps stock with no place in To sort until it is put somewhere', async () => {
+    const shelf = await core.places.create({ name: 'Shelf', code: 'U1' });
+    const peas = await core.products.create({ name: 'Peas', unit: 'bag' });
+    const beans = await core.products.create({ name: 'Baked beans', unit: 'tin' });
+    await core.stock.add({ productId: peas.id, quantity: 3 });
+    await core.stock.add({ productId: beans.id, quantity: 2, placeId: shelf.id });
+    await core.stock.add({ productId: beans.id, quantity: 4, placeId: null });
+    expect((await core.places.toSort()).items.map((i) => [i.summary.product.name, i.quantity])).toEqual([['Baked beans', 4], ['Peas', 3]]);
+
+    // Putting the loose beans on the shelf leaves the two already there alone.
+    const s = await core.stock.move({ productId: beans.id, toPlaceId: shelf.id, fromPlaceId: null, mode: 'permanent' });
+    expect(s.inStock).toBe(6);
+    expect((await core.places.toSort()).items.map((i) => i.summary.product.name)).toEqual(['Peas']);
+    expect((await core.places.contents(shelf.id)).items[0]?.quantity).toBe(6);
+    await expect(core.stock.move({ productId: beans.id, toPlaceId: shelf.id, fromPlaceId: null, mode: 'permanent' })).rejects.toThrow("There's no baked beans to move without a place.");
+  });
 });
 
 describe('shops and categories', () => {

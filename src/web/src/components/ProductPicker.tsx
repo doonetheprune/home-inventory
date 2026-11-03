@@ -6,7 +6,7 @@ import { api } from '../api';
 import { stockText } from '../format';
 import { ProductTile } from '../ui';
 
-export function ProductPicker({ onPick, only, placeholder = 'Which item?' }: { onPick: (s: ProductSummary) => void; only?: (s: ProductSummary) => boolean; placeholder?: string }) {
+export function ProductPicker({ onPick, only, placeholder = 'Which item?', autoFocus = true }: { onPick: (s: ProductSummary) => void; only?: (s: ProductSummary) => boolean; placeholder?: string; autoFocus?: boolean }) {
   const { data } = useQuery({ queryKey: ['products', 'all', ''], queryFn: () => api.products.list({ status: 'all' }) });
   const [q, setQ] = useState('');
   const matches = useMemo(() => {
@@ -18,7 +18,7 @@ export function ProductPicker({ onPick, only, placeholder = 'Which item?' }: { o
   }, [data, q, only]);
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <input className="input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
+      <input className="input" autoFocus={autoFocus} value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
       <div className="list">
         {matches.map((s) => (
           <button type="button" key={s.product.id} className="item" style={{ textAlign: 'left', width: '100%' }} onClick={() => onPick(s)}>

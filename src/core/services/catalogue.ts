@@ -1,9 +1,9 @@
 /** Categories, shops and places: the things stock is organised by. */
 import { z } from 'zod';
-import { Category, Place, Shop, type PlaceContents, type PlaceNodeT, type PlaceRef } from '../model';
+import { Category, Place, Shop, type PlaceContents, type PlaceNodeT, type PlaceRef, type PlaceToSort } from '../model';
 import { CategoryCreate, CategoryPatch, GridCreate, PlaceCreate, PlacePatch, ShopCreate, ShopPatch } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { byName, newId, pluralWord } from '../util';
+import { byName, newId, pluralWord, roundQty } from '../util';
 import type { CoreContext } from './context';
 import { loadWorld, placePath, placeRef, summarise } from './world';
 
@@ -243,6 +243,22 @@ export function createPlaceService(ctx: CoreContext) {
         visitors: [...visitors.entries()]
           .filter(([pid]) => world.productById.has(pid))
           .map(([pid, v]) => ({ summary: sum(pid), quantity: v.quantity, usualPlace: placeRef(world, v.usualPlace) })),
+      };
+    },
+
+    /** Stock with no place yet, by item: the "To sort" pile. */
+    async toSort(): Promise<PlaceToSort> {
+      const world = await loadWorld(ctx);
+      const loose = new Map<string, number>();
+      for (const e of world.entries) {
+        if (e.status !== 'in_stock' || e.quantity <= 0 || e.placeId) continue;
+        loose.set(e.productId, (loose.get(e.productId) ?? 0) + e.quantity);
+      }
+      return {
+        items: [...loose.entries()]
+          .filter(([pid]) => world.productById.has(pid))
+          .map(([pid, quantity]) => ({ summary: summarise(world, world.productById.get(pid)!), quantity: roundQty(quantity) }))
+          .sort((a, b) => a.summary.product.name.localeCompare(b.summary.product.name, 'en-GB')),
       };
     },
 

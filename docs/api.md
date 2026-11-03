@@ -31,6 +31,7 @@ Everything the web app does goes through the REST API, so integrations can do it
 | `POST /identify/remember` | Name an unknown barcode once |
 | `GET /places/tree`, `GET /places/{id}` | Places with counts; what's in one |
 | `POST /places/grid` | `{ parentId, name, prefix: "G", rows: 4, columns: 6 }` → G1-1 … G4-6 |
+| `GET /places/to-sort` | Stock with no place yet, by item ("To sort"). Put it away with `POST /stock/move` and `fromPlaceId: null` |
 | `POST /modules/pricing/check` | `{ productId, quantity, price }` → is this pack cheaper than usual? |
 | `GET /events` | Live change events (Server-Sent Events) |
 

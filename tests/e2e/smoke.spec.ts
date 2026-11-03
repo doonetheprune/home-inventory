@@ -97,8 +97,10 @@ test('adds an unknown barcode in one go, remembers it, and leaves the tidying fo
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
-  // No place and no type yet: it waits under To tidy.
+  // No place and no type yet: it waits under To tidy, and in Places → To sort for a shelf.
   await page.goto('/#/stock?status=to_tidy');
+  await expect(page.locator('.item-name').filter({ hasText: name })).toBeVisible();
+  await page.goto('/#/places/to-sort');
   await expect(page.locator('.item-name').filter({ hasText: name })).toBeVisible();
 });
 
@@ -120,7 +122,61 @@ test('sets up a grid of shelves', async ({ page }, info) => {
   await page.locator('input.mono').fill(prefix);
   await page.getByRole('button', { name: 'Create 24 places' }).click();
   await expect(page.getByText(`4 shelves, 6 boxes each. Codes ${prefix}1-1 to ${prefix}4-6.`)).toBeVisible();
-  await expect(page.locator('a.item .code', { hasText: `${prefix}2-4` })).toBeVisible();
+  await expect(page.locator('.item .code', { hasText: `${prefix}2-4` })).toBeVisible();
+});
+
+test('adds a room, then its spots one after another, and stock in a spot', async ({ page }, info) => {
+  await signIn(page);
+  const p = info.project.name === 'phone' ? 'P' : 'D';
+  const toast = page.locator('.toast');
+  await page.goto('/#/places');
+  await page.getByRole('button', { name: 'Add a place' }).first().click();
+  await page.getByPlaceholder('Kitchen, Top drawer, Shelf 2…').fill(`Loft ${info.project.name}`);
+  await page.getByPlaceholder('e.g. K').fill(`L${p}`);
+  await page.getByRole('button', { name: 'Add place' }).click();
+  // Straight into the new room, ready for its first spot, with a code that follows the room's.
+  await expect(page.locator('.bigcode')).toHaveText(`L${p}`);
+  await expect(page.getByLabel("New spot's name")).toBeFocused();
+  await expect(page.getByLabel("New spot's code")).toHaveValue(`L${p}1`);
+  await page.keyboard.type('Left eaves');
+  await page.keyboard.press('Enter');
+  await expect(toast).toContainText(`Left eaves added as L${p}1`);
+  await expect(page.getByLabel("New spot's code")).toHaveValue(`L${p}2`);
+  await page.keyboard.type('Right eaves');
+  await page.keyboard.press('Enter');
+  await expect(toast).toContainText(`Right eaves added as L${p}2`);
+  // Renamed without leaving the room.
+  await page.getByRole('button', { name: 'Edit Left eaves' }).click();
+  await page.getByLabel('Left eaves: name').fill('Left eaves boxes');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(toast).toContainText('Saved');
+
+  // In a spot: what's waiting in To sort goes there in one press, then more of something Larder has.
+  const tea = `Tea bags ${info.project.name}`;
+  await page.evaluate(async (name) => {
+    const headers = { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' };
+    const item = (await (await fetch('api/v1/products', { method: 'POST', headers, body: JSON.stringify({ name, unit: 'box' }) })).json()) as { id: string };
+    await fetch('api/v1/stock/add', { method: 'POST', headers, body: JSON.stringify({ productId: item.id, quantity: 2, placeId: null }) });
+  }, tea);
+  await page.getByRole('link', { name: /Left eaves boxes/ }).last().click();
+  await expect(page.locator('.bigcode')).toHaveText(`L${p}1`);
+  await page.getByRole('button', { name: 'Add stock here' }).first().click();
+  const sheet = page.getByRole('dialog');
+  await sheet.locator('.item', { hasText: tea }).getByRole('button', { name: 'Put here' }).click();
+  await expect(toast).toContainText(`${tea} put away in L${p}1`);
+  await sheet.getByLabel('Which item?').fill('cable ties');
+  await sheet.getByRole('button', { name: /Cable ties/ }).click();
+  await sheet.getByRole('button', { name: 'More quantity' }).click();
+  await sheet.getByRole('button', { name: /^Add 2/ }).click();
+  await expect(toast).toContainText(`of Cable ties to L${p}1`);
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  // Counted here, and changed here.
+  await page.getByRole('button', { name: `More ${tea} here` }).click();
+  await expect(toast).toContainText(`${tea}: 3 boxes here now`);
+  await expect(page.getByLabel(`${tea} here`, { exact: true })).toHaveValue('3');
+  // Scanning from here: whatever's scanned goes here.
+  await page.getByRole('link', { name: 'Scan here' }).click();
+  await expect(page.locator('.vf-chip').first()).toContainText(`Adding to L${p}1`);
 });
 
 test('links an NFC tag scanned on a phone to a place', async ({ page }, info) => {
