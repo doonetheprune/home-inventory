@@ -456,3 +456,46 @@ test('shared links wait in Pending, to go on the wish list or into Larder', asyn
   await page.goto('/#/wishlist');
   await expect(named(wish)).toHaveCount(1);
 });
+
+test('the camera needs a clear read, and holds still while a card is open', async ({ page }) => {
+  // A pretend barcode reader: each frame it "sees" the next code queued by the test, if any.
+  await page.addInitScript(() => {
+    const w = globalThis as unknown as { __frames: string[]; BarcodeDetector: unknown };
+    w.__frames = [];
+    w.BarcodeDetector = class {
+      static async getSupportedFormats() { return ['ean_13', 'qr_code']; }
+      async detect() {
+        const code = w.__frames.shift();
+        return code ? [{ rawValue: code }] : [];
+      }
+    };
+  });
+  const see = (...codes: string[]) => page.evaluate((c) => { (globalThis as unknown as { __frames: string[] }).__frames.push(...c); }, codes);
+  await signIn(page);
+  await page.goto('/#/scan');
+  await page.getByRole('button', { name: 'Start camera' }).click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+
+  // A glimpse in one frame (a misread) isn't taken.
+  await see('5000000000017');
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Looking it up…')).toHaveCount(0);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+
+  // Read the same twice: that's the toilet roll.
+  await see('5029053038889', '5029053038889');
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  await expect(page.getByText('Paused: finish this one first')).toBeVisible();
+
+  // Another barcode while the card is open doesn't replace it.
+  await see('5000157024671', '5000157024671', '5000157024671');
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+
+  // Done with it: still in view, it isn't scanned straight back in.
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await see('5029053038889', '5029053038889', '5029053038889');
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toHaveCount(0);
+});

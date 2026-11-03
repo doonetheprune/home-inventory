@@ -29,11 +29,24 @@ export function Scan() {
   const [target, setTarget] = useState<{ id: string; label: string } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const { run } = useAction();
+  const moving = mode === 'move' || mode === 'putaway';
+  /**
+   * While a card is open the camera holds still, so a second read (or a misread
+   * as the phone moves) can't replace what's being entered. Moving is the
+   * exception: after the item, it's waiting for the shelf's label.
+   */
+  const holding = looking || (!!result && !(pending && moving));
+  const hold = useRef(holding);
+  hold.current = holding;
+  /** The code just dealt with: the camera leaves it alone for a moment, though it may still be in view. */
+  const settled = useRef<{ code: string; until: number }>({ code: '', until: 0 });
 
-  const identify = useCallback(async (code: string) => {
+  const identify = useCallback(async (code: string, from: 'camera' | 'hand' = 'hand') => {
     setLooking(true);
     try {
       const r = await api.identify(code);
+      // Waiting for a shelf: the camera catching another item's barcode doesn't change the item.
+      if (from === 'camera' && pending && (mode === 'move' || mode === 'putaway') && r.kind !== 'place') return;
       if (r.kind === 'place') {
         if (pending && (mode === 'move' || mode === 'putaway')) {
           const p = pending;
@@ -53,7 +66,11 @@ export function Scan() {
     }
   }, [mode, pending, run, toast]);
 
-  const { state, error } = useBarcodeScanner(video, camera, (code) => void identify(code));
+  const { state, error } = useBarcodeScanner(video, camera, (code) => {
+    if (hold.current) return;
+    if (code === settled.current.code && Date.now() < settled.current.until) return;
+    void identify(code, 'camera');
+  });
 
   useEffect(() => {
     const code = params.get('code');
@@ -69,7 +86,10 @@ export function Scan() {
     localStorage.setItem('larder.camera', camera ? 'on' : 'off');
   }, [camera]);
 
-  const done = () => setResult(null);
+  const done = () => {
+    if (result) settled.current = { code: result.code, until: Date.now() + 3000 };
+    setResult(null);
+  };
 
   return (
     <>
@@ -79,9 +99,9 @@ export function Scan() {
           <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />
           <div className="viewfinder" aria-label="Camera">
             <video ref={video} playsInline muted hidden={state !== 'on'} />
-            {state === 'on' && <><div className="frame-corners" /><div className="line" /></>}
+            {state === 'on' && <><div className="frame-corners" />{!holding && <div className="line" />}</>}
             <div className="vf-top">
-              <span className="vf-chip"><Icon name={MODE_CHIP[mode][0]} size="sm" />{pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : MODE_CHIP[mode][1]}</span>
+              <span className="vf-chip"><Icon name={holding && camera ? 'clock' : MODE_CHIP[mode][0]} size="sm" />{holding && camera ? 'Paused: finish this one first' : pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : MODE_CHIP[mode][1]}</span>
               {camera && <button type="button" className="vf-chip" onClick={() => setCamera(false)}>Stop camera</button>}
             </div>
             {state !== 'on' && (
