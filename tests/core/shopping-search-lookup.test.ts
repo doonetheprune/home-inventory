@@ -280,6 +280,8 @@ describe('lookup photos', () => {
     'https://images.example/page.jpg': () => new Response('<html><script>alert(1)</script></html>'),
     'https://images.example/huge.jpg': () => new Response(new Uint8Array(6 * 1024 * 1024).fill(0xff)),
     'https://images.example/gone.jpg': () => new Response('Not found', { status: 404 }),
+    'https://images.example/flahavans.jpg': () => new Response(jpeg(3)),
+    'https://images.example/quaker.jpg': () => new Response(jpeg(4)),
   };
   const byBarcode: Record<string, string> = {
     '5000157024671': 'https://images.example/beans.jpg',
@@ -293,6 +295,7 @@ describe('lookup photos', () => {
 
   async function kitchen() {
     const fetched: string[] = [];
+    const searched: string[] = [];
     const fetch = (async (url: string) => {
       fetched.push(url);
       const serve = images[url];
@@ -309,6 +312,18 @@ describe('lookup photos', () => {
             async lookup(barcode) {
               return byBarcode[barcode] ? { name: `Item ${barcode}`, brand: null, quantityText: null, imageUrl: byBarcode[barcode]!, categories: [] } : null;
             },
+            // Like Open Food Facts: loose matches first, best guesses not always right.
+            async search({ brand }) {
+              searched.push(brand);
+              if (brand === 'Broken') throw new Error('503');
+              return [
+                { name: 'Golden syrup porridge', brands: ['Quaker', 'Quaker Oats'], quantityText: null, imageUrl: 'https://images.example/quaker.jpg' },
+                { name: 'Porridge Oat Drink', brands: ["Flahavan's"], quantityText: null, imageUrl: null },
+                { name: 'Organic Oatmeal', brands: ["Flahavan's"], quantityText: null, imageUrl: 'https://images.example/page.jpg' },
+                { name: 'Porridge Oat Bar Blueberry', brands: ["Flahavan's"], quantityText: null, imageUrl: 'https://images.example/quaker.jpg' },
+                { name: 'Flahavans Quick Porridge Oats', brands: ['Flahavans'], quantityText: '500 g', imageUrl: 'https://images.example/flahavans.jpg' },
+              ];
+            },
           });
         },
       })],
@@ -318,7 +333,7 @@ describe('lookup photos', () => {
       await core.lookup.identify(barcode);
       return core.lookup.remember({ barcode, create: { name } });
     };
-    return { core, fetched, scanAndSave };
+    return { core, fetched, searched, scanAndSave };
   }
 
   it('keeps its own copy of the photo a lookup found, as the item\'s photo', async () => {
@@ -356,5 +371,43 @@ describe('lookup photos', () => {
     const { variant } = await core.lookup.remember({ barcode: '4088600214568', create: { name: 'Chopped tomatoes' }, imageUrl: 'https://169.254.169.254/latest/meta-data' });
     expect(fetched).toEqual([]);
     expect(variant.photoFileId).toBeNull();
+  });
+
+  it('finds a photo for a brand added by name: the first match of that brand with every word', async () => {
+    const { core, searched } = await kitchen();
+    // Not the Quaker one, not the drink without a photo, not the blueberry bar (two more words than Quick);
+    // "Flahavan's porridge oat" matches "Flahavans … Porridge Oats".
+    const r = await core.assistant.call('add_item', { name: 'Porridge oat', brand: "Flahavan's" });
+    expect(r.text).toBe('Added Porridge oat with a photo of Flahavans Quick Porridge Oats. It has no stock yet: use add_stock to say how many.');
+    const item = (await core.products.list()).find((s) => s.product.name === 'Porridge oat')!;
+    const detail = await core.products.get(item.product.id);
+    const photo = item.product.photoFileIds[0]!;
+    expect([...(await core.adapters.files.get(photo))!.data]).toEqual([...jpeg(3)]);
+    expect(detail.variants).toMatchObject([{ name: "Flahavan's", barcodes: [], photoFileId: photo, imageUrl: 'https://images.example/flahavans.jpg', source: 'fake' }]);
+    expect(searched).toEqual(["Flahavan's"]);
+  });
+
+  it('saves no photo when nothing of that brand matches, the search fails, or no brand is given', async () => {
+    const { core, searched } = await kitchen();
+    for (const [name, brand] of [['Porridge', 'Mornflake'], ['Granola', "Flahavan's"], ['Porridge', 'Broken']] as const) {
+      const r = await core.assistant.call('add_item', { name, brand });
+      expect(r.text, brand).not.toContain('photo');
+      const item = (await core.products.list()).find((s) => s.product.name === name)!;
+      expect(item.product.photoFileIds).toEqual([]);
+      await core.products.remove(item.product.id);
+    }
+    searched.length = 0;
+    await core.assistant.call('add_item', { name: 'Porridge' });
+    expect(searched).toEqual([]);
+  });
+
+  it('gives an item added with a barcode the photo a scan would', async () => {
+    const { core, searched } = await kitchen();
+    const r = await core.assistant.call('add_item', { name: 'Baked beans', barcode: '5000157024671' });
+    expect(r.text).toContain('with a photo of Item 5000157024671');
+    const item = (await core.products.list()).find((s) => s.product.name === 'Baked beans')!;
+    const [variant] = (await core.products.get(item.product.id)).variants;
+    expect(variant).toMatchObject({ name: 'Item 5000157024671', barcodes: ['5000157024671'], photoFileId: item.product.photoFileIds[0], source: 'fake' });
+    expect(searched).toEqual([]);
   });
 });

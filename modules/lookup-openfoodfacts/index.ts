@@ -5,10 +5,14 @@ import { openFactsProvider } from '../_shared/open-facts';
 export default defineModule({
   id: 'lookup-openfoodfacts',
   name: 'Open Food Facts',
-  description: 'Fills in names, brands and photos for food and drink barcodes from Open Food Facts.',
+  description: 'Fills in names, brands and photos for food and drink barcodes from Open Food Facts, and finds a photo for a brand of food added by name.',
   version: '1.0.0',
   defaultEnabled: true,
   setup(ctx) {
-    ctx.addLookupProvider(openFactsProvider({ id: 'openfoodfacts', name: 'Open Food Facts', baseUrl: ctx.config.url ?? 'https://world.openfoodfacts.org' }));
+    ctx.addLookupProvider(openFactsProvider({
+      id: 'openfoodfacts', name: 'Open Food Facts',
+      baseUrl: ctx.config.url ?? 'https://world.openfoodfacts.org',
+      searchUrl: ctx.config.search_url ?? 'https://search.openfoodfacts.org',
+    }));
   },
 });

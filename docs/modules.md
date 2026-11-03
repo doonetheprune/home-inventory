@@ -34,7 +34,7 @@ export default defineModule({
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
-| `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files |
+| `ctx.addLookupProvider({ id, name, lookup })` | Answer unknown barcodes (asked in `modules/index.ts` order, 4 second timeout each, results cached). Return `imageUrl` as an https address: when the barcode is saved, Larder downloads that photo into its own files. Optionally add `search({ name, brand })`, returning products of that brand (`{ name, brands, quantityText, imageUrl }`, best first), to find a photo for an item added by name and brand; Larder checks the brand and name again before using one |
 | `ctx.addSearchSection({ id, title, order, documents?, results })` | Add a section to search everywhere. `documents()` feeds the shared fuzzy index (types must start with your section id); `results()` turns hits into rows. Core orders: stock 10, shopping 20, places 30, wish list 50, shops 60. Scenarios will use 40 and recipes 70 |
 | `ctx.fetch` | Reach web services (maps, lookups). Use it rather than the global `fetch`, so tests can stand in for the internet |
 | `ctx.core.homeAssistant` | Home Assistant, when Larder can reach it (the add-on always can; elsewhere `LARDER_HA_URL` and `LARDER_HA_TOKEN`), else `null`: home location, people and their phones, saving zones and automations. See `HomeAssistantPort` in `src/core/ports.ts` and the shop locations module |
@@ -72,6 +72,7 @@ export default defineWebModule({
   productPanels: [MyPanel],      // shown on product pages: ({ product }) => JSX
   shoppingPanels: [MyListPanel], // shown beside a shop's list: ({ list }) => JSX
   shopPanels: [MyShopPanel],     // inside each shop's card on the Shops page: ({ shop }) => JSX
+  panels: [{ slot: 'scenarios.scenario', component: MyScenarioPanel }], // on another module's page: ({ id }) => JSX
   pages: [
     { path: '/', title: 'My feature', icon: 'box', component: MyPage },        // linked from More and the sidebar (Organise)
     { path: '/print', title: 'My sheets', section: 'print', component: Sheets }, // under Print in the sidebar
@@ -88,7 +89,11 @@ export default defineWebModule({
 - `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then.
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 
-Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
+Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). 
+
+**Panels on another module's page.** A module page can offer a slot by rendering `<ModulePanels slot="<its module id>.<page>" id={…} />`; any switched-on module adds to it with `panels`, getting the id of what the page shows. Neither module imports the other, and nothing shows when the other is off. `useModuleEnabled(id)` says whether a module is on, e.g. to offer a choice that needs it. Slots offered now: `scenarios.scenario` (a scenario's page, with its id; recipes uses it).
+
+Use the app's CSS classes (`card pad`, `list`, `item`, `btn`, `chip`, `label`, `field`, `input`, `stats`/`stat`, `cols-2` for two columns on wide screens, `paper` and `paper-wrap` for a print preview).
 
 ## Example data
 
@@ -106,7 +111,7 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 
 | Module | What it does |
 |---|---|
-| `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes |
+| `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes (Open Food Facts also finds a photo for a brand added by name) |
 | `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |

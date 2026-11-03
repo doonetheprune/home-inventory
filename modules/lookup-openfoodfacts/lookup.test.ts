@@ -24,4 +24,28 @@ describe('Open Facts lookup', () => {
     const down = openFactsProvider({ id: 'off', name: 'OFF', baseUrl: 'https://example.test', fetch: fakeFetch(503, {}) });
     await expect(down.lookup('1', { signal })).rejects.toThrow('503');
   });
+
+  it('searches a brand by name, keeping search syntax out of the query', async () => {
+    const asked: string[] = [];
+    const p = openFactsProvider({
+      id: 'off', name: 'OFF', baseUrl: 'https://example.test', searchUrl: 'https://search.example.test/',
+      fetch: (async (url: string) => {
+        asked.push(url);
+        return new Response(JSON.stringify({ hits: [
+          { product_name: 'Porridge Original', brands: ["Flahavan's"], quantity: '1 kg', image_front_small_url: 'https://img/2.jpg' },
+          { brands: ['Nameless'] },
+        ] }));
+      }) as unknown as typeof fetch,
+    });
+    expect(await p.search!({ name: 'Porridge (oats)*', brand: 'Flahavan\'s"' }, { signal })).toEqual([
+      { name: 'Porridge Original', brands: ["Flahavan's"], quantityText: '1 kg', imageUrl: 'https://img/2.jpg' },
+    ]);
+    const url = new URL(asked[0]!);
+    expect(url.origin + url.pathname).toBe('https://search.example.test/search');
+    expect(url.searchParams.get('q')).toBe('brands:"Flahavan\'s" AND Porridge AND oats');
+  });
+
+  it('only searches where a search server is set', () => {
+    expect(openFactsProvider({ id: 'obf', name: 'Open Beauty Facts', baseUrl: 'https://example.test' }).search).toBeUndefined();
+  });
 });

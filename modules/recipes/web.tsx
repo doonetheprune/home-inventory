@@ -1,19 +1,44 @@
-/** Recipes UI: saved recipes, what's missing, amounts by preset or by what you've got, and "Cooked it" (propose, adjust, confirm). */
+/**
+ * Recipes UI: saved recipes, what's missing, amounts by preset or by what you've got, and "Cooked it" (propose, adjust, confirm);
+ * the recipes that use an item, on its page; and a scenario's recipes, on the scenario's page.
+ */
 import { useState } from 'react';
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, qty, Sheet, Stepper, Switch, useAction, useModuleParams, useNavigate, useQuery,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, qty, Sheet, Stepper, Switch, useAction, useModuleEnabled, useModuleParams, useNavigate, useQuery,
+  type ProductDetail,
 } from '@larder/web-sdk';
 
 interface Have { name: string; productId: string | null; item: string | null; amount: string; quantity: number | null; unit: string | null; inStock: number | null; status: 'have' | 'short' | 'none' | 'unknown'; optional: boolean; ratio: number | null; ratioUnit: string; shown: string; label: string; scales: boolean; need: number | null }
 interface Preset { name: string; times: number }
 interface Scale { kind: 'saved' | 'preset' | 'servings' | 'times' | 'have'; times: number; preset: string | null; servings: number | null; by: string; limitedBy: string | null }
-interface Recipe { id: string; title: string; serves: number | null; ingredients: Have[]; method: string; notes: string; source: string; lastCookedAt: string | null; timesCooked: number; missing: string[]; presets: Preset[]; defaultPreset: string | null; scale: Scale }
+interface Recipe {
+  id: string; title: string; serves: number | null; ingredients: Have[]; method: string; notes: string; source: string; lastCookedAt: string | null; timesCooked: number; missing: string[];
+  presets: Preset[]; defaultPreset: string | null; scale: Scale;
+  scenarioIds: string[]; scenarioOnly: boolean; scenarios: Array<{ id: string; name: string }>; hidden: boolean;
+}
 interface Proposal { id: string; recipe: string; items: Array<{ productId: string; name: string; quantity: number; unit: string; inStock: number }>; skipped: string[] }
 /** How much to make, as the API takes it. */
 interface Ask { preset?: string; times?: number; servings?: number; have?: Array<{ ingredient: string; amount: number }> }
 
 const call = <T,>(method: string, path: string, body?: unknown) => api.modules.call<T>('recipes', method, path, body);
 const STATUS: Record<Have['status'], [string, string]> = { have: ['ok', 'In'], short: ['soon', 'Not enough'], none: ['low', 'None in'], unknown: ['plain', 'Not tracked'] };
+const useRecipes = (query = '') => useQuery({ queryKey: ['recipes', 'list', query], queryFn: () => call<Recipe[]>('GET', `/${query ? `?${query}` : ''}`) });
+const metaOf = (r: Recipe) => `${r.missing.length ? `Missing ${r.missing.join(', ')}` : 'You have everything'}${r.timesCooked ? ` · cooked ${r.timesCooked}×` : ''}`;
+
+function RecipeRows({ list, showScenarios }: { list: Recipe[]; showScenarios?: boolean }) {
+  return (
+    <div className="list">
+      {list.map((r) => (
+        <Link key={r.id} className="item" to={`/m/recipes/${r.id}`}>
+          <span className="tile"><Icon name="book" /></span>
+          <span className="item-main"><span className="item-name">{r.title}</span><span className="item-meta">{showScenarios && r.scenarios.length ? `${r.scenarios.map((x) => x.name).join(', ')} · ` : ''}{metaOf(r)}</span></span>
+          <Icon name="chev" size="sm" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 const times = (t: number) => `×${Math.round(t * 100) / 100}`;
 
 /** "The Family preset (×2)", "From 2 eggs (×0.67)", "As saved". */
@@ -26,7 +51,8 @@ function scaleText(s: Scale): string {
 }
 
 function RecipeList() {
-  const list = useQuery({ queryKey: ['recipes'], queryFn: () => call<Recipe[]>('GET', '/') });
+  const list = useRecipes();
+  const kept = useRecipes('show=scenario-only');
   return (
     <>
       <Header title="Recipes" back="/more">
@@ -34,17 +60,15 @@ function RecipeList() {
       </Header>
       <div className="content" style={{ maxWidth: 760 }}>
         <p className="muted small">Recipes you liked, saved by you or an AI assistant. Ask it "what can I cook with what needs using up?", and to save the ones that work.</p>
-        {list.isLoading ? <Loading /> : list.data?.length ? (
-          <div className="list">
-            {list.data.map((r) => (
-              <Link key={r.id} className="item" to={`/m/recipes/${r.id}`}>
-                <span className="tile"><Icon name="book" /></span>
-                <span className="item-main"><span className="item-name">{r.title}</span><span className="item-meta">{r.missing.length ? `Missing ${r.missing.join(', ')}` : 'You have everything'}{r.timesCooked ? ` · cooked ${r.timesCooked}×` : ''}</span></span>
-                <Icon name="chev" size="sm" />
-              </Link>
-            ))}
-          </div>
-        ) : <Empty title="No saved recipes yet"><span className="small muted">Ask your AI assistant for ideas and to save the ones you like, or add one yourself.</span></Empty>}
+        {list.isLoading ? <Loading /> : list.data?.length ? <RecipeRows list={list.data} />
+          : !kept.data?.length && <Empty title="No saved recipes yet"><span className="small muted">Ask your AI assistant for ideas and to save the ones you like, or add one yourself.</span></Empty>}
+        {kept.data && kept.data.length > 0 && (
+          <details className="section">
+            <summary className="label" style={{ cursor: 'pointer' }}><span>Kept for scenarios ({kept.data.length})</span><Icon name="chev" size="sm" /></summary>
+            <p className="small muted">These only show on their scenario's page, so seasonal recipes stay out of the way.</p>
+            <RecipeRows list={kept.data} showScenarios />
+          </details>
+        )}
       </div>
     </>
   );
@@ -209,8 +233,8 @@ function RecipePage() {
             <div className="list">
               {recipe.ingredients.map((i, n) => {
                 const [kind, text] = STATUS[i.status];
-                return (
-                  <div className="item" key={n}>
+                const row = (
+                  <>
                     <span className="item-main">
                       <span className="item-name">{i.label}{i.optional ? ' (optional)' : ''}</span>
                       {(i.item || (!i.scales && s.times !== 1)) && (
@@ -218,8 +242,10 @@ function RecipePage() {
                       )}
                     </span>
                     <Pill kind={kind}>{text}</Pill>
-                  </div>
+                  </>
                 );
+                // A linked ingredient opens its item: where it is, and every recipe that uses it.
+                return i.productId ? <Link className="item" key={n} to={`/products/${i.productId}`}>{row}</Link> : <div className="item" key={n}>{row}</div>;
               })}
             </div>
             <div className="btnrow">
@@ -233,6 +259,12 @@ function RecipePage() {
             <div className="card pad" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{recipe.method || <span className="muted">No method saved.</span>}</div>
             {recipe.notes && <div className="card pad small" style={{ whiteSpace: 'pre-wrap' }}><b>Notes</b><br />{recipe.notes}</div>}
             {recipe.source && <p className="small muted">From {recipe.source}.</p>}
+            {recipe.scenarios.length > 0 && (
+              <p className="small muted">
+                {recipe.hidden ? 'Only shows in ' : 'Also in '}
+                {recipe.scenarios.map((x, n) => <span key={x.id}>{n ? ', ' : ''}<Link to={`/m/scenarios/${x.id}`}>{x.name}</Link></span>)}.
+              </p>
+            )}
           </div>
         </div>
         <div className="card pad">
@@ -255,31 +287,61 @@ interface PresetRow { name: string; times: string }
 const emptyRow = (): Row => ({ name: '', amount: '', quantity: '', ratio: '', ratioUnit: '', optional: false });
 const decimal = (s: string) => Number(s.replace(',', '.'));
 
+interface Form { title: string; serves: string; method: string; notes: string; rows: Row[]; presets: PresetRow[]; defaultIndex: number | null; scenarioIds: string[]; scenarioOnly: boolean }
+
+/** Which scenarios the recipe is in, and whether it only shows there. Only while the scenarios module is on. */
+function ScenarioPicker({ f, set }: { f: Form; set: (patch: Partial<Form>) => void }) {
+  const on = useModuleEnabled('scenarios');
+  const list = useQuery({ queryKey: ['scenarios'], queryFn: () => api.modules.call<Array<{ id: string; name: string }>>('scenarios', 'GET', '/'), enabled: on });
+  if (!on || !list.data?.length) return null;
+  return (
+    <>
+      <div className="label">Scenarios</div>
+      <div className="chips wrap">
+        {list.data.map((s) => {
+          const picked = f.scenarioIds.includes(s.id);
+          const scenarioIds = picked ? f.scenarioIds.filter((x) => x !== s.id) : [...f.scenarioIds, s.id];
+          return <button type="button" key={s.id} className={`chip ${picked ? 'on' : ''}`} aria-pressed={picked} onClick={() => set({ scenarioIds, scenarioOnly: f.scenarioOnly && scenarioIds.length > 0 })}>{s.name}</button>;
+        })}
+      </div>
+      {f.scenarioIds.length > 0 && (
+        <div className="numfield">
+          <span><b>Only show in these scenarios</b><small>Keeps it off the main Recipes list, e.g. a Halloween recipe at Christmas</small></span>
+          <Switch checked={f.scenarioOnly} onChange={(v) => set({ scenarioOnly: v })} label="Only show in these scenarios" />
+        </div>
+      )}
+    </>
+  );
+}
+
 function RecipeEditor() {
-  const { id } = useModuleParams();
+  const { id, scenario } = useModuleParams();
   const editing = id && id !== 'new' ? id : null;
   const existing = useQuery({ queryKey: ['recipes', editing], queryFn: () => call<Recipe>('GET', `/${encodeURIComponent(editing!)}`), enabled: !!editing });
-  const [form, setForm] = useState<{ title: string; serves: string; method: string; notes: string; rows: Row[]; presets: PresetRow[]; defaultIndex: number | null } | null>(null);
+  const [form, setForm] = useState<Form | null>(null);
   const { run, busy } = useAction();
   const navigate = useNavigate();
   if (editing && existing.isLoading) return <Loading />;
   const e = existing.data;
   const defaultAt = e?.defaultPreset ? e.presets.findIndex((p) => p.name === e.defaultPreset) : -1;
-  const f = form ?? (e
+  const f: Form = form ?? (e
     ? {
         title: e.title, serves: e.serves ? String(e.serves) : '', method: e.method, notes: e.notes,
         rows: e.ingredients.map((i) => ({ name: i.name, amount: i.amount, quantity: i.quantity ? String(i.quantity) : '', ratio: i.ratio ? String(i.ratio) : '', ratioUnit: i.ratioUnit, optional: i.optional, productId: i.productId, linkedAs: i.name })),
         presets: e.presets.map((p) => ({ name: p.name, times: String(p.times) })),
         defaultIndex: defaultAt >= 0 ? defaultAt : null,
+        // Only scenarios that still exist; a removed one would be refused.
+        scenarioIds: e.scenarios.map((x) => x.id), scenarioOnly: e.hidden,
       }
-    : { title: '', serves: '', method: '', notes: '', rows: [emptyRow()], presets: [], defaultIndex: null });
+    // Made from a scenario's page: in that scenario, and (as it's usually seasonal) only there.
+    : { title: '', serves: '', method: '', notes: '', rows: [emptyRow()], presets: [], defaultIndex: null, scenarioIds: scenario ? [scenario] : [], scenarioOnly: !!scenario });
   const set = (patch: Partial<typeof f>) => setForm({ ...f, ...patch });
   const setRow = (n: number, patch: Partial<Row>) => set({ rows: f.rows.map((r, i) => (i === n ? { ...r, ...patch } : r)) });
   const setPreset = (n: number, patch: Partial<PresetRow>) => set({ presets: f.presets.map((p, i) => (i === n ? { ...p, ...patch } : p)) });
   const save = async () => {
     const kept = f.presets.map((p, n) => ({ ...p, n })).filter((p) => p.name.trim() && decimal(p.times) > 0);
     const body = {
-      title: f.title.trim(), serves: f.serves ? Number(f.serves) : null, method: f.method, notes: f.notes,
+      title: f.title.trim(), serves: f.serves ? Number(f.serves) : null, method: f.method, notes: f.notes, scenarioIds: f.scenarioIds, scenarioOnly: f.scenarioOnly && f.scenarioIds.length > 0,
       ingredients: f.rows.filter((r) => r.name.trim()).map((r) => ({
         name: r.name.trim(), amount: r.amount.trim() || undefined, quantity: decimal(r.quantity) > 0 ? decimal(r.quantity) : undefined, optional: r.optional,
         ratio: decimal(r.ratio) > 0 ? decimal(r.ratio) : null, ratioUnit: r.ratioUnit.trim(),
@@ -294,7 +356,7 @@ function RecipeEditor() {
   };
   return (
     <>
-      <Header title={editing ? 'Edit recipe' : 'New recipe'} back={editing ? `/m/recipes/${editing}` : '/m/recipes'} />
+      <Header title={editing ? 'Edit recipe' : 'New recipe'} back={editing ? `/m/recipes/${editing}` : scenario ? `/m/scenarios/${scenario}` : '/m/recipes'} />
       <div className="content" style={{ maxWidth: 760 }}>
         <label className="field"><span>Title</span><input className="input" value={f.title} onChange={(ev) => set({ title: ev.target.value })} /></label>
         <label className="field"><span>Serves</span><input className="input" inputMode="numeric" value={f.serves} onChange={(ev) => set({ serves: ev.target.value.replace(/\D/g, '') })} style={{ maxWidth: 120 }} /></label>
@@ -327,17 +389,44 @@ function RecipeEditor() {
         <button type="button" className="btn small" style={{ justifySelf: 'start' }} onClick={() => set({ presets: [...f.presets, { name: '', times: '1' }] })}><Icon name="plus" size="sm" />Preset</button>
         <label className="field"><span>Method</span><textarea className="input" rows={8} value={f.method} onChange={(ev) => set({ method: ev.target.value })} /></label>
         <label className="field"><span>Notes</span><textarea className="input" rows={3} value={f.notes} onChange={(ev) => set({ notes: ev.target.value })} /></label>
+        <ScenarioPicker f={f} set={set} />
         <button type="button" className="btn primary" disabled={busy || !f.title.trim()} onClick={() => void save()}>Save</button>
       </div>
     </>
   );
 }
 
+/** On an item's page: the saved recipes that use it. */
+function ItemRecipes({ product }: { product: ProductDetail }) {
+  const list = useRecipes(`productId=${encodeURIComponent(product.product.id)}`);
+  if (!list.data?.length) return null;
+  return (
+    <div className="section">
+      <div className="label">Recipes <Link to="/m/recipes">All recipes</Link></div>
+      <RecipeRows list={list.data} showScenarios />
+    </div>
+  );
+}
+
+/** On a scenario's page: its recipes, and adding one for it. */
+function ScenarioRecipes({ id }: { id: string }) {
+  const list = useRecipes(`scenarioId=${encodeURIComponent(id)}`);
+  return (
+    <div className="section">
+      <div className="label">Recipes <Link to={`/m/recipes/new/${encodeURIComponent(id)}`}>Add one</Link></div>
+      {list.data?.length ? <RecipeRows list={list.data} /> : <p className="small muted">None yet. Recipes added here only show in this scenario, unless you say otherwise.</p>}
+    </div>
+  );
+}
+
 export default defineWebModule({
   id: 'recipes',
+  productPanels: [ItemRecipes],
+  panels: [{ slot: 'scenarios.scenario', component: ScenarioRecipes }],
   pages: [
     { path: '/', title: 'Recipes', icon: 'book', subtitle: 'Saved, with what\'s missing', component: RecipeList },
     { path: '/new', title: 'New recipe', hidden: true, component: RecipeEditor },
+    { path: '/new/:scenario', title: 'New recipe', hidden: true, component: RecipeEditor },
     { path: '/:id', title: 'Recipe', component: RecipePage },
     { path: '/:id/edit', title: 'Edit recipe', component: RecipeEditor },
   ],

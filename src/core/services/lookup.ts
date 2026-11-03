@@ -12,11 +12,21 @@ import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { loadWorld, placePath, summarise } from './world';
 
+/** A product a provider's name search found. */
+export interface LookupMatch {
+  name: string;
+  brands: string[];
+  quantityText: string | null;
+  imageUrl: string | null;
+}
+
 /** A barcode database such as Open Food Facts. Modules register these. */
 export interface LookupProvider {
   id: string;
   name: string;
   lookup(barcode: string, options: { signal: AbortSignal }): Promise<Omit<LookupResult, 'provider' | 'barcode'> | null>;
+  /** Optional: products of this brand whose names have these words, best first. Larder checks them again before using one. */
+  search?(query: { name: string; brand: string }, options: { signal: AbortSignal }): Promise<LookupMatch[]>;
 }
 
 const MISS_TTL_DAYS = 7;
@@ -48,6 +58,13 @@ async function readUpTo(res: Response, max: number): Promise<Uint8Array | null> 
   }
   return out;
 }
+
+/** Lower-case words without punctuation, so "Flahavan's" matches "Flahavans", and "oats" matches "oat". */
+const words = (text: string) => text.toLowerCase().replace(/['’]/g, '').split(/[^\p{L}\p{N}]+/u).filter(Boolean).map((w) => (w.length > 3 ? w.replace(/s$/, '') : w));
+const hasAll = (text: string, wanted: string[]) => {
+  const have = new Set(words(text));
+  return wanted.length > 0 && wanted.every((w) => have.has(w));
+};
 
 /** Codes inside Larder's own QR labels and links. */
 function parseLarderCode(code: string): { kind: 'place' | 'product'; id: string } | null {
@@ -118,6 +135,52 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
     return { result: null, tried, failed };
   }
 
+  /** A barcode's lookup: remembered from before, or asked of the providers (and remembered). */
+  async function lookupBarcode(code: string, offline = false): Promise<{ result: LookupResult | null; tried: string[]; failed: string[] }> {
+    const cached = await ctx.storage.lookups.get(code);
+    const fresh = cached && Date.parse(ctx.now()) - Date.parse(cached.fetchedAt) < MISS_TTL_DAYS * 86_400_000;
+    if (cached?.found && cached.name) {
+      return { result: { provider: cached.provider ?? 'cache', barcode: code, name: cached.name, brand: cached.brand, quantityText: cached.quantityText, imageUrl: cached.imageUrl, categories: cached.categories }, tried: [], failed: [] };
+    }
+    if ((cached && fresh) || offline) return { result: null, tried: [], failed: [] };
+
+    const { result, tried, failed } = await askProviders(code);
+    // Only remember a miss when every provider actually answered.
+    if (result || !failed.length) {
+      const record: LookupRecord = {
+        barcode: code, found: !!result, provider: result?.provider ?? null, name: result?.name ?? null, brand: result?.brand ?? null,
+        quantityText: result?.quantityText ?? null, imageUrl: result?.imageUrl ?? null, categories: result?.categories ?? [], fetchedAt: ctx.now(),
+      };
+      await ctx.storage.lookups.put(record);
+    }
+    return { result, tried, failed };
+  }
+
+  /** Of the products a name search finds that are this brand, have every word of the name and have a photo, the one with the plainest name. */
+  async function searchProviders(name: string, brand: string): Promise<{ provider: string; name: string; brand: string; imageUrl: string } | null> {
+    const wantBrand = words(brand);
+    // "Flahavan's porridge" with the brand Flahavan's: the brand needn't be in the product's name too.
+    const wantName = words(name).filter((w) => !wantBrand.includes(w));
+    for (const p of providers) {
+      if (!p.search || !isEnabled(p.id)) continue;
+      try {
+        const found = await p.search({ name, brand }, { signal: AbortSignal.timeout(ctx.lookupTimeoutMs) });
+        let best: { provider: string; name: string; brand: string; imageUrl: string; extra: number } | null = null;
+        for (const m of found) {
+          const sameBrand = m.brands.find((b) => hasAll(b, wantBrand));
+          if (!sameBrand || !m.imageUrl || !hasAll(m.name, wantName)) continue;
+          // The plainest name wins: "Porridge Oats" over "Blueberry, cranberry, guava porridge".
+          const extra = words(m.name).filter((w) => !wantName.includes(w) && !wantBrand.includes(w)).length;
+          if (!best || extra < best.extra) best = { provider: p.id, name: m.name, brand: sameBrand, imageUrl: m.imageUrl, extra };
+        }
+        if (best) return { provider: best.provider, name: best.name, brand: best.brand, imageUrl: best.imageUrl };
+      } catch {
+        // A provider being down or slow shouldn't stop the others.
+      }
+    }
+    return null;
+  }
+
   return {
     registerProvider(provider: LookupProvider) {
       providers.push(provider);
@@ -159,25 +222,36 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
 
       if (!BARCODE.test(code)) return { kind: 'unknown', code, providersTried: [], providersFailed: [] };
 
-      const cached = await ctx.storage.lookups.get(code);
-      const fresh = cached && Date.parse(ctx.now()) - Date.parse(cached.fetchedAt) < MISS_TTL_DAYS * 86_400_000;
-      if (cached?.found && cached.name) {
-        const result: LookupResult = { provider: cached.provider ?? 'cache', barcode: code, name: cached.name, brand: cached.brand, quantityText: cached.quantityText, imageUrl: cached.imageUrl, categories: cached.categories };
-        return { kind: 'external', code, result, suggestions: await suggestionsFor(result.name) };
-      }
-      if ((cached && fresh) || options.offline) return { kind: 'unknown', code, providersTried: [], providersFailed: [] };
-
-      const { result, tried, failed } = await askProviders(code);
-      // Only remember a miss when every provider actually answered.
-      if (result || !failed.length) {
-        const record: LookupRecord = {
-          barcode: code, found: !!result, provider: result?.provider ?? null, name: result?.name ?? null, brand: result?.brand ?? null,
-          quantityText: result?.quantityText ?? null, imageUrl: result?.imageUrl ?? null, categories: result?.categories ?? [], fetchedAt: ctx.now(),
-        };
-        await ctx.storage.lookups.put(record);
-      }
+      const { result, tried, failed } = await lookupBarcode(code, options.offline);
       if (!result) return { kind: 'unknown', code, providersTried: tried, providersFailed: failed };
       return { kind: 'external', code, result, suggestions: await suggestionsFor(result.name) };
+    },
+
+    /**
+     * A photo for an item being added without a scan: its barcode's lookup photo,
+     * or else, given a brand, the photo of the product a name search finds that
+     * really is that brand, has every word of the name and the fewest other words
+     * (ties go to the search's order). The photo is saved
+     * in Larder's own files; nothing here is fatal, and no match means no photo.
+     */
+    async findPhoto(input: { barcode?: string | null; name: string; brand?: string | null }): Promise<{ match: { provider: string; name: string; brand: string | null; imageUrl: string } | null; photoFileId: string | null }> {
+      const brand = input.brand?.trim() || null;
+      if (input.barcode && BARCODE.test(input.barcode)) {
+        const { result } = await lookupBarcode(input.barcode).catch(() => ({ result: null }));
+        if (result?.imageUrl) {
+          const label = [result.brand, result.name].filter(Boolean).join(' ');
+          const photoFileId = await savePhoto(result.imageUrl, label);
+          if (photoFileId) return { match: { provider: result.provider, name: result.name, brand: result.brand, imageUrl: result.imageUrl }, photoFileId };
+        }
+      }
+      if (brand) {
+        const match = await searchProviders(input.name, brand);
+        if (match) {
+          const photoFileId = await savePhoto(match.imageUrl, `${match.brand} ${match.name}`);
+          if (photoFileId) return { match, photoFileId };
+        }
+      }
+      return { match: null, photoFileId: null };
     },
 
     /** Name an unknown barcode once (or link it to an existing product) so it's instant next time. */

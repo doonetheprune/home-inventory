@@ -9,6 +9,6 @@ Lists for situations: **Power cut**, **Christmas**, **Snowed in**, **Dog sitter*
   - `GET /:id` returns the detail: items grouped by **where they are now** (out-of-place stock shows where it is, marked as visiting), with quantities. Rechargeables say "6 charged, 4 flat"; low items say "Min 3 canisters". Items with none in the house are under `missing`, and wish list items under `wish`.
   - `PATCH /:id`, `DELETE /:id` (untags its items), `PUT /:id/items` `{ productId, included }`.
 - **Search:** a "Scenarios" section (order 40) matching names, notes and the items in them.
-- **AI tools:** `list_scenarios`, `get_scenario` `{ scenario }` (plain text by place).
+- **AI tools:** `list_scenarios`, `get_scenario` `{ scenario }` (plain text by place), `make_scenario` `{ name, notes? }`, `change_scenario`, `remove_scenario`, `add_to_scenario` / `remove_from_scenario` `{ scenario, items }` (every name is checked before anything changes).
 - **Demo:** "Power cut" and "Snowed in" in the example household.
-- **UI:** the scenario list; a scenario page like the mock-up (stats, places in two columns on wide screens, wish list); a printable page (A4, grouped by place, tick boxes, optional place photos); and a Scenarios panel on product pages to tick which scenarios an item is in.
+- **UI:** the scenario list; a scenario page like the mock-up (stats, places in two columns on wide screens, wish list); a printable page (A4, grouped by place, tick boxes, optional place photos); and a Scenarios panel on product pages to tick which scenarios an item is in. The scenario page offers the slot `scenarios.scenario` (with the scenario's id) for other modules' panels; recipes shows a scenario's recipes there.

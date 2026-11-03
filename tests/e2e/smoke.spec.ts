@@ -163,6 +163,34 @@ test('cooks a saved recipe after confirming what comes out of stock', async ({ p
   await expect(page.getByText(/Cooked \d+ time/)).toBeVisible();
 });
 
+test('keeps a recipe for its scenario, and lists recipes on the items they use', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Bonfire night ${info.project.name}`;
+  const title = `Bonfire beans ${info.project.name}`;
+  const scenario = (await page.evaluate(async (n) => (await fetch('api/v1/modules/scenarios', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n }) })).json(), name)) as { id: string };
+  await page.goto(`/#/m/scenarios/${scenario.id}`);
+  await page.getByRole('link', { name: 'Add one' }).click();
+  await page.getByLabel('Title').fill(title);
+  await page.getByLabel('Ingredient', { exact: true }).fill('baked beans');
+  await expect(page.getByRole('switch', { name: 'Only show in these scenarios' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText(`Only shows in ${name}.`)).toBeVisible();
+  // Its ingredient opens the item, which lists the recipes that use it.
+  await page.getByRole('link', { name: /baked beans/ }).click();
+  await expect(page).toHaveURL(/#\/products\//);
+  await expect(page.getByRole('heading', { name: 'Baked beans' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(title) })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Cheesy beans on toast/ })).toBeVisible();
+  // Not on the main list: folded away under its scenarios.
+  await page.goto('/#/m/recipes/');
+  await expect(page.getByRole('link', { name: /Chicken and spinach traybake/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(title) })).toBeHidden();
+  await page.getByText(/Kept for scenarios/).click();
+  await expect(page.getByRole('link', { name: new RegExp(title) })).toBeVisible();
+  await page.goto(`/#/m/scenarios/${scenario.id}`);
+  await expect(page.getByRole('link', { name: new RegExp(title) })).toBeVisible();
+});
+
 test('scales a recipe by its presets and by what you have, and keeps it as the default', async ({ page, isMobile }) => {
   // Phone and desktop share one server, so each run saves its own preset.
   const name = isMobile ? 'Brunch phone' : 'Brunch desktop';

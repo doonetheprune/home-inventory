@@ -2,18 +2,21 @@
  * Tools for AI assistants (Claude, ChatGPT, Gemini, local models), served
  * over MCP by the server (src/server/mcp.ts).
  *
- * Kept deliberately few and plain so small local models use them reliably:
- * every tool takes names the way people say them ("loo roll", "G2-4",
- * "aldi"), answers in short readable text (plus the same facts as data), and
+ * Plain, so small local models use them reliably: every tool takes names
+ * the way people say them ("loo roll", "G2-4", "aldi"), answers in short
+ * readable text (plus the same facts as data), and
  * says what to do next when something is unclear. Modules add their own with
  * `ctx.addTool` (pricing adds check_price; scenarios and recipes add theirs).
+ * Tools for shops, places, categories and changing items are in assistant-manage.ts.
  */
 import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
+import { addManageTools, finders } from './assistant-manage';
 import type { Automation } from './automation';
-import { SHOP_PRESETS, type createCategoryService, type createShopService } from './catalogue';
+import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
+import type { createLookupService } from './lookup';
 import type { createProductService } from './products';
 import type { Resolver } from './resolve';
 import type { createSearchService } from './search';
@@ -62,6 +65,8 @@ export const ASSISTANT_INSTRUCTIONS = [
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Quantities are in each item\'s own unit (tins, rolls, kg). Items have a usual place; "out of place" means it is somewhere else for now.',
   'Before adding something new with add_item, search for it: it may already exist under another name.',
+  'Anything about an item can be changed later with change_item (its shop, usual place, minimum, category, name).',
+  'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
   'Low stock counts deliveries on the way. Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
 
@@ -120,10 +125,13 @@ export function createAssistant(deps: {
   search: ReturnType<typeof createSearchService>;
   categories: ReturnType<typeof createCategoryService>;
   shops: ReturnType<typeof createShopService>;
+  places: ReturnType<typeof createPlaceService>;
+  lookup: ReturnType<typeof createLookupService>;
   automation: Automation;
   resolve: Resolver;
 }) {
-  const { ctx, products, shopping, search, categories, shops, automation, resolve } = deps;
+  const { ctx, products, shopping, search, shops, lookup, automation, resolve } = deps;
+  const find = finders(deps);
   const tools: Array<{ tool: AssistantTool; module: string | null; enabled: () => boolean }> = [];
 
   function addTool<I extends z.ZodObject>(tool: AssistantTool<I>, module: string | null = null, enabled: () => boolean = () => true) {
@@ -197,7 +205,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand). From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Then use add_stock to say how many there are, or add_expected if it\'s on order.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -210,20 +218,15 @@ export function createAssistant(deps: {
       new_shop: z.boolean().optional().describe('True to add the shop to Larder if it isn\'t there yet. Only after the person has said yes'),
       shop_code: z.string().max(40).optional().describe('That shop\'s product code (e.g. a Toolstation item number), used to match order emails'),
       barcode: z.string().max(64).optional(),
-      brand: z.string().max(160).optional().describe('The brand and pack as on the label, e.g. "Heinz Baked Beanz 415 g". Saved as the item\'s brand, with the barcode'),
+      brand: z.string().max(160).optional().describe('The brand as the person said it or as on the label, e.g. "Flahavan\'s" or "Heinz Baked Beanz 415 g". Saved as the item\'s brand, with the barcode, and used to find a photo of it'),
       wish_list: z.boolean().optional().describe('True to put it on the wish list instead (wanted, none yet)'),
     }),
     async run(i) {
       const existing = await resolve.product(i.name).catch(() => null);
       if (existing && existing.name.toLowerCase() === i.name.trim().toLowerCase()) throw new LarderError(`${existing.name} is already in Larder. Use add_stock to add some.`, 409, 'conflict');
-      let categoryId: string | null = null;
-      if (i.category) {
-        const cats = await categories.list();
-        const cat = cats.find((c) => c.name.toLowerCase() === i.category!.trim().toLowerCase());
-        if (!cat) throw new ValidationError(`There's no category called "${i.category}". The categories are: ${andList(cats.map((c) => c.name))}.`);
-        categoryId = cat.id;
-      }
-      const place = i.usual_place ? await resolve.place(i.usual_place) : null;
+      // Everything named must exist first, so nothing is quietly left out (a new shop only once the person agrees).
+      const categoryId = i.category ? (await find.category(i.category)).id : null;
+      const place = i.usual_place ? await find.place(i.usual_place) : null;
       if (i.shop_code && !i.shop) throw new ValidationError('A shop code needs the shop it belongs to.');
       // Check the barcode before creating anything (a shop included), so a clash doesn't leave a half-made item.
       const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
@@ -233,12 +236,24 @@ export function createAssistant(deps: {
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
+      // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
       const brand = i.brand?.trim();
+      const { match, photoFileId } = i.barcode || brand ? await lookup.findPhoto({ barcode: i.barcode, name: p.name, brand }) : { match: null, photoFileId: null };
       if (i.barcode || i.shop_code || brand) {
-        await products.addVariant(p.id, { name: brand || p.name, barcodes: i.barcode ? [i.barcode] : [], shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [] });
+        // The brand as given; with only a barcode, what the lookup calls it.
+        const fromBarcode = match && i.barcode && !brand;
+        await products.addVariant(p.id, {
+          name: fromBarcode ? [match.brand, match.name].filter(Boolean).join(' ') : brand || p.name,
+          barcodes: i.barcode ? [i.barcode] : [],
+          shopCodes: i.shop_code && shop ? [{ shopId: shop.id, code: i.shop_code }] : [],
+          imageUrl: match?.imageUrl ?? null, photoFileId, source: match?.provider ?? 'local',
+        });
       }
+      if (photoFileId) await products.update(p.id, { photoFileIds: [photoFileId] });
+      const photoOf = match && (!match.brand || match.name.toLowerCase().includes(match.brand.toLowerCase()) ? match.name : `${match.brand} ${match.name}`);
+      const photo = photoFileId ? ` with a photo of ${photoOf}` : '';
       const shopNote = shop?.made ? ` Added ${shop.name} to the shops.` : '';
-      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}.${shopNote} It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name } };
+      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${shopNote} It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
     },
   });
 
@@ -248,6 +263,10 @@ export function createAssistant(deps: {
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
   fromAction('add_to_shopping_list', 'add_to_shopping_list', 'Put on the shopping list', 'Put an item on the shopping list even though it isn\'t low.');
+  fromAction('remove_from_shopping_list', 'remove_from_shopping_list', 'Take off the shopping list', 'Take an item that was put on the shopping list by hand off it again. Items that are low stay on until restocked.', true);
+  fromAction('put_back', 'put_back', 'Put an item back', 'Something that was out of place is back in its usual place.');
+  fromAction('mark_charged', 'mark_charged', 'Mark batteries charged', 'Rechargeable batteries (or similar): some flat ones have been charged.');
+  fromAction('renew', 'renew', 'Renew', 'A renewal (insurance, MOT, boiler service) has been renewed: restart its clock from today.');
 
   addTool({
     name: 'shopping_list', title: 'Shopping list', readOnly: true,
@@ -285,6 +304,8 @@ export function createAssistant(deps: {
       return { text, data: { items: due.map((s) => ({ item: s.product.name, expires_on: s.nextExpiry, days: s.daysToExpiry, in_stock: s.inStock, unit: s.product.unit, place: s.places[0]?.path ?? null, category: s.category?.name ?? null })) } };
     },
   });
+
+  addManageTools(addTool, deps);
 
   return {
     addTool,

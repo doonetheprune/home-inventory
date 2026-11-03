@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '../../src/adapters/storage-memory';
 import { makeCore } from '../../tests/helpers';
+import scenarios from '../scenarios';
 import recipes, { type Proposal, type RecipeView } from './index';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
@@ -134,6 +135,76 @@ describe('recipes module', () => {
     expect(await call(core, 'POST', '/:id/missing-to-list', undefined, { id: traybake.id })).toEqual({ added: ['Baby spinach'] });
     expect((await core.products.summary(ids.spinach)).product.onShoppingList).toBe(true);
     expect((await core.search.query('traybake')).find((s) => s.id === 'recipes')?.results[0]?.subtitle).toBe('Missing Baby spinach');
+  });
+
+  it('lets assistants shop for a recipe and forget one', async () => {
+    const { core, ids } = await kitchen();
+    expect((await core.assistant.call('recipe_to_shopping_list', { recipe: 'traybake' })).text).toBe('On the shopping list for Chicken and spinach traybake: Baby spinach.');
+    expect((await core.products.summary(ids.spinach)).product.onShoppingList).toBe(true);
+    await core.stock.add({ productId: ids.spinach, quantity: 1 });
+    expect((await core.assistant.call('recipe_to_shopping_list', { recipe: 'traybake' })).text).toBe('Everything Chicken and spinach traybake needs is in the house.');
+    expect((await core.assistant.call('forget_recipe', { recipe: 'traybake' })).text).toBe('Forgot Chicken and spinach traybake.');
+    expect((await core.assistant.call('list_recipes', {})).text).toBe('There are no saved recipes yet.');
+  });
+
+  describe('with scenarios', () => {
+    async function seasons() {
+      const core = await makeCore({ modules: [recipes, scenarios] });
+      const scenario = (method: string, path: string, body?: unknown) =>
+        core.modules.routes().find((r) => r.moduleId === 'scenarios' && r.route.method === method && r.route.path === path)!.route.handler({ body, query: {}, params: {}, userId: null });
+      const christmas = (await scenario('POST', '/', { name: 'Christmas' })) as { id: string };
+      const halloween = (await scenario('POST', '/', { name: 'Halloween' })) as { id: string };
+      const pumpkin = await core.products.create({ name: 'Pumpkin' });
+      const save = (body: unknown) => call(core, 'POST', '/', body) as Promise<RecipeView>;
+      const soup = await save({ title: 'Pumpkin soup', ingredients: [{ name: 'pumpkin', quantity: 1 }], scenarioIds: [halloween.id], scenarioOnly: true });
+      const pie = await save({ title: 'Pumpkin pie', ingredients: [{ name: 'pumpkin', quantity: 1 }], scenarioIds: [halloween.id, christmas.id] });
+      await save({ title: 'Toast', ingredients: [{ name: 'bread' }] });
+      const titles = async (query: Record<string, string> = {}) =>
+        ((await core.modules.routes().find((r) => r.moduleId === 'recipes' && r.route.method === 'GET' && r.route.path === '/')!.route.handler({ body: undefined, query, params: {}, userId: null })) as RecipeView[]).map((r) => r.title);
+      return { core, christmas, halloween, pumpkin, soup, pie, titles, scenario };
+    }
+
+    it('keeps scenario-only recipes off the main list, and shows them in their scenario and on their items', async () => {
+      const { halloween, christmas, pumpkin, soup, titles } = await seasons();
+      expect(soup).toMatchObject({ scenarios: [{ id: halloween.id, name: 'Halloween' }], hidden: true });
+      expect(await titles()).toEqual(['Pumpkin pie', 'Toast']);
+      expect(await titles({ show: 'scenario-only' })).toEqual(['Pumpkin soup']);
+      expect(await titles({ scenarioId: halloween.id })).toEqual(['Pumpkin pie', 'Pumpkin soup']);
+      expect(await titles({ scenarioId: christmas.id })).toEqual(['Pumpkin pie']);
+      expect(await titles({ productId: pumpkin.id })).toEqual(['Pumpkin pie', 'Pumpkin soup']);
+    });
+
+    it('brings a recipe back to the main list when its scenarios go, and refuses unknown ones', async () => {
+      const { core, halloween, soup, titles, scenario } = await seasons();
+      await expect(call(core, 'POST', '/', { title: 'Mince pies', scenarioOnly: true })).rejects.toThrow('Pick the scenarios it shows in');
+      await expect(call(core, 'POST', '/', { title: 'Mince pies', scenarioIds: ['7c6e7f0e-9d7b-4a43-9d1e-6a8b5f1b2c3d'] })).rejects.toThrow('no longer exists');
+      await core.modules.setEnabled('scenarios', false);
+      expect(await titles()).toContain('Pumpkin soup');
+      await core.modules.setEnabled('scenarios', true);
+      expect(await titles()).not.toContain('Pumpkin soup');
+      await core.modules.routes().find((r) => r.moduleId === 'scenarios' && r.route.method === 'DELETE')!.route.handler({ body: undefined, query: {}, params: { id: halloween.id }, userId: null });
+      expect(await titles()).toContain('Pumpkin soup');
+      expect(((await call(core, 'GET', '/:id', undefined, { id: soup.id })) as RecipeView).scenarios).toEqual([]);
+      void scenario;
+    });
+
+    it('lets assistants put recipes in scenarios by name', async () => {
+      const { core } = await seasons();
+      const saved = await core.assistant.call('save_recipe', { title: 'Mince pies', ingredients: [], method: 'Bake.', scenarios: ['christmas'], scenario_only: true });
+      expect(saved.text).toContain('Saved "Mince pies".');
+      expect((await core.assistant.call('list_recipes', {})).text).toBe([
+        '- Mince pies (only for Christmas): everything in',
+        '- Pumpkin pie (also in Halloween and Christmas): missing Pumpkin',
+        '- Pumpkin soup (only for Halloween): missing Pumpkin',
+        '- Toast: everything in',
+      ].join('\n'));
+      expect((await core.assistant.call('list_recipes', { scenario: 'halloween' })).text).not.toContain('Toast');
+      const moved = await core.assistant.call('set_recipe_scenarios', { recipe: 'pumpkin soup', scenarios: ['Halloween', 'Christmas'], only: false });
+      expect(moved.text).toBe('Pumpkin soup is in Halloween and Christmas and on the main list.');
+      expect((await core.assistant.call('get_recipe', { recipe: 'pumpkin soup' })).text).toContain('- 1 pumpkin');
+      expect((await core.assistant.call('set_recipe_scenarios', { recipe: 'mince pies', scenarios: [] })).text).toBe('Mince pies isn\'t in any scenario.');
+      await expect(core.assistant.call('save_recipe', { title: 'Trifle', ingredients: [], method: '', scenarios: ['easter'] })).rejects.toThrow('The scenarios are');
+    });
   });
 });
 

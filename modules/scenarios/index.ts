@@ -8,7 +8,7 @@
  * inside a cupboard door for whoever needs it in the dark.
  */
 import { z } from 'zod';
-import { amount, defineModule, Id, LarderError, newId, NotFoundError, type CoreApi, type PlaceRef, type ProductSummary } from '@larder/core';
+import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, type CoreApi, type PlaceRef, type ProductSummary } from '@larder/core';
 
 /** On each product: the ids of the scenarios it belongs to. */
 export const ScenarioFields = z.array(Id).max(50).default([]);
@@ -170,6 +170,21 @@ export default defineModule({
       return s;
     }
 
+    async function change(cur: Scenario, patch: Partial<z.infer<typeof ScenarioInput>>): Promise<Scenario> {
+      if (patch.name && (await nameTaken(patch.name, cur.id))) throw new LarderError(`There's already a scenario called ${patch.name}.`, 409, 'conflict');
+      const next = Scenario.parse({ ...cur, ...patch, updatedAt: core.now() });
+      await scenarios.put(next.id, next);
+      ctx.publish('scenarios.changed', { id: next.id });
+      return next;
+    }
+
+    async function remove(s: Scenario): Promise<void> {
+      const products = [...(await core.products.list()), ...(await core.products.list({ status: 'wish' }))];
+      for (const p of products) if (tagsOf(p).includes(s.id)) await setTag(p.product.id, s.id, false);
+      await scenarios.remove(s.id);
+      ctx.publish('scenarios.changed', { id: s.id });
+    }
+
     ctx.addRoute({
       method: 'GET', path: '/', summary: 'Scenarios, with how many items, places, low and wished for',
       response: z.array(ScenarioSummary),
@@ -194,26 +209,14 @@ export default defineModule({
     ctx.addRoute({
       method: 'PATCH', path: '/:id', summary: 'Rename a scenario or change its notes',
       params: z.object({ id: Id }), body: ScenarioInput.partial(), response: Scenario,
-      async handler({ params, body }) {
-        const cur = await get((params as { id: string }).id);
-        const patch = body as Partial<z.infer<typeof ScenarioInput>>;
-        if (patch.name && (await nameTaken(patch.name, cur.id))) throw new LarderError(`There's already a scenario called ${patch.name}.`, 409, 'conflict');
-        const next = Scenario.parse({ ...cur, ...patch, updatedAt: core.now() });
-        await scenarios.put(next.id, next);
-        ctx.publish('scenarios.changed', { id: next.id });
-        return next;
-      },
+      handler: async ({ params, body }) => change(await get((params as { id: string }).id), body as Partial<z.infer<typeof ScenarioInput>>),
     });
 
     ctx.addRoute({
       method: 'DELETE', path: '/:id', summary: 'Remove a scenario (its items stay, untagged)',
       params: z.object({ id: Id }), response: z.object({ ok: z.literal(true) }),
       async handler({ params }) {
-        const s = await get((params as { id: string }).id);
-        const products = [...(await core.products.list()), ...(await core.products.list({ status: 'wish' }))];
-        for (const p of products) if (tagsOf(p).includes(s.id)) await setTag(p.product.id, s.id, false);
-        await scenarios.remove(s.id);
-        ctx.publish('scenarios.changed', { id: s.id });
+        await remove(await get((params as { id: string }).id));
         return { ok: true as const };
       },
     });
@@ -258,7 +261,7 @@ export default defineModule({
         const list = await Promise.all((await all()).map(async (s) => ({ s, counts: (await detailFor(core, s)).counts })));
         if (!list.length) return { text: 'There are no scenarios yet.', data: { scenarios: [] } };
         return {
-          text: list.map(({ s, counts }) => `- ${s.name}: ${counts.items} items${counts.low ? `, ${counts.low} low` : ''}${counts.wish ? `, ${counts.wish} on the wish list` : ''}`).join('\n'),
+          text: list.map(({ s, counts }) => `- ${s.name}: ${counts.items} item${counts.items === 1 ? '' : 's'}${counts.low ? `, ${counts.low} low` : ''}${counts.wish ? `, ${counts.wish} on the wish list` : ''}`).join('\n'),
           data: { scenarios: list.map(({ s, counts }) => ({ id: s.id, name: s.name, ...counts })) },
         };
       },
@@ -271,6 +274,69 @@ export default defineModule({
       async run({ scenario }) {
         const d = await detailFor(core, await find(scenario));
         return { text: detailText(d), data: d as unknown as Record<string, unknown> };
+      },
+    });
+
+    const Ref = z.string().min(1).max(60).describe('The scenario\'s name, e.g. "power cut"');
+    const Items = z.array(z.string().min(1).max(200)).min(1).max(50).describe('Items by name, e.g. ["candles", "AA batteries"]');
+
+    ctx.addTool({
+      name: 'make_scenario', title: 'Make a scenario',
+      description: 'Make a scenario: a list of what\'s needed for a situation, like a power cut or Christmas. Then add items to it with add_to_scenario.',
+      input: z.object({ name: z.string().trim().min(1).max(60).describe('e.g. "Power cut"'), notes: z.string().max(1000).optional().describe('e.g. "The fuse box is in the hall cupboard"') }),
+      async run({ name, notes }) {
+        const s = await create({ name, notes });
+        return { text: `Made the ${s.name} scenario. Add items to it with add_to_scenario.`, data: { id: s.id, name: s.name } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'change_scenario', title: 'Change a scenario', destructive: true,
+      description: 'Rename a scenario or change its notes.',
+      input: z.object({ scenario: Ref, name: z.string().trim().min(1).max(60).optional().describe('New name'), notes: z.string().max(1000).optional() }),
+      async run({ scenario, name, notes }) {
+        const s = await change(await find(scenario), { ...(name ? { name } : {}), ...(notes !== undefined ? { notes } : {}) });
+        return { text: `${s.name} is updated.`, data: { id: s.id, name: s.name } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'remove_scenario', title: 'Remove a scenario', destructive: true,
+      description: 'Remove a scenario. Its items stay in Larder.',
+      input: z.object({ scenario: Ref }),
+      async run({ scenario }) {
+        const s = await find(scenario);
+        await remove(s);
+        return { text: `Removed the ${s.name} scenario. Its items are still in Larder.`, data: { id: s.id, name: s.name } };
+      },
+    });
+
+    const tagMany = async (scenario: string, items: string[], included: boolean) => {
+      const s = await find(scenario);
+      // Every name first, so one that's unclear doesn't leave half the list done.
+      const products = await Promise.all(items.map((i) => core.resolve.product(i)));
+      for (const p of products) await setTag(p.id, s.id, included);
+      ctx.publish('scenarios.changed', { id: s.id });
+      return { s, names: [...new Set(products.map((p) => p.name))] };
+    };
+
+    ctx.addTool({
+      name: 'add_to_scenario', title: 'Add items to a scenario',
+      description: 'Put items in a scenario (e.g. candles and the camping stove in "Power cut"). Items the house has none of can go on the wish list first with add_item.',
+      input: z.object({ scenario: Ref, items: Items }),
+      async run({ scenario, items }) {
+        const { s, names } = await tagMany(scenario, items, true);
+        return { text: `${andList(names)} ${names.length === 1 ? 'is' : 'are'} in ${s.name}.`, data: { id: s.id, items: names } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'remove_from_scenario', title: 'Take items out of a scenario', destructive: true,
+      description: 'Take items out of a scenario. They stay in Larder.',
+      input: z.object({ scenario: Ref, items: Items }),
+      async run({ scenario, items }) {
+        const { s, names } = await tagMany(scenario, items, false);
+        return { text: `${andList(names)} ${names.length === 1 ? 'is' : 'are'} out of ${s.name}.`, data: { id: s.id, items: names } };
       },
     });
   },
