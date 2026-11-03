@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { IdentifyResult, Place, ProductSummary } from '@larder/core';
+import type { IdentifyResult, LookupResult, Place, ProductSummary } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
 import { qty, stockText } from '../format';
-import { useBarcodeScanner } from '../components/useBarcodeScanner';
+import { readBarcode, useBarcodeScanner } from '../components/useBarcodeScanner';
+import { grabFrame } from '../components/camera';
+import { usePhotoReader, type PhotoReading } from '../components/photoReader';
 import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
 
 type Mode = 'add' | 'use' | 'move' | 'putaway' | 'look';
@@ -13,6 +15,10 @@ const MODES: Array<[Mode, string]> = [['add', 'Add'], ['use', 'Use'], ['move', '
 const MODE_CHIP: Record<Mode, [string, string]> = {
   add: ['plus', 'Adding to stock'], use: ['minus', 'Using up'], move: ['move', 'Move: item, then where it’s going'], putaway: ['inbox', 'Put away: item, then shelf'], look: ['search', 'Look up only'],
 };
+
+/** A barcode just scanned that nothing knew, kept while the AI reads the pack. */
+interface Kept { code: string; external: LookupResult | null; suggestions: ProductSummary[] }
+interface AiDraft { photo: Blob; reading: PhotoReading; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
 
 export function Scan() {
   const [params, setParams] = useSearchParams();
@@ -27,15 +33,19 @@ export function Scan() {
   const [pending, setPending] = useState<ProductSummary | null>(null);
   /** Scanning a shelf in add mode makes it the target for the next items. */
   const [target, setTarget] = useState<{ id: string; label: string } | null>(null);
+  /** What the AI read from a photo, as a new item to check and add. */
+  const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const upload = useRef<HTMLInputElement>(null);
   const { run } = useAction();
+  const reader = usePhotoReader();
   const moving = mode === 'move' || mode === 'putaway';
   /**
    * While a card is open the camera holds still, so a second read (or a misread
    * as the phone moves) can't replace what's being entered. Moving is the
    * exception: after the item, it's waiting for the shelf's label.
    */
-  const holding = looking || (!!result && !(pending && moving));
+  const holding = looking || !!aiDraft || (!!result && !(pending && moving));
   const hold = useRef(holding);
   hold.current = holding;
   /** The code just dealt with: the camera leaves it alone for a moment, though it may still be in view. */
@@ -87,9 +97,74 @@ export function Scan() {
   }, [camera]);
 
   const done = () => {
-    if (result) settled.current = { code: result.code, until: Date.now() + 3000 };
+    const code = result?.code ?? aiDraft?.code;
+    if (code) settled.current = { code, until: Date.now() + 3000 };
     setResult(null);
+    setAiDraft(null);
   };
+
+  /**
+   * Read with AI: a photo (what the camera sees now, or one uploaded) goes to the
+   * AI for its name and details. A barcode in the photo, read here, says first
+   * whether it's already in Larder. `keep` is a barcode just scanned that nothing knew.
+   */
+  async function readWithAi(given?: Blob, keep?: Kept) {
+    if (!reader) return;
+    let photo = given ?? null;
+    if (!photo) {
+      if (state !== 'on' || !video.current) {
+        setCamera(true);
+        toast('Point the camera at the front of the pack, then press Read with AI.');
+        return;
+      }
+      photo = await grabFrame(video.current);
+    }
+    setLooking(true);
+    try {
+      const reading = reader.read(photo);
+      reading.catch(() => undefined);
+      const barcode = keep?.code ?? (await readBarcode(photo));
+      const known = !keep && barcode ? await api.identify(barcode).catch(() => null) : null;
+      if (known?.kind === 'product') {
+        setResult(known);
+        return;
+      }
+      const r = await reading;
+      setResult(null);
+      setAiDraft({ photo: r.photo ?? photo, reading: r, code: barcode, external: keep?.external ?? (known?.kind === 'external' ? known.result : null), suggestions: keep?.suggestions ?? (known?.kind === 'external' ? known.suggestions : []) });
+    } catch (err) {
+      toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
+    } finally {
+      setLooking(false);
+    }
+  }
+  const readRef = useRef(readWithAi);
+  readRef.current = readWithAi;
+
+  // Add by photo (from Home) arrives with the camera wanted.
+  useEffect(() => {
+    if (params.get('ai')) {
+      setMode('add');
+      setCamera(true);
+      const next = new URLSearchParams(params);
+      next.delete('ai');
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
+
+  // Space or a volume button reads with AI, like a camera's shutter, when nothing's open.
+  useEffect(() => {
+    if (!reader || mode !== 'add' || state !== 'on' || holding) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (![' ', 'AudioVolumeDown', 'AudioVolumeUp', 'VolumeDown', 'VolumeUp', 'Camera'].includes(e.key)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      e.preventDefault();
+      void readRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [reader, mode, state, holding]);
 
   return (
     <>
@@ -112,6 +187,13 @@ export function Scan() {
               </div>
             )}
           </div>
+          {reader && mode === 'add' && (
+            <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn" disabled={looking || holding} onClick={() => void readWithAi()}><Icon name="sparkle" size="sm" />Read with AI</button>
+              <span className="small muted">No barcode? {reader.by ?? 'The AI'} names it from the pack. <button type="button" className="link small" onClick={() => upload.current?.click()}>Or upload a photo</button></span>
+              <input ref={upload} type="file" accept="image/*" hidden data-testid="scan-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readWithAi(f); }} />
+            </div>
+          )}
           <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { void identify(typed.trim()); setTyped(''); } }}>
             <input className="input mono" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type a barcode or code like G2-4" aria-label="Barcode or code" inputMode="text" />
             <button className="btn" disabled={!typed.trim() || looking}>Look up</button>
@@ -120,16 +202,21 @@ export function Scan() {
         </div>
 
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
-        <div className={`section ${looking || result || pending ? 'scan-result' : ''}`}>
+        <div className={`section ${looking || result || pending || aiDraft ? 'scan-result' : ''}`}>
           {looking && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
+          {!looking && aiDraft && (
+            <NewItemCard key={aiDraft.code ?? 'photo'} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} photo={aiDraft.photo}
+              mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
+          )}
           {!looking && pending && !result && (
             <div className="sheet-card">
               <div className="match"><ProductTile s={pending} size="lg" /><div className="item-main"><h3>{pending.product.name}</h3><span className="small muted">Scan the shelf label, or pick the place.</span></div></div>
               <MovePicker p={pending} mode={mode} onDone={() => setPending(null)} />
             </div>
           )}
-          {!looking && result && <ResultCard r={result} mode={mode} target={target} onClearTarget={() => setTarget(null)} onDone={done} onIdentified={(r) => setResult(r)} pending={pending} setPending={setPending} />}
-          {!looking && !result && !pending && (
+          {!looking && result && !aiDraft && <ResultCard r={result} mode={mode} target={target} onClearTarget={() => setTarget(null)} onDone={done} onIdentified={(r) => setResult(r)} pending={pending} setPending={setPending}
+            onReadWithAi={reader ? (keep) => void readWithAi(undefined, keep) : undefined} />}
+          {!looking && !result && !pending && !aiDraft && (
             <div className="card empty">
               <b>Ready</b>
               <span className="muted small">
@@ -160,13 +247,18 @@ function MovePicker({ p, mode, onDone }: { p: ProductSummary; mode: Mode; onDone
   );
 }
 
-function ResultCard({ r, mode, target, onClearTarget, onDone, onIdentified, pending, setPending }: {
+function ResultCard({ r, mode, target, onClearTarget, onDone, onIdentified, pending, setPending, onReadWithAi }: {
   r: IdentifyResult; mode: Mode; target: { id: string; label: string } | null; onClearTarget: () => void; onDone: () => void; onIdentified: (r: IdentifyResult) => void;
-  pending: ProductSummary | null; setPending: (p: ProductSummary | null) => void;
+  pending: ProductSummary | null; setPending: (p: ProductSummary | null) => void; onReadWithAi?: (keep: Kept) => void;
 }) {
   if (r.kind === 'product') return <ProductResult s={r.product} variantName={r.variant?.name ?? null} code={r.code} mode={mode} target={target} onDone={onDone} pending={pending} setPending={setPending} />;
   if (r.kind === 'place') return <PlaceResult place={r.place} path={r.path} mode={mode} onClearTarget={onClearTarget} onDone={onDone} />;
-  return <NewCodeResult r={r} mode={mode} target={target} onDone={onDone} onIdentified={onIdentified} />;
+  return (
+    <NewItemCard code={r.code} external={r.kind === 'external' ? r.result : null} suggestions={r.kind === 'external' ? r.suggestions : []}
+      tried={r.kind === 'unknown' ? r.providersTried : []} failed={r.kind === 'unknown' ? r.providersFailed : []}
+      mode={mode} target={target} onDone={onDone} onIdentified={onIdentified}
+      onReadWithAi={onReadWithAi && r.kind === 'unknown' ? () => onReadWithAi({ code: r.code, external: null, suggestions: [] }) : undefined} />
+  );
 }
 
 function ProductResult({ s, variantName, code, mode, target, onDone, pending, setPending }: {
@@ -259,77 +351,132 @@ function PlaceResult({ place, path, mode, onClearTarget, onDone }: { place: Plac
 /** Lookup providers by the names people know them by. */
 const PROVIDER_NAMES: Record<string, string> = { openfoodfacts: 'Open Food Facts', openbeautyfacts: 'Open Beauty Facts', openproductsfacts: 'Open Products Facts' };
 
-function NewCodeResult({ r, mode, target, onDone, onIdentified }: {
-  r: Extract<IdentifyResult, { kind: 'external' | 'unknown' }>; mode: Mode; target: { id: string; label: string } | null; onDone: () => void; onIdentified: (r: IdentifyResult) => void;
+/** A photo still on the phone, as an address for an <img>, tidied away afterwards. */
+function usePhotoUrl(photo: Blob | null | undefined): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!photo) return;
+    const u = URL.createObjectURL(photo);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [photo]);
+  return photo ? url : null;
+}
+
+/**
+ * Something new to Larder, from a barcode (found online, or not) and/or a photo
+ * the AI read: named, remembered and added in one press, then on to the next.
+ */
+function NewItemCard({ code, external, suggestions, tried = [], failed = [], reading, photo, mode, target, onDone, onIdentified, onReadWithAi }: {
+  code: string | null; external: LookupResult | null; suggestions: ProductSummary[]; tried?: string[]; failed?: string[];
+  reading?: PhotoReading; photo?: Blob; mode: Mode; target: { id: string; label: string } | null;
+  onDone: () => void; onIdentified: (r: IdentifyResult) => void; onReadWithAi?: () => void;
 }) {
   const places = usePlaces();
   const { run, busy } = useAction();
-  const external = r.kind === 'external' ? r.result : null;
-  const [name, setName] = useState(external ? external.name : '');
-  const [choice, setChoice] = useState<string>(r.kind === 'external' && r.suggestions[0] ? r.suggestions[0].product.id : 'new');
+  const photoUrl = usePhotoUrl(photo);
+  const [name, setName] = useState(reading?.name ?? external?.name ?? '');
+  const [choice, setChoice] = useState<string>(suggestions[0] ? suggestions[0].product.id : 'new');
   const [n, setN] = useState(1);
   const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
+  const [shopId, setShopId] = useState<string | null>(reading?.shop?.id ?? null);
   const dq = useDebounced(name.trim(), 250);
-  const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: r.kind === 'unknown' && dq.length > 2 });
-  const candidates: ProductSummary[] = r.kind === 'external' ? r.suggestions : (data?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? []).slice(0, 3);
-  const variantName = external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : name;
+  const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: !external && dq.length > 2 });
+  const candidates: ProductSummary[] = external ? suggestions : (data?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? []).slice(0, 3);
+  const brand = reading?.brand ?? (external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : null);
   const adding = mode === 'add';
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
 
-  /** Remembers the barcode (a new item, or a brand of one you have) and, when adding, adds the stock too: one press. */
-  async function save() {
-    const res = await run(async () => {
-      const remembered = await api.remember({
-        barcode: r.code,
-        productId: choice !== 'new' ? choice : undefined,
-        create: choice === 'new' ? { name: name.trim() } : undefined,
-        variantName: variantName || name.trim(),
-        imageUrl: external?.imageUrl ?? null,
-        source: external?.provider,
-      });
-      const after = adding ? await api.stock.add({ productId: remembered.product.product.id, quantity: n, placeId: placeId ?? remembered.product.product.defaultPlaceId }) : null;
-      return { remembered, after };
-    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
-    if (!res) return;
-    if (adding) onDone();
-    else onIdentified({ kind: 'product', code: r.code, product: res.remembered.product, variant: res.remembered.variant });
+  /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
+  async function addShop(shop: NonNullable<PhotoReading['shop']>) {
+    const made = await run(() => (shop.preset ? api.shops.addPreset(shop.name) : api.shops.create({ name: shop.name, sells: reading?.categoryId ? [reading.categoryId] : [] })), `${shop.name} added to your shops`);
+    if (made) setShopId(made.id);
   }
 
+  /** Remembers the barcode (or makes the item), keeps the photo, and when adding, adds the stock too: one press. */
+  async function save() {
+    const fields = {
+      name: name.trim(),
+      ...(reading ? { categoryId: reading.categoryId, unit: reading.unit, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
+      preferredShopIds: shopId ? [shopId] : [],
+    };
+    const res = await run(async () => {
+      let productId: string;
+      let variantId: string | null = null;
+      let identified: IdentifyResult | null = null;
+      if (code) {
+        const rem = await api.remember({
+          barcode: code, productId: into?.product.id, create: into ? undefined : fields, variantName: brand || name.trim(),
+          imageUrl: external?.imageUrl ?? null, source: external?.provider ?? reading?.by.toLowerCase(),
+        });
+        productId = rem.product.product.id;
+        variantId = rem.variant.id;
+        identified = { kind: 'product', code, product: rem.product, variant: rem.variant };
+      } else {
+        productId = into ? into.product.id : (await api.products.create(fields)).id;
+        if (brand) variantId = (await api.products.addVariant(productId, { name: brand, source: reading?.by.toLowerCase() ?? 'local' })).id;
+      }
+      // The photo the AI read becomes the item's photo, if it hasn't one, and this brand's.
+      if (photo) {
+        const { id } = await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }));
+        const item = await api.products.get(productId);
+        if (!item.product.photoFileIds.length) await api.products.update(productId, { photoFileIds: [id] });
+        if (variantId && !item.variants.find((v) => v.id === variantId)?.photoFileId) await api.products.updateVariant(variantId, { photoFileId: id });
+      }
+      const after = adding ? await api.stock.add({ productId, quantity: n, placeId }) : null;
+      return { identified, after, productId };
+    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
+    if (!res) return;
+    if (adding || !res.identified) onDone();
+    else onIdentified(res.identified);
+  }
+
+  const tile = photoUrl ?? external?.imageUrl ?? null;
   return (
     <div className="sheet-card">
       <div className="match">
-        <span className="tile lg">{external?.imageUrl ? <img src={external.imageUrl} alt="" /> : <Icon name={external ? 'scan' : 'info'} size="lg" />}</span>
+        <span className="tile lg">{tile ? <img src={tile} alt="" /> : <Icon name={external ? 'scan' : 'info'} size="lg" />}</span>
         <div className="item-main">
-          <h3>{external ? [external.brand, external.name].filter(Boolean).join(' ') : 'New to Larder'}</h3>
-          <div className="src">{external?.quantityText && <span>{external.quantityText}</span>}<code>{r.code}</code></div>
+          <h3>{brand || (external ? [external.brand, external.name].filter(Boolean).join(' ') : reading ? reading.name : 'New to Larder')}</h3>
+          <div className="src">{external?.quantityText && <span>{external.quantityText}</span>}{code && <code>{code}</code>}</div>
         </div>
       </div>
       <p className="small">
         <span className="pill p-wish">New</span>{' '}
         <span className="muted">
-          {r.kind === 'external' ? `Not in Larder yet. Found in ${PROVIDER_NAMES[r.result.provider] ?? r.result.provider}.` : (
+          {reading ? (
+            <>Read from the photo by {reading.by}.{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}</>
+          ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
             <>
-              {r.providersTried.length ? `${r.providersTried.join(', ')} ${r.providersTried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
-              {r.providersFailed.length ? `Couldn't reach ${r.providersFailed.join(', ')} just now. ` : ''}
-              {!r.providersTried.length && !r.providersFailed.length ? "Larder doesn't know this code yet. " : ''}
+              {tried.length ? `${tried.join(', ')} ${tried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
+              {failed.length ? `Couldn't reach ${failed.join(', ')} just now. ` : ''}
+              {!tried.length && !failed.length ? "Larder doesn't know this code yet. " : ''}
               Name it once and Larder will remember it.
             </>
           )}
         </span>
       </p>
-      <label className="field"><span>{external ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external}
+      {onReadWithAi && (
+        <button type="button" className="btn small" style={{ justifySelf: 'start' }} disabled={busy} onClick={onReadWithAi}>
+          <Icon name="sparkle" size="sm" />Read it with AI
+        </button>
+      )}
+      <label className="field"><span>{external || reading ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external && !reading}
         onKeyDown={(e) => { if (e.key === 'Enter' && !busy && (choice !== 'new' || name.trim())) void save(); }} /></label>
       {candidates.length > 0 && (
         <div className="field"><span>Is it a brand of something you already have?</span>
           <div className="stack" style={{ gap: 8 }}>
             {candidates.map((c) => (
               <button key={c.product.id} type="button" className={`choice ${choice === c.product.id ? 'on' : ''}`} onClick={() => setChoice(c.product.id)}>
-                <span className="radio" /><span className="item-main"><span className="item-name">{c.product.name}</span><span className="item-meta">You have {stockText(c)} · adds this barcode as a brand</span></span>
+                <span className="radio" /><span className="item-main"><span className="item-name">{c.product.name}</span><span className="item-meta">You have {stockText(c)} · adds this as a brand</span></span>
               </button>
             ))}
             <button type="button" className={`choice ${choice === 'new' ? 'on' : ''}`} onClick={() => setChoice('new')}><span className="radio" /><span className="item-main"><span className="item-name">No, it’s something new</span><span className="item-meta">Creates “{name.trim() || 'a new item'}”</span></span></button>
           </div>
         </div>
+      )}
+      {reading?.shop && !shopId && choice === 'new' && (
+        <p className="small muted" style={{ margin: 0 }}>{reading.shop.name}’s own brand, and {reading.shop.name} isn’t one of your shops. <button type="button" className="link small" disabled={busy} onClick={() => void addShop(reading.shop!)}>Add {reading.shop.name}</button></p>
       )}
       {adding && (
         <>

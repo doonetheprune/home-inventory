@@ -4,6 +4,7 @@
  */
 import type { ComponentType } from 'react';
 import type { ProductDetail, Shop, ShoppingList } from '@larder/core';
+import type { PhotoReader } from '../components/photoReader';
 import type { SlotPanel } from './panels';
 
 export interface WebModule {
@@ -30,6 +31,8 @@ export interface WebModule {
   addActions?: Array<{ path: string; title: string; subtitle: string; icon?: string; useShown?: () => boolean }>;
   /** Panels at the top of the Wish list (e.g. how many shared links are waiting in Pending). */
   wishListPanels?: Array<ComponentType>;
+  /** Reads a photo of a pack (an AI): the scanner offers "Read with AI" when one is set up. */
+  photoReader?: PhotoReader;
   /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
   settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
 }
@@ -47,6 +50,7 @@ export { ModulePanels, useModuleEnabled, type SlotPanel } from './panels';
 export { useAddItem, type AddItemDraft } from '../drafts';
 export { readBarcode } from '../components/useBarcodeScanner';
 export { useCamera, grabFrame, rotatePhoto } from '../components/camera';
+export type { PhotoReader, PhotoReading } from '../components/photoReader';
 export { Header, Empty } from '../ui';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';
