@@ -18,6 +18,9 @@ function fromDraft(d: AddItemDraft): ProductFormValue {
     unit: d.unit || f.unit,
     shelfLifeDays: d.shelfLifeDays ?? null,
     preferredShopIds: d.preferredShopIds ?? [],
+    links: (d.links ?? []).join('\n'),
+    notes: d.notes ?? '',
+    defaultPlaceId: d.defaultPlaceId ?? null,
   };
 }
 
@@ -41,16 +44,29 @@ export function AddItem() {
   const draft = useMemo(() => takeDraft(params.get('draft')), [params]);
   // The draft's photo, turned round here if it came out sideways.
   const [photo, setPhoto] = useState<Blob | null>(() => draft?.photo ?? null);
-  const photoUrl = usePhotoUrl(photo);
+  const newPhotoUrl = usePhotoUrl(photo);
+  const photoUrl = newPhotoUrl ?? (draft?.photoFileId ? api.files.url(draft.photoFileId) : null);
   const [form, setForm] = useState(() => (draft ? fromDraft(draft) : { ...emptyForm(params.get('name') ?? ''), wish: params.get('wish') === '1' }));
   const [n, setN] = useState(1);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const dq = useDebounced(form.name.trim(), 200);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: dq.length > 1 });
-  const existing = (data?.sections.find((s) => s.id === 'stock')?.results ?? []).slice(0, 3);
+  // The item being turned from a wish into stock isn't "already in Larder" as something else.
+  const existing = (data?.sections.find((s) => s.id === 'stock')?.results ?? []).filter((r) => r.id !== draft?.productId).slice(0, 3);
   const exact = existing.find((r) => r.title.toLowerCase() === form.name.trim().toLowerCase());
 
   async function save() {
+    // A wish list item you've got after all: it becomes this, with its stock, rather than a second item.
+    if (draft?.productId) {
+      const id = draft.productId;
+      const done = await run(async () => {
+        const p = await api.products.update(id, { ...toPayload(form), wish: form.wish });
+        if (!form.wish && n > 0) await api.stock.add({ productId: id, quantity: n, placeId: placeId ?? form.defaultPlaceId });
+        return p;
+      }, form.wish ? `${form.name} is still on the wish list` : `${form.name} added · ${qty(n, form.unit)}`);
+      if (done) navigate(`/products/${id}`, { replace: true });
+      return;
+    }
     const created = await run(async () => {
       const photoId = photo ? (await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }))).id : null;
       const p = await api.products.create({ ...toPayload(form), photoFileIds: photoId ? [photoId] : [] });

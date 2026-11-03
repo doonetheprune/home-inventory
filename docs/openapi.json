@@ -15306,6 +15306,49 @@
         }
       }
     },
+    "/api/v1/modules/sharing/{id}/confirm": {
+      "post": {
+        "summary": "Keep a shared item on the wish list (it leaves \"Shared, to check\")",
+        "tags": [
+          "Module: sharing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "productId": {
+                      "type": "string"
+                    },
+                    "confirmed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "productId",
+                    "confirmed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/modules/template/count": {
       "get": {
         "summary": "How many stock changes have happened since the module was switched on",

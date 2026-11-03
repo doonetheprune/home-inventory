@@ -5,6 +5,7 @@ import type { ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { Empty, Header, Loading, PlaceSelect, ProductTile, Sheet, useAction, useIsDesktop, usePlaces } from '../ui';
+import { useEnabledWebModules } from '../modules';
 
 export function WishList() {
   const desktop = useIsDesktop();
@@ -12,6 +13,11 @@ export function WishList() {
   const { run, busy } = useAction();
   const [name, setName] = useState('');
   const [bought, setBought] = useState<ProductSummary | null>(null);
+  // Modules' panels (shared links to check) show some items instead of the list.
+  const mods = useEnabledWebModules();
+  const panels = mods.flatMap((m) => m.wishList?.panels ?? []);
+  const hides = mods.flatMap((m) => (m.wishList?.hides ? [m.wishList.hides] : []));
+  const shown = (data ?? []).filter((s) => !hides.some((h) => h(s)));
 
   return (
     <>
@@ -22,10 +28,11 @@ export function WishList() {
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Something you'd like" aria-label="Wish list item" />
           <button className="btn" disabled={!name.trim() || busy}><Icon name="heart" size="sm" />Add</button>
         </form>
+        {panels.map((Panel, i) => <Panel key={i} />)}
         {isLoading && <Loading />}
         {data && !data.length && <Empty title="Nothing on the wish list"><span className="muted small">Add things you'd like to have, like a power bank for power cuts.</span></Empty>}
         <div className={desktop ? 'cards-2' : 'list'}>
-          {(data ?? []).map((s) => (
+          {shown.map((s) => (
             <div className={desktop ? 'card item' : 'item'} key={s.product.id}>
               <ProductTile s={s} />
               <Link className="item-main" to={`/products/${s.product.id}`}><span className="item-name">{s.product.name}</span><span className="item-meta">{[s.category?.name, s.product.notes].filter(Boolean).join(' · ') || 'Wish list'}</span></Link>

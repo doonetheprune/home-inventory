@@ -135,7 +135,7 @@ Tags written by the Home Assistant app keep the same id in both, so a tag works 
 
 ## Sharing links to the wish list
 
-On an Android phone with the Home Assistant app, share a page from anywhere (a shop's app, Chrome) and pick **Home Assistant**. The integration sends the link to Larder, which puts it on the wish list, named from the page, with its picture and price, and keeps the link and where it came from. The phone gets a notification, "Added … to the wish list.", that opens the item in Larder.
+On an Android phone with the Home Assistant app, share a page from anywhere (a shop's app, Chrome) and pick **Home Assistant**. The integration sends the link to Larder, which puts it on the wish list, named from the page, with its picture and price, and keeps the link and where it came from. The phone gets a notification, "Added … to the wish list.", that opens the item in Larder. It waits under **Shared, to check** at the top of the Wish list: **Yes, add** keeps it, **Already got** turns it into stock.
 
 - Something already in Larder (the same link, or the same name) isn't added again: the notification says so.
 - Shares without a link are left alone, for your own automations on `mobile_app.share`.

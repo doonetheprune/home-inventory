@@ -19,6 +19,8 @@ export const SharedFrom = z.object({
   sharedAt: z.string(),
   price: z.number().nullable().default(null),
   currency: z.string().max(3).nullable().default(null),
+  /** Said yes to on the Wish list ("Shared, to check"). Until then it waits there to be checked. */
+  confirmed: z.boolean().default(false),
 });
 export type SharedFrom = z.infer<typeof SharedFrom>;
 
@@ -116,6 +118,21 @@ export default defineModule({
         });
         ctx.publish('sharing.added', { productId: product.id, name: product.name, url: finalLink, site });
         return { status: 'added' as const, message: `Added ${product.name} to the wish list.`, productId: product.id, name: product.name, appLink: await appLink(product.id) };
+      },
+    });
+
+    ctx.addRoute({
+      method: 'POST',
+      path: '/:id/confirm',
+      summary: 'Keep a shared item on the wish list (it leaves "Shared, to check")',
+      params: z.object({ id: z.string() }),
+      response: z.object({ productId: z.string(), confirmed: z.boolean() }),
+      async handler({ params }) {
+        const p = await ctx.core.products.updateField<SharedFrom>(params.id, 'sharing', (cur) => {
+          if (!cur) throw new LarderError('That item didn\'t come from a shared link.', 400, 'invalid');
+          return { ...cur, confirmed: true };
+        });
+        return { productId: p.id, confirmed: true };
       },
     });
 

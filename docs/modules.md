@@ -81,12 +81,14 @@ export default defineWebModule({
   ],
   addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
+  wishList: { panels: [ToCheck], hides: (item) => false },  // above the Wish list; hides: shown by a panel instead
 });
 ```
 
 - `addActions` are more ways to add things, shown on Home beside Add by name and in the desktop sidebar. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
+- `wishList: { panels, hides }` adds panels at the top of the Wish list (shared links to check), and `hides(item)` keeps items a panel shows out of the list below.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
-- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then.
+- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. With `productId`, saving goes into that existing item instead (a wish list item you've got after all: it comes off the wish list with the stock you add); `photoFileId`, `links`, `notes` and `defaultPlaceId` fill in the rest of it.
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 - `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
 

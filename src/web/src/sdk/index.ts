@@ -3,7 +3,7 @@
  * `defineWebModule({...})` and may import only from here, React and its own files.
  */
 import type { ComponentType } from 'react';
-import type { ProductDetail, Shop, ShoppingList } from '@larder/core';
+import type { ProductDetail, ProductSummary, Shop, ShoppingList } from '@larder/core';
 import type { SlotPanel } from './panels';
 
 export interface WebModule {
@@ -28,6 +28,11 @@ export interface WebModule {
    * `path` is one of this module's pages. `useShown` (a hook) can hide it, e.g. until set up.
    */
   addActions?: Array<{ path: string; title: string; subtitle: string; icon?: string; useShown?: () => boolean }>;
+  /**
+   * On the Wish list: panels above the list (e.g. shared links to check), and
+   * `hides`, for items a panel shows instead, so they aren't listed twice.
+   */
+  wishList?: { panels?: Array<ComponentType>; hides?: (s: ProductSummary) => boolean };
   /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
   settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
 }

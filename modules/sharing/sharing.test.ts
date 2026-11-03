@@ -55,8 +55,15 @@ describe('Sharing: a shared link goes on the wish list', () => {
     expect(p.photoFileIds).toHaveLength(1);
     expect(p.notes).toBe('£3.50 at Tesco when it was shared (2026-10-28).');
     expect(p.fields.sharing).toEqual({
-      url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco', app: 'com.tesco.grocery.view', device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP',
+      url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco', app: 'com.tesco.grocery.view', device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP', confirmed: false,
     } satisfies SharedFrom);
+
+    // Saying yes on the Wish list keeps it there, checked.
+    const confirm = core.modules.routes().find((r) => r.moduleId === 'sharing' && r.route.path === '/:id/confirm')!.route;
+    await confirm.handler({ body: undefined, query: {}, params: { id: out.productId }, userId: null });
+    expect((await core.products.get(out.productId)).product.fields.sharing).toMatchObject({ confirmed: true, url: 'https://www.tesco.com/groceries/en-GB/products/254656543' });
+    const other = await core.products.create({ name: 'Not shared', wish: true });
+    await expect(confirm.handler({ body: undefined, query: {}, params: { id: other.id }, userId: null })).rejects.toMatchObject({ status: 400 });
     expect(core.events.log.find((e) => e.type === 'sharing.added')?.data).toMatchObject({ productId: out.productId, site: 'Tesco' });
     expect(net.asked).toEqual(['https://www.tesco.com/groceries/en-GB/products/254656543', 'https://www.tesco.com/img/sausages.jpg']);
   });

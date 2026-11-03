@@ -21,6 +21,16 @@ export interface AddItemDraft {
   source?: string;
   /** A line shown above the form, e.g. "Read from your photo by Claude. Check it before adding." */
   note?: string;
+  /**
+   * An existing item to save into instead of making a new one: a wish list item
+   * you've got after all. It comes off the wish list, with the stock you add.
+   */
+  productId?: string;
+  /** The existing item's photo, shown (and kept as it is). */
+  photoFileId?: string | null;
+  links?: string[];
+  notes?: string;
+  defaultPlaceId?: string | null;
 }
 
 const drafts = new Map<string, AddItemDraft>();

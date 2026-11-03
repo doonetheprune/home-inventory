@@ -406,3 +406,42 @@ test('settings set the order the AIs are asked in, and switch one off without lo
   await page.getByRole('switch', { name: 'Use Gemini' }).click();
   await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
 });
+
+test('shared links wait on the wish list to be checked: yes, add, or already got', async ({ page }, info) => {
+  await signIn(page);
+  // As the Home Assistant integration sends them (the shop's page can't be reached here, so the subject names them).
+  const share = (subject: string) => page.evaluate(async (s) => {
+    const res = await fetch('api/v1/modules/sharing/link', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ url: `https://shop.example.invalid/p/${encodeURIComponent(s)}`, subject: s, device: 'Test phone' }) });
+    return res.json();
+  }, subject);
+  const keep = `Garden kneeler ${info.project.name}`;
+  const got = `Bird feeder ${info.project.name}`;
+  await share(keep);
+  await share(got);
+
+  await page.goto('/#/wishlist');
+  const check = page.locator('.section', { hasText: 'Shared, to check' });
+  await expect(check.getByText(keep)).toBeVisible();
+  await expect(check.getByText(got)).toBeVisible();
+  // Waiting to be checked, so not in the list below as well.
+  const named = (name: string) => page.locator('.item-name').filter({ hasText: name });
+  await expect(named(keep)).toHaveCount(1);
+
+  await check.locator('.item', { hasText: keep }).getByRole('button', { name: 'Yes, add' }).click();
+  await expect(page.locator('.toast')).toContainText(`${keep} is on the wish list`);
+  await expect(check.getByText(keep)).toHaveCount(0);
+  await expect(named(keep)).toHaveCount(1);
+
+  // Already got: the Add item screen, filled in, turns it into stock.
+  await check.locator('.item', { hasText: got }).getByRole('button', { name: 'Already got' }).click();
+  await expect(page.getByText('You’ve got this already')).toBeVisible();
+  await expect(page.getByLabel('What is it?')).toHaveValue(got);
+  await expect(page.getByText('Already in Larder')).toHaveCount(0);
+  await page.getByRole('button', { name: `Add ${got.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: got })).toBeVisible();
+  await expect(page.getByText('On the wish list.')).toHaveCount(0);
+  await expect(page.getByText('From a shared link')).toBeVisible();
+  await page.goto('/#/wishlist');
+  await expect(named(keep)).toHaveCount(1);
+  await expect(named(got)).toHaveCount(0);
+});
