@@ -407,41 +407,43 @@ test('settings set the order the AIs are asked in, and switch one off without lo
   await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
 });
 
-test('shared links wait on the wish list to be checked: yes, add, or already got', async ({ page }, info) => {
+test('shared links wait in Pending, to go on the wish list or into Larder', async ({ page, isMobile }, info) => {
   await signIn(page);
   // As the Home Assistant integration sends them (the shop's page can't be reached here, so the subject names them).
   const share = (subject: string) => page.evaluate(async (s) => {
     const res = await fetch('api/v1/modules/sharing/link', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ url: `https://shop.example.invalid/p/${encodeURIComponent(s)}`, subject: s, device: 'Test phone' }) });
     return res.json();
   }, subject);
-  const keep = `Garden kneeler ${info.project.name}`;
+  const wish = `Garden kneeler ${info.project.name}`;
   const got = `Bird feeder ${info.project.name}`;
-  await share(keep);
+  await share(wish);
   await share(got);
-
-  await page.goto('/#/wishlist');
-  const check = page.locator('.section', { hasText: 'Shared, to check' });
-  await expect(check.getByText(keep)).toBeVisible();
-  await expect(check.getByText(got)).toBeVisible();
-  // Waiting to be checked, so not in the list below as well.
   const named = (name: string) => page.locator('.item-name').filter({ hasText: name });
-  await expect(named(keep)).toHaveCount(1);
+  const row = (name: string) => page.locator('.item', { hasText: name });
 
-  await check.locator('.item', { hasText: keep }).getByRole('button', { name: 'Yes, add' }).click();
-  await expect(page.locator('.toast')).toContainText(`${keep} is on the wish list`);
-  await expect(check.getByText(keep)).toHaveCount(0);
-  await expect(named(keep)).toHaveCount(1);
+  // The Wish list says they're waiting, without listing them: they aren't wishes yet.
+  await page.goto('/#/wishlist');
+  await expect(named(wish)).toHaveCount(0);
+  if (!isMobile) await expect(page.locator('.tabbar').getByText('Pending')).toBeVisible();
+  await page.getByText(/shared links? in Pending/).click();
+  await expect(named(wish)).toBeVisible();
+  await expect(named(got)).toBeVisible();
 
-  // Already got: the Add item screen, filled in, turns it into stock.
-  await check.locator('.item', { hasText: got }).getByRole('button', { name: 'Already got' }).click();
-  await expect(page.getByText('You’ve got this already')).toBeVisible();
+  await row(wish).getByRole('button', { name: 'Add to wish list' }).click();
+  await expect(page.locator('.toast')).toContainText(`${wish} is on the wish list`);
+  await expect(named(wish)).toHaveCount(0);
+
+  // Got it already: the Add item page, filled in; saving takes it out of Pending.
+  await row(got).getByRole('button', { name: 'Add to Larder' }).click();
+  await expect(page.getByText("Say how many you've got and where")).toBeVisible();
   await expect(page.getByLabel('What is it?')).toHaveValue(got);
-  await expect(page.getByText('Already in Larder')).toHaveCount(0);
   await page.getByRole('button', { name: `Add ${got.toLowerCase()}`, exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name: got })).toBeVisible();
   await expect(page.getByText('On the wish list.')).toHaveCount(0);
   await expect(page.getByText('From a shared link')).toBeVisible();
-  await page.goto('/#/wishlist');
-  await expect(named(keep)).toHaveCount(1);
+
+  await page.goto('/#/m/sharing/');
   await expect(named(got)).toHaveCount(0);
+  await page.goto('/#/wishlist');
+  await expect(named(wish)).toHaveCount(1);
 });

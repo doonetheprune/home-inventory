@@ -1,10 +1,10 @@
-"""Sharing: links shared to the Home Assistant app go on Larder's wish list.
+"""Sharing: links shared to the Home Assistant app go to Larder's Pending list.
 
 On Android, sharing to Home Assistant (the share menu, then Home Assistant)
 fires "mobile_app.share" with the link and any text. This sends it to
-Larder's sharing module, which reads the page and adds the item to the wish
-list, then tells the phone that shared it what happened, with a tap that
-opens the item in Larder.
+Larder's sharing module, which reads the page and puts it in Pending (to go
+on the wish list or into Larder), then tells the phone that shared it what
+happened, with a tap that opens Pending.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _phone(hass: HomeAssistant, device_id: str | None) -> tuple[str | None, str 
 
 @callback
 def async_track_shares(hass: HomeAssistant, client: LarderClient):
-    """Send every shared link to Larder. Returns the function that stops it."""
+    """Send every shared link to Larder's Pending list. Returns the function that stops it."""
 
     async def forward(event: Event) -> None:
         data = event.data
@@ -59,18 +59,18 @@ def async_track_shares(hass: HomeAssistant, client: LarderClient):
         except LarderError as err:
             # The sharing module may be switched off in Larder: then shares aren't for it.
             if err.status != 404:
-                _LOGGER.warning("Couldn't put a shared link on Larder's wish list: %s", err.message)
+                _LOGGER.warning("Couldn't send a shared link to Larder: %s", err.message)
                 if notify:
                     await _tell(hass, notify, f"Larder couldn't add that: {err.message}", None)
             return
         if notify:
-            await _tell(hass, notify, result.get("message", "Added to the wish list."), result.get("appLink"))
+            await _tell(hass, notify, result.get("message", "Sent to Larder."), result.get("appLink"))
 
     return hass.bus.async_listen(EVENT_SHARE, forward)
 
 
 async def _tell(hass: HomeAssistant, service: str, message: str, link: str | None) -> None:
-    """A notification on the phone that shared; tapping it opens the item in Larder."""
+    """A notification on the phone that shared; tapping it opens Larder (Pending, or the item it already has)."""
     data: dict[str, Any] = {"tag": "larder-share", "group": "larder"}
     if link:
         data.update({"clickAction": link, "url": link})

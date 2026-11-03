@@ -5,8 +5,7 @@
 - **Add by photo opens the camera straight away**, like the barcode scanner, instead of the phone's photo picker (which the Home Assistant app opened for both buttons). **Upload a photo** is its own button for a photo you already have.
 - A volume button takes the photo too, like a phone's camera app, where the phone passes the button to the page. Space does on a keyboard.
 - **Rotate photo:** turn a photo that came out sideways, on the Add item page before saving, or on the item's page afterwards.
-- **Share to the wish list:** on Android, share a page from anywhere (a shop's app, Chrome) to **Home Assistant**, and it goes on Larder's wish list, named from the page, with its picture and price. The item keeps the link and where it came from, and your phone gets a notification that opens it. Something already in Larder isn't added twice. Turn it off in the integration's options.
-- **Shared, to check:** shared items wait at the top of the Wish list: **Yes, add** keeps one; **Already got** opens Add item, filled in, to say how many you have and where.
+- **Share to Larder:** on Android, share a page from anywhere (a shop's app, Chrome) to **Home Assistant**, and it waits in Larder's new **Pending** list (next to the Wish list), named from the page, with its picture and price. Your phone gets a notification. From Pending, add it to the wish list, or add it to Larder if you've got it (the Add item page, filled in). Either way the item keeps the link and where it came from. Something already in Larder isn't added twice. Turn it off in the integration's options.
 
 ## 0.5.0
 

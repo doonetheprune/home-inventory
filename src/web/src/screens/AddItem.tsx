@@ -51,24 +51,12 @@ export function AddItem() {
   const [placeId, setPlaceId] = useState<string | null>(null);
   const dq = useDebounced(form.name.trim(), 200);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: dq.length > 1 });
-  // The item being turned from a wish into stock isn't "already in Larder" as something else.
-  const existing = (data?.sections.find((s) => s.id === 'stock')?.results ?? []).filter((r) => r.id !== draft?.productId).slice(0, 3);
+  const existing = (data?.sections.find((s) => s.id === 'stock')?.results ?? []).slice(0, 3);
   const exact = existing.find((r) => r.title.toLowerCase() === form.name.trim().toLowerCase());
 
   async function save() {
-    // A wish list item you've got after all: it becomes this, with its stock, rather than a second item.
-    if (draft?.productId) {
-      const id = draft.productId;
-      const done = await run(async () => {
-        const p = await api.products.update(id, { ...toPayload(form), wish: form.wish });
-        if (!form.wish && n > 0) await api.stock.add({ productId: id, quantity: n, placeId: placeId ?? form.defaultPlaceId });
-        return p;
-      }, form.wish ? `${form.name} is still on the wish list` : `${form.name} added · ${qty(n, form.unit)}`);
-      if (done) navigate(`/products/${id}`, { replace: true });
-      return;
-    }
     const created = await run(async () => {
-      const photoId = photo ? (await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }))).id : null;
+      const photoId = photo ? (await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }))).id : (draft?.photoFileId ?? null);
       const p = await api.products.create({ ...toPayload(form), photoFileIds: photoId ? [photoId] : [] });
       if (draft && (draft.brand || draft.barcode)) {
         const variant = { name: draft.brand || p.name, barcodes: draft.barcode ? [draft.barcode] : [], photoFileId: photoId, source: draft.source ?? 'local' };
@@ -78,6 +66,7 @@ export function AddItem() {
           throw err;
         });
       }
+      if (draft?.onSaved) await draft.onSaved(p.id);
       if (!form.wish && n > 0) await api.stock.add({ productId: p.id, quantity: n, placeId: placeId ?? form.defaultPlaceId });
       return p;
     }, form.wish ? `${form.name} is on the wish list` : `${form.name} added · ${qty(n, form.unit)}`);

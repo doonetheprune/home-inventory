@@ -13,11 +13,7 @@ export function WishList() {
   const { run, busy } = useAction();
   const [name, setName] = useState('');
   const [bought, setBought] = useState<ProductSummary | null>(null);
-  // Modules' panels (shared links to check) show some items instead of the list.
-  const mods = useEnabledWebModules();
-  const panels = mods.flatMap((m) => m.wishList?.panels ?? []);
-  const hides = mods.flatMap((m) => (m.wishList?.hides ? [m.wishList.hides] : []));
-  const shown = (data ?? []).filter((s) => !hides.some((h) => h(s)));
+  const panels = useEnabledWebModules().flatMap((m) => m.wishListPanels ?? []);
 
   return (
     <>
@@ -32,7 +28,7 @@ export function WishList() {
         {isLoading && <Loading />}
         {data && !data.length && <Empty title="Nothing on the wish list"><span className="muted small">Add things you'd like to have, like a power bank for power cuts.</span></Empty>}
         <div className={desktop ? 'cards-2' : 'list'}>
-          {shown.map((s) => (
+          {(data ?? []).map((s) => (
             <div className={desktop ? 'card item' : 'item'} key={s.product.id}>
               <ProductTile s={s} />
               <Link className="item-main" to={`/products/${s.product.id}`}><span className="item-name">{s.product.name}</span><span className="item-meta">{[s.category?.name, s.product.notes].filter(Boolean).join(' · ') || 'Wish list'}</span></Link>

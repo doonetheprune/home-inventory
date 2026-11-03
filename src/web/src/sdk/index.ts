@@ -3,7 +3,7 @@
  * `defineWebModule({...})` and may import only from here, React and its own files.
  */
 import type { ComponentType } from 'react';
-import type { ProductDetail, ProductSummary, Shop, ShoppingList } from '@larder/core';
+import type { ProductDetail, Shop, ShoppingList } from '@larder/core';
 import type { SlotPanel } from './panels';
 
 export interface WebModule {
@@ -18,9 +18,9 @@ export interface WebModule {
   /**
    * Whole pages at /m/<module id><path>. Paths can have parameters ("/:id", read with
    * useModuleParams). Pages without parameters (and not `hidden`) are linked from More and
-   * the desktop sidebar, under Organise (default) or Print.
+   * the desktop sidebar, under Organise (default) or Print; "wishlist" puts it right after the Wish list.
    */
-  pages?: Array<{ path: string; title: string; icon?: string; component: ComponentType; section?: 'organise' | 'print'; subtitle?: string; hidden?: boolean }>;
+  pages?: Array<{ path: string; title: string; icon?: string; component: ComponentType; section?: 'organise' | 'print' | 'wishlist'; subtitle?: string; hidden?: boolean }>;
   /** Panels on other modules' pages, at the slots those pages offer (e.g. recipes on a scenario). */
   panels?: SlotPanel[];
   /**
@@ -28,11 +28,8 @@ export interface WebModule {
    * `path` is one of this module's pages. `useShown` (a hook) can hide it, e.g. until set up.
    */
   addActions?: Array<{ path: string; title: string; subtitle: string; icon?: string; useShown?: () => boolean }>;
-  /**
-   * On the Wish list: panels above the list (e.g. shared links to check), and
-   * `hides`, for items a panel shows instead, so they aren't listed twice.
-   */
-  wishList?: { panels?: Array<ComponentType>; hides?: (s: ProductSummary) => boolean };
+  /** Panels at the top of the Wish list (e.g. how many shared links are waiting in Pending). */
+  wishListPanels?: Array<ComponentType>;
   /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
   settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
 }

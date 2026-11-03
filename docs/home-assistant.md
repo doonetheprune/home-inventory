@@ -106,7 +106,7 @@ Larder's changes are fired in Home Assistant as `larder_<type>`:
 | `larder_stock_expired` | An item expires today (once per batch) | same as above |
 | `larder_shopping_purchased` | A shopping trip was ticked off | shopId, items |
 | `larder_nfc_scanned` | A tag was scanned | tagId, device, kind (product, place, unknown), id, name, path |
-| `larder_sharing_added` | A shared link went on the wish list | productId, name, url, site |
+| `larder_sharing_pending` | A shared link is waiting in Pending | id, name, url, site |
 | `larder_batteries_low` | A linked device's battery is low | deviceId, device, kind, battery, place, message, level |
 | `larder_shop_locations_found` | A search for a shop's branches that had to wait for the map got its answer | shopId, shop, count, message |
 | `larder_product_created`, `larder_product_updated`, `larder_place_changed`, … | Catalogue changes | ids and names |
@@ -133,13 +133,13 @@ Tags scanned with the Home Assistant companion app are sent to Larder (turn this
 
 Tags written by the Home Assistant app keep the same id in both, so a tag works for Larder and for Home Assistant's own tag automations.
 
-## Sharing links to the wish list
+## Sharing links to Larder
 
-On an Android phone with the Home Assistant app, share a page from anywhere (a shop's app, Chrome) and pick **Home Assistant**. The integration sends the link to Larder, which puts it on the wish list, named from the page, with its picture and price, and keeps the link and where it came from. The phone gets a notification, "Added … to the wish list.", that opens the item in Larder. It waits under **Shared, to check** at the top of the Wish list: **Yes, add** keeps it, **Already got** turns it into stock.
+On an Android phone with the Home Assistant app, share a page from anywhere (a shop's app, Chrome) and pick **Home Assistant**. The integration sends the link to Larder, which reads the page for its name, picture and price and puts it in **Pending** (next to the Wish list). The phone gets a notification, "Added … to Pending.", that opens Pending. From there each goes **on the wish list**, or **into Larder** (the Add item page, filled in, to say how many you've got and where). Either way the item keeps the link and where it came from.
 
-- Something already in Larder (the same link, or the same name) isn't added again: the notification says so.
+- Something already in Pending or in Larder (the same link, or the same name) isn't added again: the notification says so.
 - Shares without a link are left alone, for your own automations on `mobile_app.share`.
-- Turn it off in the integration's options (**Put links shared to Home Assistant on Larder's wish list**), or switch off the Sharing module in Larder.
+- Turn it off in the integration's options (**Send links shared to Home Assistant to Larder's Pending list**), or switch off the Sharing module in Larder.
 - The Home Assistant app shares links and text, not photos. For a photo, use **Add by photo** in Larder.
 
 ## Battery linking

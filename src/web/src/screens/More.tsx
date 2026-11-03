@@ -17,9 +17,10 @@ export function More() {
           {tile('/places', 'pin', 'Places', 'Rooms, shelves and boxes')}
           {tile('/shops', 'store', 'Shops', 'And what each sells')}
           {tile('/wishlist', 'heart', 'Wish list', 'Wanted, not owned')}
+          {pages.filter((p) => p.section === 'wishlist').map((p) => tile(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, p.subtitle ?? ''))}
           {renewals && tile(`/stock?category=${renewals.id}`, 'shield', 'Renewals', 'Insurance, MOT')}
           {tile('/grid', 'grid', 'Shelves & boxes', 'Set up storage codes')}
-          {pages.map((p) => tile(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, p.subtitle ?? ''))}
+          {pages.filter((p) => p.section !== 'wishlist').map((p) => tile(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, p.subtitle ?? ''))}
           {tile('/settings', 'sliders', 'Settings', 'Household, modules, tokens')}
         </div>
       </div>

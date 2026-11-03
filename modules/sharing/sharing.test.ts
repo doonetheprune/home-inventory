@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { HomeAssistantPort } from '@larder/core';
 import { makeCore } from '../../tests/helpers';
-import sharing, { type SharedFrom } from './index';
+import sharing, { type PendingShare, type SharedFrom } from './index';
 import { findLink, readPage, siteName, tidyLink, tidyName } from './page';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
-const share = <T = { status: string; message: string; productId: string; name: string; appLink: string | null }>(core: Core, body: unknown) =>
-  core.modules.routes().find((r) => r.moduleId === 'sharing' && r.route.path === '/link')!.route.handler({ body, query: {}, params: {}, userId: null }) as Promise<T>;
+interface Answer { status: string; message: string; name: string; pendingId: string | null; productId: string | null; appLink: string | null }
+const route = (core: Core, method: string, path: string) => core.modules.routes().find((r) => r.moduleId === 'sharing' && r.route.method === method && r.route.path === path)!.route;
+const share = (core: Core, body: unknown) => route(core, 'POST', '/link').handler({ body, query: {}, params: {}, userId: null }) as Promise<Answer>;
+const waiting = (core: Core) => route(core, 'GET', '/pending').handler({ body: undefined, query: {}, params: {}, userId: null }) as Promise<PendingShare[]>;
+const decide = <T,>(core: Core, method: string, path: string, id: string, body?: unknown) => route(core, method, path).handler({ body, query: {}, params: { id }, userId: null }) as Promise<T>;
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(64).fill(1)]);
 
@@ -35,8 +38,8 @@ function internet() {
   return { fetch: fake, asked };
 }
 
-describe('Sharing: a shared link goes on the wish list', () => {
-  it('names it from the page, with its picture and price, and keeps the link and where it came from', async () => {
+describe('Sharing: a shared link waits in Pending', () => {
+  it('names it from the page, with its picture and price, and isn\'t an item yet', async () => {
     const net = internet();
     const core = await makeCore({ modules: [sharing], fetch: net.fetch, homeAssistant: { appPath: async () => '/a0d7b954_larder' } as unknown as HomeAssistantPort });
     const out = await share(core, {
@@ -46,51 +49,77 @@ describe('Sharing: a shared link goes on the wish list', () => {
       app: 'com.tesco.grocery.view',
       device: 'Shaun’s Pixel',
     });
-    expect(out).toMatchObject({ status: 'added', message: 'Added Tesco Finest 6 Pork Sausages 400G to the wish list.', name: 'Tesco Finest 6 Pork Sausages 400G' });
-    expect(out.appLink).toBe(`/a0d7b954_larder#/products/${out.productId}`);
+    expect(out).toMatchObject({ status: 'pending', message: 'Added Tesco Finest 6 Pork Sausages 400G to Pending.', name: 'Tesco Finest 6 Pork Sausages 400G', productId: null, appLink: '/a0d7b954_larder#/m/sharing/' });
 
-    const p = (await core.products.get(out.productId)).product;
-    expect(p.wish).toBe(true);
-    expect(p.links).toEqual([{ url: 'https://www.tesco.com/groceries/en-GB/products/254656543', title: 'Tesco' }]);
-    expect(p.photoFileIds).toHaveLength(1);
-    expect(p.notes).toBe('£3.50 at Tesco when it was shared (2026-10-28).');
-    expect(p.fields.sharing).toEqual({
-      url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco', app: 'com.tesco.grocery.view', device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP', confirmed: false,
-    } satisfies SharedFrom);
-
-    // Saying yes on the Wish list keeps it there, checked.
-    const confirm = core.modules.routes().find((r) => r.moduleId === 'sharing' && r.route.path === '/:id/confirm')!.route;
-    await confirm.handler({ body: undefined, query: {}, params: { id: out.productId }, userId: null });
-    expect((await core.products.get(out.productId)).product.fields.sharing).toMatchObject({ confirmed: true, url: 'https://www.tesco.com/groceries/en-GB/products/254656543' });
-    const other = await core.products.create({ name: 'Not shared', wish: true });
-    await expect(confirm.handler({ body: undefined, query: {}, params: { id: other.id }, userId: null })).rejects.toMatchObject({ status: 400 });
-    expect(core.events.log.find((e) => e.type === 'sharing.added')?.data).toMatchObject({ productId: out.productId, site: 'Tesco' });
+    const [p] = await waiting(core);
+    expect(p).toMatchObject({
+      id: out.pendingId, name: 'Tesco Finest 6 Pork Sausages 400G', url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco',
+      app: 'com.tesco.grocery.view', device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP',
+    });
+    expect(p!.photoFileId).toBeTruthy();
+    // Not on the wish list, not in stock: nothing counts it until someone decides.
+    expect(await core.products.list({ status: 'wish' })).toEqual([]);
+    expect(await core.products.list({ status: 'all' })).toEqual([]);
+    expect(core.events.log.find((e) => e.type === 'sharing.pending')?.data).toMatchObject({ id: out.pendingId, site: 'Tesco' });
     expect(net.asked).toEqual(['https://www.tesco.com/groceries/en-GB/products/254656543', 'https://www.tesco.com/img/sausages.jpg']);
+  });
+
+  it('goes on the wish list from Pending, keeping the link, photo, price and where it came from', async () => {
+    const core = await makeCore({ modules: [sharing], fetch: internet().fetch });
+    const out = await share(core, { url: 'https://www.tesco.com/groceries/en-GB/products/254656543', device: 'Shaun’s Pixel' });
+    const photo = (await waiting(core))[0]!.photoFileId;
+    const made = await decide<{ productId: string }>(core, 'POST', '/pending/:id/wish', out.pendingId!);
+    const p = (await core.products.get(made.productId)).product;
+    expect(p).toMatchObject({ name: 'Tesco Finest 6 Pork Sausages 400G', wish: true, photoFileIds: [photo], notes: '£3.50 at Tesco when it was shared (2026-10-28).' });
+    expect(p.links).toEqual([{ url: 'https://www.tesco.com/groceries/en-GB/products/254656543', title: 'Tesco' }]);
+    expect(p.fields.sharing).toEqual({
+      url: 'https://www.tesco.com/groceries/en-GB/products/254656543', site: 'Tesco', app: null, device: 'Shaun’s Pixel', sharedAt: '2026-10-28T09:00:00.000Z', price: 3.5, currency: 'GBP',
+    } satisfies SharedFrom);
+    expect(await waiting(core)).toEqual([]);
+    await expect(decide(core, 'POST', '/pending/:id/wish', out.pendingId!)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('goes into Larder from Pending through the Add item page, and the item keeps where it came from', async () => {
+    const core = await makeCore({ modules: [sharing], fetch: internet().fetch });
+    const out = await share(core, { text: 'Check out this deal on Amazon: Oatly Barista Edition Oat Drink 1L https://amzn.eu/d/abc', app: 'com.amazon.mShop.android.shopping' });
+    // The Add item page makes the item; then Pending is told.
+    const made = await core.products.create({ name: 'Oat drink', unit: 'carton', links: [{ url: 'https://www.amazon.co.uk/dp/B07XYZ1234', title: 'Amazon.co.uk' }] });
+    await decide(core, 'POST', '/pending/:id/added', out.pendingId!, { productId: made.id });
+    expect((await core.products.get(made.id)).product.fields.sharing).toMatchObject({ url: 'https://www.amazon.co.uk/dp/B07XYZ1234', site: 'Amazon.co.uk', app: 'com.amazon.mShop.android.shopping' });
+    expect(await waiting(core)).toEqual([]);
+    // Shared again, it's in Larder already.
+    expect(await share(core, { text: 'https://amzn.eu/d/abc' })).toMatchObject({ status: 'exists', productId: made.id, message: 'Oat drink is already in Larder.' });
+  });
+
+  it('can be forgotten when it was shared by mistake', async () => {
+    const core = await makeCore({ modules: [sharing], fetch: internet().fetch });
+    const out = await share(core, { url: 'https://www.tesco.com/groceries/en-GB/products/254656543' });
+    await decide(core, 'DELETE', '/pending/:id', out.pendingId!);
+    expect(await waiting(core)).toEqual([]);
+    expect(await core.products.list({ status: 'wish' })).toEqual([]);
   });
 
   it('doesn\'t add the same thing twice', async () => {
     const core = await makeCore({ modules: [sharing], fetch: internet().fetch });
     const first = await share(core, { url: 'https://www.tesco.com/groceries/en-GB/products/254656543?utm_source=app' });
     const again = await share(core, { text: 'Look at this https://www.tesco.com/groceries/en-GB/products/254656543?utm_campaign=x' });
-    expect(again).toMatchObject({ status: 'exists', productId: first.productId, message: 'Tesco Finest 6 Pork Sausages 400G is already on the wish list.' });
-    expect((await core.products.list({ status: 'wish' })).filter((s) => s.product.name.startsWith('Tesco Finest'))).toHaveLength(1);
+    expect(again).toMatchObject({ status: 'exists', pendingId: first.pendingId, message: 'Tesco Finest 6 Pork Sausages 400G is already in Pending.' });
+    expect(await waiting(core)).toHaveLength(1);
+    await decide(core, 'POST', '/pending/:id/wish', first.pendingId!);
+    expect(await share(core, { url: 'https://www.tesco.com/groceries/en-GB/products/254656543' })).toMatchObject({ status: 'exists', message: 'Tesco Finest 6 Pork Sausages 400G is already on the wish list.' });
 
-    // Something already owned under that name says so, and isn't turned into a wish.
+    // Something already owned under that name says so.
     const owned = await core.products.create({ name: 'Oatly Barista Edition Oat Drink 1L' });
     const r = await share(core, { text: 'Check out this deal on Amazon: Oatly Barista Edition Oat Drink 1L https://amzn.eu/d/abc' });
     expect(r).toMatchObject({ status: 'exists', productId: owned.id, message: 'Oatly Barista Edition Oat Drink 1L is already in Larder.' });
-    expect((await core.products.get(owned.id)).product.wish).toBe(false);
   });
 
   it('names it from what was shared when the shop turns robots away, and tidies the address', async () => {
     const net = internet();
     const core = await makeCore({ modules: [sharing], fetch: net.fetch });
     const out = await share(core, { text: 'Check out this deal on Amazon: Oatly Barista Edition Oat Drink 1L https://amzn.eu/d/abc', app: 'com.amazon.mShop.android.shopping' });
-    expect(out).toMatchObject({ status: 'added', name: 'Oatly Barista Edition Oat Drink 1L', appLink: null });
-    const p = (await core.products.get(out.productId)).product;
-    expect(p.links).toEqual([{ url: 'https://www.amazon.co.uk/dp/B07XYZ1234', title: 'Amazon.co.uk' }]);
-    expect(p.photoFileIds).toEqual([]);
-    expect(p.notes).toBe('');
+    expect(out).toMatchObject({ status: 'pending', name: 'Oatly Barista Edition Oat Drink 1L', appLink: null });
+    expect((await waiting(core))[0]).toMatchObject({ url: 'https://www.amazon.co.uk/dp/B07XYZ1234', site: 'Amazon.co.uk', photoFileId: null, price: null });
     expect(net.asked).toEqual(['https://amzn.eu/d/abc', 'https://www.amazon.co.uk/Oatly-Barista/dp/b07xyz1234/ref=sr_1_3?keywords=oat&th=1']);
   });
 
@@ -98,7 +127,7 @@ describe('Sharing: a shared link goes on the wish list', () => {
     const net = internet();
     const core = await makeCore({ modules: [sharing], fetch: net.fetch });
     const inside = await share(core, { url: 'https://192.168.1.5/admin', subject: 'Router page' });
-    expect(inside).toMatchObject({ status: 'added', name: 'Router page' });
+    expect(inside).toMatchObject({ status: 'pending', name: 'Router page' });
     await share(core, { url: 'http://shop.example.com/thing', subject: 'Not https' });
     await share(core, { url: 'https://homeassistant.local:8123/', subject: 'Home Assistant' });
     const redirected = await share(core, { url: 'https://short.example.com/x' });

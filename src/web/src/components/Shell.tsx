@@ -43,6 +43,7 @@ export function Shell() {
   const atHome = location.pathname === '/';
   const pages = useEnabledWebModules().flatMap((m) => (m.pages ?? []).filter((p) => !p.path.includes(':') && !p.hidden).map((p) => ({ ...p, moduleId: m.id })));
   const organise = pages.filter((p) => (p.section ?? 'organise') === 'organise');
+  const byWishList = pages.filter((p) => p.section === 'wishlist');
   const print = pages.filter((p) => p.section === 'print');
   useScannerWedge();
 
@@ -82,6 +83,7 @@ export function Shell() {
             {tab('/places', 'pin', 'Places', 'x')}
             {tab('/shops', 'store', 'Shops', 'x')}
             {tab('/wishlist', 'heart', 'Wish list', 'x')}
+            {byWishList.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, 'x'))}
             {organise.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'box', p.title, 'x'))}
             {print.length > 0 && <span className="side-head">Print</span>}
             {print.map((p) => tab(`/m/${p.moduleId}${p.path}`, p.icon ?? 'print', p.title, 'x'))}

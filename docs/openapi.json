@@ -15188,11 +15188,11 @@
     },
     "/api/v1/modules/sharing/link": {
       "post": {
-        "summary": "Put a shared link on the wish list (from the Home Assistant app's share menu)",
+        "summary": "Put a shared link in Pending (from the Home Assistant app's share menu)",
         "tags": [
           "Module: sharing"
         ],
-        "description": "Send what the phone shared: the link, or text with a link in it. Larder reads the page for the product's name, picture and price, and adds it to the wish list, keeping the link. The same link (or an item with the same name) isn't added twice.",
+        "description": "Send what the phone shared: the link, or text with a link in it. Larder reads the page for the product's name, picture and price, and puts it in Pending, to go on the wish list or into Larder. Something already in Pending or in Larder (the same link, or the same name) isn't added again.",
         "requestBody": {
           "required": true,
           "content": {
@@ -15271,18 +15271,27 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "added",
+                        "pending",
                         "exists"
                       ]
                     },
                     "message": {
                       "type": "string"
                     },
-                    "productId": {
-                      "type": "string"
-                    },
                     "name": {
                       "type": "string"
+                    },
+                    "pendingId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "productId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "appLink": {
                       "type": [
@@ -15294,8 +15303,9 @@
                   "required": [
                     "status",
                     "message",
-                    "productId",
                     "name",
+                    "pendingId",
+                    "productId",
                     "appLink"
                   ],
                   "additionalProperties": false
@@ -15306,9 +15316,113 @@
         }
       }
     },
-    "/api/v1/modules/sharing/{id}/confirm": {
+    "/api/v1/modules/sharing/pending": {
+      "get": {
+        "summary": "Shared links waiting in Pending, newest first",
+        "tags": [
+          "Module: sharing"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      "site": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "app": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "device": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sharedAt": {
+                        "type": "string"
+                      },
+                      "price": {
+                        "default": null,
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "currency": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 3
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "photoFileId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "site",
+                      "app",
+                      "device",
+                      "sharedAt",
+                      "price",
+                      "currency",
+                      "id",
+                      "name",
+                      "photoFileId"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/sharing/pending/{id}/wish": {
       "post": {
-        "summary": "Keep a shared item on the wish list (it leaves \"Shared, to check\")",
+        "summary": "Put a shared link from Pending on the wish list",
         "tags": [
           "Module: sharing"
         ],
@@ -15333,13 +15447,109 @@
                     "productId": {
                       "type": "string"
                     },
-                    "confirmed": {
-                      "type": "boolean"
+                    "name": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "productId",
-                    "confirmed"
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/sharing/pending/{id}/added": {
+      "post": {
+        "summary": "A shared link from Pending was added to Larder (through the Add item page): it leaves Pending, and the item keeps where it came from",
+        "tags": [
+          "Module: sharing"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "productId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "productId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "productId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/sharing/pending/{id}": {
+      "delete": {
+        "summary": "Forget a shared link in Pending (shared by mistake)",
+        "tags": [
+          "Module: sharing"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
                   ],
                   "additionalProperties": false
                 }

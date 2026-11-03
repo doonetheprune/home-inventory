@@ -21,16 +21,13 @@ export interface AddItemDraft {
   source?: string;
   /** A line shown above the form, e.g. "Read from your photo by Claude. Check it before adding." */
   note?: string;
-  /**
-   * An existing item to save into instead of making a new one: a wish list item
-   * you've got after all. It comes off the wish list, with the stock you add.
-   */
-  productId?: string;
-  /** The existing item's photo, shown (and kept as it is). */
+  /** A photo already in Larder's files (e.g. a shared page's picture), used when there's no `photo`. */
   photoFileId?: string | null;
   links?: string[];
   notes?: string;
   defaultPlaceId?: string | null;
+  /** Called with the new item's id once it's saved (e.g. to take it out of Pending). */
+  onSaved?: (productId: string) => Promise<unknown>;
 }
 
 const drafts = new Map<string, AddItemDraft>();

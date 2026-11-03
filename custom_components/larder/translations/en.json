@@ -53,12 +53,12 @@
         "data": {
           "battery_threshold": "Battery low below (%)",
           "forward_tags": "Send NFC tag scans to Larder",
-          "forward_shares": "Put links shared to Home Assistant on Larder's wish list"
+          "forward_shares": "Send links shared to Home Assistant to Larder's Pending list"
         },
         "data_description": {
           "battery_threshold": "When a device's battery drops below this, Larder says whether there's a spare.",
           "forward_tags": "Tags scanned with the Home Assistant app are sent to Larder, which fires larder_nfc_scanned with the product or place.",
-          "forward_shares": "Links shared from your phone to the Home Assistant app (Android's share menu) go on the wish list, named from the page, and the phone gets a notification saying so."
+          "forward_shares": "Links shared from your phone to the Home Assistant app (Android's share menu) wait in Larder's Pending list, to go on the wish list or into Larder. The phone gets a notification saying so."
         }
       }
     }

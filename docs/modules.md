@@ -81,14 +81,15 @@ export default defineWebModule({
   ],
   addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
-  wishList: { panels: [ToCheck], hides: (item) => false },  // above the Wish list; hides: shown by a panel instead
+  wishListPanels: [Waiting],     // at the top of the Wish list: () => JSX
 });
 ```
 
 - `addActions` are more ways to add things, shown on Home beside Add by name and in the desktop sidebar. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
-- `wishList: { panels, hides }` adds panels at the top of the Wish list (shared links to check), and `hides(item)` keeps items a panel shows out of the list below.
+- `wishListPanels` are shown at the top of the Wish list (e.g. how many shared links are in Pending).
+- A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
-- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. With `productId`, saving goes into that existing item instead (a wish list item you've got after all: it comes off the wish list with the stock you add); `photoFileId`, `links`, `notes` and `defaultPlaceId` fill in the rest of it.
+- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. `photoFileId` uses a photo already in Larder's files instead (a shared page's picture); `links`, `notes` and `defaultPlaceId` fill in more of the form; `onSaved(productId)` runs once the item is made (e.g. to take it out of Pending).
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 - `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
 
@@ -122,5 +123,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `recipes` | Saved recipes, what's missing, scaling by ingredient ratios and named presets, and taking ingredients out of stock after cooking once confirmed |
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
-| `sharing` | Links shared to the Home Assistant app from a phone go on the wish list, named from the page, with its picture and price |
+| `sharing` | Links shared to the Home Assistant app from a phone wait in Pending, named from the page with its picture and price, to go on the wish list or into Larder |
 | `_template` | Example to copy (off by default) |
