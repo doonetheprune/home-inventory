@@ -92,6 +92,10 @@ class LarderClient:
         """Tell Larder a tag was scanned."""
         return await self._request("POST", "/v1/nfc/scanned", {"tagId": tag_id, "device": device})
 
+    async def share_link(self, shared: dict[str, Any]) -> dict[str, Any]:
+        """Put a link shared from a phone on the wish list (the sharing module)."""
+        return await self._request("POST", "/v1/modules/sharing/link", shared)
+
     async def battery_devices(self) -> list[dict[str, Any]]:
         """The devices with batteries Larder knows about."""
         return await self._request("GET", "/v1/modules/batteries/devices")

@@ -7,7 +7,7 @@ import { Icon } from '../icons';
 import { stockText } from '../format';
 import { Empty, ErrorBox, Header, Loading, PlaceText, ProductTile, Seg, StatusPills, useAction, useCategories, useIsDesktop } from '../ui';
 
-const STATUSES: Array<[string, string]> = [['low', 'Low'], ['expiring', 'Use soon'], ['out_of_place', 'Out of place'], ['expected', 'On the way'], ['in_stock', 'In stock']];
+const STATUSES: Array<[string, string]> = [['low', 'Low'], ['expiring', 'Use soon'], ['out_of_place', 'Out of place'], ['expected', 'On the way'], ['in_stock', 'In stock'], ['to_tidy', 'To tidy']];
 
 function matches(s: ProductSummary, q: string): boolean {
   if (!q) return true;

@@ -8,6 +8,7 @@ import { Variant as VariantSchema } from '../model';
 import { Remember as RememberSchema, type Remember } from '../inputs';
 import { NotFoundError } from '../errors';
 import { photoType } from '../photos';
+import { publicWebAddress } from '../util';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { loadWorld, placePath, summarise } from './world';
@@ -100,6 +101,32 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
     } catch {
       return null;
     }
+  }
+
+  /**
+   * A photo from an address someone gave (a shared link's picture), saved like a
+   * lookup's. Only public https addresses, checked again at every redirect.
+   */
+  async function savePhotoFromLink(raw: string, label: string): Promise<string | null> {
+    let at = publicWebAddress(raw);
+    try {
+      for (let hop = 0; at && hop < 4; hop++) {
+        const res = await ctx.fetch(at.href, { redirect: 'manual', signal: AbortSignal.timeout(ctx.lookupTimeoutMs), headers: { accept: 'image/*' } });
+        if (res.status >= 300 && res.status < 400) {
+          const next = res.headers.get('location');
+          at = next ? publicWebAddress(new URL(next, at).href) : null;
+          continue;
+        }
+        if (!res.ok) return null;
+        const data = await readUpTo(res, MAX_PHOTO_BYTES);
+        const contentType = data && photoType(data);
+        if (!data || !contentType) return null;
+        return (await ctx.files.put({ data, contentType, name: `${label}.${contentType.split('/')[1]}` })).id;
+      }
+    } catch {
+      // Not there, too slow, or not a photo: the item is still added, without one.
+    }
+    return null;
   }
 
   async function suggestionsFor(name: string): Promise<ProductSummary[]> {
@@ -252,6 +279,23 @@ export function createLookupService(ctx: CoreContext, products: ReturnType<typeo
         }
       }
       return { match: null, photoFileId: null };
+    },
+
+    /**
+     * Saves the photo at a public https address (a shared link's picture) in
+     * Larder's own files. Null when it isn't public, isn't a photo or can't be had.
+     */
+    savePhotoFromLink: (url: string, label: string) => savePhotoFromLink(url, label),
+
+    /**
+     * Deletes a photo from Larder's files when nothing uses it (no item, brand
+     * or place): a shared link's picture once it's forgotten, say. True if it was deleted.
+     */
+    async forgetPhoto(fileId: string): Promise<boolean> {
+      const [items, brands, places] = await Promise.all([ctx.storage.products.list(), ctx.storage.variants.list(), ctx.storage.places.list()]);
+      if (items.some((p) => p.photoFileIds.includes(fileId)) || brands.some((v) => v.photoFileId === fileId) || places.some((p) => p.photoFileId === fileId)) return false;
+      await ctx.files.remove(fileId);
+      return true;
     },
 
     /** Name an unknown barcode once (or link it to an existing product) so it's instant next time. */

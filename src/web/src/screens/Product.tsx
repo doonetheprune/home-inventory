@@ -2,12 +2,13 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { ProductDetail, StockEntryView } from '@larder/core';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { Icon } from '../icons';
 import { ago, expiryText, longDate, num, qty, shortDate, stockText } from '../format';
 import { useEnabledWebModules } from '../modules';
 import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, useAction, useIsDesktop, usePlaces } from '../ui';
 import { NfcTags } from '../components/NfcTags';
+import { rotatePhoto } from '../components/camera';
 
 const KIND_TEXT: Record<string, string> = { add: 'Added', use: 'Used', move: 'Moved', return: 'Put back', expect: 'Ordered', arrive: 'Arrived', adjust: 'Edited', remove: 'Removed', flat: 'Went flat', charged: 'Charged' };
 
@@ -39,6 +40,19 @@ export function ProductPage() {
     }, 'Photo added');
   }
 
+  /** Turns the item's photo a quarter turn: saved as a new photo in its place. */
+  async function rotateMainPhoto() {
+    const [first, ...rest] = p!.product.photoFileIds;
+    if (!first) return;
+    await run(async () => {
+      const res = await fetch(api.files.url(first), { credentials: 'same-origin' });
+      if (!res.ok) throw new ApiError("Couldn't open the photo to turn it.", res.status, 'not_found');
+      const turned = await rotatePhoto(await res.blob());
+      const { id } = await api.files.upload(new File([turned], 'photo.jpg', { type: 'image/jpeg' }));
+      return api.products.update(p!.product.id, { photoFileIds: [id, ...rest] });
+    }, 'Photo turned');
+  }
+
   return (
     <>
       <Header title={desktop ? p.product.name : ''} back="/stock">
@@ -54,6 +68,11 @@ export function ProductPage() {
             <div className="stack" style={{ gap: 6, minWidth: 0 }}>
               <h2>{p.product.name}</h2>
               {p.product.aliases.length > 0 && <div className="aliases">{p.product.aliases.map((a) => <span key={a} className="pill p-plain">{a}</span>)}</div>}
+              {p.product.photoFileIds[0] && (
+                <button type="button" className="link small" style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy} onClick={() => void rotateMainPhoto()}>
+                  <Icon name="rotate" size="sm" />Rotate photo
+                </button>
+              )}
             </div>
           </div>
 

@@ -14,6 +14,15 @@ declare global {
 
 export type CameraState = 'off' | 'starting' | 'on' | 'error';
 
+/**
+ * The kinds of code Larder reads: products (EAN, UPC), shop item numbers (Code 128)
+ * and its own labels (QR, Data Matrix). Leaving out the rest (ITF, Codabar, Code 39…)
+ * stops a product's barcode, half in view, being misread as one of those.
+ */
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'qr_code', 'data_matrix'];
+/** A code counts once it's read the same way twice in a row, so a blurred frame can't stand in for it. */
+const CONFIRM_WITHIN_MS = 1500;
+
 export function cameraProblem(): string | null {
   if (!window.isSecureContext) return 'Camera scanning needs a secure (https) address. Open Larder through Home Assistant, Nabu Casa, Tailscale or your own HTTPS address, or use a USB scanner or type the code.';
   if (!navigator.mediaDevices?.getUserMedia) return "This browser can't use the camera. Type the code instead, or use a USB scanner.";
@@ -24,6 +33,7 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
   const [state, setState] = useState<CameraState>('off');
   const [error, setError] = useState<string | null>(null);
   const last = useRef<{ code: string; at: number }>({ code: '', at: 0 });
+  const seen = useRef<{ code: string; at: number; times: number }>({ code: '', at: 0, times: 0 });
   const handler = useRef(onCode);
   handler.current = onCode;
 
@@ -47,6 +57,9 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
 
     const emit = (code: string) => {
       const now = Date.now();
+      const s = seen.current;
+      seen.current = code === s.code && now - s.at < CONFIRM_WITHIN_MS ? { code, at: now, times: s.times + 1 } : { code, at: now, times: 1 };
+      if (seen.current.times < 2) return;
       if (code === last.current.code && now - last.current.at < 2500) return;
       last.current = { code, at: now };
       navigator.vibrate?.(40);
@@ -62,8 +75,9 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
           if (stopped) return;
           el.srcObject = stream;
           await el.play();
-          const formats = (await window.BarcodeDetector.getSupportedFormats?.()) ?? undefined;
-          const detector = new window.BarcodeDetector(formats ? { formats } : undefined);
+          const supported = (await window.BarcodeDetector.getSupportedFormats?.()) ?? null;
+          const formats = supported ? FORMATS.filter((f) => supported.includes(f)) : FORMATS;
+          const detector = new window.BarcodeDetector(formats.length ? { formats } : undefined);
           setState('on');
           const tick = async () => {
             if (stopped) return;
@@ -77,8 +91,10 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
           };
           void tick();
         } else {
-          const { BrowserMultiFormatReader } = await import('@zxing/browser');
-          const reader = new BrowserMultiFormatReader();
+          const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import('@zxing/browser'), import('@zxing/library')]);
+          const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+          ]]]));
           const controls = await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, el, (result) => {
             if (result) emit(result.getText());
           });

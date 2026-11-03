@@ -6,7 +6,13 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   reporter: [['list']],
-  use: { baseURL: 'http://localhost:8098', trace: 'retain-on-failure' },
+  use: {
+    baseURL: 'http://localhost:8098',
+    trace: 'retain-on-failure',
+    // A pretend camera (a moving test pattern), already allowed, for Add by photo.
+    permissions: ['camera'],
+    launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+  },
   projects: [
     { name: 'phone', use: { ...devices['Pixel 7'] } },
     { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },

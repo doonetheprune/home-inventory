@@ -34,10 +34,12 @@ from .batteries import BatteryWatcher
 from .const import (
     BATTERIES_MODULE,
     CONF_BATTERY_THRESHOLD,
+    CONF_FORWARD_SHARES,
     CONF_FORWARD_TAGS,
     CONF_TOKEN,
     CONF_URL,
     DEFAULT_BATTERY_THRESHOLD,
+    DEFAULT_FORWARD_SHARES,
     DEFAULT_FORWARD_TAGS,
     DOMAIN,
 )
@@ -47,6 +49,7 @@ from .mcp import LarderMcpView
 from .nfc import async_track_tags
 from .oauth import async_register_views as async_register_oauth_views
 from .services import async_reset_actions, async_setup_actions, async_update_actions
+from .share import async_track_shares
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -101,6 +104,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: LarderConfigEntry) -> bo
 
     if entry.options.get(CONF_FORWARD_TAGS, DEFAULT_FORWARD_TAGS):
         runtime.unsubs.append(async_track_tags(hass, client))
+    if entry.options.get(CONF_FORWARD_SHARES, DEFAULT_FORWARD_SHARES):
+        runtime.unsubs.append(async_track_shares(hass, client))
 
     @callback
     def batteries_follow_module() -> None:

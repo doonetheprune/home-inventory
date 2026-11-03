@@ -1,11 +1,12 @@
 /**
- * Add by photo, and the AI section in Settings. The photo is shrunk on the
- * phone, read by the AI the household chose, then opened on the Add item page
- * to check before saving. A barcode in the photo is read on the phone.
+ * Add by photo, and the AI section in Settings. The photo is taken with a live
+ * camera view (or uploaded), shrunk on the phone, read by the AIs in the
+ * household's order, then opened on the Add item page to check before saving.
+ * A barcode in the photo is read on the phone.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  api, ApiError, defineWebModule, Empty, ErrorBox, Header, Icon, Link, ProductTile, Sheet, Switch, readBarcode, useAction, useAddItem, useQuery, useQueryClient,
+  api, ApiError, defineWebModule, Empty, ErrorBox, Header, Icon, Link, ProductTile, Sheet, Switch, grabFrame, readBarcode, useAction, useAddItem, useCamera, useQuery, useQueryClient,
   type AddItemDraft, type ProductSummary,
 } from '@larder/web-sdk';
 
@@ -71,27 +72,85 @@ function base64(blob: Blob): Promise<string> {
 /* ------------------------------------------------------------------ */
 
 type Step =
-  | { kind: 'pick' }
+  | { kind: 'camera' }
   | { kind: 'reading'; preview: string }
   | { kind: 'known'; preview: string; product: ProductSummary }
   | { kind: 'unsure'; preview: string; draft: AddItemDraft }
   | { kind: 'shop'; preview: string; draft: AddItemDraft; shop: NonNullable<Identified['shop']> }
   | { kind: 'failed'; preview: string | null; message: string };
 
+/**
+ * Keys that take the photo: Space, the volume buttons (like a phone's camera
+ * app, where the phone passes them to the page), and a camera key.
+ */
+const SHUTTER_KEYS = new Set([' ', 'AudioVolumeDown', 'AudioVolumeUp', 'VolumeDown', 'VolumeUp', 'Camera']);
+
+/** The live camera with its shutter, like the barcode scanner's view. */
+function CameraView({ intro, onPhoto, onUpload, onRetry }: { intro: string; onPhoto: (photo: Blob) => void; onUpload: () => void; onRetry: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const cam = useCamera(video, true);
+  const [shooting, setShooting] = useState(false);
+
+  async function shoot() {
+    if (!video.current || cam.state !== 'on' || shooting) return;
+    setShooting(true);
+    try {
+      onPhoto(await grabFrame(video.current));
+    } finally {
+      setShooting(false);
+    }
+  }
+  const shootRef = useRef(shoot);
+  shootRef.current = shoot;
+
+  useEffect(() => {
+    if (cam.state !== 'on') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!SHUTTER_KEYS.has(e.key)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      e.preventDefault();
+      void shootRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cam.state]);
+
+  return (
+    <>
+      <div className="viewfinder" aria-label="Camera">
+        <video ref={video} playsInline muted hidden={cam.state !== 'on'} />
+        {cam.state !== 'on' && (
+          <div className="vf-idle">
+            {cam.state === 'error' ? <Icon name="camera" size="lg" /> : <div className="spinner" />}
+            <p className="small">{cam.error ?? 'Starting the camera…'}</p>
+            {cam.state === 'error' && <button type="button" className="btn small" onClick={onRetry}>Try again</button>}
+          </div>
+        )}
+      </div>
+      <p className="small muted">{intro}</p>
+      <button type="button" className="btn primary block" disabled={cam.state !== 'on' || shooting} onClick={() => void shoot()}><Icon name="camera" />Take photo</button>
+      <button type="button" className="btn block" onClick={onUpload}>Upload a photo</button>
+      {cam.state === 'on' && <p className="small muted" style={{ textAlign: 'center' }}>A volume button or Space takes the photo too, where your phone allows it.</p>}
+    </>
+  );
+}
+
 function AddByPhoto() {
   const status = useStatus();
   const addItem = useAddItem();
   const qc = useQueryClient();
   const { run, busy } = useAction();
-  const [step, setStep] = useState<Step>({ kind: 'pick' });
-  const camera = useRef<HTMLInputElement>(null);
-  const gallery = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<Step>({ kind: 'camera' });
+  // A new key starts the camera afresh (Try again).
+  const [cameraKey, setCameraKey] = useState(0);
+  const upload = useRef<HTMLInputElement>(null);
   const preview = 'preview' in step ? step.preview : null;
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
-  async function read(file: File) {
+  async function read(file: Blob) {
     const shown = URL.createObjectURL(file);
     setStep({ kind: 'reading', preview: shown });
     let photo: Blob;
@@ -149,13 +208,9 @@ function AddByPhoto() {
     addItem({ ...draft, preferredShopIds: [made.id] }, { replace: true });
   }
 
-  const pickers = (
-    <>
-      <input ref={camera} type="file" accept="image/*" capture="environment" hidden data-testid="ai-camera" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void read(f); }} />
-      <input ref={gallery} type="file" accept="image/*" hidden data-testid="ai-gallery" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void read(f); }} />
-    </>
-  );
-  const again = <div className="btnrow"><button type="button" className="btn primary" onClick={() => camera.current?.click()}><Icon name="camera" />Take another</button><button type="button" className="btn" onClick={() => gallery.current?.click()}>Choose a photo</button></div>;
+  // Upload is a plain file picker (the phone's photos or files); the camera is the live view above.
+  const picker = <input ref={upload} type="file" accept="image/*" hidden data-testid="ai-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void read(f); }} />;
+  const again = <div className="btnrow"><button type="button" className="btn primary" onClick={() => setStep({ kind: 'camera' })}><Icon name="camera" />Take another</button><button type="button" className="btn" onClick={() => upload.current?.click()}>Upload a photo</button></div>;
   const photo = preview && <img src={preview} alt="Your photo" style={{ width: '100%', maxHeight: 320, objectFit: 'contain', borderRadius: 16, background: 'var(--surface)' }} />;
 
   if (status.data && !status.data.ready) {
@@ -176,13 +231,15 @@ function AddByPhoto() {
     <>
       <Header title="Add by photo" back="/" />
       <div className="content stack" style={{ maxWidth: 640, gap: 16 }}>
-        {pickers}
-        {step.kind === 'pick' && (
-          <>
-            <p className="muted">Take a photo of the front of the pack. {status.data?.first ? NAMES[status.data.first] : 'The AI'} reads it and fills in the details for you to check.</p>
-            <button type="button" className="btn primary block" onClick={() => camera.current?.click()}><Icon name="camera" />Take a photo</button>
-            <button type="button" className="btn block" onClick={() => gallery.current?.click()}>Choose a photo</button>
-          </>
+        {picker}
+        {step.kind === 'camera' && status.data && (
+          <CameraView
+            key={cameraKey}
+            onRetry={() => setCameraKey((k) => k + 1)}
+            intro={`Fill the frame with the front of the pack. ${status.data.first ? NAMES[status.data.first] : 'The AI'} reads it and fills in the details for you to check.`}
+            onPhoto={(p) => void read(p)}
+            onUpload={() => upload.current?.click()}
+          />
         )}
         {step.kind === 'reading' && (
           <>
@@ -197,7 +254,7 @@ function AddByPhoto() {
               <span className="small muted">Already in Larder</span>
               <div className="row" style={{ gap: 12, alignItems: 'center' }}><ProductTile s={step.product} /><b>{step.product.product.name}</b></div>
               <div className="btnrow">
-                <button type="button" className="btn primary" disabled={busy} onClick={() => void run(() => api.stock.add({ productId: step.product.product.id, quantity: 1 }), `Added 1 ${step.product.product.name}`).then((r) => r && setStep({ kind: 'pick' }))}>Add 1</button>
+                <button type="button" className="btn primary" disabled={busy} onClick={() => void run(() => api.stock.add({ productId: step.product.product.id, quantity: 1 }), `Added 1 ${step.product.product.name}`).then((r) => r && setStep({ kind: 'camera' }))}>Add 1</button>
                 <Link className="btn" to={`/products/${step.product.product.id}`}>Open</Link>
               </div>
             </div>

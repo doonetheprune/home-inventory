@@ -30,7 +30,7 @@ export default defineModule({
 
 | Hook | Use it to |
 |---|---|
-| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup`, `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()` |
+| `ctx.core` | Call the public core API: `products`, `stock`, `places`, `shops`, `categories`, `shopping`, `search`, `lookup` (including `savePhotoFromLink(url, label)`, which saves a picture from a public https address as a Larder photo, and `forgetPhoto(fileId)`, which deletes one that no item, brand or place uses), `home`, `resolve` (find things by name or code), `automation`, `nfc`, `settings`, `history`, `today()`, `now()`. Before fetching an address someone gave, check it with `publicWebAddress(url)` from `@larder/core` (https, a real domain, not the home network) |
 | `ctx.addRoute({ method, path, summary, body?, query?, params?, response?, admin?, handler })` | Add an HTTP route at `/api/v1/modules/<id><path>`. Zod schemas validate it and it appears in the OpenAPI spec. Returns 404 while the module is off. `admin: true` limits it to household admins (403 for members), for routes that change settings or another system such as Home Assistant |
 | `ctx.on(type, handler)` | React to events. `type` can end in `*` (`'stock.*'`). Only runs while the module is on. Errors are logged, never thrown at the core |
 | `ctx.collection<T>(name)` | Your own JSON documents: `get`, `list`, `put`, `remove`. Stored as `<id>:<name>` by whichever storage adapter is in use |
@@ -81,13 +81,17 @@ export default defineWebModule({
   ],
   addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
+  wishListPanels: [Waiting],     // at the top of the Wish list: () => JSX
 });
 ```
 
 - `addActions` are more ways to add things, shown on Home beside Add by name and in the desktop sidebar. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
+- `wishListPanels` are shown at the top of the Wish list (e.g. how many shared links are in Pending).
+- A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
-- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then.
+- `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. `photoFileId` uses a photo already in Larder's files instead (a shared page's picture); `links`, `notes` and `defaultPlaceId` fill in more of the form; `onSaved(productId)` runs once the item is made (e.g. to take it out of Pending).
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
+- `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
 
 Every `modules/*/web.tsx` is picked up at build time and shown only while the module is on. Pages live at `/m/<module id><path>`. The SDK gives you the API client (`api.modules.call(id, method, path, body)`), `useAction` (runs a change, shows errors, refreshes data), UI pieces (`Header`, `Empty`, `Stepper`, `Sheet`, `Seg`, `Switch`, `Pill`, `Icon`, `PlaceSelect`, `Link`…), formatting (`money`, `qty`, `plural`, dates), and for printables `QrCode` (a crisp SVG QR code) and `PrintSetup` (A4 with your margins; only the element with class `print-area` prints, across as many pages as it needs). 
 
@@ -119,4 +123,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `recipes` | Saved recipes, what's missing, scaling by ingredient ratios and named presets, and taking ingredients out of stock after cooking once confirmed |
 | `mqtt` | Publishes stock, sensors and events to an MQTT broker (off by default) |
 | `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
+| `sharing` | Links shared to the Home Assistant app from a phone wait in Pending, named from the page with its picture and price, to go on the wish list or into Larder |
 | `_template` | Example to copy (off by default) |

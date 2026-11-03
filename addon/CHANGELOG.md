@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+- **Quicker scanning:** scan, Add, next. A barcode that's new to Larder is named (from Open Food Facts when it knows it), remembered and added in one press, instead of Save and then Add. The card says plainly whether it's **In Larder** or **New**, where it goes is one line (the shelf you scanned, or its usual place) with **Change** for the odd one, and on a phone it sits at the bottom of the screen so Add is always in reach.
+- **To tidy:** a filter on Stock for things added in a hurry: stock with no place, or no type yet.
+- **The camera holds still while a card is open**, so a second read, or a misread as the phone moves, can't replace what you're entering ("Paused: finish this one first"). A barcode has to read the same way twice before it counts, the camera only looks for the kinds of code Larder uses, and after Add or Skip the same barcode is left alone for a few seconds while it's still in view. Typed codes and USB or Bluetooth scanners still go straight through.
+- **Add by photo opens the camera straight away**, like the barcode scanner, instead of the phone's photo picker (which the Home Assistant app opened for both buttons). **Upload a photo** is its own button for a photo you already have.
+- A volume button takes the photo too, like a phone's camera app, where the phone passes the button to the page. Space does on a keyboard.
+- **Rotate photo:** turn a photo that came out sideways, on the Add item page before saving, or on the item's page afterwards.
+- **Share to Larder:** on Android, share a page from anywhere (a shop's app, Chrome) to **Home Assistant**, and it waits in Larder's new **Pending** list (next to the Wish list), named from the page, with its picture and price. Your phone gets a notification. From Pending, add it to the wish list, or add it to Larder if you've got it (the Add item page, filled in). Either way the item keeps the link and where it came from. Something already in Larder isn't added twice. Turn it off in the integration's options.
+
 ## 0.5.0
 
 - **Add by photo:** take a photo of the pack and Claude or Gemini reads it: the name, brand and size, what it's counted in, its category, roughly how long it keeps, and the shop for a shop's own brand. You check it on the Add item page before saving, and the photo becomes the item's photo. If it's a shop you haven't got, Larder asks whether to add it. A barcode in the photo is read on the phone, and if it's something you already have, Larder offers that instead.

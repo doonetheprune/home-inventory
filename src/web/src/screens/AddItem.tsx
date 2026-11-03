@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { takeDraft, type AddItemDraft } from '../drafts';
+import { rotatePhoto } from '../components/camera';
 import { Icon } from '../icons';
 import { qty, stockText } from '../format';
 import { ProductForm, emptyForm, toPayload, type ProductFormValue } from '../components/ProductForm';
@@ -17,6 +18,9 @@ function fromDraft(d: AddItemDraft): ProductFormValue {
     unit: d.unit || f.unit,
     shelfLifeDays: d.shelfLifeDays ?? null,
     preferredShopIds: d.preferredShopIds ?? [],
+    links: (d.links ?? []).join('\n'),
+    notes: d.notes ?? '',
+    defaultPlaceId: d.defaultPlaceId ?? null,
   };
 }
 
@@ -38,7 +42,10 @@ export function AddItem() {
   const { run, busy } = useAction();
   // Filled in by a module (Add by photo): details to check, plus a photo, brand and barcode to save with it.
   const draft = useMemo(() => takeDraft(params.get('draft')), [params]);
-  const photoUrl = usePhotoUrl(draft?.photo);
+  // The draft's photo, turned round here if it came out sideways.
+  const [photo, setPhoto] = useState<Blob | null>(() => draft?.photo ?? null);
+  const newPhotoUrl = usePhotoUrl(photo);
+  const photoUrl = newPhotoUrl ?? (draft?.photoFileId ? api.files.url(draft.photoFileId) : null);
   const [form, setForm] = useState(() => (draft ? fromDraft(draft) : { ...emptyForm(params.get('name') ?? ''), wish: params.get('wish') === '1' }));
   const [n, setN] = useState(1);
   const [placeId, setPlaceId] = useState<string | null>(null);
@@ -49,16 +56,17 @@ export function AddItem() {
 
   async function save() {
     const created = await run(async () => {
-      const photo = draft?.photo ? (await api.files.upload(new File([draft.photo], 'photo.jpg', { type: draft.photo.type || 'image/jpeg' }))).id : null;
-      const p = await api.products.create({ ...toPayload(form), photoFileIds: photo ? [photo] : [] });
+      const photoId = photo ? (await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }))).id : (draft?.photoFileId ?? null);
+      const p = await api.products.create({ ...toPayload(form), photoFileIds: photoId ? [photoId] : [] });
       if (draft && (draft.brand || draft.barcode)) {
-        const variant = { name: draft.brand || p.name, barcodes: draft.barcode ? [draft.barcode] : [], photoFileId: photo, source: draft.source ?? 'local' };
+        const variant = { name: draft.brand || p.name, barcodes: draft.barcode ? [draft.barcode] : [], photoFileId: photoId, source: draft.source ?? 'local' };
         // A barcode another item has already got is left off rather than losing the new item.
         await api.products.addVariant(p.id, variant).catch((err: unknown) => {
           if (err instanceof ApiError && err.status === 409 && variant.barcodes.length) return api.products.addVariant(p.id, { ...variant, barcodes: [] });
           throw err;
         });
       }
+      if (draft?.onSaved) await draft.onSaved(p.id);
       if (!form.wish && n > 0) await api.stock.add({ productId: p.id, quantity: n, placeId: placeId ?? form.defaultPlaceId });
       return p;
     }, form.wish ? `${form.name} is on the wish list` : `${form.name} added · ${qty(n, form.unit)}`);
@@ -71,11 +79,17 @@ export function AddItem() {
       <div className="content" style={{ maxWidth: 760 }}>
         {draft && (
           <div className="card pad" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {photoUrl && <img src={photoUrl} alt="Your photo" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 12, flex: 'none' }} />}
-            <div className="stack" style={{ gap: 2 }}>
+            {photoUrl && <img src={photoUrl} alt="Your photo" style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 12, flex: 'none', background: 'var(--surface-2, var(--line))' }} />}
+            <div className="stack" style={{ gap: 2, minWidth: 0 }}>
               {draft.brand && <b>{draft.brand}</b>}
               {draft.barcode && <span className="small muted">Barcode {draft.barcode}</span>}
               {draft.note && <span className="small muted">{draft.note}</span>}
+              {photo && (
+                <button type="button" className="link small" style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy}
+                  onClick={() => void rotatePhoto(photo).then(setPhoto, () => undefined)}>
+                  <Icon name="rotate" size="sm" />Rotate photo
+                </button>
+              )}
             </div>
           </div>
         )}

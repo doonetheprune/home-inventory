@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /** Signs in (setting up the household the first time) and loads the example data once. */
 async function signIn(page: Page) {
@@ -62,11 +62,14 @@ test('scans a known barcode by typing it and adds stock', async ({ page }) => {
   await page.getByLabel('Barcode or code').fill('5029053038889');
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  // Plainly already in Larder, and where it goes is a line, not a picker.
+  await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
+  await expect(page.getByText('Goes to')).toBeVisible();
   await page.getByRole('button', { name: /^Add 1 roll/ }).click();
   await expect(page.locator('.toast')).toContainText('Ready for the next scan');
 });
 
-test('names an unknown barcode once and remembers it', async ({ page }, info) => {
+test('adds an unknown barcode in one go, remembers it, and leaves the tidying for later', async ({ page }, info) => {
   await signIn(page);
   await page.goto('/#/scan');
   // Local-only code (letters), so no lookup provider is asked.
@@ -74,14 +77,20 @@ test('names an unknown barcode once and remembers it', async ({ page }, info) =>
   const name = `Chopped tomatoes ${info.project.name}`;
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.locator('.sheet-card .pill', { hasText: 'New' })).toBeVisible();
   await page.getByLabel('What is it?').fill(name);
-  await page.getByRole('button', { name: 'Save and continue' }).click();
-  await expect(page.getByRole('heading', { name })).toBeVisible();
-  // Next time it's instant.
-  await page.getByRole('button', { name: 'Skip' }).click();
+  // One press names it, remembers the barcode and adds the stock; then it's ready for the next scan.
+  await page.getByRole('button', { name: 'Add 1', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 · ${name}. Ready for the next scan.`);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  // Next time it's instant, and known.
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.getByRole('heading', { name })).toBeVisible();
+  await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
+  // No place and no type yet: it waits under To tidy.
+  await page.goto('/#/stock?status=to_tidy');
+  await expect(page.locator('.item-name').filter({ hasText: name })).toBeVisible();
 });
 
 test('shopping: tick, done, gone from the list', async ({ page }) => {
@@ -303,28 +312,46 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
 });
 
-test('adds an item from a photo, offering to add its shop', async ({ page }, info) => {
+/** Stands in for the AI: Larder's own pages, camera and saving are real. */
+async function pretendAi(page: Page, answer: Record<string, unknown>) {
+  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
+  const sent: string[] = [];
+  await page.route('**/api/v1/modules/ai/identify', (r) => {
+    sent.push((r.request().postDataJSON() as { image: string }).image);
+    return r.fulfill({ json: { readable: true, brand: null, unit: 'each', categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', skipped: [], ...answer } });
+  });
+  return sent;
+}
+
+/** The size a photo on the page really is, so turning it can be checked. */
+const size = (img: Locator) => img.evaluate((el) => {
+  const i = el as unknown as { complete: boolean; naturalWidth: number; naturalHeight: number };
+  return i.complete && i.naturalWidth ? `${i.naturalWidth}x${i.naturalHeight}` : '';
+});
+
+test('adds an item from a photo taken with the camera, offering to add its shop', async ({ page }, info) => {
   await signIn(page);
   const name = `Oat drink ${info.project.name}`;
   const shop = `Corner shop ${info.project.name}`;
-  // The AI itself is stood in for: Larder's own pages and saving are real.
-  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
-  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
-  let sent = '';
-  await page.route('**/api/v1/modules/ai/identify', (r) => {
-    sent = (r.request().postDataJSON() as { image: string }).image;
-    return r.fulfill({ json: { readable: true, name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', categoryId: null, shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false }, provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }] } });
+  const sent = await pretendAi(page, {
+    name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false },
+    provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }],
   });
   await page.goto('/');
   await page.getByRole('link', { name: /Add by photo/ }).first().click();
-  await expect(page.getByRole('button', { name: 'Take a photo' })).toBeVisible();
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-  await page.getByTestId('ai-gallery').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+  // Straight into the camera, like the scanner, with uploading as the other way.
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Upload a photo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Take photo' })).toBeEnabled();
+  // A volume button takes the photo, like a phone's camera app.
+  await page.keyboard.press('AudioVolumeDown');
 
   const ask = page.getByRole('dialog', { name: `Add ${shop}?` });
   await expect(ask).toBeVisible();
-  // The photo was shrunk to a JPEG on the phone before it was sent.
-  expect(Buffer.from(sent, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+  // The photo was shrunk to a JPEG on the phone before it was sent, and sent once.
+  expect(sent).toHaveLength(1);
+  expect(Buffer.from(sent[0]!, 'base64').subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
   await ask.getByRole('button', { name: `Add ${shop}` }).click();
 
   await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
@@ -332,10 +359,35 @@ test('adds an item from a photo, offering to add its shop', async ({ page }, inf
   await expect(page.getByText("Read from your photo by Gemini. Claude couldn't read the photo: Your credit balance is too low.")).toBeVisible();
   await expect(page.getByLabel('Other names')).toHaveValue('oat milk');
   await expect(page.getByRole('button', { name: shop })).toHaveClass(/on/);
+
+  // Turning the photo before saving: width and height swap.
+  const draftPhoto = page.getByRole('img', { name: 'Your photo' });
+  await expect.poll(() => size(draftPhoto)).toMatch(/^\d+x\d+$/);
+  const [w, h] = (await size(draftPhoto)).split('x');
+  await page.getByRole('button', { name: 'Rotate photo' }).click();
+  await expect.poll(() => size(draftPhoto)).toBe(`${h}x${w}`);
   await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
 
+  // Saved with the photo as it was turned, and it can be turned again from the item.
   await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
   await expect(page.getByText('Oatly Barista Edition 1 L')).toBeVisible();
+  const itemPhoto = page.getByRole('button', { name: 'Add a photo' }).locator('img');
+  await expect.poll(() => size(itemPhoto)).toBe(`${h}x${w}`);
+  await page.getByRole('button', { name: 'Rotate photo' }).click();
+  await expect(page.locator('.toast')).toContainText('Photo turned');
+  await expect.poll(() => size(itemPhoto)).toBe(`${w}x${h}`);
+});
+
+test('adds from an uploaded photo, and says when the AI can\'t make it out', async ({ page }, info) => {
+  test.skip(info.project.name === 'phone', 'Once is enough');
+  await signIn(page);
+  await pretendAi(page, { readable: false, name: 'Blurry thing' });
+  await page.goto('/#/m/ai/photo');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('ai-upload').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
+  await expect(page.getByText("Claude couldn't make out what this is.")).toBeVisible();
+  await page.getByRole('button', { name: 'Take another' }).click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
 });
 
 test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {
@@ -362,4 +414,88 @@ test('settings set the order the AIs are asked in, and switch one off without lo
   await expect(page.getByText('Saved (…1234)')).toBeVisible();
   await page.getByRole('switch', { name: 'Use Gemini' }).click();
   await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
+});
+
+test('shared links wait in Pending, to go on the wish list or into Larder', async ({ page, isMobile }, info) => {
+  await signIn(page);
+  // As the Home Assistant integration sends them (the shop's page can't be reached here, so the subject names them).
+  const share = (subject: string) => page.evaluate(async (s) => {
+    const res = await fetch('api/v1/modules/sharing/link', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ url: `https://shop.example.invalid/p/${encodeURIComponent(s)}`, subject: s, device: 'Test phone' }) });
+    return res.json();
+  }, subject);
+  const wish = `Garden kneeler ${info.project.name}`;
+  const got = `Bird feeder ${info.project.name}`;
+  await share(wish);
+  await share(got);
+  const named = (name: string) => page.locator('.item-name').filter({ hasText: name });
+  const row = (name: string) => page.locator('.item', { hasText: name });
+
+  // The Wish list says they're waiting, without listing them: they aren't wishes yet.
+  await page.goto('/#/wishlist');
+  await expect(named(wish)).toHaveCount(0);
+  if (!isMobile) await expect(page.locator('.tabbar').getByText('Pending')).toBeVisible();
+  await page.getByText(/shared links? in Pending/).click();
+  await expect(named(wish)).toBeVisible();
+  await expect(named(got)).toBeVisible();
+
+  await row(wish).getByRole('button', { name: 'Add to wish list' }).click();
+  await expect(page.locator('.toast')).toContainText(`${wish} is on the wish list`);
+  await expect(named(wish)).toHaveCount(0);
+
+  // Got it already: the Add item page, filled in; saving takes it out of Pending.
+  await row(got).getByRole('button', { name: 'Add to Larder' }).click();
+  await expect(page.getByText("Say how many you've got and where")).toBeVisible();
+  await expect(page.getByLabel('What is it?')).toHaveValue(got);
+  await page.getByRole('button', { name: `Add ${got.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: got })).toBeVisible();
+  await expect(page.getByText('On the wish list.')).toHaveCount(0);
+  await expect(page.getByText('From a shared link')).toBeVisible();
+
+  await page.goto('/#/m/sharing/');
+  await expect(named(got)).toHaveCount(0);
+  await page.goto('/#/wishlist');
+  await expect(named(wish)).toHaveCount(1);
+});
+
+test('the camera needs a clear read, and holds still while a card is open', async ({ page }) => {
+  // A pretend barcode reader: each frame it "sees" the next code queued by the test, if any.
+  await page.addInitScript(() => {
+    const w = globalThis as unknown as { __frames: string[]; BarcodeDetector: unknown };
+    w.__frames = [];
+    w.BarcodeDetector = class {
+      static async getSupportedFormats() { return ['ean_13', 'qr_code']; }
+      async detect() {
+        const code = w.__frames.shift();
+        return code ? [{ rawValue: code }] : [];
+      }
+    };
+  });
+  const see = (...codes: string[]) => page.evaluate((c) => { (globalThis as unknown as { __frames: string[] }).__frames.push(...c); }, codes);
+  await signIn(page);
+  await page.goto('/#/scan');
+  await page.getByRole('button', { name: 'Start camera' }).click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+
+  // A glimpse in one frame (a misread) isn't taken.
+  await see('5000000000017');
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Looking it up…')).toHaveCount(0);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+
+  // Read the same twice: that's the toilet roll.
+  await see('5029053038889', '5029053038889');
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  await expect(page.getByText('Paused: finish this one first')).toBeVisible();
+
+  // Another barcode while the card is open doesn't replace it.
+  await see('5000157024671', '5000157024671', '5000157024671');
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+
+  // Done with it: still in view, it isn't scanned straight back in.
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await see('5029053038889', '5029053038889', '5029053038889');
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toHaveCount(0);
 });

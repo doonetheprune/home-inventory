@@ -5,6 +5,7 @@ import type { ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { Empty, Header, Loading, PlaceSelect, ProductTile, Sheet, useAction, useIsDesktop, usePlaces } from '../ui';
+import { useEnabledWebModules } from '../modules';
 
 export function WishList() {
   const desktop = useIsDesktop();
@@ -12,6 +13,7 @@ export function WishList() {
   const { run, busy } = useAction();
   const [name, setName] = useState('');
   const [bought, setBought] = useState<ProductSummary | null>(null);
+  const panels = useEnabledWebModules().flatMap((m) => m.wishListPanels ?? []);
 
   return (
     <>
@@ -22,6 +24,7 @@ export function WishList() {
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Something you'd like" aria-label="Wish list item" />
           <button className="btn" disabled={!name.trim() || busy}><Icon name="heart" size="sm" />Add</button>
         </form>
+        {panels.map((Panel, i) => <Panel key={i} />)}
         {isLoading && <Loading />}
         {data && !data.length && <Empty title="Nothing on the wish list"><span className="muted small">Add things you'd like to have, like a power bank for power cuts.</span></Empty>}
         <div className={desktop ? 'cards-2' : 'list'}>

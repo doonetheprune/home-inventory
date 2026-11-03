@@ -3,7 +3,7 @@
 Two parts, used together or separately:
 
 - **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data.
-- **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags and battery linking. The add-on installs and updates it for you, so you don't need HACS.
+- **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags, shared links and battery linking. The add-on installs and updates it for you, so you don't need HACS.
 
 Larder can also make zones for the shops you use, and an automation that sends a shop's list to your phone when you get there ([Shop arrival alerts](#shop-arrival-alerts)).
 
@@ -106,6 +106,7 @@ Larder's changes are fired in Home Assistant as `larder_<type>`:
 | `larder_stock_expired` | An item expires today (once per batch) | same as above |
 | `larder_shopping_purchased` | A shopping trip was ticked off | shopId, items |
 | `larder_nfc_scanned` | A tag was scanned | tagId, device, kind (product, place, unknown), id, name, path |
+| `larder_sharing_pending` | A shared link is waiting in Pending | id, name, url, site |
 | `larder_batteries_low` | A linked device's battery is low | deviceId, device, kind, battery, place, message, level |
 | `larder_shop_locations_found` | A search for a shop's branches that had to wait for the map got its answer | shopId, shop, count, message |
 | `larder_product_created`, `larder_product_updated`, `larder_place_changed`, … | Catalogue changes | ids and names |
@@ -131,6 +132,15 @@ Tags scanned with the Home Assistant companion app are sent to Larder (turn this
 - **A new tag** is offered in Larder for 15 minutes: open the product or place, **NFC tags → Link a tag**, scan it, then **Link**. On Android, Chrome can also read the tag itself ("Read it with this phone").
 
 Tags written by the Home Assistant app keep the same id in both, so a tag works for Larder and for Home Assistant's own tag automations.
+
+## Sharing links to Larder
+
+On an Android phone with the Home Assistant app, share a page from anywhere (a shop's app, Chrome) and pick **Home Assistant**. The integration sends the link to Larder, which reads the page for its name, picture and price and puts it in **Pending** (next to the Wish list). The phone gets a notification, "Added … to Pending.", that opens Pending. From there each goes **on the wish list**, or **into Larder** (the Add item page, filled in, to say how many you've got and where). Either way the item keeps the link and where it came from.
+
+- Something already in Pending or in Larder (the same link, or the same name) isn't added again: the notification says so.
+- Shares without a link are left alone, for your own automations on `mobile_app.share`.
+- Turn it off in the integration's options (**Send links shared to Home Assistant to Larder's Pending list**), or switch off the Sharing module in Larder.
+- The Home Assistant app shares links and text, not photos. For a photo, use **Add by photo** in Larder.
 
 ## Battery linking
 
@@ -196,6 +206,6 @@ Opening the address in a browser shows Home Assistant's login: it's for assistan
 
 ## For developers
 
-- The integration only uses Larder's REST API: `GET /api/v1/automation` (sensors and actions), `GET /api/v1/automation/state`, `POST /api/v1/automation/actions/<id>`, the live events at `GET /api/v1/events`, `POST /api/v1/nfc/scanned` and the battery module's routes. See [api.md](api.md).
+- The integration only uses Larder's REST API: `GET /api/v1/automation` (sensors and actions), `GET /api/v1/automation/state`, `POST /api/v1/automation/actions/<id>`, the live events at `GET /api/v1/events`, `POST /api/v1/nfc/scanned`, the sharing module's `POST /api/v1/modules/sharing/link` and the battery module's routes. See [api.md](api.md).
 - Sensors and actions come from Larder at runtime, so a module adds them with `ctx.addSensor` and `ctx.addAction` ([modules.md](modules.md)) and the integration picks them up. `custom_components/larder/services.yaml` is generated from the same list (`npm run ha:services`; a test fails if it's stale).
 - Tests: `tests/ha` runs Home Assistant's test harness against a real Larder server (`pip install -r requirements-test.txt`, then `python -m pytest`). CI also runs Home Assistant's `hassfest`, HACS validation and the add-on linter.

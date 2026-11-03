@@ -60,6 +60,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
             case 'expected': return s.status.hasExpected;
             case 'wish': return s.product.wish;
             case 'in_stock': return !s.product.wish && s.inStock > 0;
+            // Added in a hurry (scanned and gone): stock with no place, or no type yet.
+            case 'to_tidy': return !s.product.wish && (!s.product.categoryId || (world.entriesByProduct.get(s.product.id) ?? []).some((e) => e.status === 'in_stock' && !e.placeId));
             default: return !s.product.wish;
           }
         })

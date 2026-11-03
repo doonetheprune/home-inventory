@@ -180,6 +180,43 @@ async def test_nfc_tags_are_sent_to_larder(hass: HomeAssistant, larder: Larder, 
     assert event.data["name"] == place["name"]
 
 
+async def test_shared_links_go_to_pending(hass: HomeAssistant, larder: Larder, setup_larder) -> None:
+    """A link shared to the Home Assistant app waits in Larder's Pending, and the phone that shared it is told."""
+    from homeassistant.helpers import device_registry as dr
+    from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+
+    phone = MockConfigEntry(domain="mobile_app", data={"device_name": "Test Pixel", "app_id": "io.homeassistant.companion.android"})
+    phone.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(config_entry_id=phone.entry_id, identifiers={("mobile_app", uuid.uuid4().hex)}, name="Test Pixel")
+    told = async_mock_service(hass, "notify", "mobile_app_test_pixel")
+    name = unique("Garden kneeler")
+    # The page can't be reached here, so the shared subject names it.
+    link = f"https://shop.example.invalid/p/{uuid.uuid4().hex[:8]}?utm_source=app"
+    hass.bus.async_fire("mobile_app.share", {"caller": "android-app://com.example.shop", "subject": name, "url": link, "text": None, "device_id": device.id})
+
+    async def notified():
+        return told
+
+    call = (await wait_for(notified, timeout=15.0))[0]
+    assert call.data["message"] == f"Added {name} to Pending."
+    # Larder here isn't the add-on, so it can't say where it opens inside Home Assistant: no tap link.
+    assert "clickAction" not in call.data["data"]
+
+    pending = await larder.call("GET", "/modules/sharing/pending")
+    item = next(p for p in pending if p["name"] == name)
+    assert item["url"] == link.split("?")[0]
+    assert item["device"] == "Test Pixel"
+    assert item["app"] == "android-app://com.example.shop"
+
+    # Sharing it again says it's already there, rather than adding it twice.
+    hass.bus.async_fire("mobile_app.share", {"caller": "android-app://com.example.shop", "url": link, "device_id": device.id})
+
+    async def twice():
+        return told if len(told) > 1 else None
+
+    assert (await wait_for(twice, timeout=15.0))[1].data["message"] == f"{name} is already in Pending."
+
+
 async def test_batteries_are_watched(hass: HomeAssistant, larder: Larder, setup_larder) -> None:
     """Devices with battery sensors are sent to Larder; a low one gets advice."""
     from homeassistant.helpers import device_registry as dr, entity_registry as er
