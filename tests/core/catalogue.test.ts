@@ -96,6 +96,16 @@ describe('products', () => {
     await expect(core.products.addVariant(q.id, { name: 'Plenty', barcodes: ['5029053038889'] })).rejects.toThrow('already belongs to Toilet roll');
   });
 
+  it('lists every item\'s brand names in one go', async () => {
+    const loo = await core.products.create({ name: 'Toilet roll' });
+    const beans = await core.products.create({ name: 'Baked beans' });
+    await core.products.create({ name: 'Matches' });
+    await core.products.addVariant(loo.id, { name: 'Andrex 9 pack' });
+    await core.products.addVariant(beans.id, { name: 'Heinz Beanz 415 g' });
+    await core.products.addVariant(loo.id, { name: 'Tesco Soft 4 rolls' });
+    expect(await core.products.brandNames()).toEqual({ [loo.id]: ['Andrex 9 pack', 'Tesco Soft 4 rolls'], [beans.id]: ['Heinz Beanz 415 g'] });
+  });
+
   it('filters by status', async () => {
     const low = await core.products.create({ name: 'Low thing', minQuantity: 2 });
     await core.products.create({ name: 'Wished', wish: true });

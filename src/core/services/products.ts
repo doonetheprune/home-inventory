@@ -140,6 +140,14 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       });
     },
 
+    /** Every item's brand and pack names, by item id, oldest first (for matching receipts and orders). */
+    async brandNames(): Promise<Record<string, string[]>> {
+      const out: Record<string, string[]> = {};
+      const all = (await ctx.storage.variants.list()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      for (const v of all) (out[v.productId] ??= []).push(v.name);
+      return out;
+    },
+
     async setOnList(id: string, onShoppingList: boolean): Promise<Product> {
       return service.update(id, { onShoppingList });
     },
