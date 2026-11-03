@@ -6,7 +6,7 @@ Choices made with the user that aren't in the original brief. Newest last within
 
 - **Name:** the project and add-on are called **Larder**.
 - **Look:** its own modern style, not Home Assistant's. Deep cobalt blue accent, cool neutral greys, light and dark themes.
-- **Home screen:** a dashboard with a large Scan button, Add by name and Put away; a "Going shopping?" card with every shop and how much to buy there (it first suggested one shop; see "After the owner tried it"); then use soon, running low, away from home and deliveries on the way.
+- **Home screen:** a dashboard with a large Scan button, Add by name and Put away (on a phone; on a big screen they're in the sidebar, see "After the owner tried it"); a "Going shopping?" card with every shop and how much to buy there (it first suggested one shop; see "After the owner tried it"); then use soon, running low, away from home and deliveries on the way.
 - **"Any shop" items:** each shop has a list of categories it sells (e.g. Tesco: groceries and household; Toolstation: hardware and tools). An item with no preferred shop only appears on the lists of shops that sell its category.
 - **Scanning:** always starts in Add mode. Use, move, put away and look up are picked before scanning.
 - **Wording:** the app says **Places**, not Locations.
@@ -70,6 +70,7 @@ These follow from the decisions above; the owner can change any of them.
 - **Add by photo is part of the scanner** (0.5.2, the owner's ask after using both): **Read with AI** under the camera reads the pack, and a barcode nothing knows has **Read it with AI** on its card. Either way it's the same quick card as a new barcode (check the name, Add 1, next), not the Add item page, so photos fit the scan, Add, next flow; tidying is later. The core scanner doesn't know about the AI module: the module offers a `photoReader` through the web SDK. The Add by photo button stays, and opens the scanner ready.
 - **Receipts add to stock, never make items** (0.5.3, the owner's choice: "only for adding to existing known stock … need to accept might not get matches"). The AI matches lines to the household's items and is told no match is fine; unmatched lines are shown and left out, with **Match** to pick one by hand. What a shop called an item is remembered once added, so vague receipt names ("HNZ BKD BNZ") only need matching once. Ticked by default: lines matched before, and the AI's sure matches; guesses are shown unticked. Added through the shopping list's purchase, so prices paid feed the pricing module like a shopping trip.
 - **No HACS check in CI** (the owner doesn't use HACS: the add-on installs the integration). The integration can still be added to HACS by hand as a custom repository.
+- **Home on a big screen doesn't repeat the sidebar** (0.6.1, the owner's ask): Scan, Add by name and the modules' ways to add (Add by photo, Add from receipt) are at the top of the sidebar, so Home leaves them out and starts with Going shopping. Put away goes too: it's one of Scan's modes. On a phone Home keeps them, since the tab bar only has Scan.
 
 ## Phase 2: how it was built
 

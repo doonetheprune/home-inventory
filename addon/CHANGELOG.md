@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- **A tidier Home on a big screen:** Scan, Add by name, Put away and the other ways to add (Add by photo, Add from receipt) are no longer repeated on Home, since they're at the top of the sidebar (Put away is one of Scan's modes). Home now starts with Going shopping. Phones are unchanged.
+
 ## 0.6.0
 
 - **Online shopping:** Larder can fill your online basket, Tesco first, through a shopping provider running on a computer on your network (the `larder-provider-tesco` service with its Chrome extension). Add it in Settings → **Shopping providers**: where it runs, its token, and how Home Assistant wakes that computer (a magic packet to its MAC address, filled in for you by **Test connection**, or a switch or script) and, optionally, puts it back to sleep afterwards.

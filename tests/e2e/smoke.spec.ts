@@ -18,12 +18,21 @@ async function signIn(page: Page) {
   }
 }
 
-test('home shows what needs attention', async ({ page }) => {
+test('home shows what needs attention', async ({ page, isMobile }) => {
   await signIn(page);
   await expect(page.getByRole('heading', { level: 2 })).toContainText('to use soon');
   await expect(page.getByText('Going shopping?')).toBeVisible();
   await expect(page.getByText('Tesco delivery · 1 item')).toBeVisible();
   await expect(page.getByText('Cordless drill').first()).toBeVisible();
+  // Scan and the ways to add are on Home on a phone; on a big screen they're in the sidebar, so Home doesn't repeat them.
+  const actions = page.locator('.home-grid .actions');
+  if (isMobile) {
+    await expect(actions.getByRole('link', { name: /Add by name/ })).toBeVisible();
+    await expect(actions.getByRole('link', { name: /Put away/ })).toBeVisible();
+  } else {
+    await expect(actions).toBeHidden();
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Add by name' })).toBeVisible();
+  }
 });
 
 test('search finds nicknames and counts with the keyboard', async ({ page, isMobile }) => {

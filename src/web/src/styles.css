@@ -377,10 +377,11 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   .sheet { border-radius: 22px; width: min(560px, calc(100% - 64px)); max-height: 86vh; padding: 20px 24px 24px; }
   .sheet-grip { display: none; }
 
-  .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello hello" "actions shop stats" "soon coming away"; align-items: start; padding-top: 28px; }
+  .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello hello" "shop shop stats" "soon coming away"; align-items: start; padding-top: 28px; }
   .home-grid .hello { grid-area: hello; }
   .home-grid .hello h2 { font-size: 32px; }
-  .home-grid .actions { grid-area: actions; }
+  /* Scan, Add by name and the modules' ways to add are in the sidebar; Put away is one of Scan's modes. */
+  .home-grid .actions { display: none; }
   .home-grid .shopcard { grid-area: shop; align-self: stretch; }
   .home-grid .stats { grid-area: stats; grid-template-columns: 1fr; align-self: stretch; }
   .home-grid .stat { display: flex; align-items: center; gap: 14px; }

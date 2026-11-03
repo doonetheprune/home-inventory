@@ -86,7 +86,7 @@ export default defineWebModule({
 });
 ```
 
-- `addActions` are more ways to add things, shown on Home beside Add by name and in the desktop sidebar. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
+- `addActions` are more ways to add things, shown beside Add by name: on Home on a phone, in the sidebar on a big screen. `path` is one of your pages; `useShown` is a hook that can hide the action (until the module is set up, say).
 - `wishListPanels` are shown at the top of the Wish list (e.g. how many shared links are in Pending).
 - A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
