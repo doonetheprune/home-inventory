@@ -1,11 +1,12 @@
 /**
  * Online shopping in the app: Settings → Shopping providers (where each
- * provider runs, its token, waking its machine, Test connection), and an
- * item's listings and buying rules on its page.
+ * provider runs, its token, waking its machine, Test connection), an item's
+ * listings and buying rules on its page, and planning or filling the basket
+ * beside a shop's shopping list.
  */
 import { useEffect, useState } from 'react';
 import {
-  api, defineWebModule, Icon, Pill, Seg, Sheet, Stepper, Switch, shortDate, useAction, useQuery, useShops, type ProductDetail,
+  api, defineWebModule, Icon, Pill, Seg, Sheet, Stepper, Switch, money, shortDate, useAction, useQuery, useQueryClient, useShops, type ProductDetail, type ShoppingList,
 } from '@larder/web-sdk';
 
 const call = <T,>(method: string, path: string, body?: unknown) => api.modules.call<T>('online-shopping', method, path, body);
@@ -154,6 +155,19 @@ function ProviderForm({ editing, list, onDone }: { editing: ProviderView | null;
   );
 }
 
+function MultibuySetting({ admin }: { admin: boolean }) {
+  const { run } = useAction();
+  const { data } = useQuery({ queryKey: ['online-shopping', 'options'], queryFn: () => call<{ multibuyOverPercent: number }>('GET', '/options') });
+  if (!data) return null;
+  return (
+    <div className="list" style={{ marginTop: 10 }}>
+      <div className="numfield"><span><b>Multibuys may go over by</b><small>Percent over the stock-up amount, to complete a deal like 3 for £2</small></span>
+        {admin ? <Stepper value={data.multibuyOverPercent} onChange={(n) => void run(() => call('PUT', '/options', { multibuyOverPercent: Math.round(n) }))} min={0} max={200} step={5} label="percent" /> : <span>{data.multibuyOverPercent}%</span>}
+      </div>
+    </div>
+  );
+}
+
 function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
   const { data } = useProviders();
   const [editing, setEditing] = useState<ProviderView | 'new' | null>(null);
@@ -167,6 +181,7 @@ function ShoppingProvidersSettings({ admin }: { admin: boolean }) {
       </p>
       {data.providers.length > 0 && <div className="list">{data.providers.map((p) => <ProviderRow key={p.id} p={p} admin={admin} onEdit={() => setEditing(p)} />)}</div>}
       {admin && <button type="button" className="btn small" style={{ marginTop: 10 }} onClick={() => setEditing('new')}><Icon name="plus" size="sm" />Add automated shopping provider</button>}
+      {data.providers.length > 0 && <MultibuySetting admin={admin} />}
       {editing && (
         <Sheet title={editing === 'new' ? 'Add a shopping provider' : `${editing.shopName} provider`} onClose={() => setEditing(null)}>
           <ProviderForm editing={editing === 'new' ? null : editing} list={data} onDone={() => setEditing(null)} />
@@ -308,8 +323,61 @@ function OnlineShoppingPanel({ product }: { product: ProductDetail }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Beside a shop's list: plan or fill the online basket                */
+/* ------------------------------------------------------------------ */
+
+interface Run {
+  id: string; kind: 'plan' | 'fill'; status: 'running' | 'done' | 'failed'; step: string; startedAt: string; finishedAt: string | null;
+  summary: string | null; plan: { total: number; items: unknown[] } | null; error: { code: string; message: string } | null;
+}
+
+function OnlineBasketPanel({ list }: { list: ShoppingList }) {
+  const provider = useProviders().data?.providers.find((p) => p.shopId === list.shop.id);
+  const qc = useQueryClient();
+  const { run, busy } = useAction();
+  const latest = useQuery({
+    queryKey: ['online-shopping', 'latest', list.shop.id],
+    queryFn: () => call<{ run: Run | null }>('GET', `/shops/${list.shop.id}/latest`),
+    enabled: !!provider,
+    // Follow a shop while it runs.
+    refetchInterval: (q) => (q.state.data?.run?.status === 'running' ? 3000 : false),
+  });
+  const r = latest.data?.run ?? null;
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    // A filled basket changes what's expected: refresh lists and items once it's done.
+    if (r && r.status !== 'running') void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'online-shopping' && q.queryKey[0] !== 'auth' });
+  }, [r?.id, r?.status, qc]);
+  if (!provider) return null;
+  const start = (kind: 'plan' | 'fill') => run(() => call<Run>('POST', `/shops/${list.shop.id}/${kind}`), kind === 'plan' ? 'Getting prices…' : 'Filling the basket…').then(() => setShown(true));
+  const running = r?.status === 'running';
+  return (
+    <div className="card pad stack" style={{ gap: 10 }}>
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <span><b>Online at {list.shop.name}</b><br /><span className="small muted">What's low, plus anything on offer at its target price. Stops at the basket: you check it and pay.</span></span>
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn small" disabled={busy || running} onClick={() => void start('plan')}><Icon name="search" size="sm" />Plan basket</button>
+        <button type="button" className="btn small primary" disabled={busy || running} onClick={() => { if (confirm(`Fill your ${list.shop.name} basket now? What goes in is recorded as on the way.`)) void start('fill'); }}><Icon name="cart" size="sm" />Fill basket</button>
+      </div>
+      {r && (
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small">
+            {running ? <><span className="spinner" style={{ display: 'inline-block', width: 12, height: 12, verticalAlign: 'middle' }} /> {r.step}…</>
+              : <>{r.status === 'failed' ? <Pill kind="low">Stopped</Pill> : <Pill kind="ok">{r.kind === 'plan' ? 'Planned' : 'Filled'}</Pill>} {shortDate((r.finishedAt ?? r.startedAt).slice(0, 10))}{r.plan?.items.length ? ` · ${r.plan.items.length} items, about ${money(r.plan.total, 'GBP')}` : ''}</>}
+          </span>
+          {!running && r.summary && (shown ? <pre className="small" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{r.summary}</pre>
+            : <button type="button" className="link small" style={{ alignSelf: 'flex-start' }} onClick={() => setShown(true)}>Show what it found</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default defineWebModule({
   id: 'online-shopping',
   settingsPanels: [ShoppingProvidersSettings],
   productPanels: [OnlineShoppingPanel],
+  shoppingPanels: [OnlineBasketPanel],
 });

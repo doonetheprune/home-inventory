@@ -15,6 +15,8 @@ export function fakeProvider(o: { token?: string; version?: string; host?: { mac
   const state = {
     asleep: false,
     loggedIn: true,
+    /** Milliseconds each answer takes, to look like a real shop. */
+    delayMs: 0,
     version: o.version ?? '1.3',
     capabilities: ['loyalty_prices', 'multibuys', 'slot_booking', 'favourites', 'add_favourites', 'search'],
     listings: new Map<string, FakeListing>(),
@@ -36,6 +38,7 @@ export function fakeProvider(o: { token?: string; version?: string; host?: { mac
     const method = init?.method ?? 'GET';
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined;
     if (state.asleep) throw new TypeError('fetch failed');
+    if (state.delayMs) await new Promise((r) => setTimeout(r, state.delayMs));
     state.log.push({ method, path: url.pathname + url.search, body });
     if ((init?.headers as Record<string, string>)?.authorization !== `Bearer ${token}`) return error(401, 'unauthorised', 'Wrong token.');
     const path = url.pathname;

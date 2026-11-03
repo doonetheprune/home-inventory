@@ -10,6 +10,8 @@ import { OnlineFields } from './items';
 import { itemFeatures } from './items-api';
 import { providerFeatures } from './providers-api';
 import { createServices } from './services';
+import { createShops } from './shop';
+import { shopFeatures } from './shop-api';
 
 export { ProviderView } from './providers';
 export { OnlineFields } from './items';
@@ -25,5 +27,6 @@ export default defineModule({
     const services = createServices(ctx);
     providerFeatures(ctx, services);
     itemFeatures(ctx, services);
+    shopFeatures(ctx, services, createShops(ctx, services));
   },
 });

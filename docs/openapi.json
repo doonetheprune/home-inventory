@@ -1510,6 +1510,484 @@
           "results"
         ]
       },
+      "OnlineShopPlanInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopPlanInput",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "offer",
+                    "low",
+                    "manual"
+                  ]
+                },
+                "have": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "number"
+                },
+                "needed": {
+                  "type": "number"
+                },
+                "unitPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "targetPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "capped": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "listingId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "packs": {
+                        "type": "number"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "cost": {
+                        "type": "number"
+                      },
+                      "deal": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "roundedForDeal": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "listingId",
+                      "name",
+                      "packs",
+                      "quantity",
+                      "cost",
+                      "deal",
+                      "roundedForDeal"
+                    ]
+                  }
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "cost": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "unit",
+                "reason",
+                "have",
+                "level",
+                "needed",
+                "unitPrice",
+                "targetPrice",
+                "capped",
+                "lines",
+                "quantity",
+                "cost"
+              ]
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ]
+            }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ]
+            }
+          },
+          "relink": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingId": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingId",
+                "listingName"
+              ]
+            }
+          },
+          "otherDeals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "text"
+              ]
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "listing_id": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "listing_id",
+                "quantity"
+              ]
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "skipped",
+          "unavailable",
+          "relink",
+          "otherDeals",
+          "lines",
+          "total"
+        ]
+      },
+      "OnlineShopRunInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopRunInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "fill"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "step": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryDate": {
+            "type": "string"
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "default": null,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "reference": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "reservedUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slotId",
+                  "start",
+                  "end",
+                  "reference",
+                  "reservedUntil",
+                  "bookedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnlineShopPlanInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unmatched": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name"
+              ]
+            }
+          },
+          "added": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ]
+            }
+          },
+          "failed": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "error",
+                "message"
+              ]
+            }
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "providerId",
+          "kind",
+          "status",
+          "step",
+          "startedAt",
+          "finishedAt",
+          "deliveryDate",
+          "booking",
+          "plan",
+          "summary",
+          "error"
+        ]
+      },
       "CategoryInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/CategoryInput",
@@ -4883,6 +5361,502 @@
           "finishedAt",
           "unseen",
           "results"
+        ],
+        "additionalProperties": false
+      },
+      "OnlineShopPlan": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopPlan",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "offer",
+                    "low",
+                    "manual"
+                  ]
+                },
+                "have": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "number"
+                },
+                "needed": {
+                  "type": "number"
+                },
+                "unitPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "targetPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "capped": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "listingId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "packs": {
+                        "type": "number"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "cost": {
+                        "type": "number"
+                      },
+                      "deal": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "roundedForDeal": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "listingId",
+                      "name",
+                      "packs",
+                      "quantity",
+                      "cost",
+                      "deal",
+                      "roundedForDeal"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "cost": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "unit",
+                "reason",
+                "have",
+                "level",
+                "needed",
+                "unitPrice",
+                "targetPrice",
+                "capped",
+                "lines",
+                "quantity",
+                "cost"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "why"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "relink": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingId": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingId",
+                "listingName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "otherDeals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "listing_id": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "listing_id",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "skipped",
+          "unavailable",
+          "relink",
+          "otherDeals",
+          "lines",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "OnlineShopRun": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OnlineShopRun",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "fill"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "step": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deliveryDate": {
+            "type": "string"
+          },
+          "booking": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "slotId": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "default": null,
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "reference": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "reservedUntil": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bookedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slotId",
+                  "start",
+                  "end",
+                  "price",
+                  "reference",
+                  "reservedUntil",
+                  "bookedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnlineShopPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unmatched": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "added": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "failed": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName",
+                "error",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "shopId",
+          "shopName",
+          "providerId",
+          "kind",
+          "status",
+          "step",
+          "startedAt",
+          "finishedAt",
+          "deliveryDate",
+          "booking",
+          "plan",
+          "unmatched",
+          "added",
+          "failed",
+          "summary",
+          "error"
         ],
         "additionalProperties": false
       },
@@ -18438,6 +19412,230 @@
                   },
                   "required": [
                     "photoFileIds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/options": {
+      "get": {
+        "summary": "Household settings for online shopping",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "multibuyOverPercent": {
+                      "default": 25,
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200
+                    }
+                  },
+                  "required": [
+                    "multibuyOverPercent"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Change household settings for online shopping (admin)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "multibuyOverPercent: how far over the stock-up amount rounding up to complete a multibuy may go (default 25).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "multibuyOverPercent": {
+                    "default": 25,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "multibuyOverPercent": {
+                      "default": 25,
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 200
+                    }
+                  },
+                  "required": [
+                    "multibuyOverPercent"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/plan": {
+      "post": {
+        "summary": "Work out the basket at a shop without adding anything (answers at once; follow it with GET /runs/:id)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/fill": {
+      "post": {
+        "summary": "Plan and fill the basket at a shop (answers at once; follow it with GET /runs/:id)",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "description": "What goes in is recorded as expected deliveries from \"<shop> delivery\". Stops at the basket: nobody pays.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/runs/{id}": {
+      "get": {
+        "summary": "How a shop is going, or how it went",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineShopRun"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/online-shopping/shops/{shopId}/latest": {
+      "get": {
+        "summary": "The latest shop at a shop, if any",
+        "tags": [
+          "Module: online-shopping"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shopId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/OnlineShopRun"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "run"
                   ],
                   "additionalProperties": false
                 }
