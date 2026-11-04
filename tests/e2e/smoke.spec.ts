@@ -377,13 +377,14 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
 });
 
-/** Stands in for the AI: Larder's own pages, camera and saving are real. */
-async function pretendAi(page: Page, answer: Record<string, unknown>) {
+/** Stands in for the AI: Larder's own pages, camera and saving are real. It answers once `until` settles, if given. */
+async function pretendAi(page: Page, answer: Record<string, unknown>, until?: Promise<unknown>) {
   const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
   await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
   const sent: string[] = [];
-  await page.route('**/api/v1/modules/ai/identify', (r) => {
+  await page.route('**/api/v1/modules/ai/identify', async (r) => {
     sent.push((r.request().postDataJSON() as { image: string }).image);
+    await until;
     return r.fulfill({ json: { readable: true, brand: null, unit: 'each', categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', skipped: [], ...answer } });
   });
   return sent;
@@ -395,21 +396,28 @@ const size = (img: Locator) => img.evaluate((el) => {
   return i.complete && i.naturalWidth ? `${i.naturalWidth}x${i.naturalHeight}` : '';
 });
 
-test('Add by photo is the scanner: Read with AI names it, one press adds it, and its photo can be turned later', async ({ page }, info) => {
+test('Add by photo is the scanner: Take photo names it, one press adds it, and its photo can be turned later', async ({ page }, info) => {
   await signIn(page);
   const name = `Oat drink ${info.project.name}`;
   const shop = `Corner shop ${info.project.name}`;
+  let answer = () => {};
   const sent = await pretendAi(page, {
     name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false },
     provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }],
-  });
+  }, new Promise<void>((ok) => { answer = ok; }));
   await page.goto('/');
   await page.getByRole('link', { name: /Add by photo/ }).first().click();
-  // The scanner, camera on, with Read with AI under it.
+  // The scanner, camera on, with Take photo under it.
   await expect(page.locator('.viewfinder video')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Read with AI' })).toBeVisible();
-  // A volume button reads it, like a camera's shutter.
-  await page.keyboard.press('AudioVolumeDown');
+  const shutter = page.getByRole('button', { name: 'Take photo' });
+  await expect(shutter).toBeEnabled();
+  // Pressed twice in a hurry: one photo, held still while the AI reads it, and saying so.
+  await shutter.dblclick();
+  await expect(page.getByRole('img', { name: 'The photo you took' })).toBeVisible();
+  await expect(page.locator('.vf-chip', { hasText: 'Reading the photo…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reading the photo…' })).toBeDisabled();
+  await expect(page.getByText('Reading the photo with Claude…')).toBeVisible();
+  answer();
 
   const card = page.locator('.sheet-card');
   await expect(card.getByText("Read from the photo by Gemini. Claude couldn't read the photo: Your credit balance is too low. Check the name.")).toBeVisible();
@@ -423,6 +431,15 @@ test('Add by photo is the scanner: Read with AI names it, one press adds it, and
   await expect(page.locator('.toast')).toContainText(`${shop} added to your shops`);
   await card.getByRole('button', { name: 'Add 1', exact: true }).click();
   await expect(page.locator('.toast')).toContainText(`Added 1 carton · ${name}. Ready for the next scan.`);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  // Back to the live camera, ready for the next.
+  await expect(page.getByRole('img', { name: 'The photo you took' })).toHaveCount(0);
+  await expect(shutter).toBeEnabled();
+  // A volume button takes it too, like a camera's shutter.
+  await page.keyboard.press('AudioVolumeDown');
+  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  expect(sent).toHaveLength(2);
+  await card.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
 
   // It's in Larder with its photo, brand and shop, waiting to be tidied (no place yet); the photo can be turned there.

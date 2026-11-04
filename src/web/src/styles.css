@@ -283,6 +283,9 @@ textarea.input { min-height: 84px; resize: vertical; }
 }
 .viewfinder { position: relative; border-radius: 22px; overflow: hidden; aspect-ratio: 4 / 3.4; max-width: 100%; background: var(--cam); color: var(--cam-ink); display: grid; place-items: center; }
 .viewfinder video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* The photo just taken, held still over the live view (with a flash) while the AI reads it. */
+.viewfinder .vf-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: shutter .4s ease-out; }
+@keyframes shutter { from { filter: brightness(2.5); } }
 .viewfinder .frame-corners { position: absolute; inset: 18% 14%; border-radius: 18px; pointer-events: none;
   background: linear-gradient(var(--cam-ink), var(--cam-ink)) top left / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) top left / 3px 28px no-repeat,
     linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) top right / 3px 28px no-repeat,
@@ -290,7 +293,7 @@ textarea.input { min-height: 84px; resize: vertical; }
     linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 28px 3px no-repeat, linear-gradient(var(--cam-ink), var(--cam-ink)) bottom right / 3px 28px no-repeat; }
 .viewfinder .line { position: absolute; left: 16%; right: 16%; height: 2px; top: 50%; background: #7db4ff; box-shadow: 0 0 14px 2px #7db4ff; animation: sweep 2.4s ease-in-out infinite alternate; pointer-events: none; }
 @keyframes sweep { from { top: 24%; } to { top: 76%; } }
-@media (prefers-reduced-motion: reduce) { .viewfinder .line, .spinner { animation: none; } .toast { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .viewfinder .line, .viewfinder .vf-still, .spinner { animation: none; } .toast { transition: none; } }
 .vf-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; gap: 8px; z-index: 2; }
 .vf-chip { background: rgb(0 0 0 / .5); backdrop-filter: blur(6px); color: var(--cam-ink); padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; border: 0; }
 .vf-idle { position: relative; z-index: 1; display: grid; justify-items: center; gap: 12px; text-align: center; padding: 20px; max-width: 320px; }

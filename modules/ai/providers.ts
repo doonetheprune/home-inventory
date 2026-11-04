@@ -73,7 +73,7 @@ export function instructions(categories: string[]): string {
   ].join('\n');
 }
 
-/** What a pack is: the scanner's Read with AI. */
+/** What a pack is: the scanner's Take photo. */
 export const packTask = (categories: string[]): Task<Reading> => ({ prompt: instructions(categories), schema: Reading, gemini: GEMINI_SCHEMA, effort: 'low' });
 
 export interface Provider {

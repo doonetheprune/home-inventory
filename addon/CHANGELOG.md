@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- **Add by photo has a shutter again:** in the scanner's Add mode, a big **Take photo** button sits under the camera, as on Add from receipt, instead of the small **Read with AI** button that was easy to miss. Barcodes still scan by themselves. A volume button or Space takes the photo too.
+- **You can see it's been taken:** the photo stays still in the camera view while Claude or Gemini reads it, and the camera and the card both say "Reading the photo with Claude…" instead of "Paused: finish this one first" and "Looking it up…". The live camera comes back after **Add 1** or **Skip**.
+- **A double tap sends one photo**, not two.
+
 ## 0.7.1
 
 - **Larder Automations:** online shopping now goes through Larder Automations, the hub app on your Mac that runs each shop's automation (Tesco first). Set it up once in Settings → **Larder Automations**: the Mac's address and the hub's token (both from its menu), and how Home Assistant wakes the Mac and puts it back to sleep. **Test connection** shows the automations it runs and whether its Chrome extension is connected, and fills in waking from the Mac's network card. Then **Link to a shop** for each automation (Tesco to your Tesco). A provider not run by Larder Automations can still be added at its own address under **Online shops**.

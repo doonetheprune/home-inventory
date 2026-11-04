@@ -1,6 +1,6 @@
 /**
- * The AI section in Settings, the photo reading behind the scanner's "Read with
- * AI", and Add from receipt: a photo is shrunk on the phone and read by the AIs
+ * The AI section in Settings, the photo reading behind the scanner's "Take
+ * photo", and Add from receipt: a photo is shrunk on the phone and read by the AIs
  * in the household's order. Add by photo (on Home) opens the scanner with the
  * camera on.
  */
@@ -70,7 +70,7 @@ function base64(blob: Blob): Promise<string> {
 /* Reading photos for the scanner                                      */
 /* ------------------------------------------------------------------ */
 
-/** The scanner's "Read with AI": the photo, shrunk here, goes to the AIs in the household's order. */
+/** The scanner's Take photo: the photo, shrunk here, goes to the AIs in the household's order. */
 const photoReader: PhotoReader = {
   async status() {
     const s = await call<Status>('GET', '/');
@@ -86,7 +86,7 @@ const photoReader: PhotoReader = {
   },
 };
 
-/** Add by photo (from Home) is the scanner with the camera on: Read with AI is under it. */
+/** Add by photo (from Home) is the scanner with the camera on: Take photo is under it. */
 function AddByPhoto() {
   const navigate = useNavigate();
   useEffect(() => {
