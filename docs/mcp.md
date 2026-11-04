@@ -101,6 +101,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `plan_basket` / `fill_basket` / `shop_status` | What's low or on offer at its target price, planned or put in the online basket and recorded as on the way; how it's going (online shopping module) |
 | `provider_status` / `get_product` / `link_listing` / `set_buying_rules` | The online shop's provider, its products, linking them to items, and the target price, on-offer amount and pack rule (online shopping module) |
 | `sync_favourites` / `add_to_favourites` | Shop favourites into Pending; adding one by code or link (online shopping module) |
+| `check_order_emails` | Look in Gmail now for shops' order and delivery emails, when Order emails is set up; answers what was found and done (email module) |
 
 Modules add their own tools (`ctx.addTool`, see [modules.md](modules.md)). Switched-off modules' tools disappear.
 
@@ -120,7 +121,7 @@ When an assistant connects, Larder also tells it how the house works: names not 
 
 **Pending orders:** a filled online basket (the online shopping module) is a pending order until it's checked out: it counts towards stock, so it isn't ordered twice, but it isn't on the way. When the order email's automation calls `add_expected` for something in a pending order from the same shop (the same source, or the same first word: "Tesco" confirms "Tesco delivery"), that's confirmed rather than added again. What's left pending afterwards was probably taken out of the basket: confirm or remove it.
 
-The brief's separate "read order emails" automation (not part of Larder) can call `add_expected` with the shop code from the email, for example Toolstation's item number. When Larder knows that code (on the item's brand, under Brands & barcodes), it finds the item; when it doesn't, the tool says so, and the automation can `search`, then `add_item` with `shop` and `shop_code` so it's matched next time.
+Larder can read order emails from Gmail itself (Settings → Order emails, the `email` module); `check_order_emails` checks now. Without that, the brief's separate "read order emails" automation (a Claude scheduled task, say; the Order emails page gives a prompt for one) can call `add_expected` with the shop code from the email, for example Toolstation's item number. When Larder knows that code (on the item's brand, under Brands & barcodes), it finds the item; when it doesn't, the tool says so, and the automation can `search`, then `add_item` with `shop` and `shop_code` so it's matched next time.
 
 ## Tested with
 

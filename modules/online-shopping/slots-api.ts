@@ -35,7 +35,7 @@ export function slotFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
     const b = await (await s.ready(provider)).book(slotId);
     const info = BookingInfo.parse({ slotId, start: known.start, end: known.end, price: known.price, reference: b.booking_reference, reservedUntil: b.reserved_until, bookedAt: ctx.core.now() });
     await shops.setBooking(provider.id, info);
-    ctx.publish('online-shopping.slot_booked', { shop: await providers.shopName(provider.shopId), slot: slotText(info), reference: info.reference, reserved_until: info.reservedUntil });
+    ctx.publish('online-shopping.slot_booked', { shop: await providers.shopName(provider.shopId), slot: slotText(info), start: info.start, end: info.end, reference: info.reference, reserved_until: info.reservedUntil });
     return info;
   }
 

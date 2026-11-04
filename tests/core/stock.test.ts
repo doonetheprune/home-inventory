@@ -153,6 +153,17 @@ describe('stock', () => {
     expect(b.nextExpiry).toBe('2028-09-27'); // 700 days on, 2028 is a leap year
   });
 
+  it('arrives only what was due by a date, so a later order from the same shop stays on the way', async () => {
+    const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll' });
+    const beans = await core.products.create({ name: 'Beans', unit: 'tin' });
+    await core.stock.expect({ productId: loo.id, quantity: 9, source: 'Tesco delivery', eta: '2026-11-06' });
+    await core.stock.expect({ productId: beans.id, quantity: 4, source: 'Tesco delivery', eta: '2026-11-13' });
+    expect((await core.stock.arrive({ source: 'Tesco delivery', dueBy: '2026-11-06' })).arrived).toBe(1);
+    expect((await core.products.summary(loo.id)).inStock).toBe(9);
+    expect((await core.products.summary(beans.id)).expected).toBe(4);
+    await expect(core.stock.arrive({ source: 'Tesco delivery', dueBy: '2026-11-06' })).rejects.toThrow('Nothing is expected from Tesco delivery.');
+  });
+
   it('marks part of a delivery as arrived when scanning items', async () => {
     const tins = await core.products.create({ name: 'Tomatoes', unit: 'tin' });
     await core.stock.expect({ productId: tins.id, quantity: 4, source: 'Tesco delivery' });

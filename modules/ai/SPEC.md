@@ -26,6 +26,14 @@ Name things from a photo of the pack, in the barcode scanner, and add what's on 
 - **The same receipt twice:** a receipt with the same shop, date and total as one added before says so, and nothing is ticked.
 - **Assistants (MCP):** `add_receipt` adds a receipt the assistant has read itself, by item names, with prices and each line's text (remembered as above). If any line isn't an item, nothing is added and the error says which, so the assistant can leave them out. A shop Larder doesn't have doesn't stop it.
 
+## Order emails
+
+The email module (Settings → Order emails) finds shops' order confirmations in Gmail; this module reads them. It offers a reader to other modules as `ai.order-reader` (`ctx.offer`; the shape is in `modules/_shared/order-email.ts`), so neither imports the other.
+
+- **Reading:** the AI is sent the email as text (marked off as something to read, never instructions; at most 40,000 characters), with the same numbered household items and remembered names as a receipt. It answers the order number, the delivery day and slot (HH:MM to HH:MM), and each line: its item or none, how much of the item's unit, whether it's sure, whether it's **coming** (a substitute too) or **unavailable**, and the day it comes when that isn't with the rest.
+- **Remembered names** are shared with receipts: matching a line by hand on the Order emails page remembers it for that shop, as a receipt does.
+- Nothing is changed here: the email module decides what to do with the answer.
+
 ## Routes
 
 | Route | |
@@ -41,7 +49,7 @@ Name things from a photo of the pack, in the barcode scanner, and add what's on 
 
 - **Claude:** the official Anthropic TypeScript SDK (`@anthropic-ai/sdk`, allowed for this module in `tests/architecture.test.ts`), with structured output (a JSON schema from the module's zod schema) and, on models that offer it, low effort for packs and medium for receipts (matching lines takes more thought).
 - **Gemini:** Google's REST API (`generateContent` with a response schema), key in the `x-goog-api-key` header, never in the address.
-- Both go through `ctx.fetch`, with a 60 second limit. Errors say what to do: a refused key points to Settings → AI, a busy service says to try again.
+- A photo goes as an image; an order email as text before the request. Both go through `ctx.fetch`, with a 60 second limit. Errors say what to do: a refused key points to Settings → AI, a busy service says to try again.
 
 ## Data
 

@@ -46,6 +46,7 @@ export default defineModule({
 | `ctx.core.resolve.among(what, ref, list)` | Find one of your own things (`{ name }`) by name with the core's strict rules: exact, or every word; anything looser is a "did you mean" error, never a guess |
 | `ctx.core.products.updateField(id, key, change)` | Change your field on a product (`product.fields[key]`) from its current value. Use it rather than reading then `update`-ing, so two changes at once both count. `change` must not call Larder |
 | `ctx.publish(type, data)` | Publish your own event, e.g. `batteries.low`. The type must start with your module id and a dot. It reaches the web app, other modules and Home Assistant (as `larder_batteries_low`) |
+| `ctx.offer(name, value)`, `ctx.offered<T>(fullName)` | Offer a function (or an object of them) to other modules, and use one another module offers, without either importing the other. `offer("order-reader", reader)` in the `ai` module is `offered("ai.order-reader")` elsewhere: undefined while that module is off, so check. Describe the shape in `modules/_shared`. Ask for it when it's needed, not in `setup` (modules set up in turn). The email module reads order confirmations this way |
 | `ctx.log.info/warn/error` | Log with the module's name |
 
 ### Events
@@ -127,4 +128,5 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | `ai` | Add by photo: Claude or Gemini, with the household's own key, reads the pack and fills in Add item |
 | `sharing` | Links shared to the Home Assistant app from a phone wait in Pending, named from the page with its picture and price, to go on the wish list or into Larder |
 | `online-shopping` | Fills an online basket (Tesco first) from what's low or on offer through a shopping provider on the network, books delivery slots, and brings shop favourites into Pending |
+| `email` | Reads shops' order emails from Gmail (read-only, the household's own Google Cloud client, signed in through Home Assistant): order confirmations, read by the AI module, put what's coming on its way; delivered emails mark it arrived. Checks often after an order and around a delivery |
 | `_template` | Example to copy (off by default) |

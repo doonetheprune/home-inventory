@@ -405,7 +405,7 @@ function ProviderSettings({ id, s, status, position, admin }: { id: ProviderId; 
       <div className="toggle">
         <span className="grow"><b>{position + 1}. {name}</b><br /><span className="small muted">{state}</span></span>
         {admin && position > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => void save({ order: [id] }, `${name} is asked first`)}>Ask first</button>}
-        <Switch checked={s.enabled} label={`Use ${name}`} onChange={(v) => { if (admin && !busy) void save({ [id]: { enabled: v } }, v ? `${name} is on` : `${name} is off for now. Its key and model are kept.`); }} />
+        <Switch checked={s.enabled} label={`Use ${name}`} disabled={!admin || busy} onChange={(v) => void save({ [id]: { enabled: v } }, v ? `${name} is on` : `${name} is off for now. Its key and model are kept.`)} />
       </div>
       <div className="numfield" style={{ flexWrap: 'wrap', opacity: s.enabled ? 1 : 0.6 }}>
         <span><b>{name} API key</b><small>{s.keySet ? (s.keyFrom === 'env' ? `Set on the server (${s.keyHint})` : `Saved (${s.keyHint})`) : <>Get one at <a href={KEY_SITES[id].url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{KEY_SITES[id].text}</a></>}</small></span>

@@ -80,6 +80,17 @@ export interface ModuleContext {
   publish(type: string, data: Record<string, unknown>): void;
   /** Runs only while the module is switched on. `type` can end in * to match a prefix. */
   on(type: string, handler: (event: LarderEvent) => void | Promise<void>): void;
+  /**
+   * Offers something to other modules (a function, or an object of them) under this module's id
+   * and a name: offer("order-reader", reader) in the "ai" module is "ai.order-reader" to the others.
+   * Describe its shape in modules/_shared, so neither module imports the other.
+   */
+  offer(name: string, value: unknown): void;
+  /**
+   * What another module offers, e.g. offered<OrderReader>("ai.order-reader"), or undefined while that
+   * module is off (or doesn't offer it). Ask when it's needed, not during setup: modules set up in turn.
+   */
+  offered<T>(fullName: string): T | undefined;
   log: ModuleLogger;
 }
 
@@ -157,6 +168,7 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
   const providerOwner = new Map<string, string>();
   const log = options.logger ?? (() => {});
   const contexts = new Map<string, ModuleContext>();
+  const offers = new Map<string, { owner: string; value: unknown }>();
 
   const enabled = (id: string) => {
     if (locked.has(id)) return false;
@@ -252,6 +264,13 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
               if (!enabled(def.id) || !match(event.type)) return;
               Promise.resolve(handler(event)).catch((err: unknown) => moduleLog.error('Event handler failed', { error: String(err), event: event.type }));
             });
+          },
+          offer(name, value) {
+            offers.set(`${def.id}.${name}`, { owner: def.id, value });
+          },
+          offered<T>(fullName: string) {
+            const o = offers.get(fullName);
+            return o && enabled(o.owner) ? (o.value as T) : undefined;
           },
           log: moduleLog,
         };

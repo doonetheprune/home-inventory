@@ -514,3 +514,27 @@ async def test_actions_from_two_larders_are_combined(hass: HomeAssistant) -> Non
     async_reset_actions(hass, "two")
     assert not hass.services.has_service(DOMAIN, "batteries_replaced")
     assert hass.services.has_service(DOMAIN, "add_stock")
+
+
+async def test_gmail_sign_in_comes_back_through_home_assistant(hass: HomeAssistant, aiohttp_client, larder: Larder, setup_larder) -> None:
+    """Google sends the person to /api/larder/gmail/callback, with no Home Assistant login; it goes to Larder, which says how it went."""
+    from urllib.parse import parse_qs, urlparse
+
+    client = await aiohttp_client(hass.http.app)
+    await larder.call("PUT", "/modules/email/gmail", {"address": "https://abcd1234.ui.nabu.casa", "clientId": "123-abc.apps.googleusercontent.com", "clientSecret": "GOCSPX-test"})
+    start = await larder.call("POST", "/modules/email/gmail/start", {})
+    query = parse_qs(urlparse(start["url"]).query)
+    assert query["redirect_uri"] == ["https://abcd1234.ui.nabu.casa/api/larder/gmail/callback"]
+    state = query["state"][0]
+
+    # The person said no at Google: Larder says so, and the page passes it on.
+    resp = await client.get("/api/larder/gmail/callback", params={"state": state, "error": "access_denied"})
+    assert resp.status == 400
+    page = await resp.text()
+    assert "Gmail wasn" in page and "Google says it wasn" in page
+
+    # A sign-in is used once; one Larder didn't start is turned away.
+    for params in ({"state": state, "code": "4/abc"}, {"state": "made-up", "code": "4/abc"}):
+        resp = await client.get("/api/larder/gmail/callback", params=params)
+        assert resp.status == 400
+        assert "expired or was already used" in await resp.text()

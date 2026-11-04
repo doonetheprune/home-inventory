@@ -8,7 +8,8 @@
  */
 import { z } from 'zod';
 import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
-import { claude, gemini, packTask, PROVIDER_NAMES, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
+import { claude, gemini, packTask, PROVIDER_NAMES, type Input, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
+import { orderReader } from './orders';
 import { receipts, type Asked } from './receipts';
 
 const ProviderName = z.enum(['claude', 'gemini']);
@@ -202,26 +203,29 @@ export default defineModule({
       },
     });
 
+    /** Asks the AIs in the household's order about a photo (base64), until one answers. */
+    const ask = <T>(image: string, task: () => Promise<Task<T>>): Promise<Asked<T>> => askAbout(() => ({ photo: photoFrom(image) }), task, 'photo');
+
     /**
-     * Asks the AIs in the household's order about a photo (base64), until one answers. The task is
-     * made only once the photo has passed its checks, so nothing is looked up for a bad one.
+     * Asks the AIs in the household's order about a photo or some text, until one answers. The task is
+     * made only once the input has passed its checks, so nothing is looked up for a bad photo.
      */
-    async function ask<T>(image: string, task: () => Promise<Task<T>>): Promise<Asked<T>> {
+    async function askAbout<T>(input: () => Input, task: () => Promise<Task<T>>, what: 'photo' | 'email'): Promise<Asked<T>> {
       const s = await saved();
       const use = usable(s);
-      if (!use.length) throw new LarderError('Switch on Claude or Gemini in Settings → AI, with an API key, to read photos.', 409, 'ai_not_set_up');
-      const photo = photoFrom(image);
+      if (!use.length) throw new LarderError(`Switch on Claude or Gemini in Settings → AI, with an API key, to read ${what === 'photo' ? 'photos' : 'order emails'}.`, 409, 'ai_not_set_up');
+      const given = input();
       const asking = await task();
       const skipped: Array<{ provider: ProviderId; message: string; error: LarderError }> = [];
       for (const p of use) {
         try {
           const model = await modelFor(p, keyFor(s, p)!);
-          const answer = await providers[p].read(keyFor(s, p)!, model, photo, asking);
+          const answer = await providers[p].read(keyFor(s, p)!, model, given, asking);
           return { answer, provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
         } catch (err) {
           // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
           if (!(err instanceof LarderError)) throw err;
-          ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read a photo`, { message: err.message });
+          ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read ${what === 'email' ? 'an email' : 'a photo'}`, { message: err.message });
           skipped.push({ provider: p, message: err.message, error: err });
         }
       }
@@ -239,6 +243,10 @@ export default defineModule({
     }
 
     receipts(ctx, { ask, shopFor });
+    ctx.offer('order-reader', orderReader(ctx, {
+      ready: async () => usable(await saved()).length > 0,
+      ask: (text, task) => askAbout(() => ({ text }), task, 'email'),
+    }));
 
     /** The model to use: the chosen one, or the default (saved, so Settings shows it). */
     async function modelFor(p: ProviderId, key: string): Promise<string> {

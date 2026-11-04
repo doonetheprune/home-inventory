@@ -79,8 +79,8 @@ const pence = (n: number) => Math.round(n * 100) / 100;
 const cap = (s: string | null | undefined, n: number) => (s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const quote = (s: string) => JSON.stringify(s);
 
-/** The request that goes with the photo: what to read, and the household's items to match against. */
-export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: string | null) => string | null): string {
+/** The household's items, numbered for the AI, and the lines it matched before (shared by receipts and order emails). */
+export function householdItems(known: Known[], learnt: Learnt[], shopName: (id: string | null) => string | null): string[] {
   const number = new Map(known.map((k, i) => [k.id, i + 1]));
   const items = known.map((k, i) => {
     const more = [k.aliases.length ? `also ${k.aliases.slice(0, 4).join(', ')}` : '', k.brands.length ? `brands ${k.brands.slice(0, 3).map((b) => b.slice(0, 60)).join('; ')}` : ''].filter(Boolean);
@@ -93,6 +93,15 @@ export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: s
       const k = known[number.get(l.productId)! - 1]!;
       return `${quote(l.text)}${shop ? ` at ${shop}` : ''} is item ${number.get(l.productId)}, ${l.each} ${k.unit} for each one bought`;
     });
+  return [
+    'The household\'s items:',
+    ...(items.length ? items : ['(none yet)']),
+    ...(before.length ? ['', 'Lines this household matched before (match the same text the same way):', ...before] : []),
+  ];
+}
+
+/** The request that goes with the photo: what to read, and the household's items to match against. */
+export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: string | null) => string | null): string {
   return [
     'This is a photo of a till receipt or an online order. List what was bought, and match each line to one of the household\'s items listed below. Fill in each field:',
     '- shop: the shop, e.g. "Tesco", "Sainsbury\'s", "Aldi", "Screwfix". Null if it is not shown.',
@@ -107,9 +116,7 @@ export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: s
     '  - sure: true if it is certainly that item, false if it might be something else.',
     '- readable: false if the photo is not a receipt or order, or cannot be read. Then give what you can.',
     '',
-    'The household\'s items:',
-    ...(items.length ? items : ['(none yet)']),
-    ...(before.length ? ['', 'Lines this household matched before (match the same text the same way):', ...before] : []),
+    ...householdItems(known, learnt, shopName),
   ].join('\n');
 }
 
@@ -176,13 +183,68 @@ export interface ReceiptDeps {
   shopFor(name: string | null): Promise<Receipt['shop']>;
 }
 
-export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
+/**
+ * What the household has and how its shops name things: the items the AI is shown, the
+ * lines matched before (`ai:receipt-names`), and remembering a new one. Receipts and order emails share it.
+ */
+export function itemMemory(ctx: ModuleContext) {
   const names = ctx.collection<Learnt>('receipt-names');
-  const seen = ctx.collection<{ at: string; lines: number }>('receipts');
+  return {
+    async learntNames(): Promise<Learnt[]> {
+      return (await names.list()).map((x) => x.data).sort((a, b) => b.at.localeCompare(a.at));
+    },
+    /** The household's items (not the wish list), with brand names, and what was matched before for them. */
+    async load(): Promise<{ known: Known[]; learnt: Learnt[] }> {
+      const [items, brands] = await Promise.all([ctx.core.products.list(), ctx.core.products.brandNames()]);
+      const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => ({ id: p.id, name: p.name, unit: p.unit, aliases: p.aliases, brands: brands[p.id] ?? [] }));
+      const ids = new Set(known.map((k) => k.id));
+      const learnt = (await this.learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);
+      return { known, learnt };
+    },
+    async remember(shopId: string | null, text: string, productId: string, each: number): Promise<void> {
+      const said = saidAs(text);
+      if (!said) return;
+      await names.put(nameKey(shopId, said), { shopId, text: cap(text, 120), said, productId, each: tidyNum(each), at: ctx.core.now() });
+    },
+  };
+}
 
-  async function learntNames(): Promise<Learnt[]> {
-    return (await names.list()).map((x) => x.data).sort((a, b) => b.at.localeCompare(a.at));
-  }
+/** One line the AI read, before it's checked against what Larder knows. */
+export interface ReadLine { text: string; count: number; item: number | null; quantity: number | null; sure: boolean }
+export interface Matched { text: string; count: number; item: { id: string; name: string; unit: string } | null; quantity: number; match: 'learnt' | 'sure' | 'guess' | 'none' }
+
+/**
+ * Turns the AI's lines into items: what this shop called it before wins over the AI's guess;
+ * failing that, the same words anywhere, if they always meant one item. Then the AI's numbered item.
+ */
+export function matcher(known: Known[], learnt: Learnt[], shopId: string | null) {
+  const byId = new Map(known.map((k) => [k.id, k]));
+  const recall = (said: string): Learnt | null => {
+    if (!said) return null;
+    const here = learnt.find((l) => l.said === said && l.shopId === shopId);
+    if (here) return here;
+    const anywhere = learnt.filter((l) => l.said === said);
+    return anywhere.length && anywhere.every((l) => l.productId === anywhere[0]!.productId) ? anywhere[0]! : null;
+  };
+  const ref = (k: Known) => ({ id: k.id, name: k.name, unit: k.unit });
+  return (l: ReadLine): Matched => {
+    const text = cap(l.text, 120) || '(unreadable line)';
+    const count = Number.isFinite(l.count) && l.count > 0 ? Math.min(999, tidyNum(l.count)) : 1;
+    const before = recall(saidAs(text));
+    if (before && byId.has(before.productId)) {
+      return { text, count, item: ref(byId.get(before.productId)!), quantity: Math.min(99999, tidyNum(count * before.each)), match: 'learnt' };
+    }
+    const n = typeof l.item === 'number' && Number.isFinite(l.item) ? Math.round(l.item) : 0;
+    const k = n >= 1 && n <= known.length ? known[n - 1]! : null;
+    if (!k) return { text, count, item: null, quantity: count, match: 'none' };
+    const quantity = typeof l.quantity === 'number' && Number.isFinite(l.quantity) && l.quantity > 0 ? Math.min(99999, tidyNum(l.quantity)) : count;
+    return { text, count, item: ref(k), quantity, match: l.sure ? 'sure' : 'guess' };
+  };
+}
+
+export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
+  const memory = itemMemory(ctx);
+  const seen = ctx.collection<{ at: string; lines: number }>('receipts');
 
   ctx.addRoute({
     method: 'POST',
@@ -197,40 +259,15 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
       let known: Known[] = [];
       let learnt: Learnt[] = [];
       const asked = await deps.ask(body.image, async () => {
-        const [items, brands] = await Promise.all([ctx.core.products.list(), ctx.core.products.brandNames()]);
-        known = items.slice(0, MAX_ITEMS).map(({ product: p }) => ({ id: p.id, name: p.name, unit: p.unit, aliases: p.aliases, brands: brands[p.id] ?? [] }));
-        const ids = new Set(known.map((k) => k.id));
-        learnt = (await learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);
+        ({ known, learnt } = await memory.load());
         return receiptTask(receiptPrompt(known, learnt, shopName));
       });
       const r = asked.answer;
-      const byId = new Map(known.map((k) => [k.id, k]));
       const shop = await deps.shopFor(cap(r.shop, 60) || null);
-      const shopId = shop?.id ?? null;
-
-      // What this shop called it before wins over the AI's guess; failing that, the same words anywhere, if they always meant one item.
-      const recall = (said: string): Learnt | null => {
-        if (!said) return null;
-        const here = learnt.find((l) => l.said === said && l.shopId === shopId);
-        if (here) return here;
-        const anywhere = learnt.filter((l) => l.said === said);
-        return anywhere.length && anywhere.every((l) => l.productId === anywhere[0]!.productId) ? anywhere[0]! : null;
-      };
-      const ref = (k: Known) => ({ id: k.id, name: k.name, unit: k.unit });
-
+      const match = matcher(known, learnt, shop?.id ?? null);
       const lines = r.lines.slice(0, MAX_LINES).map((l): z.infer<typeof ReceiptLine> => {
-        const text = cap(l.text, 120) || '(unreadable line)';
-        const count = Number.isFinite(l.count) && l.count > 0 ? Math.min(999, tidyNum(l.count)) : 1;
         const price = typeof l.price === 'number' && Number.isFinite(l.price) && l.price >= 0 ? pence(l.price) : null;
-        const before = recall(saidAs(text));
-        if (before && byId.has(before.productId)) {
-          return { text, count, price, item: ref(byId.get(before.productId)!), quantity: Math.min(99999, tidyNum(count * before.each)), match: 'learnt' };
-        }
-        const n = typeof l.item === 'number' && Number.isFinite(l.item) ? Math.round(l.item) : 0;
-        const k = n >= 1 && n <= known.length ? known[n - 1]! : null;
-        if (!k) return { text, count, price, item: null, quantity: count, match: 'none' };
-        const quantity = typeof l.quantity === 'number' && Number.isFinite(l.quantity) && l.quantity > 0 ? Math.min(99999, tidyNum(l.quantity)) : count;
-        return { text, count, price, item: ref(k), quantity, match: l.sure ? 'sure' : 'guess' };
+        return { ...match(l), price };
       });
 
       const date = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date.trim()) && !Number.isNaN(Date.parse(r.date.trim())) ? r.date.trim() : null;
@@ -259,13 +296,8 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
       shopId: input.shopId,
       items: [...byItem].map(([productId, x]) => ({ productId, quantity: x.quantity, ...(x.price !== null ? { price: x.price } : {}) })),
     });
-    const now = ctx.core.now();
-    for (const l of input.lines) {
-      const said = saidAs(l.text);
-      if (!said) continue;
-      await names.put(nameKey(input.shopId, said), { shopId: input.shopId, text: cap(l.text, 120), said, productId: l.productId, each: tidyNum(l.quantity / l.count), at: now });
-    }
-    if (input.receiptKey) await seen.put(input.receiptKey, { at: now, lines: input.lines.length });
+    for (const l of input.lines) await memory.remember(input.shopId, l.text, l.productId, l.quantity / l.count);
+    if (input.receiptKey) await seen.put(input.receiptKey, { at: ctx.core.now(), lines: input.lines.length });
     const shop = input.shopId ? (await ctx.core.shops.list()).find((s) => s.id === input.shopId)?.name : null;
     const what = added.length === 1 ? added[0]!.product.name : `${added.length} things`;
     ctx.publish('ai.receipt_added', { shopId: input.shopId, items: added.length });

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- **Order emails from Gmail:** Larder can read your shops' order emails. An order confirmation puts what's coming on its way, for the right day and slot, confirming a basket filled through online shopping. What's unavailable comes off the order, so it's bought next time. A delivered or "order complete" email moves the delivery into stock. Set up in **Settings → Order emails**.
+- **Step by step:** the page walks through making your own Google Cloud project (free), with links and Copy buttons. Gmail access is read-only, and Larder only opens emails whose subject you name: "this is Tesco's order confirmation", "this is Toolstation's delivered email". After you allow it, Google sends you back through Home Assistant (your Nabu Casa address works) and the Larder integration passes the sign-in on.
+- **Only order confirmations go to the AI**, which works out what's coming, what isn't and when. Lines it isn't sure of wait for you to **Match** them, and Larder remembers each shop's names for next time, as with receipts. Delivered emails don't need the AI.
+- **Checked when it matters:** every 5 minutes for 2 hours after a basket is filled, and every 5 minutes from 3 hours before a delivery slot to 2 hours after it. The rest of the time it checks every 3 hours. All of these can be changed, and **Check now** checks straight away.
+- **Rather not set up Google?** The same page explains how to have Claude do it on a schedule instead, with a prompt to copy.
+- Home Assistant gets `larder_email_order_read`, `larder_email_delivered` and `larder_email_failed` events; assistants get `check_order_emails`.
+- **Settings → AI:** the switch that turns Claude or Gemini on and off is greyed out while a change is saving, instead of quietly ignoring a second tap.
+
 ## 0.6.1
 
 - **Set up a room from inside it:** adding a place opens it, ready for its first spot. Type a spot's name, press Enter, type the next. Each spot's code follows the room's (Loft L: L1, L2…) and can be changed. The pencil beside a spot renames it or changes its code without leaving the page.

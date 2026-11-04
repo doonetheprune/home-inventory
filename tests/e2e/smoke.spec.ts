@@ -530,6 +530,9 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
 
 test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {
   test.skip(info.project.name === 'phone', 'Once is enough: settings are the same on both');
+  // Google can be slow to list Gemini's models. Each change waits for that before the next can be made,
+  // so the switches are greyed out meanwhile rather than missing a tap.
+  await page.route('**/modules/ai/models**', async (r) => { await new Promise((ok) => setTimeout(ok, 1000)); await r.continue(); });
   await signIn(page);
   await page.goto('/#/settings');
   await expect(page.getByText('Add a key to Claude or Gemini to use Add by photo.')).toBeVisible();
@@ -552,6 +555,42 @@ test('settings set the order the AIs are asked in, and switch one off without lo
   await expect(page.getByText('Saved (…1234)')).toBeVisible();
   await page.getByRole('switch', { name: 'Use Gemini' }).click();
   await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
+});
+
+test('order emails: connecting Gmail step by step, or letting Claude do it', async ({ page, context }) => {
+  await signIn(page);
+  // Google itself isn't reached from tests.
+  await context.route('https://accounts.google.com/**', (r) => r.fulfill({ body: 'Google sign-in' }));
+  // Phone and desktop share one Larder: start without an address or client.
+  await page.evaluate(async () => fetch('api/v1/modules/email/gmail', { method: 'PUT', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ address: '', clientId: '' }) }));
+  await page.goto('/#/settings');
+  await page.getByText('Read order emails from Gmail').click();
+  await expect(page.getByText('Your Home Assistant address from outside the house')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect Gmail' })).toBeDisabled();
+
+  await page.getByLabel("Home Assistant's address from outside").fill('https://abcd1234.ui.nabu.casa/lovelace');
+  await page.getByLabel("Home Assistant's address from outside").press('Enter');
+  await expect(page.locator('.toast')).toContainText('Address saved');
+  // What to paste into Google Cloud, and Larder's address for Claude, follow from it.
+  await expect(page.getByLabel('Authorised redirect URI')).toHaveValue('https://abcd1234.ui.nabu.casa/api/larder/gmail/callback');
+  await expect(page.getByLabel("Larder's address for Claude")).toHaveValue('https://abcd1234.ui.nabu.casa/api/larder/mcp');
+  await expect(page.getByLabel("Prompt for Claude's scheduled task")).toHaveValue(/add_expected[\s\S]*mark_arrived/);
+  await expect(page.getByLabel('Gmail read-only scope')).toHaveValue('https://www.googleapis.com/auth/gmail.readonly');
+
+  await page.getByLabel('Client ID').fill('not-a-client-id');
+  await page.getByLabel('Client secret').fill('GOCSPX-test-secret');
+  await page.getByRole('button', { name: 'Save' }).nth(1).click();
+  await expect(page.locator('.toast')).toContainText('ends in .apps.googleusercontent.com');
+  await page.getByLabel('Client ID').fill('123-abc.apps.googleusercontent.com');
+  await page.getByRole('button', { name: 'Save' }).nth(1).click();
+  await expect(page.locator('.toast')).toContainText('Client saved');
+  await expect(page.getByLabel('Client secret')).toHaveValue('');
+
+  // Google opens in a new tab, and the page waits for Home Assistant to pass the sign-in back.
+  const google = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Connect Gmail' }).click();
+  expect((await google).url()).toMatch(/^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?.*redirect_uri=https%3A%2F%2Fabcd1234\.ui\.nabu\.casa%2Fapi%2Flarder%2Fgmail%2Fcallback/);
+  await expect(page.getByText('Waiting for Google…')).toBeVisible();
 });
 
 test('shared links wait in Pending, to go on the wish list or into Larder', async ({ page, isMobile }, info) => {

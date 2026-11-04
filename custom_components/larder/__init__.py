@@ -45,6 +45,7 @@ from .const import (
 )
 from .coordinator import LarderCoordinator
 from .events import listen
+from .gmail import async_register_views as async_register_gmail_views
 from .mcp import LarderMcpView
 from .nfc import async_track_tags
 from .oauth import async_register_views as async_register_oauth_views
@@ -72,10 +73,11 @@ type LarderConfigEntry = ConfigEntry[LarderRuntime]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register Larder's actions (so automations can use them even before Larder is reachable) and the MCP pass-through."""
+    """Register Larder's actions (so automations can use them even before Larder is reachable), the MCP pass-through and the Gmail sign-in page."""
     await async_setup_actions(hass)
     hass.http.register_view(LarderMcpView(hass))
     async_register_oauth_views(hass)
+    async_register_gmail_views(hass)
     return True
 
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineModule } from '@larder/core';
+import { defineModule, type ModuleContext } from '@larder/core';
 import { makeCore, category, type TestCore } from '../helpers';
 
 describe('resolving names', () => {
@@ -190,5 +190,22 @@ describe('NFC tags', () => {
 
     core.clock.set('2026-10-28T10:00:00.000Z');
     expect(await core.nfc.recent()).toEqual([]);
+  });
+});
+
+describe('modules offering things to each other', () => {
+  it('finds what another module offers by its id and name, only while that module is on', async () => {
+    let asker: ModuleContext | undefined;
+    const reader = { read: (text: string) => text.toUpperCase() };
+    const core = await makeCore({
+      modules: [
+        defineModule({ id: 'reader', name: 'Reader', description: 'x', version: '1', setup(ctx) { ctx.offer('shout', reader); } }),
+        defineModule({ id: 'asker', name: 'Asker', description: 'x', version: '1', setup(ctx) { asker = ctx; } }),
+      ],
+    });
+    expect(asker!.offered<typeof reader>('reader.shout')?.read('hi')).toBe('HI');
+    expect(asker!.offered('reader.other')).toBeUndefined();
+    await core.modules.setEnabled('reader', false);
+    expect(asker!.offered('reader.shout')).toBeUndefined();
   });
 });
