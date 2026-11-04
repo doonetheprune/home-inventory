@@ -530,6 +530,9 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
 
 test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {
   test.skip(info.project.name === 'phone', 'Once is enough: settings are the same on both');
+  // Google can be slow to list Gemini's models. Each change waits for that before the next can be made,
+  // so the switches are greyed out meanwhile rather than missing a tap.
+  await page.route('**/modules/ai/models**', async (r) => { await new Promise((ok) => setTimeout(ok, 1000)); await r.continue(); });
   await signIn(page);
   await page.goto('/#/settings');
   await expect(page.getByText('Add a key to Claude or Gemini to use Add by photo.')).toBeVisible();
