@@ -1,6 +1,6 @@
 {
   "name": "larder",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "description": "Self-hosted home inventory: stock, places, shopping lists and scanning. Runs on its own or with Home Assistant.",
   "license": "MIT",

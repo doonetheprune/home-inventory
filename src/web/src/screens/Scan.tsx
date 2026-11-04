@@ -19,6 +19,8 @@ const MODE_CHIP: Record<Mode, [string, string]> = {
 /** A barcode just scanned that nothing knew, kept while the AI reads the pack. */
 interface Kept { code: string; external: LookupResult | null; suggestions: ProductSummary[] }
 interface AiDraft { photo: Blob; reading: PhotoReading; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
+/** What's being looked up: a barcode, or a photo the AI is reading. */
+type Looking = false | 'code' | 'photo';
 
 export function Scan() {
   const [params, setParams] = useSearchParams();
@@ -27,7 +29,7 @@ export function Scan() {
   const [mode, setMode] = useState<Mode>((params.get('mode') as Mode) || 'add');
   const [camera, setCamera] = useState(() => !desktop && localStorage.getItem('larder.camera') === 'on');
   const [result, setResult] = useState<IdentifyResult | null>(null);
-  const [looking, setLooking] = useState(false);
+  const [looking, setLooking] = useState<Looking>(false);
   const [typed, setTyped] = useState('');
   /** For move and put away: the item waiting for a place. */
   const [pending, setPending] = useState<ProductSummary | null>(null);
@@ -35,6 +37,14 @@ export function Scan() {
   const [target, setTarget] = useState<{ id: string; label: string } | null>(null);
   /** What the AI read from a photo, as a new item to check and add. */
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  /**
+   * The photo the AI is reading (or has read). One taken with the camera stays
+   * still in the viewfinder until its card is done, so it's clear the photo was taken.
+   */
+  const [taken, setTaken] = useState<{ photo: Blob; shot: boolean } | null>(null);
+  const takenUrl = usePhotoUrl(taken?.photo);
+  /** Set from the press until the reading's back, so a double tap doesn't send two photos. */
+  const shooting = useRef(false);
   const places = usePlaces();
   const video = useRef<HTMLVideoElement>(null);
   const upload = useRef<HTMLInputElement>(null);
@@ -46,14 +56,14 @@ export function Scan() {
    * as the phone moves) can't replace what's being entered. Moving is the
    * exception: after the item, it's waiting for the shelf's label.
    */
-  const holding = looking || !!aiDraft || (!!result && !(pending && moving));
+  const holding = !!looking || !!aiDraft || (!!result && !(pending && moving));
   const hold = useRef(holding);
   hold.current = holding;
   /** The code just dealt with: the camera leaves it alone for a moment, though it may still be in view. */
   const settled = useRef<{ code: string; until: number }>({ code: '', until: 0 });
 
   const identify = useCallback(async (code: string, from: 'camera' | 'hand' = 'hand') => {
-    setLooking(true);
+    setLooking('code');
     try {
       const r = await api.identify(code);
       // Waiting for a shelf: the camera catching another item's barcode doesn't change the item.
@@ -114,26 +124,29 @@ export function Scan() {
     if (code) settled.current = { code, until: Date.now() + 3000 };
     setResult(null);
     setAiDraft(null);
+    setTaken(null);
   };
 
   /**
-   * Read with AI: a photo (what the camera sees now, or one uploaded) goes to the
-   * AI for its name and details. A barcode in the photo, read here, says first
-   * whether it's already in Larder. `keep` is a barcode just scanned that nothing knew.
+   * Take photo (or Read it with AI on a new barcode's card): a photo (what the
+   * camera sees now, or one uploaded) goes to the AI for its name and details. A
+   * barcode in the photo, read here, says first whether it's already in Larder.
+   * `keep` is a barcode just scanned that nothing knew.
    */
   async function readWithAi(given?: Blob, keep?: Kept) {
-    if (!reader) return;
-    let photo = given ?? null;
-    if (!photo) {
-      if (state !== 'on' || !video.current) {
-        setCamera(true);
-        toast('Point the camera at the front of the pack, then press Read with AI.');
-        return;
-      }
-      photo = await grabFrame(video.current);
+    if (!reader || shooting.current) return;
+    const el = given ? null : video.current;
+    if (!given && (state !== 'on' || !el)) {
+      setCamera(true);
+      toast('Starting the camera: point it at the front of the pack, then press Read it with AI again.');
+      return;
     }
-    setLooking(true);
+    shooting.current = true;
+    setLooking('photo');
     try {
+      const photo = given ?? (await grabFrame(el!));
+      if (!given) navigator.vibrate?.(40);
+      setTaken({ photo, shot: !given });
       const reading = reader.read(photo);
       reading.catch(() => undefined);
       const barcode = keep?.code ?? (await readBarcode(photo));
@@ -146,8 +159,10 @@ export function Scan() {
       setResult(null);
       setAiDraft({ photo: r.photo ?? photo, reading: r, code: barcode, external: keep?.external ?? (known?.kind === 'external' ? known.result : null), suggestions: keep?.suggestions ?? (known?.kind === 'external' ? known.suggestions : []) });
     } catch (err) {
+      setTaken(null);
       toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
     } finally {
+      shooting.current = false;
       setLooking(false);
     }
   }
@@ -165,7 +180,7 @@ export function Scan() {
     }
   }, [params, setParams]);
 
-  // Space or a volume button reads with AI, like a camera's shutter, when nothing's open.
+  // Space or a volume button is Take photo, like a camera's shutter, when nothing's open.
   useEffect(() => {
     if (!reader || mode !== 'add' || state !== 'on' || holding) return;
     const onKey = (e: KeyboardEvent) => {
@@ -179,6 +194,15 @@ export function Scan() {
     return () => window.removeEventListener('keydown', onKey);
   }, [reader, mode, state, holding]);
 
+  // What the camera's doing, on the chip at the top of it.
+  const [chipIcon, chipText]: [string, string] = looking === 'photo' ? ['sparkle', 'Reading the photo…']
+    : looking && camera ? ['clock', 'Looking it up…']
+    : holding && camera ? ['clock', 'Paused: finish this one first']
+    : [MODE_CHIP[mode][0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]];
+  // Take photo, while the camera's on or starting (the AI reads it): barcodes still scan by themselves.
+  const shutter = !!reader && mode === 'add' && camera && state !== 'error';
+  const by = reader?.by ?? null;
+
   return (
     <>
       <Header title="Scan" back="/" />
@@ -187,9 +211,10 @@ export function Scan() {
           <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />
           <div className="viewfinder" aria-label="Camera">
             <video ref={video} playsInline muted hidden={state !== 'on'} />
+            {state === 'on' && taken?.shot && takenUrl && <img className="vf-still" src={takenUrl} alt="The photo you took" />}
             {state === 'on' && <><div className="frame-corners" />{!holding && <div className="line" />}</>}
             <div className="vf-top">
-              <span className="vf-chip"><Icon name={holding && camera ? 'clock' : MODE_CHIP[mode][0]} size="sm" />{holding && camera ? 'Paused: finish this one first' : pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]}</span>
+              <span className="vf-chip"><Icon name={chipIcon} size="sm" />{chipText}</span>
               {camera && <button type="button" className="vf-chip" onClick={() => setCamera(false)}>Stop camera</button>}
             </div>
             {state !== 'on' && (
@@ -201,22 +226,40 @@ export function Scan() {
             )}
           </div>
           {reader && mode === 'add' && (
-            <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn" disabled={looking || holding} onClick={() => void readWithAi()}><Icon name="sparkle" size="sm" />Read with AI</button>
-              <span className="small muted">No barcode? {reader.by ?? 'The AI'} names it from the pack. <button type="button" className="link small" onClick={() => upload.current?.click()}>Or upload a photo</button></span>
+            <div className="stack" style={{ gap: 8 }}>
+              {shutter && (
+                <button type="button" className="btn primary block" disabled={state !== 'on' || holding} onClick={() => void readWithAi()}>
+                  {looking === 'photo' && taken?.shot ? <><Icon name="sparkle" />Reading the photo…</> : <><Icon name="camera" />Take photo</>}
+                </button>
+              )}
+              <span className="small muted">
+                {shutter ? `Barcodes scan by themselves. No barcode? Take a photo of the front of the pack and ${by ?? 'the AI'} names it. ` : `No barcode? ${by ?? 'The AI'} can name it from a photo of the pack. `}
+                <button type="button" className="link small" onClick={() => upload.current?.click()}>{shutter ? 'Or upload a photo' : 'Upload a photo'}</button>
+              </span>
               <input ref={upload} type="file" accept="image/*" hidden data-testid="scan-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readWithAi(f); }} />
             </div>
           )}
           <form className="inputrow" onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { void identify(typed.trim()); setTyped(''); } }}>
             <input className="input mono" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type a barcode or code like G2-4" aria-label="Barcode or code" inputMode="text" />
-            <button className="btn" disabled={!typed.trim() || looking}>Look up</button>
+            <button className="btn" disabled={!typed.trim() || !!looking}>Look up</button>
           </form>
           <div className="card hint"><Icon name="keyboard" size="sm" /><span>Using a USB or Bluetooth scanner? Just scan on any screen. Larder picks it up and opens the result here.</span></div>
         </div>
 
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
         <div className={`section ${looking || result || pending || aiDraft ? 'scan-result' : ''}`}>
-          {looking && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
+          {looking === 'code' && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
+          {looking === 'photo' && (
+            <div className="sheet-card">
+              <div className="match">
+                {takenUrl && <span className="tile lg"><img src={takenUrl} alt="" /></span>}
+                <div className="item-main">
+                  <div className="row" style={{ gap: 10 }}><div className="spinner" /><b>Reading the photo with {by ?? 'the AI'}…</b></div>
+                  <span className="small muted">This takes a few seconds.</span>
+                </div>
+              </div>
+            </div>
+          )}
           {!looking && aiDraft && (
             <NewItemCard key={aiDraft.code ?? 'photo'} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} photo={aiDraft.photo}
               mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
