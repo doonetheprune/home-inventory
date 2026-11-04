@@ -1,10 +1,19 @@
 # Online shopping
 
-Larder fills an online basket from what's low or on offer, books delivery slots, and brings in the shop's favourites. Each shop's website is driven by a separate **shopping provider** (Tesco first: the `larder-provider-tesco` repository, also the template for other shops), a small service on a computer on the network, behind one fixed contract. Larder holds the stock and the buying rules and makes every decision; the provider does exactly what it's asked and stops at a full basket. Nobody pays automatically.
+Larder fills an online basket from what's low or on offer, books delivery slots, and brings in the shop's favourites. Each shop's website is driven by a **shopping provider** behind one fixed contract (`CONTRACT.md` in `larder-automations`). Usually that's an automation (Tesco first: `larder-provider-tesco`) run by **Larder Automations**, the hub app on a Mac, which Larder reaches at one address with one token. Larder holds the stock and the buying rules and makes every decision; the provider does exactly what it's asked and stops at a full basket. Nobody pays automatically.
+
+## Larder Automations
+
+Settings → **Larder Automations** → **Set up Larder Automations**: the Mac's address (`192.168.1.40`; port 8700 unless given; the menu's Copy address), its token (the menu's Copy token; never shown again, only its last four characters), and how Home Assistant wakes the Mac and puts it back to sleep (as for a provider, below). **Save and test** checks it straight away.
+
+- **Test connection** asks the hub's `/health`, `/automations` and `/status`: its version, the automations it runs (and whether each is running), and whether its Chrome extension is connected. Not ready says why in words (wrong token, no automations yet, the extension isn't connected). When waking isn't set up, it's filled in from the Mac's network card (a magic packet to its MAC address, with its broadcast address). **Wake and test** wakes the Mac first.
+- Each automation is listed with the shop it shops for. **Link to a shop** picks the Larder shop (Tesco is offered from the presets if Larder doesn't have it), whether it's the default, and loyalty prices. One shop per automation, and one automation per shop. That makes it a provider at `http://<hub>/automations/<id>`, with the hub's token, waking and sleep.
+- Waking the Mac belongs to the hub: every automation shares it, and the Mac is put back to sleep only when none of them is working. A linked automation's Test connection that finds the Mac's MAC address fills in the hub's waking.
+- **Forget** removes the hub and unlinks its shops; items keep their listings.
 
 ## Providers
 
-Settings → **Shopping providers** → **Add automated shopping provider**: the type (Tesco, or another shop's provider), the Larder shop it serves (one provider per shop; Tesco is added from the presets if Larder doesn't have it), whether it's the default (used when no shop is named; only one is, and the first one added), its address (`192.168.1.231:8710`; port 8710 unless given), its token (the provider's `AUTH_TOKEN`, never shown again, only its last four characters), and whether to count loyalty prices (Clubcard).
+Settings → **Online shops** lists every shop Larder can shop online at, linked automations included. **Add a provider at its own address** is for a provider not run by Larder Automations: the type (Tesco, or another shop's provider), the Larder shop it serves (one provider per shop; Tesco is added from the presets if Larder doesn't have it), whether it's the default (used when no shop is named; only one is, and the first one added), its address (`192.168.1.231:8710`; port 8710 unless given), its token (the provider's `AUTH_TOKEN`, never shown again, only its last four characters), and whether to count loyalty prices (Clubcard).
 
 - **Test connection** asks `/health` and `/manifest` and keeps the answer as its status: ready, or what's wrong in words (log in again, wrong token, another contract version), with the provider's version, contract version and capabilities. When waking isn't set up and the manifest gives the computer's MAC address (contract 1.3), Larder fills it in.
 - **Waking its computer**, through Home Assistant: a magic packet to its MAC address (`wake_on_lan.send_magic_packet`, with an optional broadcast address; needs Home Assistant's Wake on LAN integration), or a switch, button, script or automation. When the provider doesn't answer, Larder wakes it and asks `/health` every 5 seconds until it answers or the wake timeout (3 minutes unless changed) runs out, then says "Couldn't wake the Tesco provider…". Test connection only wakes it when asked (**Wake and test**).
@@ -26,7 +35,7 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 
 - **Bring in favourites** (`sync_favourites`, a button on the Pending page, or the Home Assistant action `larder.online_shopping_sync_favourites` on a schedule) reads the provider's favourites, fresh from the shop. If the shop can't be reached, the provider's older copy is used and the answer says so.
 - A favourite already linked to an item is left out. Any other waits in **Pending**, the Sharing module's list next to the Wish list (or its own **Shop favourites** page, linked from the Wish list, when Sharing is off), with its name, pack size, price, picture and link. The Wish list says how many are waiting.
-- From Pending: **New item** opens Add item filled in: a plain name ("Closed Cup Mushrooms" from "Tesco Closed Cup Mushrooms 300G"), the full name as its brand, g or ml for weights and volumes, the shop, the link and the shop's picture as its photo. Saving links it and takes it out of Pending. **Link to an item** links it to one Larder has. **Dismiss** (×) forgets it for good, by shop and code; dismissals are listed in Settings → Shopping providers with **Undo**, which puts it back in Pending.
+- From Pending: **New item** opens Add item filled in: a plain name ("Closed Cup Mushrooms" from "Tesco Closed Cup Mushrooms 300G"), the full name as its brand, g or ml for weights and volumes, the shop, the link and the shop's picture as its photo. Saving links it and takes it out of Pending. **Link to an item** links it to one Larder has. **Dismiss** (×) forgets it for good, by shop and code; dismissals are listed in Settings → Online shops with **Undo**, which puts it back in Pending.
 - A favourite taken out of the shop's favourites since leaves Pending at the next fresh sync.
 - When the shop gives a product a new code it shows up as a new favourite. Linking it to the item replaces the item's gone listing (the only one, or the gone one with the same pack size).
 - **Add to favourites** from Larder: pasting a code or link onto an item can also add it to the shop's favourites (Online shopping on the item's page, or `link_listing`), and `add_to_favourites` adds one by code or link, linking it to an item if named, else leaving it in Pending. A provider without `add_favourites` says so.
@@ -38,7 +47,9 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 3. The assistant suggests one and books it with `book_slot` once the person agrees. Only a slot from the last list can be booked (Larder needs to know when it is). The booking is kept for that provider until its day has passed; plans and fills check offers for that day and record deliveries as expected then, with the booking reference.
 4. `fill_basket` runs the order logic, fills the basket, records it as a pending order and answers the summary; then the computer goes back to sleep when set up. The person checks out on the shop's website; the order email (or Confirm) makes the pending order on its way.
 
-The person says when they're free; Larder doesn't look at calendars. A provider without `slot_booking` says to book on the shop's website. In the app, the shopping panel shows the booked slot and **Book a delivery slot** (type when, pick one).
+The person says when they're free; Larder doesn't look at calendars. A provider without `slot_booking` says to book on the shop's website.
+
+In the app, beside a shop's shopping list: **Start a shop** opens the day picker: **Tomorrow** and the six days after (or another day in words), each day's free slots by morning, afternoon and evening, with their price, and **Book**. Each day is asked once while it's open (the shop's website is slow, and the first ask may wake the Mac). After booking (or straight away with a slot booked, when the button says **Fill basket**): **Fill basket** or **Just plan it**. **Change slot** goes back to the days. Slots listed in the last hour can be booked, whichever day was looked at last.
 
 ## Order logic
 
@@ -61,7 +72,7 @@ Worked examples (the tests): loo roll, minimum 4, stock up to 12, 36 on offer, t
 
 The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items low at that shop but not linked to anything there, low items linked there but bought at another shop, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
 
-In the app, beside a shop's shopping list: **Plan basket**, **Fill basket**, and how the latest went (followed every 3 seconds while it runs).
+In the app, beside a shop's shopping list: **Start a shop** (or **Fill basket** once a slot is booked), **Plan basket**, and how the latest went (followed every 3 seconds while it runs).
 
 ## Assistant tools
 
@@ -96,8 +107,12 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 
 | Route | |
 |---|---|
+| `GET /hub` | Larder Automations (never its token) and its automations, with the shop each is linked to |
+| `PUT /hub` | `{ address, token?, wake?, sleepEntityId? }`. A new address or token clears the status |
+| `DELETE /hub` | Forget it, unlinking its shops |
+| `POST /hub/test` | `{ wake? }`. Answers the hub and its automations, whether it woke, whether waking was filled in, and a sentence |
 | `GET /providers` | Providers (never their tokens) and the types that can be added |
-| `POST /providers` | `{ type, shopId, address, token, isDefault?, wake?, sleepEntityId?, loyaltyPrices? }` |
+| `POST /providers` | `{ type, shopId, automation }` for an automation, or `{ type, shopId, address, token, wake?, sleepEntityId? }`; both with `isDefault?`, `loyaltyPrices?` |
 | `PATCH /providers/:id` | Any of those. A new address or token clears the status |
 | `DELETE /providers/:id` | Items keep their listings |
 | `POST /providers/:id/test` | `{ wake? }`. Answers the provider, whether it woke, whether waking was filled in, and a sentence |
@@ -124,7 +139,7 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 
 `product.fields['online-shopping']`: `{ shops: { <shopId>: { listings: [{ listingId, name, packQuantity, guessed, packSize, link, imageUrl, deadSince, addedAt }], packRule, fixedListingId, targetPrice } }, offerStockUpTo, targetPrice }`. Prices are per one of the item's unit. The item's own `stockUpTo` (core) is the normal stock-up amount.
 
-`online-shopping:pending` and `online-shopping:dismissed` (favourites, by `<shopId>:<code>`), `online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's last list of slots), `online-shopping:settings` (`options`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`. Tokens are kept in Larder's data folder, so they're in backups.
+`online-shopping:pending` and `online-shopping:dismissed` (favourites, by `<shopId>:<code>`), `online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's slots listed in the last hour), `online-shopping:settings` (`options`, and `hub`: `{ url, token, wake, sleepEntityId, status }`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, automation, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`; an automation's `url` and `token` are empty and its waking unused (the hub's are). Tokens are kept in Larder's data folder, so they're in backups.
 
 ## Settings
 

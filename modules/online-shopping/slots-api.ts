@@ -17,14 +17,22 @@ type ListedSlots = z.infer<typeof ListedSlots>;
 
 export function slotFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
   const { providers } = s;
-  // The slots last listed at each provider, so a booking knows when its slot is.
+  // The slots listed at each provider in the last hour, so a booking knows when its slot is
+  // (the app looks at a few days before picking one).
   const listed = ctx.collection<ListedSlots>('slots');
+  const HOUR = 3_600_000;
 
   async function list(provider: Provider, when: string): Promise<SlotList> {
     if (!s.can(provider, 'slot_booking')) throw new ValidationError(`The ${await providers.shopName(provider.shopId)} provider can't book delivery slots. Book one on the shop's website.`);
     const w = when.trim();
     const answer = await (await s.ready(provider)).slots(/^\d{4}-\d{2}-\d{2}$/.test(w) ? { date: w } : { when: w });
-    await listed.put(provider.id, ListedSlots.parse({ listedAt: ctx.core.now(), date: answer.date, described: answer.described, slots: answer.slots }));
+    const before = await listed.get(provider.id);
+    const recent = before && Date.parse(ctx.core.now()) - Date.parse(before.listedAt) < HOUR ? before.slots : [];
+    const ids = new Set(answer.slots.map((x) => x.id));
+    await listed.put(provider.id, ListedSlots.parse({
+      listedAt: ctx.core.now(), date: answer.date, described: answer.described,
+      slots: [...answer.slots, ...recent.filter((x) => !ids.has(x.id) && x.start.slice(0, 10) !== answer.date)],
+    }));
     return answer;
   }
 
@@ -57,7 +65,7 @@ export function slotFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
   async function forShopId(shopId: string): Promise<{ provider: Provider; shop: ShopRecord }> {
     const provider = await providers.forShop(shopId);
     const shop = (await ctx.core.shops.list()).find((x) => x.id === shopId);
-    if (!provider || !shop) throw new LarderError('That shop has no shopping provider. Add one in Settings → Shopping providers.', 409, 'no_provider');
+    if (!provider || !shop) throw new LarderError('That shop has no shopping provider. Link one to it in Settings → Larder Automations.', 409, 'no_provider');
     return { provider, shop };
   }
 

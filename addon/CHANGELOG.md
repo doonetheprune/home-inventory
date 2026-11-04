@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- **Larder Automations:** online shopping now goes through Larder Automations, the hub app on your Mac that runs each shop's automation (Tesco first). Set it up once in Settings → **Larder Automations**: the Mac's address and the hub's token (both from its menu), and how Home Assistant wakes the Mac and puts it back to sleep. **Test connection** shows the automations it runs and whether its Chrome extension is connected, and fills in waking from the Mac's network card. Then **Link to a shop** for each automation (Tesco to your Tesco). A provider not run by Larder Automations can still be added at its own address under **Online shops**.
+- **Start a shop** beside a shop's shopping list: pick tomorrow or one of the six days after (or another day in words), see that day's free delivery slots by morning, afternoon and evening, book one, then fill the basket or just plan it. A slot from a day you looked at earlier can still be booked.
+- Sheets opened from a side panel (beside a shopping list) no longer sit under the page's own buttons.
+
 ## 0.7.0
 
 - **Order emails from Gmail:** Larder can read your shops' order emails. An order confirmation puts what's coming on its way, for the right day and slot, confirming a basket filled through online shopping. What's unavailable comes off the order, so it's bought next time. A delivered or "order complete" email moves the delivery into stock. Set up in **Settings → Order emails**.

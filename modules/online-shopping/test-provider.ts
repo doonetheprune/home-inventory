@@ -121,3 +121,35 @@ export function fakeProvider(o: { token?: string; version?: string; host?: { mac
 
   return { fetch, state, listing, url: 'http://192.168.1.231:8710', token };
 }
+
+/**
+ * A pretend Larder Automations hub on a Mac, with the pretend provider as its
+ * "tesco" automation: its own token, /health, /automations and /status, and
+ * everything under /automations/tesco/ passed on with the automation's token.
+ */
+export function fakeHub(provider: ReturnType<typeof fakeProvider>, o: { token?: string; extension?: boolean } = {}) {
+  const state = { asleep: false, extension: o.extension ?? true, automations: [{ id: 'tesco', name: 'Tesco', version: '0.2.0' }] };
+  const token = o.token ?? 'hub-secret';
+  const json = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  const fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.port !== '8700') return provider.fetch(input, init);
+    if (state.asleep) throw new TypeError('fetch failed');
+    if ((init?.headers as Record<string, string>)?.authorization !== `Bearer ${token}`) return json(401, { error: { code: 'unauthorised', message: 'Missing or wrong token.' } });
+    const path = url.pathname;
+    if (path === '/health') return json(200, { ok: true, hub_version: '0.1.0', extension: { connected: state.extension }, automations: state.automations.map((a) => ({ id: a.id, name: a.name, joined: true })) });
+    if (path === '/automations') return json(200, { automations: state.automations.map((a) => ({ ...a, base: `/automations/${a.id}`, sites: [] })) });
+    if (path === '/status') {
+      return json(200, {
+        hub: { version: '0.1.0' }, extension: { connected: state.extension }, awake: true,
+        mac: { model: 'Macmini9,1', macos: '15.1', network: { interface: 'en0', wifi: false, mac: 'a8:20:66:00:00:01', address: '192.168.1.40', broadcast: '192.168.1.255' }, checks: [], ready_to_wake: true },
+        automations: state.automations.map((a) => ({ id: a.id, name: a.name, running: true })),
+      });
+    }
+    const m = /^\/automations\/([^/]+)(\/.*)$/.exec(path);
+    if (!m) return json(404, { error: { code: 'not_found', message: `No route ${path}.` } });
+    if (!state.automations.some((a) => a.id === m[1])) return json(404, { error: { code: 'not_found', message: `There's no automation "${m[1]}".` } });
+    return provider.fetch(`${provider.url}${m[2]}${url.search}`, { ...init, headers: { ...(init?.headers as Record<string, string>), authorization: `Bearer ${provider.token}` } });
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch, state, token, address: '192.168.1.40' };
+}

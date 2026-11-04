@@ -18,7 +18,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
   /** Looks a product up by code or link, adding it to the shop's favourites too if asked. */
   async function fetchProduct(shopId: string, idOrLink: string, addToFavourites: boolean) {
     const provider = await providers.forShop(shopId);
-    if (!provider) throw new LarderError(`Larder can't look things up at ${await providers.shopName(shopId)}: it has no shopping provider. Add one in Settings → Shopping providers.`, 409, 'no_provider');
+    if (!provider) throw new LarderError(`Larder can't look things up at ${await providers.shopName(shopId)}: it has no shopping provider. Link one to it in Settings → Larder Automations.`, 409, 'no_provider');
     if (addToFavourites && !s.can(provider, 'add_favourites')) throw new ValidationError(`The ${await providers.shopName(shopId)} provider can't add favourites yet. Link it without adding it to favourites.`);
     const client = await s.ready(provider);
     return addToFavourites ? client.addFavourite(idOrLink.trim()) : client.product(idOrLink.trim());
