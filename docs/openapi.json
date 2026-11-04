@@ -11221,6 +11221,10 @@
                   "quantity": {
                     "type": "number",
                     "exclusiveMinimum": 0
+                  },
+                  "dueBy": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   }
                 }
               }
@@ -21496,6 +21500,2210 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PendingFavourite"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email": {
+      "get": {
+        "summary": "How order emails are set up: Gmail, the rules, when Gmail is checked next",
+        "tags": [
+          "Module: email"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "redirectUri": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clientId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secretSet": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "shopId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "delivered"
+                            ]
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 150
+                          },
+                          "from": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "shopId",
+                          "kind",
+                          "subject",
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "afterOrder": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "hours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "hours"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "aroundDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "before": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            },
+                            "after": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "before",
+                            "after"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "otherwise": {
+                          "type": "object",
+                          "properties": {
+                            "everyHours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "everyHours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "afterOrder",
+                        "aroundDelivery",
+                        "otherwise"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lastCheck": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastResult": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string"
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aiReady": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "callbackPath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "account",
+                    "address",
+                    "redirectUri",
+                    "clientId",
+                    "secretSet",
+                    "problem",
+                    "rules",
+                    "timing",
+                    "lastCheck",
+                    "lastResult",
+                    "lastError",
+                    "next",
+                    "aiReady",
+                    "scope",
+                    "callbackPath"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/settings": {
+      "put": {
+        "summary": "Which emails are which (by subject and sender), and how often to check (admin)",
+        "tags": [
+          "Module: email"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rules": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "shopId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "delivered"
+                          ]
+                        },
+                        "subject": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 150
+                        },
+                        "from": {
+                          "default": "",
+                          "type": "string",
+                          "maxLength": 120
+                        },
+                        "id": {
+                          "type": "string",
+                          "maxLength": 40
+                        }
+                      },
+                      "required": [
+                        "shopId",
+                        "kind",
+                        "subject"
+                      ]
+                    }
+                  },
+                  "timing": {
+                    "type": "object",
+                    "properties": {
+                      "afterOrder": {
+                        "type": "object",
+                        "properties": {
+                          "every": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 120
+                          },
+                          "hours": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 48
+                          }
+                        },
+                        "required": [
+                          "every",
+                          "hours"
+                        ]
+                      },
+                      "aroundDelivery": {
+                        "type": "object",
+                        "properties": {
+                          "every": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 120
+                          },
+                          "before": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "after": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 24
+                          }
+                        },
+                        "required": [
+                          "every",
+                          "before",
+                          "after"
+                        ]
+                      },
+                      "otherwise": {
+                        "type": "object",
+                        "properties": {
+                          "everyHours": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 48
+                          }
+                        },
+                        "required": [
+                          "everyHours"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "afterOrder",
+                      "aroundDelivery",
+                      "otherwise"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "redirectUri": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clientId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secretSet": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "shopId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "delivered"
+                            ]
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 150
+                          },
+                          "from": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "shopId",
+                          "kind",
+                          "subject",
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "afterOrder": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "hours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "hours"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "aroundDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "before": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            },
+                            "after": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "before",
+                            "after"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "otherwise": {
+                          "type": "object",
+                          "properties": {
+                            "everyHours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "everyHours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "afterOrder",
+                        "aroundDelivery",
+                        "otherwise"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lastCheck": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastResult": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string"
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aiReady": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "callbackPath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "account",
+                    "address",
+                    "redirectUri",
+                    "clientId",
+                    "secretSet",
+                    "problem",
+                    "rules",
+                    "timing",
+                    "lastCheck",
+                    "lastResult",
+                    "lastError",
+                    "next",
+                    "aiReady",
+                    "scope",
+                    "callbackPath"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/gmail": {
+      "put": {
+        "summary": "Home Assistant's outside address, and the Google Cloud client ID and secret (admin)",
+        "tags": [
+          "Module: email"
+        ],
+        "description": "The secret is kept in Larder's data folder and never sent back. Changing the client signs Larder out of Gmail (Google ties the sign-in to it).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "clientId": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "clientSecret": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "redirectUri": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clientId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secretSet": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "shopId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "delivered"
+                            ]
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 150
+                          },
+                          "from": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "shopId",
+                          "kind",
+                          "subject",
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "afterOrder": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "hours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "hours"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "aroundDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "before": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            },
+                            "after": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "before",
+                            "after"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "otherwise": {
+                          "type": "object",
+                          "properties": {
+                            "everyHours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "everyHours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "afterOrder",
+                        "aroundDelivery",
+                        "otherwise"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lastCheck": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastResult": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string"
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aiReady": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "callbackPath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "account",
+                    "address",
+                    "redirectUri",
+                    "clientId",
+                    "secretSet",
+                    "problem",
+                    "rules",
+                    "timing",
+                    "lastCheck",
+                    "lastResult",
+                    "lastError",
+                    "next",
+                    "aiReady",
+                    "scope",
+                    "callbackPath"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Disconnect Gmail (Larder stops reading it and Google forgets the sign-in) (admin)",
+        "tags": [
+          "Module: email"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "account": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "address": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "redirectUri": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "clientId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "secretSet": {
+                      "type": "boolean"
+                    },
+                    "problem": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "shopId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "delivered"
+                            ]
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 150
+                          },
+                          "from": {
+                            "default": "",
+                            "type": "string",
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "shopId",
+                          "kind",
+                          "subject",
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "timing": {
+                      "type": "object",
+                      "properties": {
+                        "afterOrder": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "hours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "hours"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "aroundDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "every": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "before": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            },
+                            "after": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 24
+                            }
+                          },
+                          "required": [
+                            "every",
+                            "before",
+                            "after"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "otherwise": {
+                          "type": "object",
+                          "properties": {
+                            "everyHours": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 48
+                            }
+                          },
+                          "required": [
+                            "everyHours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "afterOrder",
+                        "aroundDelivery",
+                        "otherwise"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lastCheck": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastResult": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "lastError": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string"
+                            },
+                            "why": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aiReady": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "callbackPath": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "account",
+                    "address",
+                    "redirectUri",
+                    "clientId",
+                    "secretSet",
+                    "problem",
+                    "rules",
+                    "timing",
+                    "lastCheck",
+                    "lastResult",
+                    "lastError",
+                    "next",
+                    "aiReady",
+                    "scope",
+                    "callbackPath"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/gmail/start": {
+      "post": {
+        "summary": "Start signing in to Gmail: answers the Google page to send the person to (admin)",
+        "tags": [
+          "Module: email"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/gmail/callback": {
+      "post": {
+        "summary": "Finish signing in to Gmail, with what Google sent back",
+        "tags": [
+          "Module: email"
+        ],
+        "description": "The Larder integration in Home Assistant calls this when Google sends the person back to /api/larder/gmail/callback. The state must be one Larder started in the last 15 minutes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "error": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "account": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "account",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/check": {
+      "post": {
+        "summary": "Check Gmail now (Larder also checks on its own)",
+        "tags": [
+          "Module: email"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/emails": {
+      "get": {
+        "summary": "The order and delivery emails Larder has read, newest first",
+        "tags": [
+          "Module: email"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "sentAt": {
+                        "type": "string"
+                      },
+                      "subject": {
+                        "type": "string"
+                      },
+                      "from": {
+                        "type": "string"
+                      },
+                      "shopId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "shopName": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "delivered"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "enum": [
+                          "expected",
+                          "arrived",
+                          "nothing",
+                          "waiting",
+                          "failed",
+                          "ignored"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "reference": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "delivery": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "from": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "to": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "date",
+                              "from",
+                              "to"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lines": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "count": {
+                              "type": "number"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "item": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "unit": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "unit"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "match": {
+                              "type": "string",
+                              "enum": [
+                                "learnt",
+                                "sure",
+                                "guess",
+                                "none"
+                              ]
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "coming",
+                                "unavailable"
+                              ]
+                            },
+                            "date": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "price": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "done",
+                                "todo",
+                                "skipped"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "count",
+                            "quantity",
+                            "item",
+                            "match",
+                            "status",
+                            "date",
+                            "price",
+                            "state"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "sentAt",
+                      "subject",
+                      "from",
+                      "shopId",
+                      "shopName",
+                      "kind",
+                      "outcome",
+                      "message",
+                      "reference",
+                      "delivery",
+                      "lines",
+                      "at"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/emails/{id}/lines/{n}": {
+      "post": {
+        "summary": "Say which item an order line is: it goes on the delivery, and the shop's name for it is remembered",
+        "tags": [
+          "Module: email"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 99999
+                  }
+                },
+                "required": [
+                  "productId",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "in": "path",
+            "name": "n",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sentAt": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "shopId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shopName": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "delivered"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "expected",
+                        "arrived",
+                        "nothing",
+                        "waiting",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "delivery": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "date": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "from": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "to": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "date",
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "item": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "unit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "match": {
+                            "type": "string",
+                            "enum": [
+                              "learnt",
+                              "sure",
+                              "guess",
+                              "none"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "coming",
+                              "unavailable"
+                            ]
+                          },
+                          "date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "price": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "done",
+                              "todo",
+                              "skipped"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "count",
+                          "quantity",
+                          "item",
+                          "match",
+                          "status",
+                          "date",
+                          "price",
+                          "state"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sentAt",
+                    "subject",
+                    "from",
+                    "shopId",
+                    "shopName",
+                    "kind",
+                    "outcome",
+                    "message",
+                    "reference",
+                    "delivery",
+                    "lines",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/emails/{id}/lines/{n}/skip": {
+      "post": {
+        "summary": "An order line isn't something Larder keeps: leave it out",
+        "tags": [
+          "Module: email"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "in": "path",
+            "name": "n",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sentAt": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "shopId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shopName": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "delivered"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "expected",
+                        "arrived",
+                        "nothing",
+                        "waiting",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "delivery": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "date": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "from": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "to": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "date",
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "item": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "unit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "match": {
+                            "type": "string",
+                            "enum": [
+                              "learnt",
+                              "sure",
+                              "guess",
+                              "none"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "coming",
+                              "unavailable"
+                            ]
+                          },
+                          "date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "price": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "done",
+                              "todo",
+                              "skipped"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "count",
+                          "quantity",
+                          "item",
+                          "match",
+                          "status",
+                          "date",
+                          "price",
+                          "state"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sentAt",
+                    "subject",
+                    "from",
+                    "shopId",
+                    "shopName",
+                    "kind",
+                    "outcome",
+                    "message",
+                    "reference",
+                    "delivery",
+                    "lines",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/email/emails/{id}/read": {
+      "post": {
+        "summary": "Read an order confirmation again (one no AI could read before)",
+        "tags": [
+          "Module: email"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sentAt": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "shopId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shopName": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "confirmed",
+                            "delivered"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "expected",
+                        "arrived",
+                        "nothing",
+                        "waiting",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "delivery": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "date": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "from": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "to": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "date",
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "number"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "item": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "unit"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "match": {
+                            "type": "string",
+                            "enum": [
+                              "learnt",
+                              "sure",
+                              "guess",
+                              "none"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "coming",
+                              "unavailable"
+                            ]
+                          },
+                          "date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "price": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "done",
+                              "todo",
+                              "skipped"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "count",
+                          "quantity",
+                          "item",
+                          "match",
+                          "status",
+                          "date",
+                          "price",
+                          "state"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sentAt",
+                    "subject",
+                    "from",
+                    "shopId",
+                    "shopName",
+                    "kind",
+                    "outcome",
+                    "message",
+                    "reference",
+                    "delivery",
+                    "lines",
+                    "at"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }

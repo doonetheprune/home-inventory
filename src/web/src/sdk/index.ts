@@ -52,6 +52,7 @@ export { readBarcode } from '../components/useBarcodeScanner';
 export { useCamera, grabFrame, rotatePhoto } from '../components/camera';
 export type { PhotoReader, PhotoReading } from '../components/photoReader';
 export { Header, Empty } from '../ui';
+export { ProductPicker } from '../components/ProductPicker';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
 export { useQuery, useQueryClient } from '@tanstack/react-query';
 export { Link, useNavigate } from 'react-router-dom';

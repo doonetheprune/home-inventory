@@ -112,6 +112,9 @@ Larder's changes are fired in Home Assistant as `larder_<type>`:
 | `larder_sharing_pending` | A shared link is waiting in Pending | id, name, url, site |
 | `larder_batteries_low` | A linked device's battery is low | deviceId, device, kind, battery, place, message, level |
 | `larder_shop_locations_found` | A search for a shop's branches that had to wait for the map got its answer | shopId, shop, count, message |
+| `larder_email_order_read` | An order confirmation email was read | shop, reference, coming, unavailable, to_check, delivery_date, delivery_from, delivery_to, message |
+| `larder_email_delivered` | A delivered email marked a delivery arrived | shop, arrived |
+| `larder_email_failed` | Gmail needs signing in again | message, needs_you |
 | `larder_product_created`, `larder_product_updated`, `larder_place_changed`, … | Catalogue changes | ids and names |
 
 ```yaml
@@ -193,6 +196,10 @@ The integration passes Larder's MCP server through at `https://<home-assistant>/
 - **Claude Code, Gemini CLI, Open WebUI, LM Studio**, Claude Desktop with `mcp-remote`: send a Home Assistant long-lived access token (your profile → Security) as `Authorization: Bearer …`.
 
 Opening the address in a browser shows Home Assistant's login: it's for assistants, not people. See [mcp.md](mcp.md).
+
+## Gmail sign-in for order emails
+
+Larder's **Order emails** (Settings → Order emails) reads shops' order emails from Gmail. After you allow it at Google, Google sends you back to `https://<home-assistant>/api/larder/gmail/callback`, Home Assistant's address from outside the house (Nabu Casa's Remote control address, or your own). That page needs no Home Assistant login, since Google's redirect can't carry one: it passes what Google sent to Larder, which only accepts a sign-in it started in the last 15 minutes, once, and says how it went. Larder shows the exact address to paste into Google Cloud.
 
 ## Troubleshooting
 

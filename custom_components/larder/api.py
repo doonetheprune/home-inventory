@@ -100,6 +100,10 @@ class LarderClient:
         """The devices with batteries Larder knows about."""
         return await self._request("GET", "/v1/modules/batteries/devices")
 
+    async def gmail_signed_in(self, body: dict[str, str]) -> dict[str, Any]:
+        """Pass on what Google sent back after signing in to Gmail (the email module finishes signing in)."""
+        return await self._request("POST", "/v1/modules/email/gmail/callback", body)
+
     async def oauth_request(self, request_id: str) -> dict[str, Any]:
         """Which assistant is asking to connect (for the approval page)."""
         return await self._request("GET", f"/v1/oauth/requests/{request_id}")

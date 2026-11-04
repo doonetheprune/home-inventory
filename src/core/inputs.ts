@@ -147,6 +147,8 @@ export const StockArrive = z
     /** Or this much of one product (e.g. scanning items as you unpack). */
     productId: Id.optional(),
     quantity: z.number().positive().optional(),
+    /** With source: only what was due by this date (or has no date), so a later order from the same shop stays on the way. */
+    dueBy: IsoDate.optional(),
   })
   .refine((v) => v.source || v.entryIds?.length || v.productId, 'Say which delivery, entries or product arrived');
 export type StockArrive = z.input<typeof StockArrive>;

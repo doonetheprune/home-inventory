@@ -94,7 +94,7 @@ Fuzzy search across names, aliases, categories, notes and locations, tolerant of
 
 ## MCP tools (keep minimal)
 
-Roughly: search items; get item (stock, locations, expiry); add/use/move stock; add expected stock (used by a separate Claude automation that reads Tesco/Toolstation order emails, so email parsing is NOT part of this app); mark delivery arrived; get shopping list for a shop; list scenarios / get scenario; list expiring items; save/get/list recipes; propose and confirm recipe deductions.
+Roughly: search items; get item (stock, locations, expiry); add/use/move stock; add expected stock (used by a separate Claude automation that reads Tesco/Toolstation order emails, so email parsing is NOT part of this app; since 0.7.0 Larder can read them from Gmail itself as well, see DECISIONS.md); mark delivery arrived; get shopping list for a shop; list scenarios / get scenario; list expiring items; save/get/list recipes; propose and confirm recipe deductions.
 
 ## Future (design for, don't build in v1)
 

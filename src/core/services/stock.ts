@@ -450,8 +450,9 @@ export function createStockService(ctx: CoreContext) {
           chosen.push({ entry, quantity: q });
         }
       } else {
-        const confirmed = all.filter((e) => e.status === 'expected' && sameSource(e.expected?.source, input.source));
-        const waiting = all.filter((e) => e.status === 'pending' && sameSource(e.expected?.source, input.source));
+        const due = (e: StockEntry) => !input.dueBy || !e.expected?.eta || e.expected.eta <= input.dueBy;
+        const confirmed = all.filter((e) => e.status === 'expected' && sameSource(e.expected?.source, input.source) && due(e));
+        const waiting = all.filter((e) => e.status === 'pending' && sameSource(e.expected?.source, input.source) && due(e));
         pendingLeft = confirmed.length ? waiting.length : 0;
         chosen = (confirmed.length ? confirmed : waiting).map((entry) => ({ entry, quantity: entry.quantity }));
       }
