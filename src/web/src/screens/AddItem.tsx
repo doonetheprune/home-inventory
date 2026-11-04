@@ -48,7 +48,8 @@ export function AddItem() {
   const photoUrl = newPhotoUrl ?? (draft?.photoFileId ? api.files.url(draft.photoFileId) : null);
   const [form, setForm] = useState(() => (draft ? fromDraft(draft) : { ...emptyForm(params.get('name') ?? ''), wish: params.get('wish') === '1' }));
   const [n, setN] = useState(1);
-  const [placeId, setPlaceId] = useState<string | null>(null);
+  // From a place's "Add stock here": that's where it goes.
+  const [placeId, setPlaceId] = useState<string | null>(() => params.get('place'));
   const dq = useDebounced(form.name.trim(), 200);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: dq.length > 1 });
   const existing = (data?.sections.find((s) => s.id === 'stock')?.results ?? []).slice(0, 3);
@@ -110,7 +111,7 @@ export function AddItem() {
         {!form.wish && (
           <div className="list">
             <div className="numfield"><span><b>How many now</b></span><Stepper value={n} onChange={setN} label="quantity" /></div>
-            <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Where</b><small>{places.length ? 'Where you’re putting it' : <Link to="/places" style={{ color: 'var(--accent)' }}>Set up places first</Link>}</small></span>
+            <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Where</b><small>{!places.length ? <Link to="/places" style={{ color: 'var(--accent)' }}>Set up places first</Link> : placeId ?? form.defaultPlaceId ? 'Where you’re putting it' : 'No place? It waits in Places → To sort'}</small></span>
               <div style={{ minWidth: 200, flex: 1, maxWidth: 360 }}><PlaceSelect value={placeId ?? form.defaultPlaceId} onChange={(v) => { setPlaceId(v); if (!form.defaultPlaceId) setForm({ ...form, defaultPlaceId: v }); }} places={places} /></div>
             </div>
           </div>

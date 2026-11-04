@@ -88,7 +88,8 @@ export const StockMove = z.object({
   toPlaceId: Id,
   /** Defaults to everything (in the from place, if given). */
   quantity: z.number().positive().optional(),
-  fromPlaceId: Id.optional(),
+  /** Only stock in this place; null for stock with no place yet ("To sort"). */
+  fromPlaceId: Id.nullable().optional(),
   /**
    * "temporary": it's out of place for now and should go back (drill taken to the kitchen).
    * "permanent": its usual place changes.

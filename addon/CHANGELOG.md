@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+- **Set up a room from inside it:** adding a place opens it, ready for its first spot. Type a spot's name, press Enter, type the next. Each spot's code follows the room's (Loft L: L1, L2…) and can be changed. The pencil beside a spot renames it or changes its code without leaving the page.
+- **Stock in a spot:** − and + beside everything that lives there change how many are there. **Add stock here** puts away what's waiting in To sort with one press, or adds more of something you already have. **Scan here** opens the scanner with the spot filled in, so new things go straight onto it; **Put away here** does the same for things moving in for good.
+- **To sort:** things added without a place (scanned in a hurry, say) wait in a **To sort** pile at the top of Places until you put them away.
+- **A tidier Home on a big screen:** Scan, Add by name, Put away and the other ways to add (Add by photo, Add from receipt) are no longer repeated on Home, since they're at the top of the sidebar (Put away is one of Scan's modes). Home now starts with Going shopping. Phones are unchanged.
+
 ## 0.6.0
 
 - **Online shopping:** Larder can fill your online basket, Tesco first, through a shopping provider running on a computer on your network (the `larder-provider-tesco` service with its Chrome extension). Add it in Settings → **Shopping providers**: where it runs, its token, and how Home Assistant wakes that computer (a magic packet to its MAC address, filled in for you by **Test connection**, or a switch or script) and, optionally, puts it back to sleep afterwards.

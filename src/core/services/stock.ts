@@ -52,6 +52,13 @@ function where(e: StockEntry): string | null {
   return e.currentPlaceId ?? e.placeId;
 }
 
+/** Stock a move takes: from anywhere (undefined), from stock with no place yet (null), or from one place. */
+function from(e: StockEntry, placeId: string | null | undefined): boolean {
+  if (placeId === undefined) return true;
+  if (placeId === null) return !e.placeId;
+  return where(e) === placeId;
+}
+
 /** The same shop's order: the same source, or the same first word ("Tesco order" and "Tesco delivery"). */
 function sameOrder(a: string, b: string): boolean {
   const x = a.trim().toLowerCase();
@@ -286,16 +293,16 @@ export function createStockService(ctx: CoreContext) {
       const work = t.original.map((e) => ({ ...e }));
       const movable = work
         .filter((e) => e.status === 'in_stock' && e.quantity > 0)
-        .filter((e) => !input.fromPlaceId || where(e) === input.fromPlaceId)
+        .filter((e) => from(e, input.fromPlaceId))
         .filter((e) => (input.mode === 'permanent' ? e.placeId !== input.toPlaceId || !!e.currentPlaceId : where(e) !== input.toPlaceId))
         .sort(useOrder);
       const available = roundQty(movable.reduce((n, e) => n + e.quantity, 0));
       if (!available) {
         // There is some, but it's all where it's going already.
-        const inStock = work.some((e) => e.status === 'in_stock' && e.quantity > 0 && (!input.fromPlaceId || where(e) === input.fromPlaceId));
+        const inStock = work.some((e) => e.status === 'in_stock' && e.quantity > 0 && from(e, input.fromPlaceId));
         const place = inStock ? await ctx.storage.places.get(input.toPlaceId) : null;
         if (place) throw new ValidationError(`${t.product.name} is already in ${place.name}.`);
-        throw new ValidationError(`There's no ${t.product.name.toLowerCase()} to move${input.fromPlaceId ? ' from there' : ''}.`);
+        throw new ValidationError(`There's no ${t.product.name.toLowerCase()} to move${input.fromPlaceId ? ' from there' : input.fromPlaceId === null ? ' without a place' : ''}.`);
       }
       const quantity = input.quantity ?? available;
       if (quantity > available + EPS) throw new ValidationError(`Only ${plural(available, t.product.unit)} can be moved.`);

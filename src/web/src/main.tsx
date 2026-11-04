@@ -24,6 +24,7 @@ import { Scan } from './screens/Scan';
 import { Shopping } from './screens/Shopping';
 import { Places } from './screens/Places';
 import { PlacePage } from './screens/Place';
+import { ToSort } from './screens/ToSort';
 import { GridWizard } from './screens/GridWizard';
 import { Shops } from './screens/Shops';
 import { WishList } from './screens/WishList';
@@ -65,6 +66,7 @@ function App() {
           <Route path="shop" element={<Shopping />} />
           <Route path="shop/:shopId" element={<Shopping />} />
           <Route path="places" element={<Places />} />
+          <Route path="places/to-sort" element={<ToSort />} />
           <Route path="places/:id" element={<PlacePage />} />
           <Route path="grid" element={<GridWizard />} />
           <Route path="shops" element={<Shops />} />

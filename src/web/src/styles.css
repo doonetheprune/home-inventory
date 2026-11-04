@@ -196,6 +196,13 @@ textarea.input { min-height: 84px; resize: vertical; }
 .photo img { width: 100%; height: 100%; object-fit: cover; }
 .code { font-family: var(--f-mono); font-weight: 700; font-size: 12px; padding: 3px 7px; border-radius: 7px; background: var(--surface-2); color: var(--ink); white-space: nowrap; }
 .bigcode { font: 700 34px/1 var(--f-mono); letter-spacing: -.02em; }
+/* Places: the row that adds the next spot (or renames one), and the To sort pile. */
+.spot-form { flex-wrap: wrap; gap: 8px; }
+.spot-form .input { height: 40px; }
+.spot-form .input.grow { min-width: 150px; }
+.spot-form .spot-code { width: 96px; flex: none; }
+.tosort-link { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 4px; }
+.photo.photo-add { aspect-ratio: auto; min-height: 0; padding: 14px; }
 .hint { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 12px 14px; }
 .empty { padding: 22px 18px; display: grid; gap: 10px; justify-items: start; }
 .empty b { font-family: var(--f-display); font-size: 17px; }
@@ -377,10 +384,11 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   .sheet { border-radius: 22px; width: min(560px, calc(100% - 64px)); max-height: 86vh; padding: 20px 24px 24px; }
   .sheet-grip { display: none; }
 
-  .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello hello" "actions shop stats" "soon coming away"; align-items: start; padding-top: 28px; }
+  .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hello hello hello" "shop shop stats" "soon coming away"; align-items: start; padding-top: 28px; }
   .home-grid .hello { grid-area: hello; }
   .home-grid .hello h2 { font-size: 32px; }
-  .home-grid .actions { grid-area: actions; }
+  /* Scan, Add by name and the modules' ways to add are in the sidebar; Put away is one of Scan's modes. */
+  .home-grid .actions { display: none; }
   .home-grid .shopcard { grid-area: shop; align-self: stretch; }
   .home-grid .stats { grid-area: stats; grid-template-columns: 1fr; align-self: stretch; }
   .home-grid .stat { display: flex; align-items: center; gap: 14px; }

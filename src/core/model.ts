@@ -295,6 +295,12 @@ export const PlaceContents = z.object({
 });
 export type PlaceContents = z.infer<typeof PlaceContents>;
 
+/** Stock with no place yet ("To sort"): added in a hurry, waiting to be put somewhere. */
+export const PlaceToSort = z.object({
+  items: z.array(z.object({ summary: ProductSummary, quantity: z.number() })),
+});
+export type PlaceToSort = z.infer<typeof PlaceToSort>;
+
 export const ShoppingItem = z.object({
   summary: ProductSummary,
   /** Suggested amount to buy. */

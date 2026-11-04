@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { PlaceNodeT } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
+import { nextPlaceCode } from '../placeCodes';
 import { Empty, ErrorBox, Header, Loading, PlaceSelect, Sheet, useAction, useIsDesktop, usePlaces } from '../ui';
 
 const ROOM_ICON = (name: string) => (/garage|shed|work/i.test(name) ? 'wrench' : /kitchen|pantry|fridge|freezer/i.test(name) ? 'apple' : /loft|attic/i.test(name) ? 'gift' : /outside|garden|tank/i.test(name) ? 'drop' : /hall|bath/i.test(name) ? 'pin' : 'home');
@@ -43,6 +44,7 @@ export function PlaceTree({ nodes, current, filter }: { nodes: PlaceNodeT[]; cur
 export function Places() {
   const desktop = useIsDesktop();
   const { data, error, isLoading } = useQuery({ queryKey: ['places', 'tree'], queryFn: api.places.tree });
+  const toSort = useQuery({ queryKey: ['places', 'to-sort'], queryFn: api.places.toSort }).data?.items ?? [];
   const [filter, setFilter] = useState('');
   const [adding, setAdding] = useState(false);
   const total = useMemo(() => (data ?? []).reduce((n, x) => n + 1 + x.children.length, 0), [data]);
@@ -55,6 +57,7 @@ export function Places() {
       <div className={`content ${desktop ? 'two-col' : ''}`}>
         <div className="section">
           <label className="search"><Icon name="search" /><input placeholder="Find a place or code" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a place" /></label>
+          {toSort.length > 0 && !filter && <ToSortLink count={toSort.length} />}
           {isLoading && <Loading />}
           {error ? <ErrorBox error={error} /> : null}
           {data && !data.length && <Empty title="No places yet"><span className="muted small">Start with rooms (Kitchen, Garage, Shed), then the cupboards, shelves and boxes inside them.</span><button type="button" className="btn primary small" onClick={() => setAdding(true)}>Add a room</button></Empty>}
@@ -75,22 +78,52 @@ export function Places() {
   );
 }
 
+/** Stock added without a place waits here until someone puts it away. */
+function ToSortLink({ count }: { count: number }) {
+  return (
+    <Link className="card item tosort-link" to="/places/to-sort">
+      <span className="tile" style={{ background: 'var(--accent-soft)' }}><Icon name="inbox" /></span>
+      <span className="item-main"><span className="item-name">To sort</span><span className="item-meta">{count} thing{count === 1 ? '' : 's'} added without a place</span></span>
+      <span className="pill p-wish">{count}</span>
+      <Icon name="chev" className="muted" />
+    </Link>
+  );
+}
+
+/**
+ * Adds a place, or changes one. A new place opens straight away, ready for the
+ * spots inside it. Inside a place with a code, the code is offered from it
+ * (in G: G1, then G2).
+ */
 export function PlaceSheet({ onClose, parentId = null, edit }: { onClose: () => void; parentId?: string | null; edit?: { id: string; name: string; code: string | null; parentId: string | null; notes: string } }) {
   const places = usePlaces();
+  const navigate = useNavigate();
   const { run, busy } = useAction();
   const [name, setName] = useState(edit?.name ?? '');
-  const [code, setCode] = useState(edit?.code ?? '');
+  /** What was typed; null while the offered code is used. */
+  const [typedCode, setTypedCode] = useState<string | null>(edit ? (edit.code ?? '') : null);
   const [parent, setParent] = useState<string | null>(edit ? edit.parentId : parentId);
   const [notes, setNotes] = useState(edit?.notes ?? '');
-  const save = () =>
-    run(() => (edit ? api.places.update(edit.id, { name: name.trim(), code: code.trim() || null, parentId: parent, notes }) : api.places.create({ name: name.trim(), code: code.trim() || null, parentId: parent, notes })), edit ? 'Saved' : `${name.trim()} added`).then((r) => r && onClose());
+  const offered = nextPlaceCode(places.find((p) => p.id === parent)?.code, places.map((p) => p.code));
+  const code = typedCode ?? offered ?? '';
+  const save = async () => {
+    const body = { name: name.trim(), code: code.trim() || null, parentId: parent, notes };
+    if (edit) {
+      if (await run(() => api.places.update(edit.id, body), 'Saved')) onClose();
+      return;
+    }
+    const created = await run(() => api.places.create(body), `${body.name} added`);
+    if (!created) return;
+    onClose();
+    navigate(`/places/${created.id}`, { state: { added: true } });
+  };
   return (
     <Sheet title={edit ? `Edit ${edit.name}` : 'Add a place'} onClose={onClose}>
-      <label className="field"><span>Name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Kitchen, Top drawer, Shelf 2…" autoFocus /></label>
+      <label className="field"><span>Name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Kitchen, Top drawer, Shelf 2…" autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && name.trim() && !busy) void save(); }} /></label>
       <label className="field"><span>Inside</span><PlaceSelect value={parent} onChange={setParent} places={places.filter((p) => p.id !== edit?.id)} /></label>
-      <label className="field"><span>Short code (optional)</span><input className="input mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={20} placeholder="e.g. K2" /><small>Printed on labels and typed into search. Must be unique.</small></label>
+      <label className="field"><span>Short code (optional)</span><input className="input mono" value={code} onChange={(e) => setTypedCode(e.target.value.toUpperCase())} maxLength={20} placeholder="e.g. K" /><small>Printed on labels and typed into search. Must be unique. Spots inside start with it (K1, K2…).</small></label>
       <label className="field"><span>Notes</span><textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
-      <button type="button" className="btn primary block" disabled={busy || !name.trim()} onClick={save}>{edit ? 'Save' : 'Add place'}</button>
+      <button type="button" className="btn primary block" disabled={busy || !name.trim()} onClick={() => void save()}>{edit ? 'Save' : 'Add place'}</button>
     </Sheet>
   );
 }
