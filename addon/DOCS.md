@@ -16,6 +16,10 @@ New to Larder? Turn on **Load the example household** in the options, restart, a
 
 Cameras need an https address. Opening Larder through Home Assistant (the companion app, or Nabu Casa) already is one, so camera scanning works there. USB and Bluetooth barcode scanners work anywhere.
 
+## Backups
+
+Home Assistant backups include all of Larder's data: items, stock, places, shops, recipes, history, settings (AI keys and the Gmail sign-in too) and photos, as long as your backups include add-ons. Larder stops while Home Assistant copies it (usually a few seconds) and then starts again, so the copy is always complete; its sensors show as unavailable meanwhile.
+
 ## Options
 
 - **Log level**: how much goes in the log.
