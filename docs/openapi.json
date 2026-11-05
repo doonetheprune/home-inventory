@@ -2054,11 +2054,41 @@
                 },
                 "name": {
                   "type": "string"
+                },
+                "options": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "required": [
                 "productId",
                 "name"
+              ]
+            }
+          },
+          "linked": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName"
               ]
             }
           },
@@ -6155,11 +6185,43 @@
                 },
                 "name": {
                   "type": "string"
+                },
+                "options": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "required": [
                 "productId",
-                "name"
+                "name",
+                "options"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "linked": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName"
               ],
               "additionalProperties": false
             }
@@ -6295,6 +6357,7 @@
           "booking",
           "plan",
           "unmatched",
+          "linked",
           "elsewhere",
           "added",
           "failed",

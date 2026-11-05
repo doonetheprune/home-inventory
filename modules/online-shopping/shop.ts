@@ -5,9 +5,10 @@
  * so its progress and summary can be asked for (shop_status, the app).
  */
 import { z } from 'zod';
-import { LarderError, NotFoundError, amount, andList, newId, type ModuleContext, type Shop } from '@larder/core';
+import { LarderError, NotFoundError, amount, andList, newId, type ModuleContext, type Product, type Shop } from '@larder/core';
 import { BasketAddResult, ProviderError, STOPPING } from './client';
 import type { QuoteLine } from './contract';
+import { matchFavourite, type Favourites } from './favourites';
 import { money, perUnit } from './format';
 import { fieldsOf, rulesFor } from './items';
 import { dailyUse, isCandidate, plan, type Candidate, type Plan } from './plan';
@@ -61,8 +62,10 @@ export const Run = z.object({
   deliveryDate: z.string(),
   booking: BookingInfo.nullable(),
   plan: PlanSchema.nullable(),
-  /** Items in Larder that are low at this shop but have no listing there. */
-  unmatched: z.array(z.object({ productId: z.string(), name: z.string() })).default([]),
+  /** Items in Larder that are low at this shop but have no listing there, with the shop's favourites their name matches when it's more than one. */
+  unmatched: z.array(z.object({ productId: z.string(), name: z.string(), options: z.array(z.string()).default([]) })).default([]),
+  /** Low items with no listing here, linked by this run to the one favourite their name matches. */
+  linked: z.array(z.object({ productId: z.string(), name: z.string(), listingName: z.string() })).default([]),
   /** Low items linked here, but bought at other shops (their preferred shops don't include this one). */
   elsewhere: z.array(z.object({ productId: z.string(), name: z.string(), shops: z.array(z.string()) })).default([]),
   /** Filled: what went into the basket, and what the shop refused. */
@@ -81,7 +84,7 @@ export function slotText(b: Pick<BookingInfo, 'start' | 'end'>): string {
   return `${day}, ${b.start.slice(11, 16)}–${b.end.slice(11, 16)}`;
 }
 
-export function createShops(ctx: ModuleContext, s: Services) {
+export function createShops(ctx: ModuleContext, s: Services, favourites: Favourites) {
   const { providers, items } = s;
   const runs = ctx.collection<Run>('runs');
   const bookings = ctx.collection<BookingInfo>('bookings');
@@ -119,7 +122,7 @@ export function createShops(ctx: ModuleContext, s: Services) {
    * decide where something is bought. Also: low items here with no listing, and low items linked
    * here that are bought elsewhere.
    */
-  async function candidates(shop: Shop): Promise<{ candidates: Candidate[]; unmatched: Run['unmatched']; elsewhere: Run['elsewhere'] }> {
+  async function candidates(shop: Shop): Promise<{ candidates: Candidate[]; unmatched: Product[]; elsewhere: Run['elsewhere'] }> {
     const out: Candidate[] = [];
     const elsewhere: Run['elsewhere'] = [];
     const shops = await ctx.core.shops.list();
@@ -145,8 +148,32 @@ export function createShops(ctx: ModuleContext, s: Services) {
       out.push(c);
     }
     const list = await ctx.core.shopping.forShop(shop.id);
-    const unmatched = list.groups.flatMap((g) => g.items).filter((i) => !rulesFor(i.summary.product, shop.id).listings.length).map((i) => ({ productId: i.summary.product.id, name: i.summary.product.name }));
+    const unmatched = list.groups.flatMap((g) => g.items).map((i) => i.summary.product).filter((p) => !rulesFor(p, shop.id).listings.length);
     return { candidates: out, unmatched, elsewhere };
+  }
+
+  /**
+   * Low items with no listing here (milk from any shop), each linked to the one shop favourite in
+   * Pending its name matches. Several matching are left for the person to pick, never guessed.
+   */
+  async function fromFavourites(provider: Provider, unmatched: Product[]): Promise<Pick<Run, 'unmatched' | 'linked'>> {
+    if (!unmatched.length || !s.can(provider, 'favourites')) return { unmatched: unmatched.map((p) => ({ productId: p.id, name: p.name, options: [] })), linked: [] };
+    // Pending as the provider has it now (its own copy, not a fresh read of the shop).
+    await favourites.sync(provider, { refresh: false }).catch((err: unknown) => ctx.log.warn('Couldn\'t bring in favourites', { error: String(err) }));
+    let waiting = (await favourites.list()).filter((f) => f.shopId === provider.shopId);
+    const left: Run['unmatched'] = [];
+    const linked: Run['linked'] = [];
+    for (const p of unmatched) {
+      const { match, options } = matchFavourite(p, waiting);
+      if (!match) {
+        left.push({ productId: p.id, name: p.name, options: options.map((o) => o.name) });
+        continue;
+      }
+      await favourites.link(match.id, p.id);
+      waiting = waiting.filter((f) => f.id !== match.id);
+      linked.push({ productId: p.id, name: p.name, listingName: match.name });
+    }
+    return { unmatched: left, linked };
   }
 
   /** Records what went into the basket as a pending order, item by item, until it's confirmed or removed. */
@@ -188,9 +215,13 @@ export function createShops(ctx: ModuleContext, s: Services) {
         const client = await s.ready(provider);
         const shop = (await ctx.core.shops.list()).find((x) => x.id === run.shopId);
         if (!shop) throw new LarderError(`${run.shopName} has been removed from Larder.`, 404, 'not_found');
-        const { candidates: cs, unmatched, elsewhere } = await candidates(shop);
+        let found = await candidates(shop);
+        if (found.unmatched.length) await update({ step: `Looking in ${run.shopName} favourites for ${andList(found.unmatched.map((p) => p.name))}` });
+        const { unmatched, linked } = await fromFavourites(provider, found.unmatched);
+        if (linked.length) found = await candidates(shop);
+        const { candidates: cs, elsewhere } = found;
         const ids = [...new Set(cs.flatMap((c) => c.listings.map((l) => l.listingId)))];
-        await update({ step: ids.length ? `Getting ${run.shopName}'s prices for ${ids.length} product${ids.length === 1 ? '' : 's'}` : 'Nothing to check', unmatched, elsewhere });
+        await update({ step: ids.length ? `Getting ${run.shopName}'s prices for ${ids.length} product${ids.length === 1 ? '' : 's'}` : 'Nothing to check', unmatched, linked, elsewhere });
         const quotes = new Map<string, QuoteLine>();
         if (ids.length) for (const q of await client.quote(ids)) quotes.set(q.listing_id, q);
         const o = await options();
@@ -310,7 +341,8 @@ export function summary(run: Run, currency: string, woke = false): string {
     if (run.failed.length) lines.push(`${run.shopName} wouldn't add: ${run.failed.map((f) => `${f.name} (${f.message})`).join('; ')}`);
     if (p.unavailable.length) lines.push(`Unavailable: ${p.unavailable.map((u) => `${u.name} (${u.why})`).join('; ')}.`);
     if (p.relink.length) lines.push(`Gone from ${run.shopName}, link the new one: ${p.relink.map((r) => `${r.name} (${r.listingName})`).join('; ')}.`);
-    if (run.unmatched.length) lines.push(`Low but not linked to a ${run.shopName} product: ${andList(run.unmatched.map((u) => u.name))}.`);
+    if (run.linked.length) lines.push(`Linked from your ${run.shopName} favourites: ${run.linked.map((l) => `${l.name} to ${l.listingName}`).join('; ')}.`);
+    if (run.unmatched.length) lines.push(`Low but not linked to a ${run.shopName} product: ${andList(run.unmatched.map((u) => (u.options.length ? `${u.name} (${u.options.length} favourites match: ${u.options.join(', ')}; link one)` : u.name)))}.`);
     if (run.elsewhere.length) lines.push(`Low and linked at ${run.shopName}, but bought elsewhere (add ${run.shopName} to its shops to buy it here): ${run.elsewhere.map((e) => `${e.name} (${e.shops.length ? andList(e.shops) : 'no shop sells its type'})`).join('; ')}.`);
     if (p.otherDeals.length) lines.push(`Other offers seen (not used): ${p.otherDeals.map((d) => `${d.name}: ${d.text}`).join('; ')}.`);
   }

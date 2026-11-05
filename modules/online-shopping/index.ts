@@ -33,9 +33,10 @@ export default defineModule({
     hubFeatures(ctx, services);
     providerFeatures(ctx, services);
     itemFeatures(ctx, services);
-    const shops = createShops(ctx, services);
+    const favourites = createFavourites(ctx, services);
+    const shops = createShops(ctx, services, favourites);
     shopFeatures(ctx, services, shops);
     slotFeatures(ctx, services, shops);
-    favouriteFeatures(ctx, services, createFavourites(ctx, services));
+    favouriteFeatures(ctx, services, favourites);
   },
 });

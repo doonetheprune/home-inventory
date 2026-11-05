@@ -50,6 +50,25 @@ export function asShopProduct(f: PendingFavourite): ShopProduct {
   return { listing_id: f.listingId, name: f.name, pack_size: f.packSize, price: f.price, loyalty_price: f.loyaltyPrice, loyalty_price_valid: null, link: f.link, image_urls: f.imageUrl ? [f.imageUrl] : [] };
 }
 
+const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/**
+ * The one favourite an item with no listing stands for: every word of its name
+ * (else of one of its aliases) is in the favourite's name, and no other
+ * favourite's. "Whole milk" is "Tesco British Whole Milk 4 Pints". More than
+ * one is never guessed between: they come back as options.
+ */
+export function matchFavourite(item: { name: string; aliases: string[] }, favourites: PendingFavourite[]): { match: PendingFavourite | null; options: PendingFavourite[] } {
+  const named = favourites.map((f) => ({ f, words: new Set(words(f.name)) }));
+  for (const term of [item.name, ...item.aliases]) {
+    const want = words(term);
+    if (!want.length) continue;
+    const hits = named.filter((n) => want.every((w) => n.words.has(w) || n.words.has(`${w}s`) || (w.endsWith('s') && n.words.has(w.slice(0, -1))))).map((n) => n.f);
+    if (hits.length) return { match: hits.length === 1 ? hits[0]! : null, options: hits.length === 1 ? [] : hits };
+  }
+  return { match: null, options: [] };
+}
+
 export function createFavourites(ctx: ModuleContext, s: Services) {
   const pending = ctx.collection<PendingFavourite>('pending');
   const dismissed = ctx.collection<Dismissed>('dismissed');
