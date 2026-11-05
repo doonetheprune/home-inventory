@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { IdentifyResult, LookupResult, Place, ProductSummary } from '@larder/core';
@@ -438,7 +438,16 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const [shopId, setShopId] = useState<string | null>(reading?.shop?.id ?? null);
   const dq = useDebounced(name.trim(), 250);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: !external && dq.length > 2 });
-  const candidates: ProductSummary[] = external ? suggestions : (data?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? []).slice(0, 3);
+  // The plain kind the AI gave ("Herbal tea") finds an item the household keeps for any brand of it.
+  const kind = reading?.kind?.trim() ?? '';
+  const byKind = useQuery({ queryKey: ['search', kind], queryFn: () => api.search(kind), enabled: !external && kind.length > 2 });
+  const stockIn = (r: typeof data) => r?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? [];
+  // Turn about, so the best match for the kind isn't pushed out by near matches for the name.
+  const byName = stockIn(data);
+  const forKind = stockIn(byKind.data);
+  const candidates: ProductSummary[] = external ? suggestions
+    : Array.from({ length: Math.max(byName.length, forKind.length) }, (_, i) => [byName[i], forKind[i]]).flat()
+      .filter((c, i, all): c is ProductSummary => !!c && all.findIndex((x) => x?.product.id === c.product.id) === i).slice(0, 3);
   const brand = reading?.brand ?? (external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : null);
   const adding = mode === 'add';
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
@@ -501,7 +510,13 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
         <span className="pill p-wish">New</span>{' '}
         <span className="muted">
           {reading ? (
-            <>Read from the photo by {reading.by}.{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}</>
+            <>
+              Read from the photo by {reading.by}
+              {reading.sources?.length ? <>, looked up on {reading.sources.map((x, i, all) => (
+                <Fragment key={x.url}>{i ? (i === all.length - 1 ? ' and ' : ', ') : ''}<a href={x.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{x.name}</a></Fragment>
+              ))}</> : null}
+              .{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}
+            </>
           ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
             <>
               {tried.length ? `${tried.join(', ')} ${tried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}

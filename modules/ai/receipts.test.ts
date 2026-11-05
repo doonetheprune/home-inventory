@@ -103,6 +103,8 @@ describe('AI module: receipts', () => {
     expect(prompt).toContain('never pick the nearest one just to have one');
     const msg = net.sent.find((r) => r.url.endsWith('/v1/messages'))!;
     expect(msg.body).toMatchObject({ output_config: { effort: 'medium', format: { type: 'json_schema' } } });
+    // A receipt is read, never looked up on the web.
+    expect(msg.body).not.toHaveProperty('tools');
   });
 
   it('adds what was kept in one go, records the prices paid, and learns the shop\'s names for next time', async () => {
@@ -171,6 +173,7 @@ describe('AI module: receipts', () => {
     expect(await call(core, 'POST', '/receipt', { image: JPEG })).toMatchObject({ provider: 'gemini', lines: [{ match: 'none' }, { match: 'none' }, { match: 'none' }, { match: 'none' }, { match: 'none' }] });
     const gen = net.sent.find((r) => r.url.endsWith(':generateContent'))!;
     expect(gen.body).toMatchObject({ generationConfig: { responseSchema: { properties: { lines: { type: 'ARRAY', items: { type: 'OBJECT' } } } } } });
+    expect(gen.body).not.toHaveProperty('tools');
   });
 
   it('lets an assistant add a receipt it has read, by item names', async () => {

@@ -6,6 +6,12 @@
 - **A copy each day:** Larder saves a copy on the phone when you open it and the newest is over a day old, and keeps the newest 10. **Settings → Offline copies** saves one now, opens or removes them, and turns the daily copy off. Signing out removes them.
 - **Needs Larder's own https address on the phone,** added to the home screen: the Home Assistant app has to reach Home Assistant before it shows Larder. For the add-on, open its port behind Tailscale, a Cloudflare Tunnel or your reverse proxy and make a Larder account for each person (see the add-on's documentation). Settings → Offline copies says whether a phone can use Larder with no connection.
 
+## 0.7.5
+
+- **Add by photo names the actual product:** a box of Twinings Sleep is "Twinings Sleep tea bags", not "Herbal tea". The name always says the variety or flavour ("Peppermint tea bags", "Semi-skimmed milk"), and keeps the brand when the product is that brand's own blend or range. Everyday things you'd buy any brand of keep a plain name ("Baked beans"), with the brand underneath as before.
+- **The plain kind still finds it:** "Herbal tea" becomes one of the item's other names, so searching for it finds the item, and the card offers an item you already keep for that kind ("Is it a brand of something you already have?").
+- **It can look things up online:** when the photo doesn't show exactly which product it is or its size, Claude or Gemini searches the web (at most twice a photo, about a penny a search), and the card says where it looked, e.g. "looked up on twinings.co.uk". Switch it off under **Settings → AI → Look things up online**.
+
 ## 0.7.4
 
 - **How many in each place:** ask an assistant "where's the green pesto?" and it says "1 jar in Kitchen and 1 jar in Larder", not just the places. Home Assistant's **Find item** does the same.
