@@ -2515,6 +2515,15 @@
               }
             ]
           },
+          "keptInPlaceIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
           "nfcTags": {
             "default": [],
             "type": "array",
@@ -3058,6 +3067,42 @@
               "$ref": "#/components/schemas/PlaceRefInput"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ]
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -3301,6 +3346,42 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlaceRefInput"
+            }
+          },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ]
             }
           },
           "nowIn": {
@@ -6643,6 +6724,15 @@
               }
             ]
           },
+          "keptInPlaceIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
           "nfcTags": {
             "default": [],
             "type": "array",
@@ -6693,6 +6783,7 @@
           "rechargeable",
           "onShoppingList",
           "defaultPlaceId",
+          "keptInPlaceIds",
           "nfcTags",
           "haDeviceIds",
           "fields",
@@ -7232,6 +7323,43 @@
               "$ref": "#/components/schemas/PlaceRef"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -7251,6 +7379,7 @@
           "daysToExpiry",
           "status",
           "places",
+          "stockByPlace",
           "nowIn"
         ],
         "additionalProperties": false
@@ -7488,6 +7617,43 @@
               "$ref": "#/components/schemas/PlaceRef"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -7531,6 +7697,7 @@
           "daysToExpiry",
           "status",
           "places",
+          "stockByPlace",
           "nowIn",
           "variants",
           "entries",
@@ -10151,6 +10318,15 @@
                       }
                     ]
                   },
+                  "keptInPlaceIds": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
                   "nfcTags": {
                     "default": [],
                     "type": "array",
@@ -10350,6 +10526,14 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "keptInPlaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
                   },
                   "nfcTags": {
                     "type": "array",
@@ -12036,6 +12220,15 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "keptInPlaceIds": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
                       },
                       "nfcTags": {
                         "default": [],

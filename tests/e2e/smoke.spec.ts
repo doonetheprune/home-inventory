@@ -164,16 +164,31 @@ test('adds a room, then its spots one after another, and stock in a spot', async
   const sheet = page.getByRole('dialog');
   await sheet.locator('.item', { hasText: tea }).getByRole('button', { name: 'Put here' }).click();
   await expect(toast).toContainText(`${tea} put away in L${p}1`);
+  // Quick add: search, − and + for how many are here, then the tick. No second step.
   await sheet.getByLabel('Which item?').fill('cable ties');
-  await sheet.getByRole('button', { name: /Cable ties/ }).click();
-  await sheet.getByRole('button', { name: 'More quantity' }).click();
-  await sheet.getByRole('button', { name: /^Add 2/ }).click();
-  await expect(toast).toContainText(`of Cable ties to L${p}1`);
+  const ties = sheet.locator('.item', { hasText: 'Cable ties' }).first();
+  await expect(ties).toContainText('0 packs here');
+  await ties.getByRole('button', { name: `More Cable ties in L${p}1` }).click();
+  await ties.getByRole('button', { name: `More Cable ties in L${p}1` }).click();
+  await expect(ties).toContainText(/2 packs here · \d+ packs in total \(\+2 packs\)/);
+  await ties.getByRole('button', { name: `Save Cable ties in L${p}1` }).click();
+  await expect(toast).toContainText(`Added 2 packs of Cable ties to L${p}1`);
+  await expect(ties.getByRole('button', { name: `Save Cable ties in L${p}1` })).toBeDisabled();
   await sheet.getByRole('button', { name: 'Close' }).click();
   // Counted here, and changed here.
   await page.getByRole('button', { name: `More ${tea} here` }).click();
   await expect(toast).toContainText(`${tea}: 3 boxes here now`);
   await expect(page.getByLabel(`${tea} here`, { exact: true })).toHaveValue('3');
+  // Down to none: it stays here, ready for more, until it's taken off.
+  const teaRow = page.locator('.item', { hasText: tea });
+  for (const left of [2, 1, 0]) {
+    await page.getByRole('button', { name: `Less ${tea} here` }).click();
+    await expect(page.getByLabel(`${tea} here`, { exact: true })).toHaveValue(String(left));
+  }
+  await expect(teaRow).toContainText('None here now');
+  await page.getByRole('button', { name: `Don't keep ${tea} here` }).click();
+  await expect(toast).toContainText(`${tea} isn't kept here now`);
+  await expect(teaRow).toHaveCount(0);
   // Scanning from here: whatever's scanned goes here.
   await page.getByRole('link', { name: 'Scan here' }).click();
   await expect(page.locator('.vf-chip').first()).toContainText(`Adding to L${p}1`);

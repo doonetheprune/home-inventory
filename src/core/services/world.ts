@@ -5,7 +5,7 @@
  */
 import type { Category, Place, PlaceRef, Product, ProductSummary, Shop, StockEntry } from '../model';
 import type { CoreContext } from './context';
-import { daysBetween, roundQty } from '../util';
+import { amount, andList, daysBetween, roundQty } from '../util';
 
 export interface World {
   products: Product[];
@@ -104,6 +104,12 @@ export function summarise(world: World, product: Product): ProductSummary {
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => placeRef(world, id))
     .filter((p): p is PlaceRef => !!p);
+  // Older records have no keptInPlaceIds.
+  for (const id of product.keptInPlaceIds ?? []) if (!byPlace.has(id)) byPlace.set(id, 0);
+  const stockByPlace = [...byPlace.entries()]
+    .map(([id, quantity]) => { const ref = placeRef(world, id); return ref ? { ...ref, quantity: roundQty(quantity) } : null; })
+    .filter((p): p is PlaceRef & { quantity: number } => !!p)
+    .sort((a, b) => b.quantity - a.quantity || a.path.localeCompare(b.path, 'en-GB', { numeric: true }));
 
   return {
     product,
@@ -123,8 +129,20 @@ export function summarise(world: World, product: Product): ProductSummary {
       hasExpected: expected > 0,
     },
     places,
+    stockByPlace,
     nowIn: [...nowIn].map((id) => placeRef(world, id)).filter((p): p is PlaceRef => !!p),
   };
+}
+
+/**
+ * Where an item is kept, for people: "in Kitchen" when it's all in one place,
+ * "1 jar in Kitchen and 1 jar in Larder" across places, and "none in Garage"
+ * for a place it's kept in that has run out. Empty when it has no places.
+ */
+export function placesText(s: ProductSummary): string {
+  const kept = s.stockByPlace ?? [];
+  if (kept.length === 1 && kept[0]!.quantity > 0) return `in ${kept[0]!.path}`;
+  return andList(kept.map((x) => `${x.quantity > 0 ? amount(x.quantity, s.product.unit) : 'none'} in ${x.path}`));
 }
 
 /** Shops a product can come from: its preferred shops, or any shop that sells its category. */
