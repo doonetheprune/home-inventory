@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.4
+
+- **How many in each place:** ask an assistant "where's the green pesto?" and it says "1 jar in Kitchen and 1 jar in Larder", not just the places. Home Assistant's **Find item** does the same.
+- **Running out somewhere doesn't forget it:** an item stays in a place at 0 when the last one there is used, ready for more, and the place's page lists it as "None here now". The ✕ beside it takes it off. Moving stock somewhere else for good moves it; something only out of place for now doesn't join where it is.
+- **Adding stock to a place is quicker:** the search comes first, and each item found shows how many are here and in total, with − and + for how many should be here and a tick to save. No second step, and you can do several in a row. To sort is under the search until you type.
+- A place's page says how many of each thing are here and how many in total when some are elsewhere.
+
 ## 0.7.3
 
 - **Safer Home Assistant backups:** Home Assistant now stops Larder while it copies Larder's data (usually a few seconds), then starts it again, so the database can't be copied halfway through a change and every backup restores cleanly. Larder's sensors show as unavailable for those seconds. Backups still include everything: items, stock, places, settings (AI keys and the Gmail sign-in too) and photos, as long as your backups include add-ons.
