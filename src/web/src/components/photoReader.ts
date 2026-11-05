@@ -10,8 +10,10 @@ import { useEnabledWebModules } from '../modules';
 export interface PhotoReading {
   /** False when it couldn't make out a product; the rest is its best guess. */
   readable: boolean;
-  /** Generic name, e.g. "Baked beans". */
+  /** What to call it, with its variety, and its brand when that's what it is: "Twinings Sleep tea bags", "Semi-skimmed milk". */
   name: string;
+  /** The plain kind of thing, e.g. "Herbal tea": finds an item the household already has for it. */
+  kind?: string | null;
   /** Brand and pack, e.g. "Heinz Baked Beanz 415 g". */
   brand: string | null;
   unit: string;
@@ -22,6 +24,8 @@ export interface PhotoReading {
   shop: { name: string; id: string | null; preset: boolean } | null;
   /** Which AI read it, e.g. "Claude". */
   by: string;
+  /** Web pages it looked at when the photo wasn't enough, by site name, e.g. "twinings.co.uk". */
+  sources?: Array<{ name: string; url: string }>;
   /** Anything worth saying, e.g. that the first AI was out of credit. */
   notes: string[];
   /** The photo as it was sent (smaller than a camera's): the one to keep as the item's photo. */
