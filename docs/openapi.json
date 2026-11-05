@@ -2017,6 +2017,21 @@
                   },
                   "bookedAt": {
                     "type": "string"
+                  },
+                  "method": {
+                    "default": "delivery",
+                    "type": "string",
+                    "enum": [
+                      "delivery",
+                      "collection"
+                    ]
+                  },
+                  "store": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -2032,6 +2047,10 @@
                 "type": "null"
               }
             ]
+          },
+          "usesSlots": {
+            "default": true,
+            "type": "boolean"
           },
           "plan": {
             "anyOf": [
@@ -6146,6 +6165,21 @@
                   },
                   "bookedAt": {
                     "type": "string"
+                  },
+                  "method": {
+                    "default": "delivery",
+                    "type": "string",
+                    "enum": [
+                      "delivery",
+                      "collection"
+                    ]
+                  },
+                  "store": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -6155,7 +6189,9 @@
                   "price",
                   "reference",
                   "reservedUntil",
-                  "bookedAt"
+                  "bookedAt",
+                  "method",
+                  "store"
                 ],
                 "additionalProperties": false
               },
@@ -6163,6 +6199,10 @@
                 "type": "null"
               }
             ]
+          },
+          "usesSlots": {
+            "default": true,
+            "type": "boolean"
           },
           "plan": {
             "anyOf": [
@@ -6355,6 +6395,7 @@
           "finishedAt",
           "deliveryDate",
           "booking",
+          "usesSlots",
           "plan",
           "unmatched",
           "linked",
@@ -18855,6 +18896,10 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "usesSlots": {
+                                    "default": true,
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
@@ -18868,7 +18913,8 @@
                                   "contractVersion",
                                   "currency",
                                   "capabilities",
-                                  "host"
+                                  "host",
+                                  "usesSlots"
                                 ],
                                 "additionalProperties": false
                               },
@@ -19281,6 +19327,10 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "usesSlots": {
+                              "default": true,
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -19294,7 +19344,8 @@
                             "contractVersion",
                             "currency",
                             "capabilities",
-                            "host"
+                            "host",
+                            "usesSlots"
                           ],
                           "additionalProperties": false
                         },
@@ -19682,6 +19733,10 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "usesSlots": {
+                              "default": true,
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -19695,7 +19750,8 @@
                             "contractVersion",
                             "currency",
                             "capabilities",
-                            "host"
+                            "host",
+                            "usesSlots"
                           ],
                           "additionalProperties": false
                         },
@@ -20021,6 +20077,10 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "usesSlots": {
+                                  "default": true,
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -20034,7 +20094,8 @@
                                 "contractVersion",
                                 "currency",
                                 "capabilities",
-                                "host"
+                                "host",
+                                "usesSlots"
                               ],
                               "additionalProperties": false
                             },
@@ -21749,7 +21810,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/slots": {
       "get": {
-        "summary": "Delivery slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
+        "summary": "Delivery or click and collect slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
         "tags": [
           "Module: online-shopping"
         ],
@@ -21763,6 +21824,29 @@
             "in": "query",
             "name": "when",
             "required": true
+          },
+          {
+            "schema": {
+              "default": "delivery",
+              "type": "string",
+              "enum": [
+                "delivery",
+                "collection"
+              ]
+            },
+            "in": "query",
+            "name": "method",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "branch",
+            "required": false
           },
           {
             "schema": {
@@ -21788,6 +21872,71 @@
                     },
                     "described": {
                       "type": "string"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "delivery",
+                        "collection"
+                      ]
+                    },
+                    "store": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "address": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "address"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "address"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "slots": {
                       "type": "array",
@@ -21819,12 +21968,19 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "offerCollection": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "date",
                     "described",
-                    "slots"
+                    "method",
+                    "store",
+                    "stores",
+                    "slots",
+                    "offerCollection"
                   ],
                   "additionalProperties": false
                 }
@@ -21836,7 +21992,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/book": {
       "post": {
-        "summary": "Book a delivery slot from the last list",
+        "summary": "Book a delivery or click and collect slot from the last list",
         "tags": [
           "Module: online-shopping"
         ],
@@ -21912,6 +22068,21 @@
                         },
                         "bookedAt": {
                           "type": "string"
+                        },
+                        "method": {
+                          "default": "delivery",
+                          "type": "string",
+                          "enum": [
+                            "delivery",
+                            "collection"
+                          ]
+                        },
+                        "store": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -21921,7 +22092,9 @@
                         "price",
                         "reference",
                         "reservedUntil",
-                        "bookedAt"
+                        "bookedAt",
+                        "method",
+                        "store"
                       ],
                       "additionalProperties": false
                     },
@@ -21943,7 +22116,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/booking": {
       "get": {
-        "summary": "The delivery slot booked at a shop, while it's still to come",
+        "summary": "The slot booked at a shop, while it's still to come",
         "tags": [
           "Module: online-shopping"
         ],
@@ -22002,6 +22175,21 @@
                             },
                             "bookedAt": {
                               "type": "string"
+                            },
+                            "method": {
+                              "default": "delivery",
+                              "type": "string",
+                              "enum": [
+                                "delivery",
+                                "collection"
+                              ]
+                            },
+                            "store": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -22011,7 +22199,9 @@
                             "price",
                             "reference",
                             "reservedUntil",
-                            "bookedAt"
+                            "bookedAt",
+                            "method",
+                            "store"
                           ],
                           "additionalProperties": false
                         },

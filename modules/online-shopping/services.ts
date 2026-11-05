@@ -21,8 +21,11 @@ export function createServices(ctx: ModuleContext) {
   /** Whether the provider said it can (from its last status); unknown counts as yes, and the provider says if not. */
   const can = (p: Provider, capability: string) => !p.status?.capabilities.length || p.status.capabilities.includes(capability);
 
+  /** The shop has no delivery or collection slots at all (from its last status), so there's none to choose. */
+  const noSlots = (p: Provider) => p.status?.usesSlots === false;
+
   const currency = async () => (await ctx.core.settings.get()).currency;
 
-  return { hub, providers, items, ready, can, currency };
+  return { hub, providers, items, ready, can, noSlots, currency };
 }
 export type Services = ReturnType<typeof createServices>;

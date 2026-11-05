@@ -103,7 +103,7 @@ export function shopFeatures(ctx: ModuleContext, s: Services, shops: Shops) {
 
   ctx.addTool({
     name: 'fill_basket', title: 'Fill the online basket',
-    description: 'Plan the shop and add it to the online basket, recording it as expected deliveries. Book a delivery slot first (list_slots, book_slot) so offers are checked for that day. Stops at the basket: the person checks it and pays on the shop\'s website. Can take a few minutes; follow it with shop_status.',
+    description: 'Plan the shop and add it to the online basket, recording it as expected deliveries. Book a delivery or collection slot first (list_slots, book_slot) so offers are checked for that day, unless the shop has no slots. Stops at the basket: the person checks it and pays on the shop\'s website. Can take a few minutes; follow it with shop_status.',
     input: z.object({ shop: Shop }),
     async run({ shop }) {
       const started = await begin('fill', shop);

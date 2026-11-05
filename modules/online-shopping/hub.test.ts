@@ -71,7 +71,7 @@ describe('online shopping: Larder Automations', () => {
     await expect(link(core, asda.id)).rejects.toThrow('That automation already shops for Tesco. Unlink it there first.');
 
     const tested = await call<{ provider: ProviderView; message: string }>(core, 'POST', '/providers/:id/test', {}, { id: p.id });
-    expect(tested.message).toBe('Tesco 0.1.0 is ready (contract 1.3). Larder will wake the Mac with a magic packet to 4c:32:75:12:34:56 when it doesn\'t answer.');
+    expect(tested.message).toBe('Tesco 0.1.0 is ready (contract 1.4). Larder will wake the Mac with a magic packet to 4c:32:75:12:34:56 when it doesn\'t answer.');
     expect((await call<HubAnswer>(core, 'GET', '/hub')).hub?.wake?.mac).toBe('4c:32:75:12:34:56');
     provider.state.slots = [{ id: 's17', start: '2026-10-30T17:00:00+00:00', end: '2026-10-30T18:00:00+00:00', price: 0, available: true }];
     expect((await core.assistant.call('list_slots', { when: 'friday' })).text).toContain('- 17:00–18:00, free (id s17)');

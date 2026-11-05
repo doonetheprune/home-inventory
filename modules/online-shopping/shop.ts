@@ -29,6 +29,9 @@ export const BookingInfo = z.object({
   reference: z.string().nullable(),
   reservedUntil: z.string().nullable(),
   bookedAt: z.string(),
+  /** Delivery, or click and collect from `store` (the branch's name). */
+  method: z.enum(['delivery', 'collection']).default('delivery'),
+  store: z.string().nullable().default(null),
 });
 export type BookingInfo = z.infer<typeof BookingInfo>;
 
@@ -61,6 +64,8 @@ export const Run = z.object({
   /** The day offers had to cover. */
   deliveryDate: z.string(),
   booking: BookingInfo.nullable(),
+  /** False for a shop with no delivery or collection slots, so none is expected. */
+  usesSlots: z.boolean().default(true),
   plan: PlanSchema.nullable(),
   /** Items in Larder that are low at this shop but have no listing there, with the shop's favourites their name matches when it's more than one. */
   unmatched: z.array(z.object({ productId: z.string(), name: z.string(), options: z.array(z.string()).default([]) })).default([]),
@@ -82,6 +87,11 @@ const KEEP_RUNS = 30;
 export function slotText(b: Pick<BookingInfo, 'start' | 'end'>): string {
   const day = new Date(`${b.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   return `${day}, ${b.start.slice(11, 16)}–${b.end.slice(11, 16)}`;
+}
+
+/** "Friday 6 November, 17:00–18:00", and for click and collect ", collecting from Southport Extra". */
+export function bookedSlotText(b: Pick<BookingInfo, 'start' | 'end' | 'method' | 'store'>): string {
+  return b.method === 'collection' ? `${slotText(b)}, collecting from ${b.store ?? 'the shop'}` : slotText(b);
 }
 
 export function createShops(ctx: ModuleContext, s: Services, favourites: Favourites) {
@@ -252,7 +262,7 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
         ctx.publish('online-shopping.basket_filled', {
           pending_order: `${run.shopName} delivery`,
           shop: run.shopName, run_id: run.id, items: got.added.length, total: p.total, failed: got.failed.length,
-          relink: p.relink.length, slot: run.booking ? slotText(run.booking) : null, summary: current.summary,
+          relink: p.relink.length, slot: run.booking ? bookedSlotText(run.booking) : null, summary: current.summary,
         });
       });
     } catch (err) {
@@ -295,7 +305,7 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
       const b = await booking(provider.id);
       const run = await save(Run.parse({
         id: newId(), shopId: shop.id, shopName: shop.name, providerId: provider.id, kind, status: 'running', step: 'Starting', startedAt: ctx.core.now(), finishedAt: null,
-        deliveryDate: b ? b.start.slice(0, 10) : ctx.core.today(), booking: b, plan: null, summary: null, error: null,
+        deliveryDate: b ? b.start.slice(0, 10) : ctx.core.today(), booking: b, usesSlots: !s.noSlots(provider), plan: null, summary: null, error: null,
       }));
       const done = execute(run, provider).finally(() => working.delete(run.id));
       working.set(run.id, done);
@@ -321,7 +331,8 @@ export function summary(run: Run, currency: string, woke = false): string {
   const lines: string[] = [];
   if (woke) lines.push(`Woke the ${run.shopName} provider's computer.`);
   if (run.status === 'failed' && run.error) lines.push(`The shop at ${run.shopName} stopped: ${run.error.message}`);
-  const when = run.booking ? `, for delivery ${slotText(run.booking)}` : '';
+  const b = run.booking;
+  const when = !b ? '' : b.method === 'collection' ? `, for collection from ${b.store ?? run.shopName} on ${slotText(b)}` : `, for delivery ${slotText(b)}`;
   if (p) {
     const filled = run.kind === 'fill' && run.status === 'done';
     if (!p.items.length) lines.push(`Nothing needs buying at ${run.shopName} right now.`);
@@ -347,7 +358,8 @@ export function summary(run: Run, currency: string, woke = false): string {
     if (p.otherDeals.length) lines.push(`Other offers seen (not used): ${p.otherDeals.map((d) => `${d.name}: ${d.text}`).join('; ')}.`);
   }
   if (run.kind === 'fill' && run.status === 'done' && p?.items.length) {
-    lines.push(run.booking ? `Delivery slot booked: ${slotText(run.booking)}${run.booking.reference ? ` (ref ${run.booking.reference})` : ''}.` : 'No delivery slot is booked yet.');
+    if (b) lines.push(`${b.method === 'collection' ? 'Collection' : 'Delivery'} slot booked: ${bookedSlotText(b)}${b.reference ? ` (ref ${b.reference})` : ''}.`);
+    else if (run.usesSlots) lines.push('No delivery slot is booked yet.');
     lines.push(`Check the basket on ${run.shopName}'s website and pay there. Until then it's a pending "${run.shopName} delivery" order in Larder (not bought again, not on its way yet): confirm it once you've checked out (the order email does too), or remove it if you don't go ahead.`);
   }
   return lines.join('\n');
