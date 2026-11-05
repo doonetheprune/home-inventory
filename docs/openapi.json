@@ -16542,6 +16542,9 @@
                         }
                       ]
                     },
+                    "search": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -16637,6 +16640,7 @@
                     "ready",
                     "order",
                     "first",
+                    "search",
                     "claude",
                     "gemini"
                   ],
@@ -16650,7 +16654,7 @@
     },
     "/api/v1/modules/ai/settings": {
       "put": {
-        "summary": "Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model (admin)",
+        "summary": "Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web on or off (admin)",
         "tags": [
           "Module: ai"
         ],
@@ -16672,6 +16676,9 @@
                         "gemini"
                       ]
                     }
+                  },
+                  "search": {
+                    "type": "boolean"
                   },
                   "claude": {
                     "type": "object",
@@ -16781,6 +16788,9 @@
                         }
                       ]
                     },
+                    "search": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -16876,6 +16886,7 @@
                     "ready",
                     "order",
                     "first",
+                    "search",
                     "claude",
                     "gemini"
                   ],
@@ -16956,7 +16967,7 @@
         "tags": [
           "Module: ai"
         ],
-        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.",
+        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. Unless switched off in Settings, the AI may search the web when the photo doesn't show which product it is or its size; `sources` lists the pages. The answer fills in the Add item page: check it, then save it as usual.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16990,6 +17001,12 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "kind": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "brand": {
                       "type": [
@@ -17064,6 +17081,25 @@
                     "model": {
                       "type": "string"
                     },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "skipped": {
                       "type": "array",
                       "items": {
@@ -17091,6 +17127,7 @@
                   "required": [
                     "readable",
                     "name",
+                    "kind",
                     "brand",
                     "unit",
                     "categoryId",
@@ -17099,6 +17136,7 @@
                     "shop",
                     "provider",
                     "model",
+                    "sources",
                     "skipped"
                   ],
                   "additionalProperties": false
