@@ -137,6 +137,42 @@
         ],
         "additionalProperties": {}
       },
+      "OfflineCopyInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopyInput",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ]
+      },
       "PriceViewInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/PriceViewInput",
@@ -4223,6 +4259,43 @@
           "message"
         ],
         "additionalProperties": {}
+      },
+      "OfflineCopy": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopy",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ],
+        "additionalProperties": false
       },
       "PriceView": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -13076,6 +13149,27 @@
                     "unlinked"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/offline/copy": {
+      "get": {
+        "summary": "Everything the web app shows, for a copy kept on a phone",
+        "tags": [
+          "Settings"
+        ],
+        "description": "The answers to the GET requests the web app makes (every item, place, shop list and module page), as the caller sees them. The app saves this on the device and answers from it when Larder can't be reached. Sent gzipped when the client accepts it.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineCopy"
                 }
               }
             }

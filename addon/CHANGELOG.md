@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- **Larder with no connection:** when the Wi-Fi or internet is down, a phone can still open Larder and **Load data from** a copy saved on it. Pick one (newest first) and search, look at items, places, shopping lists, scenarios and recipes as they were when it was saved. A bar at the top says which copy it is; **Change** goes back to the live Larder once it can be reached. Copies are read only.
+- **A copy each day:** Larder saves a copy on the phone when you open it and the newest is over a day old, and keeps the newest 10. **Settings → Offline copies** saves one now, opens or removes them, and turns the daily copy off. Signing out removes them.
+- **Needs Larder's own https address on the phone,** added to the home screen: the Home Assistant app has to reach Home Assistant before it shows Larder. For the add-on, open its port behind Tailscale, a Cloudflare Tunnel or your reverse proxy and make a Larder account for each person (see the add-on's documentation). Settings → Offline copies says whether a phone can use Larder with no connection.
+
 ## 0.7.4
 
 - **How many in each place:** ask an assistant "where's the green pesto?" and it says "1 jar in Kitchen and 1 jar in Larder", not just the places. Home Assistant's **Find item** does the same.

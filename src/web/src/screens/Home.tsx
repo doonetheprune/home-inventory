@@ -8,6 +8,7 @@ import { dayDate, expiryText, greeting, num, qty } from '../format';
 import { Empty, ErrorBox, Loading, PlaceSelect, PlaceText, ProductRow, Sheet, Stepper, useAction, usePlaces } from '../ui';
 import { ProductPicker } from '../components/ProductPicker';
 import { AddActions } from '../components/AddActions';
+import { useOpenCopy } from '../offline/current';
 
 function headline(d: Dashboard): string {
   const parts: string[] = [];
@@ -53,6 +54,7 @@ export function Home() {
   const { data: d, error, isLoading } = useQuery({ queryKey: ['home'], queryFn: api.home });
   const { run } = useAction();
   const [moving, setMoving] = useState(false);
+  const copy = useOpenCopy();
   if (isLoading) return <Loading />;
   if (error || !d) return <div className="content"><ErrorBox error={error} /></div>;
 
@@ -63,12 +65,14 @@ export function Home() {
     <div className="content home-grid">
       <div className="hello"><h2>{headline(d)}</h2></div>
 
-      <div className="actions">
-        <Link className="act big" to="/scan"><span className="bars" aria-hidden="true" /><Icon name="scan" size="lg" /><div><b>Scan</b><br /><span>Add, use or move anything with a barcode, QR code or NFC tag</span></div></Link>
-        <Link className="act" to="/add"><Icon name="plus" /><div><b>Add by name</b><br /><span>Tools, fuel, anything without a barcode</span></div></Link>
-        <AddActions place="home" />
-        <Link className="act" to="/scan?mode=putaway"><Icon name="inbox" /><div><b>Put away</b><br /><span>Scan the item, then the shelf</span></div></Link>
-      </div>
+      {!copy && (
+        <div className="actions">
+          <Link className="act big" to="/scan"><span className="bars" aria-hidden="true" /><Icon name="scan" size="lg" /><div><b>Scan</b><br /><span>Add, use or move anything with a barcode, QR code or NFC tag</span></div></Link>
+          <Link className="act" to="/add"><Icon name="plus" /><div><b>Add by name</b><br /><span>Tools, fuel, anything without a barcode</span></div></Link>
+          <AddActions place="home" />
+          <Link className="act" to="/scan?mode=putaway"><Icon name="inbox" /><div><b>Put away</b><br /><span>Scan the item, then the shelf</span></div></Link>
+        </div>
+      )}
 
       <div className="card shopcard">
         <div className="label" style={{ margin: 0 }}>Going shopping?</div>
