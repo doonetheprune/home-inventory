@@ -87,6 +87,12 @@ export const Product = z.object({
   onShoppingList: z.boolean().default(false),
   /** Where new stock goes by default. */
   defaultPlaceId: Id.nullable().default(null),
+  /**
+   * Places this item is kept in. A place joins when stock is added there and stays
+   * when it runs out (0 there, more to come), until it's taken off or the stock is
+   * moved somewhere else for good.
+   */
+  keptInPlaceIds: z.array(Id).default([]),
   nfcTags: z.array(z.string().max(200)).default([]),
   /** Linked Home Assistant device ids (used from Phase 2). */
   haDeviceIds: z.array(z.string().max(200)).default([]),
@@ -248,6 +254,8 @@ export const ProductSummary = z.object({
   status: ProductStatus,
   /** Usual places with stock, most stock first. */
   places: z.array(PlaceRef),
+  /** How many are in each place it's kept in (its usual places, so out-of-place stock counts where it lives), most first, including places with none right now. */
+  stockByPlace: z.array(PlaceRef.extend({ quantity: z.number() })).default([]),
   /** Places where out-of-place stock is right now. */
   nowIn: z.array(PlaceRef),
 });
@@ -288,7 +296,7 @@ export const PlaceContents = z.object({
   path: z.string(),
   breadcrumbs: z.array(PlaceRef),
   children: z.array(PlaceRef.extend({ itemCount: z.number() })),
-  /** Stock that lives here (including any that is out of place right now). */
+  /** Stock that lives here (including any that is out of place right now), and items kept here with none right now (quantity 0). */
   items: z.array(z.object({ summary: ProductSummary, quantity: z.number(), outOfPlace: z.boolean(), nowIn: PlaceRef.nullable() })),
   /** Stock from elsewhere that is here right now. */
   visitors: z.array(z.object({ summary: ProductSummary, quantity: z.number(), usualPlace: PlaceRef.nullable() })),

@@ -17,7 +17,7 @@ import type { createProductService } from './products';
 import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
-import { loadWorld, needsBuying, summarise } from './world';
+import { loadWorld, needsBuying, placesText, summarise } from './world';
 import { amount, daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
@@ -319,8 +319,8 @@ export function createAutomation(deps: {
     async run(i) {
       const p = await resolve.product(i.item);
       const s = await products.summary(p.id);
-      const where = s.places.map((x) => x.path);
-      return { message: `${brief(s)}${where.length ? ` In ${where.join(' and ')}.` : ''}${s.nowIn.length ? ` Now in ${s.nowIn.map((x) => x.path).join(' and ')}.` : ''}`, ...itemInfo(s) };
+      const where = placesText(s);
+      return { message: `${brief(s)}${where ? ` ${where[0]!.toUpperCase()}${where.slice(1)}.` : ''}${s.nowIn.length ? ` Now in ${s.nowIn.map((x) => x.path).join(' and ')}.` : ''}`, ...itemInfo(s) };
     },
   });
   addAction({
