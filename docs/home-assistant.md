@@ -2,7 +2,7 @@
 
 Two parts, used together or separately:
 
-- **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data.
+- **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data (when they include add-ons); Larder stops while its data is copied (usually a few seconds), so the copy is always complete.
 - **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags, shared links and battery linking. The add-on installs and updates it for you, so you don't need HACS.
 
 Larder can also make zones for the shops you use, and an automation that sends a shop's list to your phone when you get there ([Shop arrival alerts](#shop-arrival-alerts)).

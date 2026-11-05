@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3
+
+- **Safer Home Assistant backups:** Home Assistant now stops Larder while it copies Larder's data (usually a few seconds), then starts it again, so the database can't be copied halfway through a change and every backup restores cleanly. Larder's sensors show as unavailable for those seconds. Backups still include everything: items, stock, places, settings (AI keys and the Gmail sign-in too) and photos, as long as your backups include add-ons.
+
 ## 0.7.2
 
 - **Add by photo has a shutter again:** in the scanner's Add mode, a big **Take photo** button sits under the camera, as on Add from receipt, instead of the small **Read with AI** button that was easy to miss. Barcodes still scan by themselves. A volume button or Space takes the photo too.
