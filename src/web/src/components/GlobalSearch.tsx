@@ -11,6 +11,7 @@ import { api } from '../api';
 import { Icon } from '../icons';
 import { num, plural, stockText } from '../format';
 import { ProductTile, useAction, useDebounced, useShops } from '../ui';
+import { useOpenCopy } from '../offline/current';
 
 interface Row {
   key: string;
@@ -31,6 +32,8 @@ function listShop(s: ProductSummary, shops: Shop[]): Shop | undefined {
 export function GlobalSearch() {
   const navigate = useNavigate();
   const shops = useShops();
+  // A saved copy: search and open things, but no quick changes or new items.
+  const copy = useOpenCopy();
   const { run } = useAction();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -184,7 +187,7 @@ export function GlobalSearch() {
         <input
           ref={input}
           type="search"
-          placeholder="Search or add anything…"
+          placeholder={copy ? 'Search this saved copy…' : 'Search or add anything…'}
           aria-label="Search or add anything"
           autoComplete="off"
           value={q}
@@ -196,7 +199,7 @@ export function GlobalSearch() {
           onKeyDown={onKey}
         />
         {isFetching && open ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <kbd className="gs-kbd">/</kbd>}
-        <button type="button" className="gs-scan" aria-label="Scan instead" onClick={() => go('/scan')}><Icon name="scan" /></button>
+        {!copy && <button type="button" className="gs-scan" aria-label="Scan instead" onClick={() => go('/scan')}><Icon name="scan" /></button>}
       </div>
       {open && (
         <div className="gs-results" role="listbox" onMouseMove={(e) => {
@@ -231,7 +234,7 @@ export function GlobalSearch() {
                         </span>
                       </span>
                     </a>
-                    <div className="gs-acts">
+                    {!copy && <div className="gs-acts">
                       {hl && count && p ? <span className="gs-pending">{count > 0 ? '+' : '−'}{Math.abs(count)}</span> : null}
                       {row.kind === 'stepper' && p ? (
                         <span className="stepper sm">
@@ -244,14 +247,16 @@ export function GlobalSearch() {
                           {{ renew: 'Renewed', flat: '1 went flat', bought: 'Bought it', tolist: 'Add to list', link: row.section === 'shopping' || row.section === 'shops' ? 'Open list' : 'Open', stepper: 'Open' }[row.kind]}
                         </button>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
             </div>
           ))}
-          {dq && !rows.length && !isFetching && <div className="gs-empty"><b>Nothing called “{dq}” yet</b><br /><span className="small muted">Add it now. You can scan a barcode for it later.</span></div>}
-          {dq && (hasStock ? (
+          {dq && !rows.length && !isFetching && (copy
+            ? <div className="gs-empty"><b>Nothing called “{dq}” in this copy</b></div>
+            : <div className="gs-empty"><b>Nothing called “{dq}” yet</b><br /><span className="small muted">Add it now. You can scan a barcode for it later.</span></div>)}
+          {dq && !copy && (hasStock ? (
             <button type="button" className="gs-line accent" onClick={() => newItem()}><Icon name="plus" size="sm" />Not what you meant? Add “{q.trim()}” as a new item</button>
           ) : (
             <>

@@ -345,6 +345,16 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
 .more-grid a span.muted { font-size: 12.5px; margin-top: -6px; }
 .login { min-height: 100%; display: grid; place-items: center; padding: 24px var(--gr) 24px var(--gl); }
 .login .card { width: min(420px, 100%); padding: 24px; display: grid; gap: 16px; }
+
+/* ---------- offline copies ---------- */
+.login .card.offline-start { width: min(480px, 100%); gap: 20px; }
+.offline-start .list { max-height: 50vh; overflow-y: auto; }
+button.copy-open { background: none; border: 0; padding: 0; text-align: left; color: inherit; cursor: pointer; }
+button.copy-open:disabled { cursor: default; opacity: 1; }
+.copy-bar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px var(--gr) 8px var(--gl); background: var(--soon-bg); color: var(--soon); border-bottom: 1px solid var(--line); font-size: 13px; }
+.copy-bar .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-bar .btn { flex: none; }
+.app.copy-open .tabbar { grid-template-columns: repeat(4, 1fr); }
 .secret { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 10px; padding: 12px; overflow-wrap: anywhere; user-select: all; }
 
 /* ---------- big screens: sidebar and columns ---------- */
@@ -364,6 +374,9 @@ details.loc[open] > summary .chev { transform: rotate(90deg); }
   .gs-kbd { display: inline-block; }
   .gs-keys { display: block; }
   .screen { grid-column: 2; grid-row: 2; }
+  .app.copy-open { grid-template-rows: auto auto minmax(0, 1fr); }
+  .copy-bar { grid-column: 1 / -1; grid-row: 2; padding-inline: 22px 32px; }
+  .app.copy-open .screen, .app.copy-open .tabbar { grid-row: 3; }
   .tabbar { grid-column: 1; grid-row: 2; width: 232px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 20px 14px; border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
   .tab { order: 3; display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 9px 12px; border-radius: 10px; }
   .tab:hover { background: var(--surface-2); color: var(--ink); }

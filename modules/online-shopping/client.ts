@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { LarderError } from '@larder/core';
 import {
-  Basket, BasketAddResult, Booking, CONTRACT_MAJOR, ErrorBody, FavouriteList, Health, Job, Manifest, Product, Quote, SlotList,
+  Basket, BasketAddResult, Booking, CONTRACT_MAJOR, ErrorBody, FavouriteList, Health, Job, Manifest, Product, Quote, SlotList, type SlotMethod,
   type BasketLine, type QuoteLine,
 } from './contract';
 
@@ -101,7 +101,13 @@ export function providerClient(doFetch: typeof fetch, p: ProviderAddress) {
   return {
     health: () => call(Health, 'GET', '/health', undefined, 8000),
     manifest: () => call(Manifest.extend({ contract_version: z.string() }), 'GET', '/manifest', undefined, 15_000),
-    slots: (q: { when?: string; date?: string }) => call(SlotList, 'GET', `/slots?${new URLSearchParams(q.date ? { date: q.date } : { when: q.when ?? '' })}`, undefined, 3 * MINUTE),
+    /** Delivery slots, or click and collect ones (method collection) at the usual branch or `store` (an id or words from its name). */
+    slots: (q: { when?: string; date?: string; method?: SlotMethod; store?: string }) => {
+      const query = new URLSearchParams(q.date ? { date: q.date } : { when: q.when ?? '' });
+      if (q.method === 'collection') query.set('method', 'collection');
+      if (q.method === 'collection' && q.store) query.set('store', q.store);
+      return call(SlotList, 'GET', `/slots?${query}`, undefined, 3 * MINUTE);
+    },
     book: async (slotId: string) => (await call(z.object({ booking: Booking }), 'POST', '/slots/book', { slot_id: slotId }, 3 * MINUTE)).booking,
     /** Live prices, in the order asked. Up to 200 at a time; more are asked in batches. */
     async quote(listingIds: string[]): Promise<QuoteLine[]> {

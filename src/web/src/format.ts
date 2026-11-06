@@ -102,3 +102,21 @@ export function money(amount: number, currency = 'GBP', decimals?: number): stri
   const symbol = ({ GBP: '£', EUR: '€', USD: '$' } as Record<string, string>)[currency] ?? `${currency} `;
   return `${symbol}${amount.toFixed(decimals ?? (amount < 1 && amount > 0 ? 3 : 2))}`;
 }
+
+/** When something was saved, in this device's time: "Today, 14:32", "Yesterday, 08:10", "Mon 3 Nov, 19:45", "3 Nov 2025, 19:45". */
+export function savedText(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(now) - day(d)) / 86_400_000);
+  if (days === 0) return `Today, ${time}`;
+  if (days === 1) return `Yesterday, ${time}`;
+  const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear() ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' };
+  return `${d.toLocaleDateString('en-GB', opts).replace(',', '')}, ${time}`;
+}
+
+/** "640 KB", "1.2 MB". */
+export function sizeText(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}

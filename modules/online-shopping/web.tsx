@@ -19,6 +19,8 @@ interface Status {
   checkedAt: string; ok: boolean; message: string | null; reachable: boolean; loggedIn: boolean | null;
   name: string | null; version: string | null; contractVersion: string | null; capabilities: string[];
   host: { mac: string | null; address: string | null } | null;
+  /** False when the shop has no delivery or collection slots at all. */
+  usesSlots: boolean;
 }
 interface ProviderView {
   id: string; type: 'tesco' | 'other'; shopId: string; shopName: string; isDefault: boolean; automation: string | null; url: string; tokenHint: string;
@@ -507,11 +509,18 @@ interface Run {
   summary: string | null; plan: { total: number; items: unknown[] } | null; error: { code: string; message: string } | null;
 }
 
-interface Booking { slotId: string; start: string; end: string; price: number | null; reference: string | null; reservedUntil: string | null }
+type Method = 'delivery' | 'collection';
+interface Booking { slotId: string; start: string; end: string; price: number | null; reference: string | null; reservedUntil: string | null; method: Method; store: string | null }
 interface Slot { id: string; start: string; end: string; price: number; available: boolean }
+interface Branch { id: string; name: string; address: string | null }
 
 const slotWhen = (b: { start: string; end: string }) =>
   `${new Date(`${b.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}, ${b.start.slice(11, 16)}–${b.end.slice(11, 16)}`;
+
+/** "Delivery: Friday 6 November, 17:00–18:00" or "Click and collect from Southport Extra: …" */
+const BookedSlot = ({ b }: { b: Booking }) => (
+  <>{b.method === 'collection' ? <>Click and collect{b.store ? ` from ${b.store}` : ''}</> : 'Delivery'}: <b>{slotWhen(b)}</b>{b.reference ? ` (ref ${b.reference})` : ''}</>
+);
 
 /** The next week's days, from tomorrow: YYYY-MM-DD in this device's time, and a short label. */
 function nextDays(n = 7): Array<{ date: string; label: string }> {
@@ -527,10 +536,10 @@ function nextDays(n = 7): Array<{ date: string; label: string }> {
 
 const partOfDay = (x: Slot) => { const h = Number(x.start.slice(11, 13)); return h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening'; };
 
-type DayAnswer = { described: string; date: string; slots: Slot[] };
+type DayAnswer = { described: string; date: string; method: Method; store: Branch | null; stores: Branch[]; slots: Slot[]; offerCollection: boolean };
 
-/** A day's free slots at the shop, to book one. */
-function DaySlots({ shopId, found, onBooked }: { shopId: string; found: DayAnswer; onBooked: (b: Booking) => void }) {
+/** A day's free slots at the shop (or a branch, for collection), to book one. */
+function DaySlots({ shopId, found, onBooked, onCollect }: { shopId: string; found: DayAnswer; onBooked: (b: Booking) => void; onCollect: () => void }) {
   const toast = useToast();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -553,7 +562,9 @@ function DaySlots({ shopId, found, onBooked }: { shopId: string; found: DayAnswe
   return (
     <div className="stack" style={{ gap: 10 }}>
       <b>{found.described || shortDate(found.date)}</b>
-      {!free.length && <p className="small muted">No slots free that day. Try another day.</p>}
+      {!free.length && (found.offerCollection
+        ? <p className="small muted">No delivery slots free that day. <button type="button" className="link small" onClick={onCollect}>Try click and collect</button></p>
+        : <p className="small muted">No slots free that day. Try another day{found.stores.length ? ' or branch' : ''}.</p>)}
       {parts.map((g) => (
         <div key={g.name} className="stack" style={{ gap: 6 }}>
           <span className="small muted">{g.name}</span>
@@ -572,36 +583,49 @@ function DaySlots({ shopId, found, onBooked }: { shopId: string; found: DayAnswe
 }
 
 /**
- * "Do me a shop" in the app: pick a delivery slot from the next few days
- * (or another day in words), then plan or fill the basket for it.
+ * "Do me a shop" in the app: pick a delivery (or click and collect) slot from
+ * the next few days (or another day in words), then plan or fill the basket for it.
  */
-function ShopSheet({ shopId, shopName, booked, canBook, startAt, onStart, onClose }: {
-  shopId: string; shopName: string; booked: Booking | null; canBook: boolean; startAt: 'slot' | 'basket';
+function ShopSheet({ shopId, shopName, booked, canBook, canCollect, noSlots, startAt, onStart, onClose }: {
+  shopId: string; shopName: string; booked: Booking | null; canBook: boolean; canCollect: boolean; noSlots: boolean; startAt: 'slot' | 'basket';
   onStart: (kind: 'plan' | 'fill') => void; onClose: () => void;
 }) {
   const days = nextDays();
-  const [step, setStep] = useState<'slot' | 'basket'>(canBook ? startAt : 'basket');
+  const [step, setStep] = useState<'slot' | 'basket'>(canBook || canCollect ? startAt : 'basket');
   const [day, setDay] = useState(days[0]!.date);
   const [other, setOther] = useState('');
   const [typed, setTyped] = useState<string | null>(null);
   const [booking, setBooking] = useState<Booking | null>(booked);
+  const [method, setMethod] = useState<Method>(canBook ? (booked?.method ?? 'delivery') : 'collection');
+  // The branch to collect from, once one other than the usual is picked.
+  const [branch, setBranch] = useState<string | null>(null);
   const shown = typed ?? day;
-  // Each day is asked once while the sheet is open: the shop's website is slow, and it may wake the computer.
+  const key = `${method}|${method === 'collection' ? (branch ?? '') : ''}|${shown}`;
+  // Each day (and branch) is asked once while the sheet is open: the shop's website is slow, and it may wake the computer.
   const [asked, setAsked] = useState<Record<string, { found?: DayAnswer; error?: string }>>({});
-  const answer = asked[shown];
+  const answer = asked[key];
   useEffect(() => {
-    if (step !== 'slot' || asked[shown]) return;
-    setAsked((d) => ({ ...d, [shown]: {} }));
-    call<DayAnswer>('GET', `/shops/${shopId}/slots?when=${encodeURIComponent(shown)}`).then(
-      (found) => setAsked((d) => ({ ...d, [shown]: { found } })),
-      (err: unknown) => setAsked((d) => ({ ...d, [shown]: { error: err instanceof Error ? err.message : 'Couldn\'t get the slots.' } })),
+    if (step !== 'slot' || asked[key]) return;
+    setAsked((d) => ({ ...d, [key]: {} }));
+    const q = new URLSearchParams({ when: shown, method });
+    if (method === 'collection' && branch) q.set('branch', branch);
+    call<DayAnswer>('GET', `/shops/${shopId}/slots?${q}`).then(
+      (found) => setAsked((d) => ({ ...d, [key]: { found } })),
+      (err: unknown) => setAsked((d) => ({ ...d, [key]: { error: err instanceof Error ? err.message : 'Couldn\'t get the slots.' } })),
     );
-  }, [step, shown, shopId, asked]);
+  }, [step, key, shown, method, branch, shopId, asked]);
+  const here = answer?.found?.store;
+  const branches = here ? [here, ...(answer.found?.stores ?? [])] : [];
   return (
     <Sheet title={`Shop at ${shopName}`} onClose={onClose}>
       {step === 'slot' ? (
         <div className="stack" style={{ gap: 14 }}>
-          <span className="small muted">When would you like it delivered? Offers are checked for that day.</span>
+          {canBook && canCollect && (
+            <div className="chips" role="tablist" aria-label="Delivery or collection">
+              {(['delivery', 'collection'] as const).map((m) => <button type="button" role="tab" aria-selected={method === m} key={m} className={`chip ${method === m ? 'on' : ''}`} onClick={() => setMethod(m)}>{m === 'delivery' ? 'Delivery' : 'Click and collect'}</button>)}
+            </div>
+          )}
+          <span className="small muted">{method === 'collection' ? 'When would you like to collect it?' : 'When would you like it delivered?'} Offers are checked for that day.</span>
           <div className="chips wrap" role="tablist" aria-label="Delivery day">
             {days.map((d) => <button type="button" role="tab" aria-selected={!typed && d.date === day} key={d.date} className={`chip ${!typed && d.date === day ? 'on' : ''}`} onClick={() => { setTyped(null); setDay(d.date); }}>{d.label}</button>)}
           </div>
@@ -609,18 +633,27 @@ function ShopSheet({ shopId, shopName, booked, canBook, startAt, onStart, onClos
             <input className="input" value={other} onChange={(e) => setOther(e.target.value)} placeholder="Another day: 'next tuesday evening', '20 Nov'…" aria-label="Another day" />
             <button className="btn small" disabled={!other.trim()}>Find</button>
           </form>
-          {answer?.found ? <DaySlots shopId={shopId} found={answer.found} onBooked={(b) => { setBooking(b); setStep('basket'); }} />
-            : answer?.error ? <p className="small" style={{ color: 'var(--low)' }}>{answer.error} <button type="button" className="link small" onClick={() => setAsked((d) => { const { [shown]: _, ...rest } = d; return rest; })}>Try again</button></p>
+          {method === 'collection' && branches.length > 1 && (
+            <label className="row small" style={{ gap: 8, alignItems: 'center' }}>
+              <span className="muted">Collect from</span>
+              <select className="input" style={{ width: 'auto', flex: '1 1 160px' }} value={here!.id} onChange={(e) => setBranch(e.target.value)} aria-label="Branch to collect from">
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </label>
+          )}
+          {method === 'collection' && here && branches.length <= 1 && <span className="small">Collecting from <b>{here.name}</b>{here.address ? `, ${here.address}` : ''}</span>}
+          {answer?.found ? <DaySlots shopId={shopId} found={answer.found} onBooked={(b) => { setBooking(b); setStep('basket'); }} onCollect={() => setMethod('collection')} />
+            : answer?.error ? <p className="small" style={{ color: 'var(--low)' }}>{answer.error} <button type="button" className="link small" onClick={() => setAsked((d) => { const { [key]: _, ...rest } = d; return rest; })}>Try again</button></p>
               : <p className="small muted row" style={{ gap: 8 }}><span className="spinner" style={{ display: 'inline-block', width: 14, height: 14 }} /> Asking {shopName} for slots (this wakes its computer if it's asleep)…</p>}
           {booking && <button type="button" className="link small" style={{ alignSelf: 'flex-start' }} onClick={() => setStep('basket')}>Keep {slotWhen(booking)}</button>}
         </div>
       ) : (
         <div className="stack" style={{ gap: 14 }}>
-          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          {noSlots ? <span className="small muted">{shopName} has no slots to book. Offers are checked for today.</span> : <div className="row" style={{ gap: 8, alignItems: 'center' }}>
             <Icon name="truck" size="sm" />
-            <span className="grow small">{booking ? <>Delivery: <b>{slotWhen(booking)}</b>{booking.reference ? ` (ref ${booking.reference})` : ''}</> : canBook ? 'No delivery slot booked. Offers are checked for today.' : `Book a slot on ${shopName}'s website. Offers are checked for today.`}</span>
-            {canBook && <button type="button" className="btn small ghost" onClick={() => setStep('slot')}>{booking ? 'Change' : 'Pick a slot'}</button>}
-          </div>
+            <span className="grow small">{booking ? <BookedSlot b={booking} /> : canBook || canCollect ? 'No slot booked. Offers are checked for today.' : `Book a slot on ${shopName}'s website. Offers are checked for today.`}</span>
+            {(canBook || canCollect) && <button type="button" className="btn small ghost" onClick={() => setStep('slot')}>{booking ? 'Change' : 'Pick a slot'}</button>}
+          </div>}
           <p className="small muted">Larder adds what's low, and anything on offer at its target price, to your {shopName} basket. It stops there: you check the basket and pay on {shopName}'s website.</p>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <button type="button" className="btn primary" onClick={() => { onStart('fill'); onClose(); }}><Icon name="cart" size="sm" />Fill basket</button>
@@ -647,7 +680,10 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   const booked = useQuery({ queryKey: ['online-shopping', 'booking', list.shop.id], queryFn: () => call<{ booking: Booking | null }>('GET', `/shops/${list.shop.id}/booking`), enabled: !!provider }).data?.booking ?? null;
   const [shown, setShown] = useState(false);
   const [sheet, setSheet] = useState<'slot' | 'basket' | null>(null);
-  const canBook = !provider?.status?.capabilities.length || provider.status.capabilities.includes('slot_booking');
+  // A shop with no slots at all skips them: no slot row, and Start a shop goes straight to the basket.
+  const noSlots = provider?.status?.usesSlots === false;
+  const canBook = !noSlots && (!provider?.status?.capabilities.length || provider.status.capabilities.includes('slot_booking'));
+  const canCollect = !noSlots && !!provider?.status?.capabilities.includes('click_and_collect');
   useEffect(() => {
     // A filled basket changes what's expected: refresh lists and items once it's done.
     if (r && r.status !== 'running') void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'online-shopping' && q.queryKey[0] !== 'auth' });
@@ -658,18 +694,18 @@ function OnlineBasketPanel({ list }: { list: ShoppingList }) {
   return (
     <div className="card pad stack" style={{ gap: 10 }}>
       <span><b>Online at {list.shop.name}</b><br /><span className="small muted">What's low, plus anything on offer at its target price. Stops at the basket: you check it and pay.</span></span>
-      {canBook && (
+      {(canBook || canCollect) && (
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Icon name="truck" size="sm" />
-          <span className="small grow">{booked ? <>Delivery booked: <b>{slotWhen(booked)}</b>{booked.reference ? ` (ref ${booked.reference})` : ''}</> : 'No delivery slot booked yet.'}</span>
+          <span className="small grow">{booked ? <BookedSlot b={booked} /> : 'No slot booked yet.'}</span>
           {booked && <button type="button" className="btn small ghost" disabled={running} onClick={() => setSheet('slot')}>Change slot</button>}
         </div>
       )}
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" className="btn small primary" disabled={busy || running} onClick={() => setSheet(booked || !canBook ? 'basket' : 'slot')}><Icon name="cart" size="sm" />{booked ? 'Fill basket' : 'Start a shop'}</button>
+        <button type="button" className="btn small primary" disabled={busy || running} onClick={() => setSheet(booked || !(canBook || canCollect) ? 'basket' : 'slot')}><Icon name="cart" size="sm" />{booked ? 'Fill basket' : 'Start a shop'}</button>
         <button type="button" className="btn small" disabled={busy || running} onClick={() => void start('plan')}><Icon name="search" size="sm" />Plan basket</button>
       </div>
-      {sheet && <ShopSheet shopId={list.shop.id} shopName={list.shop.name} booked={booked} canBook={canBook} startAt={sheet} onStart={(k) => void start(k)} onClose={() => setSheet(null)} />}
+      {sheet && <ShopSheet shopId={list.shop.id} shopName={list.shop.name} booked={booked} canBook={canBook} canCollect={canCollect} noSlots={noSlots} startAt={sheet} onStart={(k) => void start(k)} onClose={() => setSheet(null)} />}
       {r && (
         <div className="stack" style={{ gap: 6 }}>
           <span className="small">

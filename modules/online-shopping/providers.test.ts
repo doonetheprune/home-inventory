@@ -60,8 +60,8 @@ describe('online shopping: providers', () => {
     const { core, tesco } = await setup();
     const p = await add(core, tesco.id);
     const r = await call<{ provider: ProviderView; message: string; filledWake: boolean }>(core, 'POST', '/providers/:id/test', {}, { id: p.id });
-    expect(r.message).toBe('Tesco 0.1.0 is ready (contract 1.3). Larder will wake it with a magic packet to 4c:32:75:12:34:56 when it doesn\'t answer.');
-    expect(r.provider.status).toMatchObject({ ok: true, version: '0.1.0', contractVersion: '1.3', capabilities: expect.arrayContaining(['slot_booking']) });
+    expect(r.message).toBe('Tesco 0.1.0 is ready (contract 1.4). Larder will wake it with a magic packet to 4c:32:75:12:34:56 when it doesn\'t answer.');
+    expect(r.provider.status).toMatchObject({ ok: true, version: '0.1.0', contractVersion: '1.4', capabilities: expect.arrayContaining(['slot_booking']) });
     expect(r.provider.wake).toMatchObject({ mac: '4c:32:75:12:34:56', timeoutSeconds: 180 });
     expect(r.provider.canWake).toBe(true);
   });

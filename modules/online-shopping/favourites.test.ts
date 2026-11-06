@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeCore } from '../../tests/helpers';
 import onlineShopping from './index';
-import type { Dismissed, PendingFavourite, SyncResult } from './favourites';
+import { matchFavourite, type Dismissed, type PendingFavourite, type SyncResult } from './favourites';
 import type { OnlineFields } from './items';
 import { fakeProvider } from './test-provider';
 
@@ -99,5 +99,25 @@ describe('online shopping: favourites into Pending', () => {
     const { core } = await setup();
     const r = await core.automation.run('online_shopping_sync_favourites', {}, { userId: null });
     expect(r).toMatchObject({ added: 2, pending: 2 });
+  });
+});
+
+describe('matchFavourite', () => {
+  const fav = (name: string) => ({ id: `t:${name}`, shopId: 't', shopName: 'Tesco', listingId: name, name, packSize: null, link: '', imageUrl: null, price: null, loyaltyPrice: null, foundAt: '' });
+  const favourites = ['Tesco Unsalted Butter 250G', 'Tesco Salted Butter 250G', 'Tesco British Whole Milk 2.272L 4 Pints', 'Tesco Free Range Eggs 6 Pack'].map(fav);
+  const names = (r: ReturnType<typeof matchFavourite>) => ({ match: r.match?.name ?? null, options: r.options.map((o) => o.name) });
+
+  it('takes the one favourite with every word of the name', () => {
+    expect(names(matchFavourite({ name: 'UNSALTED BUTTER', aliases: [] }, favourites))).toEqual({ match: 'Tesco Unsalted Butter 250G', options: [] });
+    expect(names(matchFavourite({ name: 'Egg', aliases: [] }, favourites))).toEqual({ match: 'Tesco Free Range Eggs 6 Pack', options: [] });
+  });
+
+  it('tries the aliases when the name matches nothing', () => {
+    expect(names(matchFavourite({ name: 'Fresh moo juice', aliases: ['whole milk'] }, favourites))).toEqual({ match: 'Tesco British Whole Milk 2.272L 4 Pints', options: [] });
+  });
+
+  it('gives the options when more than one matches, and nothing when none do', () => {
+    expect(names(matchFavourite({ name: 'Butter', aliases: [] }, favourites))).toEqual({ match: null, options: ['Tesco Unsalted Butter 250G', 'Tesco Salted Butter 250G'] });
+    expect(names(matchFavourite({ name: 'Bread', aliases: [] }, favourites))).toEqual({ match: null, options: [] });
   });
 });

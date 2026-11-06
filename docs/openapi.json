@@ -137,6 +137,42 @@
         ],
         "additionalProperties": {}
       },
+      "OfflineCopyInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopyInput",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ]
+      },
       "PriceViewInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/PriceViewInput",
@@ -2346,6 +2382,21 @@
                   },
                   "bookedAt": {
                     "type": "string"
+                  },
+                  "method": {
+                    "default": "delivery",
+                    "type": "string",
+                    "enum": [
+                      "delivery",
+                      "collection"
+                    ]
+                  },
+                  "store": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -2361,6 +2412,10 @@
                 "type": "null"
               }
             ]
+          },
+          "usesSlots": {
+            "default": true,
+            "type": "boolean"
           },
           "plan": {
             "anyOf": [
@@ -2383,11 +2438,41 @@
                 },
                 "name": {
                   "type": "string"
+                },
+                "options": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "required": [
                 "productId",
                 "name"
+              ]
+            }
+          },
+          "linked": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName"
               ]
             }
           },
@@ -4668,6 +4753,43 @@
           "message"
         ],
         "additionalProperties": {}
+      },
+      "OfflineCopy": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopy",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ],
+        "additionalProperties": false
       },
       "PriceView": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -6987,6 +7109,21 @@
                   },
                   "bookedAt": {
                     "type": "string"
+                  },
+                  "method": {
+                    "default": "delivery",
+                    "type": "string",
+                    "enum": [
+                      "delivery",
+                      "collection"
+                    ]
+                  },
+                  "store": {
+                    "default": null,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -6996,7 +7133,9 @@
                   "price",
                   "reference",
                   "reservedUntil",
-                  "bookedAt"
+                  "bookedAt",
+                  "method",
+                  "store"
                 ],
                 "additionalProperties": false
               },
@@ -7004,6 +7143,10 @@
                 "type": "null"
               }
             ]
+          },
+          "usesSlots": {
+            "default": true,
+            "type": "boolean"
           },
           "plan": {
             "anyOf": [
@@ -7026,11 +7169,43 @@
                 },
                 "name": {
                   "type": "string"
+                },
+                "options": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               },
               "required": [
                 "productId",
-                "name"
+                "name",
+                "options"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "linked": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "listingName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "productId",
+                "name",
+                "listingName"
               ],
               "additionalProperties": false
             }
@@ -7164,8 +7339,10 @@
           "finishedAt",
           "deliveryDate",
           "booking",
+          "usesSlots",
           "plan",
           "unmatched",
+          "linked",
           "elsewhere",
           "added",
           "failed",
@@ -14241,6 +14418,27 @@
         }
       }
     },
+    "/api/v1/offline/copy": {
+      "get": {
+        "summary": "Everything the web app shows, for a copy kept on a phone",
+        "tags": [
+          "Settings"
+        ],
+        "description": "The answers to the GET requests the web app makes (every item, place, shop list and module page), as the caller sees them. The app saves this on the device and answers from it when Larder can't be reached. Sent gzipped when the client accepts it.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineCopy"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/requests/{request}": {
       "get": {
         "summary": "What is asking to connect (for the approval page)",
@@ -20685,6 +20883,10 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "usesSlots": {
+                                    "default": true,
+                                    "type": "boolean"
                                   }
                                 },
                                 "required": [
@@ -20698,7 +20900,8 @@
                                   "contractVersion",
                                   "currency",
                                   "capabilities",
-                                  "host"
+                                  "host",
+                                  "usesSlots"
                                 ],
                                 "additionalProperties": false
                               },
@@ -21111,6 +21314,10 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "usesSlots": {
+                              "default": true,
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -21124,7 +21331,8 @@
                             "contractVersion",
                             "currency",
                             "capabilities",
-                            "host"
+                            "host",
+                            "usesSlots"
                           ],
                           "additionalProperties": false
                         },
@@ -21512,6 +21720,10 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "usesSlots": {
+                              "default": true,
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -21525,7 +21737,8 @@
                             "contractVersion",
                             "currency",
                             "capabilities",
-                            "host"
+                            "host",
+                            "usesSlots"
                           ],
                           "additionalProperties": false
                         },
@@ -21851,6 +22064,10 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "usesSlots": {
+                                  "default": true,
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -21864,7 +22081,8 @@
                                 "contractVersion",
                                 "currency",
                                 "capabilities",
-                                "host"
+                                "host",
+                                "usesSlots"
                               ],
                               "additionalProperties": false
                             },
@@ -23579,7 +23797,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/slots": {
       "get": {
-        "summary": "Delivery slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
+        "summary": "Delivery or click and collect slots for a day, in everyday words (\"tomorrow evening\") or YYYY-MM-DD",
         "tags": [
           "Module: online-shopping"
         ],
@@ -23593,6 +23811,29 @@
             "in": "query",
             "name": "when",
             "required": true
+          },
+          {
+            "schema": {
+              "default": "delivery",
+              "type": "string",
+              "enum": [
+                "delivery",
+                "collection"
+              ]
+            },
+            "in": "query",
+            "name": "method",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "branch",
+            "required": false
           },
           {
             "schema": {
@@ -23618,6 +23859,71 @@
                     },
                     "described": {
                       "type": "string"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "delivery",
+                        "collection"
+                      ]
+                    },
+                    "store": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "address": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "address"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "default": null,
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "address"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "slots": {
                       "type": "array",
@@ -23649,12 +23955,19 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "offerCollection": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "date",
                     "described",
-                    "slots"
+                    "method",
+                    "store",
+                    "stores",
+                    "slots",
+                    "offerCollection"
                   ],
                   "additionalProperties": false
                 }
@@ -23666,7 +23979,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/book": {
       "post": {
-        "summary": "Book a delivery slot from the last list",
+        "summary": "Book a delivery or click and collect slot from the last list",
         "tags": [
           "Module: online-shopping"
         ],
@@ -23742,6 +24055,21 @@
                         },
                         "bookedAt": {
                           "type": "string"
+                        },
+                        "method": {
+                          "default": "delivery",
+                          "type": "string",
+                          "enum": [
+                            "delivery",
+                            "collection"
+                          ]
+                        },
+                        "store": {
+                          "default": null,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -23751,7 +24079,9 @@
                         "price",
                         "reference",
                         "reservedUntil",
-                        "bookedAt"
+                        "bookedAt",
+                        "method",
+                        "store"
                       ],
                       "additionalProperties": false
                     },
@@ -23773,7 +24103,7 @@
     },
     "/api/v1/modules/online-shopping/shops/{shopId}/booking": {
       "get": {
-        "summary": "The delivery slot booked at a shop, while it's still to come",
+        "summary": "The slot booked at a shop, while it's still to come",
         "tags": [
           "Module: online-shopping"
         ],
@@ -23832,6 +24162,21 @@
                             },
                             "bookedAt": {
                               "type": "string"
+                            },
+                            "method": {
+                              "default": "delivery",
+                              "type": "string",
+                              "enum": [
+                                "delivery",
+                                "collection"
+                              ]
+                            },
+                            "store": {
+                              "default": null,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -23841,7 +24186,9 @@
                             "price",
                             "reference",
                             "reservedUntil",
-                            "bookedAt"
+                            "bookedAt",
+                            "method",
+                            "store"
                           ],
                           "additionalProperties": false
                         },

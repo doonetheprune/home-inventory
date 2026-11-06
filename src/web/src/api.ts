@@ -6,12 +6,11 @@ import type {
   Category, Dashboard, IdentifyResult, PlaceContents, PlaceNodeT, PlaceRef, PlaceToSort, Place, Product, ProductCreate, ProductDetail, ProductSummary,
   SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase,
 } from '@larder/core';
+import { ApiError } from './apiError';
+import { openCopy } from './offline/current';
+import type { OfflineCopy } from './offline/copy';
 
-export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
-    super(message);
-  }
-}
+export { ApiError };
 
 type Listener = () => void;
 const authListeners = new Set<Listener>();
@@ -22,7 +21,19 @@ export const onAuthRequired = (l: Listener) => {
   };
 };
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+const UNREACHABLE = "Can't reach Larder. Check your connection and that the server is running.";
+
+interface RequestOptions {
+  /** Ask the live Larder even while a saved copy is open. */
+  live?: boolean;
+  /** Give up (as unreachable) after this long. */
+  timeoutMs?: number;
+}
+
+async function request<T>(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<T> {
+  // Looking at a copy saved on this device: it answers instead of the server.
+  const copy = options.live ? null : openCopy();
+  if (copy) return copy.answer(method, path) as T;
   const headers: Record<string, string> = { 'X-Larder-Client': 'web' };
   let payload: BodyInit | undefined;
   if (body instanceof FormData) payload = body;
@@ -30,16 +41,28 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
+  const abort = options.timeoutMs ? new AbortController() : undefined;
+  const timer = abort ? window.setTimeout(() => abort.abort(), options.timeoutMs) : undefined;
   let res: Response;
+  let text: string;
   try {
-    res = await fetch(`api/v1${path}`, { method, headers, body: payload, credentials: 'same-origin' });
+    res = await fetch(`api/v1${path}`, { method, headers, body: payload, credentials: 'same-origin', signal: abort?.signal });
+    text = await res.text();
   } catch {
-    throw new ApiError("Can't reach Larder. Check your connection and that the server is running.", 0, 'offline');
+    throw new ApiError(UNREACHABLE, 0, 'offline');
+  } finally {
+    window.clearTimeout(timer);
   }
   if (res.status === 401 && !path.startsWith('/auth/')) authListeners.forEach((l) => l());
-  const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : undefined;
+  let data: unknown;
+  try {
+    data = text ? (JSON.parse(text) as unknown) : undefined;
+  } catch {
+    // Larder always answers JSON: anything else is a proxy's own page (Home Assistant, Cloudflare, a captive portal) because Larder itself didn't answer.
+    throw new ApiError(UNREACHABLE, res.status, 'offline');
+  }
   if (!res.ok) {
+    if (res.status === 502 || res.status === 503 || res.status === 504) throw new ApiError(UNREACHABLE, res.status, 'offline');
     const e = (data ?? {}) as { message?: string; error?: string };
     throw new ApiError(e.message ?? `Larder answered ${res.status}.`, res.status, e.error ?? 'error');
   }
@@ -65,7 +88,9 @@ export interface ServerInfo { version: string; auth: string; storage: string; ba
 export const api = {
   raw: request,
   auth: {
-    status: () => get<AuthStatus>('/auth/status'),
+    status: () => request<AuthStatus>('GET', '/auth/status', undefined, { timeoutMs: 10_000 }),
+    /** Is the live Larder there (while a saved copy is open)? */
+    liveStatus: () => request<AuthStatus>('GET', '/auth/status', undefined, { live: true, timeoutMs: 10_000 }),
     setup: (b: { username: string; password: string; displayName?: string }) => post<AuthUser>('/auth/setup', b),
     login: (b: { username: string; password: string }) => post<AuthUser>('/auth/login', b),
     logout: () => post('/auth/logout'),
@@ -157,6 +182,10 @@ export const api = {
       // The module's own root is its address with nothing after it ("/?show=all" too).
       return request<T>(method, `/modules/${id}${path === '/' ? '' : path.startsWith('/?') ? path.slice(1) : path}`, body);
     },
+  },
+  offline: {
+    /** Everything the app shows, to keep on this device (always from the live Larder). */
+    copy: () => request<OfflineCopy>('GET', '/offline/copy', undefined, { live: true }),
   },
   oauth: {
     request: (id: string) => get<{ client: string; redirectHost: string }>(`/oauth/requests/${encodeURIComponent(id)}`),

@@ -55,10 +55,12 @@ export const Manifest = z.object({
   name: z.string(),
   version: z.string(),
   currency: z.string(),
-  /** loyalty_prices, multibuys, slot_booking, favourites, add_favourites, product_images, substitution_prefs, search, and later more. */
+  /** loyalty_prices, multibuys, slot_booking, favourites, add_favourites, product_images, substitution_prefs, search, click_and_collect (1.4), and later more. */
   capabilities: z.array(z.string()),
   /** The machine it runs on, for Wake-on-LAN (1.3). */
   host: z.object({ mac: z.string().nullable(), address: z.string().nullable() }).nullable().default(null),
+  /** False for a shop with no delivery or collection slots at all: Larder skips choosing one (1.4). */
+  uses_slots: z.boolean().default(true),
 });
 export type Manifest = z.infer<typeof Manifest>;
 
@@ -73,15 +75,28 @@ export type Health = z.infer<typeof Health>;
 
 export const Slot = z.object({ id: z.string(), start: z.string(), end: z.string(), price: Money, available: z.boolean() });
 export type Slot = z.infer<typeof Slot>;
+/** Delivery, or click and collect (1.4). */
+export const SlotMethod = z.enum(['delivery', 'collection']);
+export type SlotMethod = z.infer<typeof SlotMethod>;
+/** A branch to collect from (1.4). */
+export const Store = z.object({ id: z.string(), name: z.string(), address: z.string().nullable().default(null) });
+export type Store = z.infer<typeof Store>;
 export const SlotList = z.object({
   date: z.string(),
   described: z.string().default(''),
   window: z.object({ from: z.string().nullable(), until: z.string().nullable() }).nullable().default(null),
+  method: SlotMethod.default('delivery'),
+  /** For collection: the branch the slots are at, and the others that can be asked for (1.4). */
+  store: Store.nullable().default(null),
+  stores: z.array(Store).default([]),
   slots: z.array(Slot),
 });
 export type SlotList = z.infer<typeof SlotList>;
 
-export const Booking = z.object({ slot_id: z.string(), booking_reference: z.string().nullable(), reserved_until: z.string().nullable() });
+export const Booking = z.object({
+  slot_id: z.string(), booking_reference: z.string().nullable(), reserved_until: z.string().nullable(),
+  method: SlotMethod.default('delivery'), store: Store.nullable().default(null),
+});
 export type Booking = z.infer<typeof Booking>;
 
 export const QuoteLine = z.object({

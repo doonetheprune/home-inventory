@@ -40,6 +40,8 @@ src/web/             React web app (Vite). Mobile first; switches to a sidebar l
   server/addon.ts    Running as a Home Assistant add-on: options, Supervisor discovery, installing the integration
   server/install-integration.ts  The add-on's start-up step (run as root by docker/entrypoint.sh) that installs it
   server/mcp.ts      MCP server at /mcp (tools from src/core/services/assistant.ts); server/oauth.ts: connector sign-in
+  web/src/offline/   Offline copies: saved on the phone (IndexedDB), answering the app's requests from one, and their screens.
+                     web/sw-template.js keeps the app on the phone (written to dist/web/sw.js at build)
 modules/             Feature modules, each self-contained with SPEC.md and tests. modules/index.ts lists them
   _template/         Copy this to start a new module
   _shared/           Helpers modules may import (not modules themselves)
@@ -74,6 +76,7 @@ mockups/             Phase 0 clickable mock-ups (the design reference)
    - `ctx.collection('name')` stores your own JSON documents in whatever storage is in use.
    - `ctx.addLookupProvider(...)`, `ctx.addSearchSection(...)` extend scanning and search.
    - `ctx.addSensor(...)`, `ctx.addAction(...)` add Home Assistant sensors and actions; `ctx.addTool(...)` adds a tool for AI assistants; `ctx.publish('my-feature.something', data)` fires an event.
+   - `ctx.addOfflinePaths(() => [...])` puts your pages in the offline copies phones keep (then set `offline: true` on the web module).
    - `productFields: z.object({...})` declares data in `product.fields['my-feature']`.
 4. Optional UI: `modules/my-feature/web.tsx` default-exports `defineWebModule({ id, productPanels, shoppingPanels, shopPanels, pages })` from `@larder/web-sdk`. It's found automatically and only shown while the module is on.
 5. Write `SPEC.md` (what it does, hooks, routes, data, settings) and tests (`*.test.ts`, see `modules/_template/template.test.ts` and `modules/pricing/pricing.test.ts`).
