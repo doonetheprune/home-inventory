@@ -17,14 +17,18 @@ export function fakeProvider(o: { token?: string; version?: string; host?: { mac
     loggedIn: true,
     /** Milliseconds each answer takes, to look like a real shop. */
     delayMs: 0,
-    version: o.version ?? '1.3',
+    version: o.version ?? '1.4',
     capabilities: ['loyalty_prices', 'multibuys', 'slot_booking', 'favourites', 'add_favourites', 'search'],
     listings: new Map<string, FakeListing>(),
     favourites: [] as string[],
     basket: new Map<string, number>(),
     jobs: new Map<string, Record<string, unknown>>(),
     slots: [] as Array<{ id: string; start: string; end: string; price: number; available: boolean }>,
+    /** Click and collect branches (the first is the usual one), each with its slots. Needs click_and_collect in capabilities. */
+    stores: [] as Array<{ id: string; name: string; address: string | null; slots: Array<{ id: string; start: string; end: string; price: number; available: boolean }> }>,
     booked: null as string | null,
+    /** False for a shop with no slots at all. */
+    usesSlots: true,
     log: [] as Array<{ method: string; path: string; body?: unknown }>,
   };
   const token = o.token ?? 'secret';
@@ -44,18 +48,29 @@ export function fakeProvider(o: { token?: string; version?: string; host?: { mac
     const path = url.pathname;
 
     if (method === 'GET' && path === '/health') return reply(200, { ok: true, logged_in: state.loggedIn, session_valid: state.loggedIn, busy: false, message: state.loggedIn ? null : 'Log in to Tesco again in the Larder Chrome.' });
-    if (method === 'GET' && path === '/manifest') return reply(200, { provider: 'tesco', name: 'Tesco', version: '0.1.0', currency: 'GBP', capabilities: state.capabilities, host: o.host === undefined ? { mac: '4c:32:75:12:34:56', address: '192.168.1.231' } : o.host });
+    if (method === 'GET' && path === '/manifest') return reply(200, { provider: 'tesco', name: 'Tesco', version: '0.1.0', currency: 'GBP', capabilities: state.capabilities, uses_slots: state.usesSlots, host: o.host === undefined ? { mac: '4c:32:75:12:34:56', address: '192.168.1.231' } : o.host });
     if (!state.loggedIn) return error(503, 'login_expired', 'Log in to Tesco again in the Larder Chrome, then try again.');
 
     if (method === 'GET' && path === '/slots') {
       const date = url.searchParams.get('date') ?? '2026-10-30';
-      return reply(200, { date, described: `Friday 30 October${url.searchParams.get('when')?.includes('evening') ? ', evening (17:00 onwards)' : ''}`, window: null, slots: state.slots });
+      const described = `Friday 30 October${url.searchParams.get('when')?.includes('evening') ? ', evening (17:00 onwards)' : ''}`;
+      if (url.searchParams.get('method') === 'collection') {
+        if (!state.capabilities.includes('click_and_collect')) return error(501, 'not_supported', 'Tesco doesn\'t support click and collect.');
+        const wanted = url.searchParams.get('store')?.toLowerCase();
+        const store = wanted ? state.stores.find((b) => b.id === wanted || b.name.toLowerCase().includes(wanted)) : state.stores[0];
+        if (!store) return error(400, 'bad_request', `Tesco doesn't offer collection from "${wanted}". The branches are: ${state.stores.map((b) => b.name).join('; ')}.`);
+        const { slots, ...branch } = store;
+        return reply(200, { date, described, window: null, method: 'collection', store: branch, stores: state.stores.filter((b) => b !== store).map(({ slots: _, ...b }) => b), slots });
+      }
+      return reply(200, { date, described, window: null, method: 'delivery', store: null, stores: [], slots: state.slots });
     }
     if (method === 'POST' && path === '/slots/book') {
-      const slot = state.slots.find((s) => s.id === body?.slot_id && s.available);
+      const branch = state.stores.find((b) => b.slots.some((s) => s.id === body?.slot_id));
+      const slot = (branch?.slots ?? state.slots).find((s) => s.id === body?.slot_id && s.available);
       if (!slot) return error(409, 'slot_unavailable', 'That slot has gone. List the slots again.');
       state.booked = slot.id;
-      return reply(200, { booking: { slot_id: slot.id, booking_reference: 'TSC-1234', reserved_until: '2026-10-28T11:00:00Z' } });
+      const store = branch ? { id: branch.id, name: branch.name, address: branch.address } : null;
+      return reply(200, { booking: { slot_id: slot.id, booking_reference: 'TSC-1234', reserved_until: '2026-10-28T11:00:00Z', method: branch ? 'collection' : 'delivery', store } });
     }
     if (method === 'POST' && path === '/quote') {
       const ids = (body?.listing_ids as string[]) ?? [];

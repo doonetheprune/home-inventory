@@ -90,7 +90,7 @@ export function providerFeatures(ctx: ModuleContext, { providers }: Services) {
 
   function capsText(caps: string[]): string {
     const words: Record<string, string> = {
-      slot_booking: 'book delivery slots', favourites: 'read your favourites', add_favourites: 'add favourites', search: 'search products',
+      slot_booking: 'book delivery slots', click_and_collect: 'book click and collect slots', favourites: 'read your favourites', add_favourites: 'add favourites', search: 'search products',
       loyalty_prices: 'see loyalty prices', multibuys: 'see multibuys',
     };
     const said = caps.map((c) => words[c]).filter(Boolean);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- **Click and collect:** a shop whose automation can collect (Tesco now) offers **Delivery** or **Click and collect** when you start a shop. For click and collect, the slots say which branch they're for, with its address, and **Collect from** picks another branch. Assistants do the same: "click and collect at the Martlesham one on Saturday". When a day has no delivery slots free, Larder offers click and collect instead. A booked collection slot says where to collect from.
+- **Shops with no slots:** a shop that has no delivery or collection slots at all skips choosing a slot and goes straight to filling the basket.
+- **Low items with no listing at a shop:** when something low (milk, say) has no listing at the shop, Larder looks in that shop's favourites. If exactly one favourite matches its name, it's linked and bought like any other; if several match, they're listed for you to pick, never guessed between.
+
 ## 0.8.0
 
 - **Larder with no connection:** when the Wi-Fi or internet is down, a phone can still open Larder and **Load data from** a copy saved on it. Pick one (newest first) and search, look at items, places, shopping lists, scenarios and recipes as they were when it was saved. A bar at the top says which copy it is; **Change** goes back to the live Larder once it can be reached. Copies are read only.

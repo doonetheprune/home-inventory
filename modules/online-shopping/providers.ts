@@ -36,6 +36,8 @@ export const ProviderStatus = z.object({
   currency: z.string().nullable().default(null),
   capabilities: z.array(z.string()).default([]),
   host: z.object({ mac: z.string().nullable(), address: z.string().nullable() }).nullable().default(null),
+  /** False when the shop has no delivery or collection slots at all. */
+  usesSlots: z.boolean().default(true),
 });
 export type ProviderStatus = z.infer<typeof ProviderStatus>;
 
@@ -192,7 +194,7 @@ export function createProviders(ctx: ModuleContext, hub: HubStore) {
       const problem = healthProblem(a.health, name);
       status = ProviderStatus.parse({
         checkedAt: ctx.core.now(), ok: !problem, message: problem, reachable: true, loggedIn: a.health.logged_in && a.health.session_valid,
-        name: m.name, version: m.version, contractVersion: (m as { contract_version?: string }).contract_version ?? null, currency: m.currency, capabilities: m.capabilities, host: m.host,
+        name: m.name, version: m.version, contractVersion: (m as { contract_version?: string }).contract_version ?? null, currency: m.currency, capabilities: m.capabilities, host: m.host, usesSlots: m.uses_slots,
       });
       if (m.host?.mac) {
         // An automation's machine is the hub's Mac: its waking is the hub's.

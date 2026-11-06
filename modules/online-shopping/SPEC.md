@@ -1,6 +1,6 @@
 # Online shopping
 
-Larder fills an online basket from what's low or on offer, books delivery slots, and brings in the shop's favourites. Each shop's website is driven by a **shopping provider** behind one fixed contract (`CONTRACT.md` in `larder-automations`). Usually that's an automation (Tesco first: `larder-provider-tesco`) run by **Larder Automations**, the hub app on a Mac, which Larder reaches at one address with one token. Larder holds the stock and the buying rules and makes every decision; the provider does exactly what it's asked and stops at a full basket. Nobody pays automatically.
+Larder fills an online basket from what's low or on offer, books delivery and click and collect slots, and brings in the shop's favourites. Each shop's website is driven by a **shopping provider** behind one fixed contract (`CONTRACT.md` in `larder-automations`). Usually that's an automation (Tesco first: `larder-provider-tesco`) run by **Larder Automations**, the hub app on a Mac, which Larder reaches at one address with one token. Larder holds the stock and the buying rules and makes every decision; the provider does exactly what it's asked and stops at a full basket. Nobody pays automatically.
 
 ## Larder Automations
 
@@ -40,7 +40,7 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 - When the shop gives a product a new code it shows up as a new favourite. Linking it to the item replaces the item's gone listing (the only one, or the gone one with the same pack size).
 - **Add to favourites** from Larder: pasting a code or link onto an item can also add it to the shop's favourites (Online shopping on the item's page, or `link_listing`), and `add_to_favourites` adds one by code or link, linking it to an item if named, else leaving it in Pending. A provider without `add_favourites` says so.
 
-## Delivery slots and "do me a shop"
+## Delivery and click and collect slots, and "do me a shop"
 
 1. The person asks an assistant for a shop. `start_shop` uses the default online shop unless one is named, checks it's ready (waking its computer), and says to ask when they'd like it delivered.
 2. With `when` ("tomorrow evening", "friday", "12 Nov", a date), it lists the free slots that day, in the shop's own words for the day ("Friday 6 November, evening (17:00 onwards)") so a misread shows. `list_slots` does the same on its own.
@@ -49,7 +49,11 @@ On an item's page, **Online shopping** (shown once a provider is set up):
 
 The person says when they're free; Larder doesn't look at calendars. A provider without `slot_booking` says to book on the shop's website.
 
-In the app, beside a shop's shopping list: **Start a shop** opens the day picker: **Tomorrow** and the six days after (or another day in words), each day's free slots by morning, afternoon and evening, with their price, and **Book**. Each day is asked once while it's open (the shop's website is slow, and the first ask may wake the Mac). After booking (or straight away with a slot booked, when the button says **Fill basket**): **Fill basket** or **Just plan it**. **Change slot** goes back to the days. Slots listed in the last hour can be booked, whichever day was looked at last.
+**Shops with no slots** (the manifest's `uses_slots: false`, contract 1.4): some shops have no delivery or collection slots at all; the order just comes, or is ready to collect, once it's checked out. Then `start_shop` says there's no slot to pick and goes straight to `fill_basket`, `list_slots` and `book_slot` say the same, offers are checked for today, and summaries don't mention a slot. In the app there's no slot row: **Start a shop** opens the basket step. This is kept to what the provider says on **Test connection**; a provider that hasn't said is treated as having slots.
+
+**Click and collect** (providers with `click_and_collect`, contract 1.4): `start_shop` and `list_slots` take `method: "collection"` for collection slots instead, at the shop's usual branch or the one named in `branch` ("southport", or a branch id). The answer names the branch the slots are at, with its address, and the other branches that can be asked for, so "check Formby instead" is another `list_slots` with `branch: "formby"`; a name that could be more than one branch, or none, comes back with the branches to choose from. When a day has no delivery slots free and the provider can collect, the answer tells the assistant to offer click and collect. Booking is the same `book_slot`, and the booking remembers the branch: summaries say "for collection from Southport Extra on Friday 6 November, 17:00–18:00". What goes in the basket is still a pending "Tesco delivery" order (the order email confirms it the same way).
+
+In the app, beside a shop's shopping list: **Start a shop** opens the day picker: **Tomorrow** and the six days after (or another day in words), each day's free slots by morning, afternoon and evening, with their price, and **Book**. Each day is asked once while it's open (the shop's website is slow, and the first ask may wake the Mac). After booking (or straight away with a slot booked, when the button says **Fill basket**): **Fill basket** or **Just plan it**. **Change slot** goes back to the days. Slots listed in the last hour can be booked, whichever day (or branch) was looked at last. With a provider that can collect, **Delivery** and **Click and collect** switch between the two; collection shows **Collect from** with the nearby branches to choose from, and a day with no delivery slots free offers **Try click and collect**.
 
 ## Order logic
 
@@ -64,13 +68,15 @@ In the app, beside a shop's shopping list: **Start a shop** opens the day picker
 7. **Perishables** (items with a shelf life) are capped at what gets used before it goes off: daily use (stock used over the last 90 days, or since the oldest movement if sooner; at least a week of history) × shelf life, never below the minimum. With no usage history, something keeping under 90 days only tops up to the normal amount, never the on-offer one.
 8. One basket line per listing goes to the provider's `/basket/add`.
 
+Before that, an item low at the shop with no listing there (milk from any shop) is matched to the shop's favourites waiting in Pending (the provider's copy, brought in first): when every word of its name, or else of one of its aliases, is in exactly one favourite's name ("Whole milk" in "Tesco British Whole Milk 4 Pints"), that favourite is linked to it (as **Link to an item** would, so it's remembered) and it's planned like any other. Several matching are listed for the person to link one, never guessed between; none matching, it's listed as not linked. Plan basket links them too.
+
 Worked examples (the tests): loo roll, minimum 4, stock up to 12, 36 on offer, target £0.32 a roll, 3 in stock; Tesco has 9 rolls at £4.50 and 24 rolls at £9.00 (£7.50 Clubcard). On offer (£0.3125 a roll), so up to 36: 33 needed, one 24-pack and one 9-pack, £12. With 15 in stock: on offer, 21 needed, one 24-pack; not on offer, skipped.
 
 ## A shop
 
 **Plan basket** works the basket out without adding anything; **Fill basket** also adds it. Both run in the background, one at a time per provider: wake and check the provider (stopping with what to do when it's logged out), quote, plan, then (filling) add and wait for the provider's job. Everything added becomes a **pending order** from "Tesco delivery" (a core stock state), with the booked slot's date and reference when there is one: it counts towards stock straight away, so nothing is ordered twice, online or in a shop, but it isn't on the way until it's confirmed. Once checked out, **Confirm** it (Home, the item's page, `confirm_order`, or the order email's automation calling `add_expected`, which confirms rather than adds); if the basket wasn't checked out, **Remove** it (`cancel_order`) and anything still low is bought next time. Then, with **Sleep after** set and nothing else running there, the computer is put back to sleep.
 
-The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items low at that shop but not linked to anything there, low items linked there but bought at another shop, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
+The **summary** (the tool's answer, the app, and the event) lists what was added and why (low, on offer at what price against the target, held back by shelf life, rounded up for a deal), what's on offer, what the shop wouldn't add, what's unavailable, listings to relink, items linked from the shop's favourites, items low at that shop but not linked to anything there (with the favourites that match, when several do), low items linked there but bought at another shop, other offers seen, and the slot booked. Runs are kept (the last 30); one left running when Larder stopped is marked as stopped.
 
 In the app, beside a shop's shopping list: **Start a shop** (or **Fill basket** once a slot is booked), **Plan basket**, and how the latest went (followed every 3 seconds while it runs).
 
@@ -83,8 +89,8 @@ In the app, beside a shop's shopping list: **Start a shop** (or **Fill basket** 
 | `link_listing` | Link a shop's product to an item (and add it to favourites), with `pack_quantity` when the pack size isn't clear |
 | `set_buying_rules` | Target price, on-offer stock-up amount, pack rule and a shop's own target price. The minimum and normal stock-up amount are `change_item`'s (`stock_up_to`) |
 | `start_shop` | Begin "do me a shop": ready?, then when, then the free slots |
-| `list_slots` | Free delivery slots for a day, in everyday words or YYYY-MM-DD |
-| `book_slot` | Book one from the last list, once the person agrees |
+| `list_slots` | Free delivery slots for a day, in everyday words or YYYY-MM-DD; with `method: "collection"`, click and collect slots at the usual branch or `branch` |
+| `book_slot` | Book one (delivery or collection) from the last list, once the person agrees |
 | `sync_favourites` | Bring the shop's favourites into Pending |
 | `add_to_favourites` | Add a product to the shop's favourites by code or link, linking it to an item or leaving it in Pending |
 | `plan_basket` | What would go in the basket, without adding anything |
@@ -99,7 +105,7 @@ Action `larder.online_shopping_sync_favourites` (`shop`, optional): for a weekly
 
 ## Events
 
-`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ pending_order, shop, run_id, items, total, failed, relink, slot, summary }`, for a notification (with `sensor.larder_pending_orders` for a reminder to confirm it). `online-shopping.slot_booked`: `{ shop, slot, start, end, reference, reserved_until }` (`slot` in words, `start` and `end` as the shop gives them, e.g. `2026-11-06T09:30`); the email module watches for that delivery's email. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
+`online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ pending_order, shop, run_id, items, total, failed, relink, slot, summary }`, for a notification (with `sensor.larder_pending_orders` for a reminder to confirm it). `online-shopping.slot_booked`: `{ shop, slot, start, end, reference, reserved_until, method, store }` (`method` is `delivery` or `collection`, `store` the branch for collection; `slot` in words, `start` and `end` as the shop gives them, e.g. `2026-11-06T09:30`); the email module watches for that delivery's email. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 
 ## Routes
 
@@ -124,7 +130,7 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 | `POST /items/:productId/shop-image` | `{ shopId, listingId }`: the listing's picture becomes the item's photo |
 | `GET /options`, `PUT /options` | `{ multibuyOverPercent }` (changing it is for admins) |
 | `POST /shops/:shopId/plan`, `POST /shops/:shopId/fill` | Start one; answers the run at once |
-| `GET /shops/:shopId/slots?when=` | Free and taken slots for a day |
+| `GET /shops/:shopId/slots?when=&method=&branch=` | Free and taken slots for a day: delivery, or click and collect at a branch (with the branch, the others nearby, and `offerCollection` when delivery is full) |
 | `POST /shops/:shopId/book` | `{ slotId }` from the last list |
 | `GET /shops/:shopId/booking` | The booked slot, while it's to come |
 | `GET /pending` | Shop favourites waiting in Pending |

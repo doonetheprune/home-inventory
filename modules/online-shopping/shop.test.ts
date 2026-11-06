@@ -119,6 +119,33 @@ describe('online shopping: planning and filling a basket', () => {
     expect((await core.assistant.call('plan_basket', {})).text.split('\n')[0]).toBe('Nothing needs buying at Tesco right now.');
   });
 
+  it('links a low item with no listing to the one shop favourite its name matches, and buys it', async () => {
+    const { core, shop, tesco } = await setup();
+    shop.listing('7001', 'Tesco British Whole Milk 2.272L 4 Pints', { amount: 2.272, unit: 'l' }, 1.65);
+    shop.listing('7002', 'Tesco British Semi Skimmed Milk 2.272L 4 Pints', { amount: 2.272, unit: 'l' }, 1.65);
+    shop.state.favourites = ['7001', '7002'];
+    const milk = await core.products.create({ name: 'Whole milk', unit: 'bottle', minQuantity: 1, aliases: ['milk'], preferredShopIds: [tesco.id] });
+    const r = await core.assistant.call('fill_basket', {});
+    expect(r.text).toContain('- Whole milk: 1 × Tesco British Whole Milk 2.272L 4 Pints = 1 bottle, £1.65; low (0 bottles), up to 1 bottle');
+    expect(r.text).toContain('Linked from your Tesco favourites: Whole milk to Tesco British Whole Milk 2.272L 4 Pints.');
+    expect(r.text).toContain('Low but not linked to a Tesco product: Fish fingers.');
+    expect(shop.state.basket.get('7001')).toBe(1);
+    expect(await core.products.summary(milk.id)).toMatchObject({ pending: 1 });
+    // Linked for next time, and out of Pending; the other milk still waits there.
+    expect((await call<Array<{ name: string }>>(core, 'GET', '/pending')).map((p) => p.name)).toEqual(['Tesco British Semi Skimmed Milk 2.272L 4 Pints']);
+  });
+
+  it('never guesses between favourites: several matching are listed to link one', async () => {
+    const { core, shop, tesco } = await setup();
+    shop.listing('7001', 'Tesco British Whole Milk 2.272L 4 Pints', { amount: 2.272, unit: 'l' }, 1.65);
+    shop.listing('7002', 'Tesco British Semi Skimmed Milk 2.272L 4 Pints', { amount: 2.272, unit: 'l' }, 1.65);
+    shop.state.favourites = ['7001', '7002'];
+    await core.products.create({ name: 'Milk', unit: 'bottle', minQuantity: 1, preferredShopIds: [tesco.id] });
+    const r = await core.assistant.call('fill_basket', {});
+    expect(r.text).toContain('Low but not linked to a Tesco product: Fish fingers and Milk (2 favourites match: Tesco British Semi Skimmed Milk 2.272L 4 Pints, Tesco British Whole Milk 2.272L 4 Pints; link one).');
+    expect(shop.state.basket.has('7001') || shop.state.basket.has('7002')).toBe(false);
+  });
+
   it('stops and says so when the shop needs the person to log in', async () => {
     const { core, shop } = await setup();
     shop.state.loggedIn = false;
