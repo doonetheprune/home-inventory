@@ -137,6 +137,42 @@
         ],
         "additionalProperties": {}
       },
+      "OfflineCopyInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopyInput",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ]
+      },
       "PriceViewInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/PriceViewInput",
@@ -2564,6 +2600,15 @@
               }
             ]
           },
+          "keptInPlaceIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
           "nfcTags": {
             "default": [],
             "type": "array",
@@ -3107,6 +3152,42 @@
               "$ref": "#/components/schemas/PlaceRefInput"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ]
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -3350,6 +3431,42 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PlaceRefInput"
+            }
+          },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ]
             }
           },
           "nowIn": {
@@ -4191,6 +4308,43 @@
           "message"
         ],
         "additionalProperties": {}
+      },
+      "OfflineCopy": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/OfflineCopy",
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "larder-offline-copy"
+          },
+          "version": {
+            "type": "number",
+            "const": 1
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "larderVersion": {
+            "type": "string"
+          },
+          "responses": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The API's answer to each GET, by path under /api/v1, e.g. \"/products/abc\" or \"/products?status=all\". Paths that answered with an error are left out."
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "savedAt",
+          "larderVersion",
+          "responses"
+        ],
+        "additionalProperties": false
       },
       "PriceView": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -6747,6 +6901,15 @@
               }
             ]
           },
+          "keptInPlaceIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
           "nfcTags": {
             "default": [],
             "type": "array",
@@ -6797,6 +6960,7 @@
           "rechargeable",
           "onShoppingList",
           "defaultPlaceId",
+          "keptInPlaceIds",
           "nfcTags",
           "haDeviceIds",
           "fields",
@@ -7336,6 +7500,43 @@
               "$ref": "#/components/schemas/PlaceRef"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -7355,6 +7556,7 @@
           "daysToExpiry",
           "status",
           "places",
+          "stockByPlace",
           "nowIn"
         ],
         "additionalProperties": false
@@ -7592,6 +7794,43 @@
               "$ref": "#/components/schemas/PlaceRef"
             }
           },
+          "stockByPlace": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "path",
+                "code",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          },
           "nowIn": {
             "type": "array",
             "items": {
@@ -7635,6 +7874,7 @@
           "daysToExpiry",
           "status",
           "places",
+          "stockByPlace",
           "nowIn",
           "variants",
           "entries",
@@ -10255,6 +10495,15 @@
                       }
                     ]
                   },
+                  "keptInPlaceIds": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
                   "nfcTags": {
                     "default": [],
                     "type": "array",
@@ -10454,6 +10703,14 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "keptInPlaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
                   },
                   "nfcTags": {
                     "type": "array",
@@ -12141,6 +12398,15 @@
                           }
                         ]
                       },
+                      "keptInPlaceIds": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      },
                       "nfcTags": {
                         "default": [],
                         "type": "array",
@@ -12987,6 +13253,27 @@
                     "unlinked"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/offline/copy": {
+      "get": {
+        "summary": "Everything the web app shows, for a copy kept on a phone",
+        "tags": [
+          "Settings"
+        ],
+        "description": "The answers to the GET requests the web app makes (every item, place, shop list and module page), as the caller sees them. The app saves this on the device and answers from it when Larder can't be reached. Sent gzipped when the client accepts it.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineCopy"
                 }
               }
             }
@@ -16453,6 +16740,9 @@
                         }
                       ]
                     },
+                    "search": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -16548,6 +16838,7 @@
                     "ready",
                     "order",
                     "first",
+                    "search",
                     "claude",
                     "gemini"
                   ],
@@ -16561,7 +16852,7 @@
     },
     "/api/v1/modules/ai/settings": {
       "put": {
-        "summary": "Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model (admin)",
+        "summary": "Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web on or off (admin)",
         "tags": [
           "Module: ai"
         ],
@@ -16583,6 +16874,9 @@
                         "gemini"
                       ]
                     }
+                  },
+                  "search": {
+                    "type": "boolean"
                   },
                   "claude": {
                     "type": "object",
@@ -16692,6 +16986,9 @@
                         }
                       ]
                     },
+                    "search": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -16787,6 +17084,7 @@
                     "ready",
                     "order",
                     "first",
+                    "search",
                     "claude",
                     "gemini"
                   ],
@@ -16867,7 +17165,7 @@
         "tags": [
           "Module: ai"
         ],
-        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.",
+        "description": "Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household's order; if one can't (out of credit, key refused, busy), the next is asked. Unless switched off in Settings, the AI may search the web when the photo doesn't show which product it is or its size; `sources` lists the pages. The answer fills in the Add item page: check it, then save it as usual.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16901,6 +17199,12 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "kind": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "brand": {
                       "type": [
@@ -16975,6 +17279,25 @@
                     "model": {
                       "type": "string"
                     },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "skipped": {
                       "type": "array",
                       "items": {
@@ -17002,6 +17325,7 @@
                   "required": [
                     "readable",
                     "name",
+                    "kind",
                     "brand",
                     "unit",
                     "categoryId",
@@ -17010,6 +17334,7 @@
                     "shop",
                     "provider",
                     "model",
+                    "sources",
                     "skipped"
                   ],
                   "additionalProperties": false

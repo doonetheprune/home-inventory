@@ -12,7 +12,7 @@ const now = '2026-10-28T12:00:00.000Z';
 
 const product = (id: string, extra: Partial<Product> = {}): Product => ({
   id, name: `Product ${id}`, aliases: [], categoryId: null, unit: 'each', shelfLifeDays: null, minQuantity: null, stockUpTo: null, preferredShopIds: [],
-  notes: '', photoFileIds: [], links: [], wish: false, rechargeable: false, onShoppingList: false, defaultPlaceId: null, nfcTags: [],
+  notes: '', photoFileIds: [], links: [], wish: false, rechargeable: false, onShoppingList: false, defaultPlaceId: null, keptInPlaceIds: [], nfcTags: [],
   haDeviceIds: [], fields: {}, createdAt: now, updatedAt: now, ...extra,
 });
 const place = (id: string, extra: Partial<Place> = {}): Place => ({

@@ -91,6 +91,13 @@ export interface ModuleContext {
    * module is off (or doesn't offer it). Ask when it's needed, not during setup: modules set up in turn.
    */
   offered<T>(fullName: string): T | undefined;
+  /**
+   * Paths of this module's GET routes to keep in offline copies (the copy of Larder a phone
+   * saves to look at with no connection), e.g. ["/", "/abc", "/?productId=abc"]. Asked each
+   * time a copy is saved, only while the module is on. Paths that answer with an error are
+   * left out. Set `offline: true` on the web module once its pages read nothing else.
+   */
+  addOfflinePaths(paths: () => string[] | Promise<string[]>): void;
   log: ModuleLogger;
 }
 
@@ -139,6 +146,8 @@ export interface ModuleRegistry {
   start(core: CoreApi): Promise<void>;
   /** Runs each switched-on module's `demo`, after the core's example household is in. */
   seedDemo(seed: DemoSeed): Promise<void>;
+  /** API paths (under /api/v1, e.g. "/modules/scenarios/abc") switched-on modules want in offline copies. */
+  offlinePaths(): Promise<string[]>;
 }
 
 export interface ModuleOptions {
@@ -169,6 +178,7 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
   const log = options.logger ?? (() => {});
   const contexts = new Map<string, ModuleContext>();
   const offers = new Map<string, { owner: string; value: unknown }>();
+  const offline: Array<{ moduleId: string; paths: () => string[] | Promise<string[]> }> = [];
 
   const enabled = (id: string) => {
     if (locked.has(id)) return false;
@@ -211,6 +221,19 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
         const parsed = d.productFields.safeParse(out[d.id]);
         if (!parsed.success) throw new ValidationError(`${d.name}: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'value'} ${i.message}`).join('; ')}`);
         out[d.id] = parsed.data;
+      }
+      return out;
+    },
+    async offlinePaths() {
+      const out: string[] = [];
+      for (const { moduleId, paths } of offline) {
+        if (!enabled(moduleId)) continue;
+        try {
+          // The same address the web app asks for: a module's "/" is /modules/<id> itself, "/?a=b" is /modules/<id>?a=b.
+          for (const p of await paths()) if (p.startsWith('/')) out.push(`/modules/${moduleId}${p === '/' ? '' : p.startsWith('/?') ? p.slice(1) : p}`);
+        } catch (err) {
+          log('warn', `[${moduleId}] Couldn't list its pages for an offline copy; they're left out`, { error: String(err) });
+        }
       }
       return out;
     },
@@ -271,6 +294,9 @@ export function createModuleRegistry(ctx: CoreContext, options: ModuleOptions): 
           offered<T>(fullName: string) {
             const o = offers.get(fullName);
             return o && enabled(o.owner) ? (o.value as T) : undefined;
+          },
+          addOfflinePaths(paths) {
+            offline.push({ moduleId: def.id, paths });
           },
           log: moduleLog,
         };

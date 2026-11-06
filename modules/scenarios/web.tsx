@@ -221,6 +221,8 @@ function ScenariosPanel({ product }: { product: ProductDetail }) {
 
 export default defineWebModule({
   id: 'scenarios',
+  // Its list and pages are in offline copies: a power cut list is wanted in a power cut.
+  offline: true,
   pages: [
     { path: '/', title: 'Scenarios', icon: 'layers', subtitle: 'Power cut, Christmas…', component: ScenarioList },
     { path: '/:id', title: 'Scenario', component: ScenarioPage },

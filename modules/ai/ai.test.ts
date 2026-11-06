@@ -15,6 +15,7 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new 
 const BEANS: Reading = {
   readable: true,
   name: 'baked beans',
+  kind: 'Baked beans',
   title: 'Tesco Baked Beans in Tomato Sauce',
   size: '4 x 400 g',
   unit: 'tin',
@@ -26,8 +27,19 @@ const BEANS: Reading = {
 
 interface Sent { url: string; method: string; headers: Record<string, string>; body: Record<string, unknown> | null }
 
-/** Pretend Claude and Gemini. Records every request; `status` makes every answer fail with that HTTP status. */
-function internet(o: { reading?: Reading; status?: number; message?: string; broken?: Partial<Record<'claude' | 'gemini', { status: number; message: string }>>; claudeModels?: unknown[]; geminiModels?: unknown[] } = {}) {
+type Reply = { status: number; json: unknown } | Record<string, unknown> | undefined;
+
+/**
+ * Pretend Claude and Gemini. Records every request; `status` makes every answer fail with that HTTP status.
+ * `claude` and `gemini` can answer a request themselves (the nth to that AI, from 0); `claudeCaps` are what the Models API says a model can do.
+ */
+function internet(o: {
+  reading?: Reading; status?: number; message?: string; broken?: Partial<Record<'claude' | 'gemini', { status: number; message: string }>>; claudeModels?: unknown[]; geminiModels?: unknown[];
+  claude?: (body: Record<string, unknown>, n: number) => Reply; gemini?: (body: Record<string, unknown>, n: number) => Reply; claudeCaps?: Record<string, unknown>;
+} = {}) {
+  let claudeAsked = 0;
+  let geminiAsked = 0;
+  const reply = (r: NonNullable<Reply>) => ('status' in r && 'json' in r && typeof r.status === 'number' ? Response.json(r.json, { status: r.status }) : Response.json(r));
   const sent: Sent[] = [];
   const fake = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -43,9 +55,11 @@ function internet(o: { reading?: Reading; status?: number; message?: string; bro
         return Response.json({ data: o.claudeModels ?? [], has_more: false, first_id: null, last_id: null });
       }
       if (u.pathname.startsWith('/v1/models/')) {
-        return Response.json({ id: u.pathname.split('/').pop(), type: 'model', display_name: 'Claude', created_at: '2026-01-01T00:00:00Z', capabilities: { effort: { supported: true }, image_input: { supported: true }, structured_outputs: { supported: true } } });
+        return Response.json({ id: u.pathname.split('/').pop(), type: 'model', display_name: 'Claude', created_at: '2026-01-01T00:00:00Z', capabilities: o.claudeCaps ?? { effort: { supported: true }, image_input: { supported: true }, structured_outputs: { supported: true } } });
       }
       if (u.pathname === '/v1/messages') {
+        const mine = o.claude?.(body!, claudeAsked++);
+        if (mine) return reply(mine);
         return Response.json({
           id: 'msg_1', type: 'message', role: 'assistant', model: String(body?.model), stop_reason: 'end_turn', stop_sequence: null,
           content: [{ type: 'text', text: JSON.stringify(o.reading ?? BEANS) }],
@@ -56,6 +70,8 @@ function internet(o: { reading?: Reading; status?: number; message?: string; bro
     if (u.hostname === 'generativelanguage.googleapis.com') {
       if (u.pathname === '/v1beta/models') return Response.json({ models: o.geminiModels ?? [] });
       if (u.pathname.endsWith(':generateContent')) {
+        const mine = o.gemini?.(body!, geminiAsked++);
+        if (mine) return reply(mine);
         return Response.json({ candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: JSON.stringify(o.reading ?? BEANS) }] } }] });
       }
     }
@@ -71,7 +87,7 @@ describe('AI module: settings', () => {
   it('starts with nothing set up', async () => {
     const core = await makeCore({ modules: [ai] });
     expect(await call(core, 'GET', '/')).toEqual({
-      ready: false, order: ['claude', 'gemini'], first: null,
+      ready: false, order: ['claude', 'gemini'], first: null, search: true,
       claude: { enabled: true, keySet: false, keyHint: null, keyFrom: null, model: null },
       gemini: { enabled: true, keySet: false, keyHint: null, keyFrom: null, model: null },
     });
@@ -189,6 +205,8 @@ describe('AI module: Claude', () => {
     expect(out).toEqual({
       readable: true,
       name: 'Baked beans',
+      // The same as the name, so no kind; no name twice among the other names either.
+      kind: null,
       brand: 'Tesco Baked Beans in Tomato Sauce 4 x 400 g',
       unit: 'tin',
       categoryId: food.id,
@@ -197,6 +215,7 @@ describe('AI module: Claude', () => {
       shop: { name: 'Tesco', id: null, preset: true },
       provider: 'claude',
       model: 'claude-haiku-5-5',
+      sources: [],
       skipped: [],
     });
 
@@ -307,6 +326,154 @@ describe('AI module: Gemini', () => {
     expect(bestGemini(m('gemini-3-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite'))).toBe('gemini-3-flash-preview');
     expect(bestGemini(m('gemini-4-flash', 'gemini-3.6-flash', 'gemini-4-flash-lite'))).toBe('gemini-4-flash');
     expect(bestGemini([])).toBe('gemini-flash-latest');
+  });
+});
+
+describe('AI module: looking it up online', () => {
+  const SLEEP: Reading = {
+    readable: true, name: 'Twinings Sleep tea bags', kind: 'Herbal tea', title: 'Twinings Sleep', size: '20 tea bags', unit: 'box',
+    category: 'food', shelf_life_days: 540, shop: null, other_names: ['sleep tea'],
+  };
+  const TWININGS = 'https://www.twinings.co.uk/products/sleep';
+  const TESCO = 'https://www.tesco.com/groceries/en-GB/products/123';
+  const searched = (id: string) => [
+    { type: 'server_tool_use', id, name: 'web_search', input: { query: 'Twinings Sleep tea bags' } },
+    {
+      type: 'web_search_tool_result', tool_use_id: id, content: [
+        { type: 'web_search_result', url: TWININGS, title: 'Sleep | Twinings', encrypted_content: 'abc', page_age: null },
+        { type: 'web_search_result', url: TESCO, title: 'Twinings Sleep 20 Tea Bags', encrypted_content: 'def', page_age: null },
+        { type: 'web_search_result', url: 'https://www.example.com/tea', title: 'Tea', encrypted_content: 'ghi', page_age: null },
+      ],
+    },
+  ];
+  const message = (content: unknown[], stop = 'end_turn') => ({
+    id: 'msg_2', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: stop, stop_sequence: null, content,
+    usage: { input_tokens: 9000, output_tokens: 300, server_tool_use: { web_search_requests: 1 } },
+  });
+  const messages = (net: ReturnType<typeof internet>) => net.sent.filter((r) => r.url.endsWith('/v1/messages')).map((r) => r.body!);
+  const promptOf = (body: Record<string, unknown>) => String((body.messages as Array<{ content: Array<{ text?: string }> }>)[0]!.content[1]!.text);
+
+  it('lets Claude search the web, and reads a cited answer that comes in pieces after the search', async () => {
+    const json = JSON.stringify(SLEEP);
+    const net = internet({
+      claude: () => message([
+        { type: 'text', text: "I'll check the pack size." },
+        ...searched('srvtoolu_1'),
+        { type: 'text', text: json.slice(0, 40), citations: null },
+        { type: 'text', text: json.slice(40, 90), citations: [{ type: 'web_search_result_location', url: TWININGS, title: 'Sleep | Twinings', encrypted_index: 'x', cited_text: '20 tea bags' }] },
+        { type: 'text', text: json.slice(90), citations: null },
+      ]),
+    });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
+    const out = await call(core, 'POST', '/identify', { body: { image: JPEG } });
+    expect(out).toMatchObject({
+      name: 'Twinings Sleep tea bags',
+      kind: 'Herbal tea',
+      brand: 'Twinings Sleep 20 tea bags',
+      unit: 'box',
+      aliases: ['Herbal tea', 'sleep tea'],
+      shop: null,
+      sources: [{ name: 'twinings.co.uk', url: TWININGS }],
+    });
+
+    const [body] = messages(net);
+    expect(body!.tools).toEqual([{ type: 'web_search_20250305', name: 'web_search', max_uses: 2, user_location: { type: 'approximate', country: 'GB', timezone: 'Europe/London' } }]);
+    expect(promptOf(body!)).toContain('You can search the web, at most 2 times');
+    expect(promptOf(body!)).toContain('never only the kind of thing ("Herbal tea"');
+    expect(promptOf(body!)).toContain('"Twinings Sleep tea bags"');
+  });
+
+  it('carries on a search Claude paused, and names the pages it found when it cited none', async () => {
+    const net = internet({
+      claude: (_, n) => (n === 0 ? message(searched('srvtoolu_2'), 'pause_turn') : message([{ type: 'text', text: JSON.stringify(SLEEP) }])),
+    });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY, model: 'claude-haiku-5-5' } } });
+    const out = await call<{ name: string; sources: unknown[] }>(core, 'POST', '/identify', { body: { image: JPEG } });
+    expect(out.name).toBe('Twinings Sleep tea bags');
+    expect(out.sources).toEqual([{ name: 'twinings.co.uk', url: TWININGS }, { name: 'tesco.com', url: TESCO }]);
+
+    const sent = messages(net);
+    expect(sent).toHaveLength(2);
+    // The paused turn goes back as it came, with the same tools, and nothing added.
+    expect(sent[1]!.messages).toEqual([(sent[0]!.messages as unknown[])[0], { role: 'assistant', content: searched('srvtoolu_2') }]);
+    expect(sent[1]!.tools).toEqual(sent[0]!.tools);
+  });
+
+  it('reads the photo without searching when Claude turns the search down, and doesn\'t ask that model to search again', async () => {
+    const net = internet({
+      claude: (body) => (body.tools ? { status: 400, json: { type: 'error', error: { type: 'invalid_request_error', message: 'Web search is not enabled for this organization.' } } } : undefined),
+    });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY, model: 'claude-haiku-5-5' } } });
+    expect(await call(core, 'POST', '/identify', { body: { image: JPEG } })).toMatchObject({ name: 'Baked beans', sources: [], skipped: [] });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+
+    const sent = messages(net);
+    expect(sent.map((b) => !!b.tools)).toEqual([true, false, false]);
+    expect(promptOf(sent[1]!)).not.toContain('search the web');
+    expect(promptOf(sent[1]!)).toContain('never only the kind of thing');
+  });
+
+  it('doesn\'t offer Claude a search its model can\'t do', async () => {
+    const net = internet({ claudeCaps: { effort: { supported: true }, image_input: { supported: true }, structured_outputs: { supported: true }, server_tools: { supported: true, code_execution: { supported: false }, web_search: { supported: false } } } });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY, model: 'claude-older' } } });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+    expect(messages(net)[0]).not.toHaveProperty('tools');
+  });
+
+  it('lets Gemini search with Google, and names each site once', async () => {
+    const redirect = (x: string) => `https://vertexaisearch.cloud.google.com/grounding-api-redirect/${x}`;
+    const net = internet({
+      gemini: () => ({
+        candidates: [{
+          finishReason: 'STOP',
+          content: { role: 'model', parts: [{ text: JSON.stringify(SLEEP) }] },
+          groundingMetadata: { groundingChunks: [{ web: { uri: redirect('a'), title: 'twinings.co.uk' } }, { web: { uri: redirect('b'), title: 'twinings.co.uk' } }, { web: { uri: redirect('c'), title: 'tesco.com' } }] },
+        }],
+      }),
+    });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { order: ['gemini'], gemini: { apiKey: GEMINI_KEY, model: 'gemini-3.6-flash' } } });
+    expect(await call(core, 'POST', '/identify', { body: { image: JPEG } })).toMatchObject({
+      name: 'Twinings Sleep tea bags', provider: 'gemini', sources: [{ name: 'twinings.co.uk', url: redirect('a') }, { name: 'tesco.com', url: redirect('c') }],
+    });
+    const gen = net.sent.find((r) => r.url.endsWith(':generateContent'))!;
+    expect(gen.body).toMatchObject({ tools: [{ google_search: {} }], generationConfig: { responseMimeType: 'application/json' } });
+  });
+
+  it('reads the photo without searching on a Gemini model that can\'t search and answer in a schema at once', async () => {
+    const net = internet({
+      gemini: (body) => (body.tools ? { status: 400, json: { error: { code: 400, message: "Tool use with a response mime type: 'application/json' is unsupported", status: 'INVALID_ARGUMENT' } } } : undefined),
+    });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { order: ['gemini'], gemini: { apiKey: GEMINI_KEY, model: 'gemini-2.5-flash' } } });
+    expect(await call(core, 'POST', '/identify', { body: { image: JPEG } })).toMatchObject({ name: 'Baked beans', provider: 'gemini', sources: [], skipped: [] });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+    expect(net.sent.filter((r) => r.url.endsWith(':generateContent')).map((r) => !!r.body!.tools)).toEqual([true, false, false]);
+  });
+
+  it('never searches once the household switches it off', async () => {
+    const net = internet();
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY, model: 'claude-haiku-5-5' }, gemini: { apiKey: GEMINI_KEY, model: 'gemini-3.6-flash' } } });
+    expect(await call(core, 'PUT', '/settings', { body: { search: false } })).toMatchObject({ search: false, first: 'claude' });
+    // Changing something else keeps it off.
+    expect(await call(core, 'PUT', '/settings', { body: { order: ['gemini'] } })).toMatchObject({ search: false });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+    await call(core, 'PUT', '/settings', { body: { order: ['claude'] } });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+
+    const gen = net.sent.find((r) => r.url.endsWith(':generateContent'))!;
+    expect(gen.body).not.toHaveProperty('tools');
+    expect(JSON.stringify(gen.body)).not.toContain('search the web');
+    const [msg] = messages(net);
+    expect(msg).not.toHaveProperty('tools');
+    expect(promptOf(msg!)).not.toContain('search the web');
+
+    expect(await call(core, 'PUT', '/settings', { body: { search: true } })).toMatchObject({ search: true });
   });
 });
 

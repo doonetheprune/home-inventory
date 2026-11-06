@@ -47,6 +47,7 @@ export default defineModule({
 | `ctx.core.products.updateField(id, key, change)` | Change your field on a product (`product.fields[key]`) from its current value. Use it rather than reading then `update`-ing, so two changes at once both count. `change` must not call Larder |
 | `ctx.publish(type, data)` | Publish your own event, e.g. `batteries.low`. The type must start with your module id and a dot. It reaches the web app, other modules and Home Assistant (as `larder_batteries_low`) |
 | `ctx.offer(name, value)`, `ctx.offered<T>(fullName)` | Offer a function (or an object of them) to other modules, and use one another module offers, without either importing the other. `offer("order-reader", reader)` in the `ai` module is `offered("ai.order-reader")` elsewhere: undefined while that module is off, so check. Describe the shape in `modules/_shared`. Ask for it when it's needed, not in `setup` (modules set up in turn). The email module reads order confirmations this way |
+| `ctx.addOfflinePaths(() => paths)` | Put your pages in offline copies (the copy of Larder a phone keeps to look at with no connection). Return the paths of your GET routes the web module reads, e.g. `['/', '/abc', '/?productId=abc']`; asked each time a copy is saved, only while the module is on. Each is answered as the person saving it, and ones that answer with an error are left out. Then set `offline: true` on the web module. Scenarios and recipes do this |
 | `ctx.log.info/warn/error` | Log with the module's name |
 
 ### Events
@@ -84,6 +85,7 @@ export default defineWebModule({
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
   wishListPanels: [Waiting],     // at the top of the Wish list: () => JSX
   photoReader: { status, read }, // lets the scanner name things from a photo (the ai module)
+  offline: true,                 // still shown in a saved copy (see ctx.addOfflinePaths)
 });
 ```
 
@@ -92,7 +94,8 @@ export default defineWebModule({
 - A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
 - `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. `photoFileId` uses a photo already in Larder's files instead (a shared page's picture); `links`, `notes` and `defaultPlaceId` fill in more of the form; `onSaved(productId)` runs once the item is made (e.g. to take it out of Pending).
-- `photoReader` lets the scanner name things from a photo of the pack: `status()` says whether it's set up and who reads (`{ ready, by: 'Claude' }`); `read(photo)` answers a `PhotoReading` (name, brand, unit, categoryId, shelfLifeDays, aliases, shop, by, notes, and the smaller `photo` it sent, to keep). The scanner shows **Read with AI** while one is ready; `usePhotoReader()` gets it from any page. The ai module offers one.
+- `photoReader` lets the scanner name things from a photo of the pack: `status()` says whether it's set up and who reads (`{ ready, by: 'Claude' }`); `read(photo)` answers a `PhotoReading` (name, brand, unit, categoryId, shelfLifeDays, aliases, shop, by, notes, and the smaller `photo` it sent, to keep). The scanner shows **Take photo** in Add mode while one is ready; `usePhotoReader()` gets it from any page. The ai module offers one.
+- `offline: true` keeps the module's pages and panels while a saved copy is open (no connection). Without it they're hidden then. Set it only when everything they read is saved with `ctx.addOfflinePaths`, or they hide themselves when a read fails (a read that isn't in the copy fails with a 404, `not_saved`). Changes always fail in a copy (`read_only`), with a message saying so.
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 - `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
 

@@ -214,6 +214,10 @@ export function createPlaceService(ctx: CoreContext) {
           visitors.set(e.productId, cur);
         }
       }
+      // Kept here but none here right now: listed at 0, ready for more.
+      for (const product of world.products) {
+        if (!items.has(product.id) && (product.keptInPlaceIds ?? []).includes(id)) items.set(product.id, { quantity: 0, outOfPlace: false, nowIn: null });
+      }
       const breadcrumbs: PlaceRef[] = [];
       let cur = place.parentId ? world.placeById.get(place.parentId) : undefined;
       while (cur) {
@@ -293,8 +297,13 @@ export function createPlaceService(ctx: CoreContext) {
       for (const child of (await ctx.storage.places.list()).filter((p) => p.parentId === id)) {
         await ctx.storage.places.put({ ...child, parentId: place.parentId, updatedAt: ctx.now() });
       }
-      for (const product of (await ctx.storage.products.list()).filter((p) => p.defaultPlaceId === id)) {
-        await ctx.storage.products.put({ ...product, defaultPlaceId: null, updatedAt: ctx.now() });
+      for (const product of (await ctx.storage.products.list()).filter((p) => p.defaultPlaceId === id || (p.keptInPlaceIds ?? []).includes(id))) {
+        await ctx.storage.products.put({
+          ...product,
+          defaultPlaceId: product.defaultPlaceId === id ? null : product.defaultPlaceId,
+          keptInPlaceIds: (product.keptInPlaceIds ?? []).filter((x) => x !== id),
+          updatedAt: ctx.now(),
+        });
       }
       await ctx.storage.places.remove(id);
       changed(id);

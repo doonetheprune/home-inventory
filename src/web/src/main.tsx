@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HashRouter, Route, Routes } from 'react-router-dom';
@@ -11,7 +11,7 @@ import '@fontsource/bricolage-grotesque/800.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/700.css';
 import './styles.css';
-import { api, onAuthRequired } from './api';
+import { api, ApiError, onAuthRequired } from './api';
 import { ToastProvider, Loading, useLiveUpdates } from './ui';
 import { Shell } from './components/Shell';
 import { Login } from './screens/Login';
@@ -32,6 +32,9 @@ import { Settings } from './screens/Settings';
 import { Connect } from './screens/Connect';
 import { More } from './screens/More';
 import { ModulePage } from './screens/ModulePage';
+import { useOpenCopy } from './offline/current';
+import { copiesOwner, forgetCopies, keepAppOnDevice, useDailyCopy } from './offline/state';
+import { COPIES_KEY, OfflineStart } from './offline/ui';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: (n, err) => n < 2 && (err as { status?: number }).status !== 401 && (err as { status?: number }).status !== 404, refetchOnWindowFocus: true } },
@@ -39,17 +42,28 @@ const queryClient = new QueryClient({
 
 function App() {
   const qc = useQueryClient();
-  const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status });
+  // No retries when Larder can't be reached: say so straight away and offer the saved copies.
+  const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status, retry: (n, err) => n < 2 && !(err instanceof ApiError && (err.code === 'offline' || err.status === 401)) });
   const [, force] = useState(0);
   useEffect(() => onAuthRequired(() => {
     void qc.invalidateQueries({ queryKey: ['auth'] });
     force((n) => n + 1);
   }), [qc]);
+  const copy = useOpenCopy();
   const signedIn = !!status.data?.user;
-  useLiveUpdates(signedIn);
+  const live = signedIn && !copy;
+  useLiveUpdates(live);
+  const copiesSaved = useCallback(() => void qc.invalidateQueries({ queryKey: COPIES_KEY }), [qc]);
+  useDailyCopy(live, copiesSaved);
+  // Copies on this device are the account's that saved them: someone else signing in here doesn't get them.
+  const userId = live ? status.data?.user?.id : undefined;
+  useEffect(() => {
+    const owner = copiesOwner();
+    if (userId && owner && owner !== userId) void forgetCopies().then(copiesSaved);
+  }, [userId, copiesSaved]);
 
   if (status.isLoading) return <Loading />;
-  if (status.error) return <div className="login"><div className="card"><b>Can't reach Larder.</b><p className="muted">Check that the server is running, then reload.</p></div></div>;
+  if (status.error && !copy) return <OfflineStart error={status.error} onRetry={() => void status.refetch()} retrying={status.isFetching} />;
   if (!signedIn) return <Login status={status.data!} />;
 
   return (
@@ -80,6 +94,8 @@ function App() {
     </HashRouter>
   );
 }
+
+if (import.meta.env.PROD) keepAppOnDevice();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

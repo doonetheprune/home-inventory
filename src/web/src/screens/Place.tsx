@@ -1,12 +1,11 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { Place, PlaceContents, ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { qty, stockText } from '../format';
+import { qty } from '../format';
 import { nextPlaceCode } from '../placeCodes';
-import { ProductPicker } from '../components/ProductPicker';
 import { ErrorBox, Header, Loading, ProductRow, ProductTile, Sheet, Stepper, useAction, useIsDesktop, usePlaces } from '../ui';
 import { PlaceSheet, PlaceTree } from './Places';
 import { NfcTags } from '../components/NfcTags';
@@ -34,7 +33,8 @@ export function PlacePage() {
 
   if (isLoading) return <Loading />;
   if (error || !c) return <><Header title="Place" back="/places" /><div className="content"><ErrorBox error={error} /></div></>;
-  const empty = !c.items.length && !c.visitors.length;
+  // Items kept here with none here right now don't stop it being removed.
+  const empty = !c.items.some((i) => i.quantity > 0) && !c.visitors.length;
   // A room, or anything with spots (or just added): the spots come first. A shelf or box: what's on it does.
   const spotsFirst = !c.breadcrumbs.length || c.children.length > 0 || justAdded;
   const spots = <Spots key={id} place={c.place} spots={c.children} focus={justAdded} />;
@@ -196,11 +196,16 @@ function SpotEdit({ spot, onDone }: { spot: Spot; onDone: () => void }) {
   );
 }
 
-/** Something that lives here, with − and + to change how many are here. */
+/**
+ * Something that lives here, with − and + to change how many are here. At 0 it
+ * stays (more may come), with a button to stop keeping it here.
+ */
 function HereRow({ i, placeId }: { i: Here; placeId: string }) {
-  const { run } = useAction();
+  const { run, busy } = useAction();
   const s = i.summary;
   const p = s.product;
+  const elsewhere = s.inStock - i.quantity > 0.0005;
+  const forget = () => run(() => api.products.update(p.id, { keptInPlaceIds: (p.keptInPlaceIds ?? []).filter((x) => x !== placeId) }), `${p.name} isn't kept here now`);
   // Stock that's somewhere else for now, and rechargeables (− would mean "flat"), are changed on the item's page.
   const editable = !i.outOfPlace && !p.rechargeable;
   const change = (n: number) => {
@@ -217,9 +222,10 @@ function HereRow({ i, placeId }: { i: Here; placeId: string }) {
         <ProductTile s={s} />
         <span className="item-main">
           <span className="item-name">{p.name}</span>
-          <span className="item-meta">{i.outOfPlace ? <span style={{ color: 'var(--away)' }}>Now in {i.nowIn?.path}</span> : [qty(i.quantity, p.unit), s.category?.name].filter(Boolean).join(' · ')}</span>
+          <span className="item-meta">{i.outOfPlace ? <span style={{ color: 'var(--away)' }}>Now in {i.nowIn?.path}</span> : [i.quantity ? `${qty(i.quantity, p.unit)} here` : 'None here now', elsewhere ? `${qty(s.inStock, p.unit)} in total` : null, s.category?.name].filter(Boolean).join(' · ')}</span>
         </span>
       </Link>
+      {!i.quantity && <button type="button" className="iconbtn" aria-label={`Don't keep ${p.name} here`} title="Not kept here any more" disabled={busy} onClick={() => void forget()}><Icon name="x" size="sm" /></button>}
       {editable
         ? <Stepper small value={i.quantity} onChange={change} label={`${p.name} here`} />
         : <span className="item-side"><span className="qty">{qty(i.quantity, p.unit)}</span>{i.outOfPlace ? <span className="pill p-away">Moved</span> : null}</span>}
@@ -228,41 +234,40 @@ function HereRow({ i, placeId }: { i: Here; placeId: string }) {
 }
 
 /**
- * Adding stock to a place: first anything waiting in To sort (one press puts
- * it here), then more of something Larder already has. Something new is
- * scanned here, or added by name, with this place filled in.
+ * Adding stock to a place, quickly: search first, then − and + on the item for
+ * how many are here, and the tick. Several can be added without leaving. With
+ * nothing typed, what's waiting in To sort is listed (one press puts it here).
+ * Something new is scanned here, or added by name, with this place filled in.
  */
 function AddStockSheet({ place, onClose }: { place: Place; onClose: () => void }) {
   const desktop = useIsDesktop();
   const { run, busy } = useAction();
+  const all = useQuery({ queryKey: ['products', 'all', ''], queryFn: () => api.products.list({ status: 'all' }) }).data;
   const loose = useQuery({ queryKey: ['places', 'to-sort'], queryFn: api.places.toSort }).data?.items ?? [];
-  const [picked, setPicked] = useState<ProductSummary | null>(null);
-  const [n, setN] = useState(1);
+  const [q, setQ] = useState('');
   const label = place.code ?? place.name;
+  const matches = useMemo(() => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    return (all ?? [])
+      .filter((s) => !s.product.wish)
+      .filter((s) => words.every((w) => [s.product.name, ...s.product.aliases].join(' ').toLowerCase().includes(w)))
+      .slice(0, 8);
+  }, [all, q]);
 
   const putHere = (s: ProductSummary) =>
     run(() => api.stock.move({ productId: s.product.id, toPlaceId: place.id, fromPlaceId: null, mode: 'permanent' }), `${s.product.name} put away in ${label}`);
-  const add = async () => {
-    if (!picked) return;
-    const done = await run(() => api.stock.add({ productId: picked.product.id, quantity: n, placeId: place.id }), `Added ${qty(n, picked.product.unit)} of ${picked.product.name} to ${label}`);
-    if (done) setPicked(null);
-  };
 
-  if (picked) {
-    return (
-      <Sheet title={`Add to ${place.name}`} onClose={onClose}>
-        <div className="match"><ProductTile s={picked} size="lg" /><div className="item-main"><h3>{picked.product.name}</h3><span className="small muted">You have {stockText(picked)}.</span></div></div>
-        <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} label="quantity" /></div>
-        <div className="btnrow">
-          <button type="button" className="btn" onClick={() => setPicked(null)}>Back</button>
-          <button type="button" className="btn primary" disabled={busy} onClick={() => void add()}>Add {qty(n, picked.product.unit)}</button>
-        </div>
-      </Sheet>
-    );
-  }
   return (
     <Sheet title={`Add stock to ${place.name}`} onClose={onClose}>
-      {loose.length > 0 && (
+      {/* On a phone the keyboard would cover the sheet, so it waits for a tap. */}
+      <input className="input" type="search" autoFocus={desktop} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Which item?" aria-label="Which item?" />
+      {q.trim() ? (
+        <div className="list">
+          {matches.map((s) => <QuickAddRow key={s.product.id} s={s} place={place} />)}
+          {!matches.length && <div className="item"><span className="muted small">Nothing in Larder matches “{q.trim()}”.</span></div>}
+        </div>
+      ) : loose.length > 0 && (
         <div className="stack" style={{ gap: 8 }}>
           <div className="label" style={{ margin: 0 }}>To sort · {loose.length}</div>
           <div className="list">
@@ -276,12 +281,45 @@ function AddStockSheet({ place, onClose }: { place: Place; onClose: () => void }
           </div>
         </div>
       )}
-      <div className="label" style={{ margin: 0 }}>More of something</div>
-      {/* On a phone the keyboard would cover To sort, so it waits for a tap. */}
-      <ProductPicker onPick={(s) => { setPicked(s); setN(1); }} placeholder="Which item?" autoFocus={desktop} />
       <p className="small muted" style={{ margin: 0 }}>
         Something new? <Link to={`/scan?mode=add&place=${place.id}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>Scan it here</Link> or <Link to={`/add?place=${place.id}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>add it by name</Link>.
       </p>
     </Sheet>
+  );
+}
+
+/**
+ * One item in the quick add: how many are here and in total, − and + for how
+ * many should be here, and the tick to save it. Taking some away uses this
+ * place's stock; rechargeables can only be added to here (flat ones are changed
+ * on the item's page).
+ */
+function QuickAddRow({ s, place }: { s: ProductSummary; place: Place }) {
+  const { run, busy } = useAction();
+  const p = s.product;
+  const here = s.stockByPlace?.find((x) => x.id === place.id)?.quantity ?? 0;
+  const [n, setN] = useState<number | null>(null);
+  const want = n ?? here;
+  const d = Math.round((want - here) * 1000) / 1000;
+  const label = place.code ?? place.name;
+  const save = async () => {
+    if (!d) return;
+    const done = await run(
+      () => (d > 0 ? api.stock.add({ productId: p.id, quantity: d, placeId: place.id }) : api.stock.use({ productId: p.id, quantity: -d, placeId: place.id })),
+      d > 0 ? `Added ${qty(d, p.unit)} of ${p.name} to ${label}` : `${p.name}: ${qty(want, p.unit)} in ${label} now`,
+    );
+    if (done) setN(null);
+  };
+  const total = Math.round((s.inStock + d) * 1000) / 1000;
+  return (
+    <div className="item">
+      <ProductTile s={s} />
+      <span className="item-main">
+        <span className="item-name">{p.name}</span>
+        <span className="item-meta">{qty(want, p.unit)} here · {qty(total, p.unit)} in total{d ? <b> ({d > 0 ? '+' : '−'}{qty(Math.abs(d), p.unit)})</b> : null}</span>
+      </span>
+      <Stepper small value={want} onChange={setN} min={p.rechargeable ? here : 0} label={`${p.name} in ${label}`} />
+      <button type="button" className="check" aria-label={`Save ${p.name} in ${label}`} aria-pressed={!!d} disabled={!d || busy} onClick={() => void save()}><Icon name="check" size="sm" /></button>
+    </div>
   );
 }
