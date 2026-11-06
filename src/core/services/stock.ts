@@ -157,6 +157,11 @@ export function createStockService(ctx: CoreContext) {
     return { wish: false, onShoppingList: false };
   }
 
+  /** Things that last a set time once started: using one starts it today. */
+  function started(product: Product): Partial<Product> | undefined {
+    return product.lastsDays ? { inUseSince: ctx.today() } : undefined;
+  }
+
   /** Pending entries chosen by source (a whole order), entry ids, or one item's (optionally from one source). */
   async function pendingEntries(raw: StockOrders): Promise<StockEntry[]> {
     const input = In.StockOrders.parse(raw);
@@ -262,7 +267,7 @@ export function createStockService(ctx: CoreContext) {
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
       const movements = takeFrom(t, work, input);
-      return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use');
+      return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product));
     },
 
     /** Several uses (a recipe's ingredients) that all happen, or none do. */
@@ -274,7 +279,7 @@ export function createStockService(ctx: CoreContext) {
         let c = changes.get(input.productId);
         if (!c) {
           const t = txn(world, input.productId);
-          c = { t, next: t.original.map((e) => ({ ...e })), movements: [], kind: t.product.rechargeable ? 'flat' : 'use' };
+          c = { t, next: t.original.map((e) => ({ ...e })), movements: [], kind: t.product.rechargeable ? 'flat' : 'use', productUpdate: started(t.product) };
           changes.set(input.productId, c);
         }
         c.movements.push(...takeFrom(c.t, c.next, input));

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.6
+
+- **Things used one after another:** for a glucose sensor, contact lenses or a water filter, set **Each one lasts** on the item (e.g. 14 days). Using one starts it, and the item says how long the one in use has left and when the rest run out: "One in use until 20 Nov. With 3 more, enough until 1 Jan." The day the one in use was started can be changed on Edit.
+- **They go on the list in time:** when they'll run out within the warning days (Medicine warns 30 days ahead, everything else 7 unless you change it in Settings), counting what's on order, they're low, so they're on the shopping list and under Running low with "Runs out Fri 18 Dec". Home Assistant gets `larder_stock_running_out` once when that happens, and Running low lists the date.
+- Assistants say when they run out (`get_item`, `search`), and `add_item` and `change_item` can set how long each one lasts.
+- The example household has water filter cartridges that last 28 days each.
+- On a phone, the − + steppers on an item's Edit page no longer push their Clear link off the edge.
+
 ## 0.7.5
 
 - **Add by photo names the actual product:** a box of Twinings Sleep is "Twinings Sleep tea bags", not "Herbal tea". The name always says the variety or flavour ("Peppermint tea bags", "Semi-skimmed milk"), and keeps the brand when the product is that brand's own blend or range. Everyday things you'd buy any brand of keep a plain name ("Baked beans"), with the brand underneath as before.

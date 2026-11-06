@@ -17,9 +17,9 @@ Everything the web app does goes through the REST API, so integrations can do it
 | `GET /home` | Use soon, running low, out of place, pending orders, deliveries, which shop to go to |
 | `GET /products?status=low` | Products with stock summaries (`all`, `low`, `expiring`, `out_of_place`, `expected`, `wish`, `in_stock`, `to_tidy`: owned items with stock that has no place, or no category) |
 | `GET /products/{id}` | One product: stock by place, brands and barcodes, shops, history |
-| `POST /products` | New product `{ name, aliases, categoryId, unit, minQuantity, shelfLifeDays, preferredShopIds, defaultPlaceId, wish }` |
+| `POST /products` | New product `{ name, aliases, categoryId, unit, minQuantity, shelfLifeDays, lastsDays, preferredShopIds, defaultPlaceId, wish }`. `lastsDays`: for things used one after another, how long each lasts once started; summaries then say `inUseUntil`, `runsOutOn` and `daysToRunOut`, and it's low (`status.runningOut`) when it runs out within the warning window |
 | `POST /stock/add` | `{ productId, quantity, placeId?, expiresOn? }` |
-| `POST /stock/use` | `{ productId, quantity, placeId? }` (soonest-expiring first; rechargeables go flat) |
+| `POST /stock/use` | `{ productId, quantity, placeId? }` (soonest-expiring first; rechargeables go flat; with `lastsDays`, sets `inUseSince` to today) |
 | `POST /stock/move` | `{ productId, toPlaceId, mode: "temporary" \| "permanent", quantity? }` |
 | `POST /stock/return` | `{ productId }` puts out-of-place stock back |
 | `POST /stock/expect` | `{ productId, quantity, source: "Tesco delivery", eta? }` ordered, not arrived |

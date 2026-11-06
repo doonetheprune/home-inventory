@@ -59,6 +59,7 @@ export default defineModule({
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }] }` |
 | `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
+| `stock.running_out` | `{ productId, name, runsOutOn, daysToRunOut, inStock, expected, unit }`, once when something that lasts a set time once started (`product.lastsDays`) will run out within its warning window, counting what's on order (checked hourly; again only after it's restocked) |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |
 | `<module>.*` | anything a module publishes, e.g. `batteries.low` |

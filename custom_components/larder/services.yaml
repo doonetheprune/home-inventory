@@ -47,7 +47,7 @@ add_stock:
           integration: "larder"
 use_stock:
   name: "Use stock"
-  description: "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead."
+  description: "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today."
   fields:
     item:
       name: "Item"

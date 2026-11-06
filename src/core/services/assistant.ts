@@ -92,8 +92,18 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
   if (s.status.low) parts.push('running low');
+  if (s.runsOutOn) parts.push(`enough until ${when(ctx, s.runsOutOn)}`);
   if (s.nextExpiry && s.status.expiringSoon) parts.push(`expires ${when(ctx, s.nextExpiry)}`);
   return parts.join(', ');
+}
+
+/** "Each lasts 14 days once started, one after another. One in use since …, until …. Enough until …" */
+function lastsText(ctx: CoreContext, s: ProductSummary): string {
+  const p = s.product;
+  const each = `Each lasts ${p.lastsDays} days once started, one after another.`;
+  if (!s.inUseUntil && s.inStock <= 0) return `${each} None in use and none left`;
+  const inUse = s.inUseUntil ? ` One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}.` : ' None in use.';
+  return `${each}${inUse} Enough until ${when(ctx, s.runsOutOn)}`;
 }
 
 function detailText(ctx: CoreContext, d: ProductDetail): string {
@@ -116,6 +126,7 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   if (p.minQuantity) lines.push(`Running low below ${amount(p.minQuantity, p.unit)}${d.status.low ? ': it is low now' : ''}.`);
   if (p.stockUpTo) lines.push(`Stock up to ${amount(p.stockUpTo, p.unit)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
+  if (p.lastsDays && d.runsOutOn) lines.push(`${lastsText(ctx, d)}${d.status.runningOut ? ': it is low now' : ''}.`);
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
   if (d.variants.length) lines.push(`Brands: ${d.variants.map((v) => v.name).join('; ')}.`);
@@ -222,6 +233,7 @@ export function createAssistant(deps: {
       minimum: z.number().min(0).optional().describe('Running low below this many'),
       stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
+      lasts_days: z.number().int().positive().max(3650).optional().describe('For things used one at a time, one after another (a glucose sensor, contact lenses, a water filter): how many days each one lasts once started. Larder works out when they run out'),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
       new_shop: z.boolean().optional().describe('True to add the shop to Larder if it isn\'t there yet. Only after the person has said yes'),
@@ -243,7 +255,7 @@ export function createAssistant(deps: {
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
-        shelfLifeDays: i.shelf_life_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        shelfLifeDays: i.shelf_life_days ?? null, lastsDays: i.lasts_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
       const brand = i.brand?.trim();
@@ -267,7 +279,7 @@ export function createAssistant(deps: {
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first.', true);
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. For things that last a set time once started (a sensor, lenses), it\'s how to say a new one was started today.', true);
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);

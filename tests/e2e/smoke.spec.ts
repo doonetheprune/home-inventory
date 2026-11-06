@@ -333,6 +333,40 @@ async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
 }
 
+test('works out when things used one after another run out', async ({ page }, info) => {
+  await signIn(page);
+  // The example water filters: one in the jug since 10 days ago, and 2 more, 28 days each.
+  await page.goto(`/#/products/${await productId(page, 'Water filter cartridges')}`);
+  await expect(page.getByText(/One in use until \d+ \w+\. With 2 more cartridges, enough until/)).toBeVisible();
+  await expect(page.getByText('28 days once started')).toBeVisible();
+
+  // 3 new ones that last 2 weeks each, none started yet.
+  const name = `Glucose sensor ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.getByRole('button', { name: 'More quantity' }).click();
+  await page.getByRole('button', { name: 'More quantity' }).click();
+  await page.getByRole('button', { name: 'Set how long each one lasts' }).click();
+  await expect(page.getByLabel('days each one lasts', { exact: true })).toHaveValue('14');
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.getByText(/None in use\. Starting one today, there's enough until/)).toBeVisible();
+
+  // Using one starts it.
+  await page.getByRole('button', { name: 'Use', exact: true }).click();
+  await page.getByRole('button', { name: /^Use 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('2 left, enough until');
+  await expect(page.getByText(/One in use until \d+ \w+\. With 2 more, enough until/)).toBeVisible();
+
+  // If each only lasted a day, they'd run out within the week: low, saying when.
+  await page.locator('a[aria-label="Edit"]').click();
+  await expect(page.getByLabel('The one in use started')).not.toHaveValue('');
+  await page.getByLabel('days each one lasts', { exact: true }).fill('1');
+  await page.getByLabel('days each one lasts', { exact: true }).blur();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.locator('.pill', { hasText: /^Runs out / })).toBeVisible();
+});
+
 test('stock opens on the types of thing, and each type lists its items', async ({ page }) => {
   await signIn(page);
   await page.goto('/#/stock');

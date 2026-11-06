@@ -2436,6 +2436,31 @@
               }
             ]
           },
+          "lastsDays": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inUseSince": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -2961,6 +2986,10 @@
           },
           "hasExpected": {
             "type": "boolean"
+          },
+          "runningOut": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -3053,6 +3082,37 @@
             ]
           },
           "daysToExpiry": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "inUseUntil": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runsOutOn": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daysToRunOut": {
+            "default": null,
             "type": [
               "number",
               "null"
@@ -3334,6 +3394,37 @@
             ]
           },
           "daysToExpiry": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "inUseUntil": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runsOutOn": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daysToRunOut": {
+            "default": null,
             "type": [
               "number",
               "null"
@@ -6645,6 +6736,31 @@
               }
             ]
           },
+          "lastsDays": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inUseSince": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -6773,6 +6889,8 @@
           "categoryId",
           "unit",
           "shelfLifeDays",
+          "lastsDays",
+          "inUseSince",
           "minQuantity",
           "stockUpTo",
           "preferredShopIds",
@@ -7215,6 +7333,10 @@
           },
           "hasExpected": {
             "type": "boolean"
+          },
+          "runningOut": {
+            "default": false,
+            "type": "boolean"
           }
         },
         "required": [
@@ -7222,7 +7344,8 @@
           "expiringSoon",
           "expired",
           "outOfPlace",
-          "hasExpected"
+          "hasExpected",
+          "runningOut"
         ],
         "additionalProperties": false
       },
@@ -7314,6 +7437,37 @@
               "null"
             ]
           },
+          "inUseUntil": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runsOutOn": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daysToRunOut": {
+            "default": null,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/ProductStatus"
           },
@@ -7377,6 +7531,9 @@
           "flat",
           "nextExpiry",
           "daysToExpiry",
+          "inUseUntil",
+          "runsOutOn",
+          "daysToRunOut",
           "status",
           "places",
           "stockByPlace",
@@ -7608,6 +7765,37 @@
               "null"
             ]
           },
+          "inUseUntil": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runsOutOn": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daysToRunOut": {
+            "default": null,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/ProductStatus"
           },
@@ -7695,6 +7883,9 @@
           "flat",
           "nextExpiry",
           "daysToExpiry",
+          "inUseUntil",
+          "runsOutOn",
+          "daysToRunOut",
           "status",
           "places",
           "stockByPlace",
@@ -10239,6 +10430,31 @@
                       }
                     ]
                   },
+                  "lastsDays": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inUseSince": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "minQuantity": {
                     "default": null,
                     "anyOf": [
@@ -10452,6 +10668,29 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 36500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastsDays": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inUseSince": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                       },
                       {
                         "type": "null"
@@ -12142,6 +12381,31 @@
                           }
                         ]
                       },
+                      "lastsDays": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3650
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "inUseSince": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "minQuantity": {
                         "default": null,
                         "anyOf": [
@@ -12782,7 +13046,7 @@
     },
     "/api/v1/automation/check-expiry": {
       "post": {
-        "summary": "Publish stock.expiring / stock.expired events for anything newly due (the server also does this hourly)",
+        "summary": "Publish stock.expiring / stock.expired / stock.running_out events for anything newly due (the server also does this hourly)",
         "tags": [
           "Automation"
         ],
@@ -12799,11 +13063,15 @@
                     },
                     "expired": {
                       "type": "number"
+                    },
+                    "runningOut": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "expiring",
-                    "expired"
+                    "expired",
+                    "runningOut"
                   ],
                   "additionalProperties": false
                 }

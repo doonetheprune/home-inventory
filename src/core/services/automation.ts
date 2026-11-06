@@ -94,7 +94,7 @@ export function createAutomation(deps: {
   const brief = (s: ProductSummary) => `${s.product.name}: ${amount(s.inStock, s.product.unit)} in stock${s.expected ? `, ${amount(s.expected, s.product.unit)} on the way` : ''}.`;
   const itemInfo = (s: ProductSummary) => ({
     item: s.product.name, id: s.product.id, in_stock: s.inStock, expected: s.expected, unit: s.product.unit, low: s.status.low,
-    next_expiry: s.nextExpiry, place: s.places[0]?.path ?? null,
+    next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, place: s.places[0]?.path ?? null,
   });
 
   function addSensor(def: SensorDefinition, module: string | null = null, enabled: () => boolean = () => true) {
@@ -112,10 +112,10 @@ export function createAutomation(deps: {
 
   addSensor({
     id: 'low_stock', name: 'Running low', icon: 'mdi:cart-arrow-down', unit: 'items',
-    description: 'Items below their minimum, counting deliveries on the way.',
+    description: 'Items below their minimum, or (for things that last a set time once started) running out within their warning window, counting deliveries on the way.',
     async read() {
       const items = (await products.list({ status: 'low' })).sort((a, b) => a.product.name.localeCompare(b.product.name));
-      return { state: items.length, attributes: { items: items.slice(0, LIST_LIMIT).map((s) => ({ item: s.product.name, in_stock: s.inStock, expected: s.expected, minimum: s.product.minQuantity, unit: s.product.unit })) } };
+      return { state: items.length, attributes: { items: items.slice(0, LIST_LIMIT).map((s) => ({ item: s.product.name, in_stock: s.inStock, expected: s.expected, minimum: s.product.minQuantity, unit: s.product.unit, ...(s.runsOutOn ? { runs_out_on: s.runsOutOn } : {}) })) } };
     },
   });
   addSensor({
@@ -183,13 +183,14 @@ export function createAutomation(deps: {
     },
   });
   addAction({
-    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead.',
+    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today.',
     input: z.object({ item: Item, quantity: Quantity, place: z.string().max(200).optional().describe('Only use stock from this place') }),
     async run(i) {
       const p = await resolve.product(i.item);
       const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
       const s = await stock.use({ productId: p.id, quantity: i.quantity, placeId });
-      return { message: `${p.name}: used ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} left${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
+      const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
+      return { message: `${p.name}: used ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
     },
   });
   addAction({
@@ -337,6 +338,8 @@ export function createAutomation(deps: {
   /* ----------------------------- expiry check ---------------------------- */
 
   type Notified = Record<string, { expiresOn: string; warned: boolean; expired: boolean }>;
+  /** Products already announced as running out, with the day they first were. */
+  type RunOutNotified = Record<string, { since: string }>;
   // One check at a time, so a manual check during the hourly one can't announce things twice.
   let checking: Promise<unknown> = Promise.resolve();
 
@@ -383,23 +386,36 @@ export function createAutomation(deps: {
 
     /**
      * Publishes `stock.expiring` once when an item enters its warning window
-     * and `stock.expired` once on the day it expires. Safe to call as often
-     * as you like; the server calls it hourly.
+     * and `stock.expired` once on the day it expires; and `stock.running_out`
+     * once when something that lasts a set time once started comes within its
+     * warning window of running out (again only after it's been restocked).
+     * Safe to call as often as you like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; runningOut: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number }> {
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; runningOut: number }> {
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
+      const runOutNotified = (await ctx.storage.settings.get<RunOutNotified>('runOutNotified')) ?? {};
       const next: Notified = {};
+      const nextRunOut: RunOutNotified = {};
       let expiring = 0;
       let expired = 0;
+      let runningOut = 0;
       const world = await loadWorld(ctx);
       for (const p of world.products) {
         const s = summarise(world, p);
+        // Its run-out date moves as days pass with none in use, so it's announced once per spell in the window, not per date.
+        if (s.status.runningOut && s.runsOutOn) {
+          if (!runOutNotified[p.id]) {
+            ctx.publish('stock.running_out', { productId: p.id, name: p.name, runsOutOn: s.runsOutOn, daysToRunOut: s.daysToRunOut, inStock: s.inStock, expected: roundQty(s.expected + s.pending), unit: p.unit });
+            runningOut++;
+          }
+          nextRunOut[p.id] = runOutNotified[p.id] ?? { since: world.today };
+        }
         if (s.product.wish || !s.nextExpiry || !s.status.expiringSoon) continue;
         const prev = notified[p.id]?.expiresOn === s.nextExpiry ? notified[p.id]! : { expiresOn: s.nextExpiry, warned: false, expired: false };
         const days = s.daysToExpiry ?? daysBetween(world.today, s.nextExpiry);
@@ -417,7 +433,8 @@ export function createAutomation(deps: {
         next[p.id] = prev;
       }
       await ctx.storage.settings.set('expiryNotified', next);
-      return { expiring, expired };
+      await ctx.storage.settings.set('runOutNotified', nextRunOut);
+      return { expiring, expired, runningOut };
     },
   };
 }

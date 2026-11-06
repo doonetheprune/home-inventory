@@ -76,6 +76,9 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Kitchen roll', categoryId: cats.Household, unit: 'roll', minQuantity: 2, defaultPlaceId: u1 }, [{ quantity: 1 }]);
   await product({ name: 'Bin bags', categoryId: cats.Household, unit: 'bag', minQuantity: 10, defaultPlaceId: sink }, [{ quantity: 3 }]);
   await product({ name: 'Candles', aliases: ['tea lights'], categoryId: cats.Household, unit: 'candle', defaultPlaceId: drawer }, [{ quantity: 12 }]);
+  // Used one after another: the one in the jug was started 10 days ago.
+  const filters = await product({ name: 'Water filter cartridges', aliases: ['water filter', 'brita'], categoryId: cats.Household, unit: 'cartridge', lastsDays: 28, defaultPlaceId: sink }, [{ quantity: 2 }]);
+  await core.products.update(filters.id, { inUseSince: addDays(today, -10) });
   const beansLoo = await product({ name: 'Head torch', aliases: ['headlamp'], categoryId: cats.Household, unit: 'each', defaultPlaceId: hallDrawer }, [{ quantity: 2 }]);
   void beansLoo;
 

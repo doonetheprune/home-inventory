@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
-import type { Category, Movement, Place, Shop } from '../model';
+import { IsoDate, type Category, type Movement, type Place, type Shop } from '../model';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
@@ -263,7 +263,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_category', title: 'Change a category', destructive: true,
-    description: 'Rename a category, or change how many days before expiry its items are flagged.',
+    description: 'Rename a category, or change how many days before expiry (or running out, for things used one after another) its items are flagged.',
     input: z.object({
       category: z.string().min(1).max(60),
       name: z.string().min(1).max(60).optional().describe('New name'),
@@ -293,7 +293,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_item', title: 'Change an item', destructive: true,
-    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, usual place, which shops to buy it from, notes, wish list or rechargeable. Only the fields given change.',
+    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, how long each one lasts once started (and when the one in use was started), usual place, which shops to buy it from, notes, wish list or rechargeable. Only the fields given change.',
     input: z.object({
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
@@ -303,6 +303,8 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       minimum: z.number().min(0).nullable().optional().describe('Running low below this many; null to never count as low'),
       stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
+      lasts_days: z.number().int().positive().max(3650).nullable().optional().describe('For things used one at a time, one after another (a glucose sensor, contact lenses): how many days each one lasts once started; null for none'),
+      in_use_since: IsoDate.nullable().optional().describe('When the one in use was started (YYYY-MM-DD); null if none is in use. use_stock sets it to today, so this is for a different day'),
       usual_place: z.string().max(200).nullable().optional().describe('Where it usually lives; null for nowhere in particular. This doesn\'t move stock (use move_item)'),
       shops: z.array(z.string().max(80)).max(10).optional().describe('Every shop to buy it from (replaces the old list); [] for any shop that sells its category'),
       notes: z.string().max(5000).optional(),
@@ -322,7 +324,9 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit ? { unit: i.unit } : {}),
         ...(i.aliases ? { aliases: i.aliases } : {}), ...(i.minimum !== undefined ? { minQuantity: i.minimum } : {}),
         ...(i.stock_up_to !== undefined ? { stockUpTo: i.stock_up_to } : {}),
-        ...(i.shelf_life_days !== undefined ? { shelfLifeDays: i.shelf_life_days } : {}), ...(defaultPlaceId !== undefined ? { defaultPlaceId } : {}),
+        ...(i.shelf_life_days !== undefined ? { shelfLifeDays: i.shelf_life_days } : {}),
+        ...(i.lasts_days !== undefined ? { lastsDays: i.lasts_days } : {}), ...(i.in_use_since !== undefined ? { inUseSince: i.in_use_since } : {}),
+        ...(defaultPlaceId !== undefined ? { defaultPlaceId } : {}),
         ...(preferredShopIds ? { preferredShopIds } : {}), ...(i.notes !== undefined ? { notes: i.notes } : {}),
         ...(i.wish_list !== undefined ? { wish: i.wish_list } : {}), ...(i.rechargeable !== undefined ? { rechargeable: i.rechargeable } : {}),
       });
@@ -333,6 +337,9 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (defaultPlaceId !== undefined) said.push(defaultPlaceId ? `usually lives in ${(await places.list()).find((x) => x.id === defaultPlaceId)?.path}` : 'no usual place');
       if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${amount(i.minimum, next.unit)}`);
       if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
+      if (i.lasts_days !== undefined) said.push(i.lasts_days === null ? 'no set time once started' : `each lasts ${i.lasts_days} days once started`);
+      if (i.in_use_since !== undefined) said.push(i.in_use_since ? `the one in use was started on ${i.in_use_since}` : 'none in use');
+      if (d.runsOutOn && (i.lasts_days || i.in_use_since !== undefined)) said.push(`enough until ${d.runsOutOn}${d.status.runningOut ? ', so it\'s low' : ''}`);
       return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.`, data: { id: next.id, name: next.name } };
     },
   });

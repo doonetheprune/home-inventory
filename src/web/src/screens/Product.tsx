@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { ProductDetail, StockEntryView } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { ago, expiryText, longDate, num, qty, shortDate, stockText } from '../format';
+import { ago, dayText, expiryText, longDate, num, plural, qty, shortDate, stockText } from '../format';
 import { useEnabledWebModules } from '../modules';
 import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, useAction, useIsDesktop, usePlaces } from '../ui';
 import { NfcTags } from '../components/NfcTags';
@@ -90,6 +90,7 @@ export function ProductPage() {
               <div className="meter" aria-hidden="true"><i style={{ width: `${(p.inStock / scale) * 100}%`, background: p.status.low ? 'var(--low)' : 'var(--accent)' }} /><i style={{ width: `${((p.expected + p.pending) / scale) * 100}%`, background: 'var(--coming)', opacity: 0.45 }} /></div>
             )}
             <div className="small muted">
+              {p.runsOutOn ? <><RunsOut p={p} />{' '}</> : null}
               {min > 0 ? <>Low below {qty(min, unit)}. </> : null}
               {p.expected + p.pending > 0 ? <>With {qty(p.expected + p.pending, unit)} {p.pending ? (p.expected ? `on order (${num(p.pending)} not confirmed)` : 'in a pending order') : 'on the way'} you'll have {num(p.inStock + p.expected + p.pending)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
               {p.nextExpiry ? <> {renewal ? 'Renews' : 'Next to expire'}: {longDate(p.nextExpiry)}.</> : null}
@@ -148,6 +149,7 @@ export function ProductPage() {
                 <dt>Category</dt><dd>{p.category?.name ?? '—'}</dd>
                 <dt>Counted in</dt><dd>{unit}</dd>
                 <dt>{renewal ? 'Renews every' : 'Shelf life'}</dt><dd>{p.product.shelfLifeDays ? `${p.product.shelfLifeDays} days` : <span className="muted">None</span>}</dd>
+                {p.product.lastsDays ? <><dt>Each one lasts</dt><dd>{p.product.lastsDays} days once started</dd></> : null}
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
                 {p.product.stockUpTo != null && <><dt>Stock up to</dt><dd>{p.product.stockUpTo}</dd></>}
                 <dt>Buy from</dt><dd>{p.product.preferredShopIds.length ? p.shops.map((s) => s.name).join(', ') : p.shops.length ? `Any shop (${p.shops.map((s) => s.name).join(', ')})` : <span className="muted">No shop sells this category</span>}</dd>
@@ -191,6 +193,14 @@ export function ProductPage() {
       {sheet === 'expect' && <ExpectSheet p={p} onClose={() => setSheet(null)} />}
     </>
   );
+}
+
+/** Things used one after another: "One in use until 20 Nov. With 3 more, enough until 1 Jan." */
+function RunsOut({ p }: { p: ProductDetail }) {
+  const until = <b style={{ color: 'var(--ink)' }}>{dayText(p.runsOutOn!, p.daysToRunOut)}</b>;
+  const more = `${num(p.inStock)} more${p.product.unit === 'each' ? '' : ` ${plural(p.product.unit, p.inStock)}`}`;
+  if (p.inUseUntil) return p.inStock > 0 ? <>One in use until {shortDate(p.inUseUntil)}. With {more}, enough until {until}.</> : <>One in use until {until}, and none left after it.</>;
+  return p.inStock > 0 ? <>None in use. Starting one today, there's enough until {until}.</> : <>None left.</>;
 }
 
 function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {
@@ -297,7 +307,7 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
       {placesWithStock.length > 1 && (
         <label className="field"><span>From</span><select className="input" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Whatever expires first</option>{placesWithStock.map((pl) => <option key={pl!.id} value={pl!.id}>{pl!.path}</option>)}</select></label>
       )}
-      <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: n, placeId: from || undefined }), (r) => `${p.product.rechargeable ? 'Marked flat' : 'Used'} ${num(n)} · ${stockText(r)} left`).then((r) => r && onClose())}>
+      <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: n, placeId: from || undefined }), (r) => `${p.product.rechargeable ? 'Marked flat' : 'Used'} ${num(n)} · ${stockText(r)} left${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`).then((r) => r && onClose())}>
         {p.product.rechargeable ? `Mark ${num(n)} flat` : `Use ${qty(n, p.product.unit)}`}
       </button>
     </Sheet>

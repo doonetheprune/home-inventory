@@ -70,6 +70,13 @@ export const Product = z.object({
   unit: z.string().min(1).max(20).default('each'),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
+  /**
+   * Things used one at a time, one after another (a glucose sensor, contact lenses, a water
+   * filter): how many days each one lasts once it's started. Larder works out when they run out.
+   */
+  lastsDays: z.number().int().min(1).max(3650).nullable().default(null),
+  /** When the one in use was started (only with `lastsDays`). Using one sets it to today. */
+  inUseSince: IsoDate.nullable().default(null),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */
@@ -232,6 +239,8 @@ export const ProductStatus = z.object({
   expired: z.boolean(),
   outOfPlace: z.boolean(),
   hasExpected: z.boolean(),
+  /** Things that last a set time once started: they run out within the warning window, counting what's on order. Makes it low. */
+  runningOut: z.boolean().default(false),
 });
 export type ProductStatus = z.infer<typeof ProductStatus>;
 
@@ -251,6 +260,12 @@ export const ProductSummary = z.object({
   nextExpiry: IsoDate.nullable(),
   /** Days from today until nextExpiry (negative when expired). */
   daysToExpiry: z.number().nullable(),
+  /** Things that last a set time once started: when the one in use needs replacing. Null when none is in use. */
+  inUseUntil: IsoDate.nullable().default(null),
+  /** Things that last a set time once started: the day the one in use and every one in the house are used up. */
+  runsOutOn: IsoDate.nullable().default(null),
+  /** Days from today until runsOutOn (0 when there's none left). */
+  daysToRunOut: z.number().nullable().default(null),
   status: ProductStatus,
   /** Usual places with stock, most stock first. */
   places: z.array(PlaceRef),

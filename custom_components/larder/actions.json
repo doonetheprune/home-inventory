@@ -43,7 +43,7 @@
   {
     "id": "use_stock",
     "name": "Use stock",
-    "description": "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead.",
+    "description": "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today.",
     "module": null,
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
