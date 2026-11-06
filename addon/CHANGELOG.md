@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- **Click and collect:** a shop whose automation can do it offers delivery or click and collect. The shop's sheet has a choice of the two and a **Collect from** branch picker, the slots say which branch they're for, and a day with no delivery slots offers click and collect instead.
+- **Shops with no slots:** an online shop that doesn't take bookings skips choosing a slot altogether.
+- **Low items with no listing at the shop:** something low that isn't linked to anything at that shop (milk or butter from any shop) is matched to one of your favourites there by its name, linked, and bought like anything else. When more than one favourite could be it, the plan lists them for you to pick one; it never guesses.
+
 ## 0.8.0
 
 - **Larder with no connection:** when the Wi-Fi or internet is down, a phone can still open Larder and **Load data from** a copy saved on it. Pick one (newest first) and search, look at items, places, shopping lists, scenarios and recipes as they were when it was saved. A bar at the top says which copy it is; **Change** goes back to the live Larder once it can be reached. Copies are read only.
