@@ -48,6 +48,16 @@ Behind Tailscale, a tunnel or a proxy, set `LARDER_TRUST_PROXY` to the proxy's a
 
 Set `LARDER_BASE_URL` to the https address so QR labels point to it.
 
+## With no connection
+
+A phone can keep Larder, and copies of what's in it, to look at when it can't reach Larder (the Wi-Fi is down, a power cut, out of signal at home):
+
+1. Open Larder at its https address in the phone's browser (see above) and add it to the home screen (Share → Add to Home Screen on an iPhone, ⋮ → Add to home screen in Chrome).
+2. In **Settings → Offline copies**, **Save a copy each day** is on: a copy is saved when you open Larder and the newest is over a day old. **Save a copy now** saves one straight away. The newest 10 are kept.
+3. With no connection, Larder still opens and says it can't reach the server. Under **Load data from**, pick a copy: search, items, places, shopping lists, scenarios and recipes are all there, as they were when it was saved. A bar at the top says which copy it is, and **Change** goes back to the live Larder when it's reachable.
+
+A copy is read only: changes need the live Larder. Photos aren't in copies (ones the phone has shown recently may still appear). Copies stay on the phone until they're removed in Settings or you sign out. Phones only keep Larder for use with no connection at an https address, not an http one such as `http://192.168.1.20:8080`.
+
 ## Settings
 
 | Variable | Default | What it does |

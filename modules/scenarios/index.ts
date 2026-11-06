@@ -185,6 +185,9 @@ export default defineModule({
       ctx.publish('scenarios.changed', { id: s.id });
     }
 
+    // A phone's offline copy has the list and every scenario (the power cut list is what's wanted in a power cut).
+    ctx.addOfflinePaths(async () => ['/', ...(await all()).map((s) => `/${s.id}`)]);
+
     ctx.addRoute({
       method: 'GET', path: '/', summary: 'Scenarios, with how many items, places, low and wished for',
       response: z.array(ScenarioSummary),

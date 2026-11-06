@@ -22,6 +22,7 @@ import { registerStockRoutes } from './routes/stock';
 import { registerMiscRoutes } from './routes/misc';
 import { registerModuleRoutes } from './routes/modules';
 import { registerAutomationRoutes } from './routes/automation';
+import { registerOfflineRoutes } from './routes/offline';
 import { MCP_PATH, registerMcp } from './mcp';
 import { createOAuth, resourceMetadataUrl } from './oauth';
 
@@ -176,6 +177,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: ZodApp; auth: Auth
       registerStockRoutes(z, { core });
       registerMiscRoutes(z, { core, config, backup: deps.backup });
       registerAutomationRoutes(z, { core });
+      registerOfflineRoutes(z, { core, config, inject: (options) => app.inject(options) });
       oauth.registerApi(z);
       registerModuleRoutes(z, { core });
     },

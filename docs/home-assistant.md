@@ -38,6 +38,10 @@ The **Network** section can open port 8080 on your network, for MCP clients, scr
 
 Larder is in every Home Assistant user's sidebar, not only admins'. People who open it are signed in as their Home Assistant user, with no second login (Larder trusts this only for connections that come from Home Assistant's Supervisor). They're Larder admins unless the **Larder admins** option lists who is. They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
 
+### Using Larder with no connection
+
+Opened from Home Assistant's sidebar or app, Larder needs Home Assistant to be reachable: the app has to reach Home Assistant before it shows Larder. To keep Larder on a phone for when the Wi-Fi or internet is down (with copies saved each day to look at), give it its own https address: open port 8080 in the add-on's **Network** section and put it behind Tailscale, a Cloudflare Tunnel or your reverse proxy, make a Larder account for each person (Settings → Accounts), then open that address in the phone's browser, sign in and add it to the home screen. See [running.md](running.md#with-no-connection).
+
 ## Add the integration by hand
 
 For Larder running outside Home Assistant (Docker, another machine), or with the add-on's **Install the Home Assistant integration** option turned off:

@@ -35,6 +35,12 @@ export interface WebModule {
   photoReader?: PhotoReader;
   /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
   settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
+  /**
+   * Shown while a saved copy is open (no connection). Set it only when everything the pages and
+   * panels read is saved with ctx.addOfflinePaths, or they hide themselves when a read fails.
+   * Changes always fail in a copy, with a message saying why.
+   */
+  offline?: boolean;
 }
 
 export function defineWebModule(m: WebModule): WebModule {

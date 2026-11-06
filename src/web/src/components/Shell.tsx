@@ -6,6 +6,8 @@ import { dayDate } from '../format';
 import { GlobalSearch } from './GlobalSearch';
 import { AddActions } from './AddActions';
 import { useEnabledWebModules } from '../modules';
+import { useOpenCopy } from '../offline/current';
+import { CopyBar } from '../offline/ui';
 
 function todayIso() {
   const d = new Date();
@@ -41,6 +43,8 @@ export function Shell() {
   const location = useLocation();
   const screen = useRef<HTMLElement>(null);
   const atHome = location.pathname === '/';
+  // A saved copy can't be changed, so there's nothing to scan or add.
+  const copy = useOpenCopy();
   const pages = useEnabledWebModules().flatMap((m) => (m.pages ?? []).filter((p) => !p.path.includes(':') && !p.hidden).map((p) => ({ ...p, moduleId: m.id })));
   const organise = pages.filter((p) => (p.section ?? 'organise') === 'organise');
   const byWishList = pages.filter((p) => p.section === 'wishlist');
@@ -59,23 +63,28 @@ export function Shell() {
 
   return (
     <div className="frame">
-      <div className={`app ${atHome ? 'at-home' : ''}`}>
+      <div className={`app ${atHome ? 'at-home' : ''} ${copy ? 'copy-open' : ''}`}>
         <header className="topbar">
           <NavLink to="/" className="tb-brand" aria-label="Larder home"><span className="mark"><Icon name="jar" /></span><b>Larder</b></NavLink>
           <span className="tb-date">{dayDate(todayIso())}</span>
           <GlobalSearch />
         </header>
+        <CopyBar />
         <main className="screen" ref={screen}>
           <Outlet />
         </main>
         <nav className="tabbar" aria-label="Main">
           {tab('/', 'home', 'Home', 'home', true)}
           {tab('/stock', 'box', 'Stock', 'stock')}
-          <NavLink to="/scan" className={({ isActive }) => `tab scan ${isActive ? 'on' : ''}`} data-t="scan" aria-label="Scan">
-            <span className="fab"><Icon name="scan" /><span className="side-label">Scan</span></span>
-          </NavLink>
-          <NavLink to="/add" className="side-add"><Icon name="plus" size="sm" />Add by name</NavLink>
-          <AddActions place="sidebar" />
+          {!copy && (
+            <>
+              <NavLink to="/scan" className={({ isActive }) => `tab scan ${isActive ? 'on' : ''}`} data-t="scan" aria-label="Scan">
+                <span className="fab"><Icon name="scan" /><span className="side-label">Scan</span></span>
+              </NavLink>
+              <NavLink to="/add" className="side-add"><Icon name="plus" size="sm" />Add by name</NavLink>
+              <AddActions place="sidebar" />
+            </>
+          )}
           {tab('/shop', 'cart', 'Shop', 'shop')}
           {tab('/more', 'more', 'More', 'more')}
           <div className="side-group">
