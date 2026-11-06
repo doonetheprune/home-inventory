@@ -421,6 +421,8 @@ function ScenarioRecipes({ id }: { id: string }) {
 
 export default defineWebModule({
   id: 'recipes',
+  // Recipes, and the lists on item and scenario pages, are in offline copies.
+  offline: true,
   productPanels: [ItemRecipes],
   panels: [{ slot: 'scenarios.scenario', component: ScenarioRecipes }],
   pages: [

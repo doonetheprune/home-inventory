@@ -31,10 +31,16 @@ export interface WebModule {
   addActions?: Array<{ path: string; title: string; subtitle: string; icon?: string; useShown?: () => boolean }>;
   /** Panels at the top of the Wish list (e.g. how many shared links are waiting in Pending). */
   wishListPanels?: Array<ComponentType>;
-  /** Reads a photo of a pack (an AI): the scanner offers "Read with AI" when one is set up. */
+  /** Reads a photo of a pack (an AI): the scanner offers "Take photo" when one is set up. */
   photoReader?: PhotoReader;
   /** Sections in Settings, after Modules. `admin` says whether this person may change settings. */
   settingsPanels?: Array<ComponentType<{ admin: boolean }>>;
+  /**
+   * Shown while a saved copy is open (no connection). Set it only when everything the pages and
+   * panels read is saved with ctx.addOfflinePaths, or they hide themselves when a read fails.
+   * Changes always fail in a copy, with a message saying why.
+   */
+  offline?: boolean;
 }
 
 export function defineWebModule(m: WebModule): WebModule {

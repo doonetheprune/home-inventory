@@ -75,7 +75,8 @@ function plural(n: number, unit: string): string {
 
 export function createStockService(ctx: CoreContext) {
   type Txn = { world: World; product: Product; original: StockEntry[]; before: ProductSummary };
-  type Change = { t: Txn; next: StockEntry[]; movements: Movement[]; kind: string; productUpdate?: Partial<Product> };
+  /** `leave`: places stock was moved out of for good, which it stops being kept in once there's none left there. */
+  type Change = { t: Txn; next: StockEntry[]; movements: Movement[]; kind: string; productUpdate?: Partial<Product>; leave?: string[] };
 
   function txn(world: World, productId: string): Txn {
     const product = world.productById.get(productId);
@@ -107,11 +108,15 @@ export function createStockService(ctx: CoreContext) {
     const movements: Movement[] = [];
     const products: Product[] = [];
     for (const c of changes) {
-      const d = diff(c.t.original, tidy(c.next));
+      const next = tidy(c.next);
+      const d = diff(c.t.original, next);
       put.push(...d.put);
       remove.push(...d.remove);
       movements.push(...c.movements);
-      if (c.productUpdate) products.push({ ...c.t.product, ...c.productUpdate, updatedAt: ctx.now() });
+      const product = { ...c.t.product, ...c.productUpdate };
+      const kept = keptIn(product, c.t.original, next, c.leave ?? []);
+      const keptChanged = kept.join() !== (product.keptInPlaceIds ?? []).join();
+      if (c.productUpdate || keptChanged) products.push({ ...product, keptInPlaceIds: kept, updatedAt: ctx.now() });
     }
     await ctx.storage.applyStockChanges({ put, remove, movements, products: products.length ? products : undefined });
     const world = await loadWorld(ctx);
@@ -124,6 +129,19 @@ export function createStockService(ctx: CoreContext) {
       if (c.productUpdate) ctx.publish('product.updated', { id: c.t.product.id, name: c.t.product.name });
       return after;
     });
+  }
+
+  /**
+   * The places an item is kept in after a change: those it was kept in, and any
+   * that had or now have its stock (so running out somewhere doesn't forget it),
+   * less those it was moved out of for good and has none left in.
+   */
+  function keptIn(product: Product, before: StockEntry[], after: StockEntry[], leave: string[]): string[] {
+    const here = (es: StockEntry[]) => es.filter((e) => e.status === 'in_stock' && e.quantity > 0 && e.placeId).map((e) => e.placeId!);
+    const still = new Set(here(after));
+    const out = [...(product.keptInPlaceIds ?? [])];
+    for (const id of [...here(before), ...still]) if (!out.includes(id)) out.push(id);
+    return out.filter((id) => still.has(id) || !leave.includes(id));
   }
 
   function defaultPlace(world: World, product: Product): string | null {
@@ -308,12 +326,14 @@ export function createStockService(ctx: CoreContext) {
       if (quantity > available + EPS) throw new ValidationError(`Only ${plural(available, t.product.unit)} can be moved.`);
       let left = quantity;
       const movements: Movement[] = [];
+      const leave: string[] = [];
       const now = ctx.now();
       for (const e of movable) {
         if (left <= EPS) break;
         const take = Math.min(e.quantity, left);
         left = roundQty(left - take);
         const from = where(e);
+        const usual = e.placeId;
         const moved: StockEntry =
           input.mode === 'permanent'
             ? { ...e, id: take < e.quantity ? newId() : e.id, quantity: take, placeId: input.toPlaceId, currentPlaceId: null, movedAt: null }
@@ -323,8 +343,9 @@ export function createStockService(ctx: CoreContext) {
           work.push(moved);
         } else Object.assign(e, moved);
         movements.push(movement(t.product, 'move', take, { entryId: e.id, fromPlaceId: from, toPlaceId: input.toPlaceId, note: input.mode }));
+        if (input.mode === 'permanent' && usual && usual !== input.toPlaceId) leave.push(usual);
       }
-      return commit(t, work, movements, 'move');
+      return (await commitAll([{ t, next: work, movements, kind: 'move', leave }]))[0]!;
     },
 
     /** Put out-of-place stock back in its usual place. */

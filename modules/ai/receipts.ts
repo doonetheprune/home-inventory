@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { LarderError, type ModuleContext, type Product } from '@larder/core';
-import type { Task } from './providers';
+import type { Source, Task } from './providers';
 
 /** What the AI read from the receipt. */
 export const ReceiptReading = z.object({
@@ -174,7 +174,7 @@ const AddReceipt = z.object({
 });
 type AddReceipt = z.output<typeof AddReceipt>;
 
-export interface Asked<T> { answer: T; provider: 'claude' | 'gemini'; model: string; skipped: Array<{ provider: 'claude' | 'gemini'; message: string }> }
+export interface Asked<T> { answer: T; sources: Source[]; provider: 'claude' | 'gemini'; model: string; skipped: Array<{ provider: 'claude' | 'gemini'; message: string }> }
 
 export interface ReceiptDeps {
   /** Asks the AIs in the household's order about a photo (base64). */

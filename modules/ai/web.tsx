@@ -1,6 +1,6 @@
 /**
- * The AI section in Settings, the photo reading behind the scanner's "Read with
- * AI", and Add from receipt: a photo is shrunk on the phone and read by the AIs
+ * The AI section in Settings, the photo reading behind the scanner's "Take
+ * photo", and Add from receipt: a photo is shrunk on the phone and read by the AIs
  * in the household's order. Add by photo (on Home) opens the scanner with the
  * camera on.
  */
@@ -11,10 +11,11 @@ import {
 
 type ProviderId = 'claude' | 'gemini';
 interface ProviderStatus { enabled: boolean; keySet: boolean; keyHint: string | null; keyFrom: 'app' | 'env' | null; model: string | null }
-interface Status { ready: boolean; order: ProviderId[]; first: ProviderId | null; claude: ProviderStatus; gemini: ProviderStatus }
+interface Status { ready: boolean; order: ProviderId[]; first: ProviderId | null; search: boolean; claude: ProviderStatus; gemini: ProviderStatus }
 interface Identified {
   readable: boolean;
   name: string;
+  kind: string | null;
   brand: string | null;
   unit: string;
   categoryId: string | null;
@@ -23,6 +24,8 @@ interface Identified {
   shop: { name: string; id: string | null; preset: boolean } | null;
   provider: ProviderId;
   model: string;
+  /** Web pages it looked at, when the photo wasn't enough. */
+  sources: Array<{ name: string; url: string }>;
   /** AIs asked first that couldn't read it, and why. */
   skipped: Array<{ provider: ProviderId; message: string }>;
 }
@@ -70,7 +73,7 @@ function base64(blob: Blob): Promise<string> {
 /* Reading photos for the scanner                                      */
 /* ------------------------------------------------------------------ */
 
-/** The scanner's "Read with AI": the photo, shrunk here, goes to the AIs in the household's order. */
+/** The scanner's Take photo: the photo, shrunk here, goes to the AIs in the household's order. */
 const photoReader: PhotoReader = {
   async status() {
     const s = await call<Status>('GET', '/');
@@ -80,13 +83,13 @@ const photoReader: PhotoReader = {
     const small = await shrink(photo);
     const r = await call<Identified>('POST', '/identify', { image: await base64(small) });
     return {
-      readable: r.readable, name: r.name, brand: r.brand, unit: r.unit, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
-      by: NAMES[r.provider], notes: r.skipped.map((x) => x.message), photo: small,
+      readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, unit: r.unit, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
+      by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message), photo: small,
     };
   },
 };
 
-/** Add by photo (from Home) is the scanner with the camera on: Read with AI is under it. */
+/** Add by photo (from Home) is the scanner with the camera on: Take photo is under it. */
 function AddByPhoto() {
   const navigate = useNavigate();
   useEffect(() => {
@@ -433,6 +436,23 @@ function ProviderSettings({ id, s, status, position, admin }: { id: ProviderId; 
   );
 }
 
+/** Whether Add by photo may look a pack up on the web when the photo isn't enough. */
+function SearchSetting({ s, admin }: { s: Status; admin: boolean }) {
+  const { run, busy } = useAction();
+  return (
+    <div className="list">
+      <div className="toggle">
+        <span className="grow">
+          <b>Look things up online</b><br />
+          <span className="small muted">When the photo doesn't show exactly which product it is or its size, the AI searches the web for it (Claude and Gemini each charge about a penny a search, at most two a photo). Off: it only goes on the photo.</span>
+        </span>
+        <Switch checked={s.search} label="Look things up online" disabled={!admin || busy}
+          onChange={(v) => void run(() => call<Status>('PUT', '/settings', { search: v }), v ? 'The AI looks things up online when the photo isn’t enough' : 'The AI only goes on the photo now')} />
+      </div>
+    </div>
+  );
+}
+
 function AiSettings({ admin }: { admin: boolean }) {
   const s = useStatus().data;
   if (!s) return null;
@@ -445,6 +465,7 @@ function AiSettings({ admin }: { admin: boolean }) {
       </p>
       {!s.ready && <p className="small"><b>{s.claude.keySet || s.gemini.keySet ? 'Every AI with a key is switched off, so Add by photo is hidden.' : 'Add a key to Claude or Gemini to use Add by photo.'}</b></p>}
       {s.order.map((id, i) => <ProviderSettings key={id} id={id} s={s[id]} status={s} position={i} admin={admin} />)}
+      <SearchSetting s={s} admin={admin} />
     </div>
   );
 }

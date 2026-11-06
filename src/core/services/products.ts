@@ -8,15 +8,16 @@ import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
 
 export function createProductService(ctx: CoreContext, validateFields: (fields: Record<string, unknown>) => Record<string, unknown>) {
-  async function assertRefs(p: Pick<Product, 'categoryId' | 'preferredShopIds' | 'defaultPlaceId'>) {
+  async function assertRefs(p: Pick<Product, 'categoryId' | 'preferredShopIds' | 'defaultPlaceId' | 'keptInPlaceIds'>) {
     if (p.categoryId && !(await ctx.storage.categories.get(p.categoryId))) throw new NotFoundError('Category', p.categoryId);
     for (const s of p.preferredShopIds) if (!(await ctx.storage.shops.get(s))) throw new NotFoundError('Shop', s);
     if (p.defaultPlaceId && !(await ctx.storage.places.get(p.defaultPlaceId))) throw new NotFoundError('Place', p.defaultPlaceId);
+    for (const id of p.keptInPlaceIds) if (!(await ctx.storage.places.get(id))) throw new NotFoundError('Place', id);
   }
 
   function tidy(p: Product): Product {
     const aliases = unique(p.aliases.map((a) => a.trim()).filter((a) => a && a.toLowerCase() !== p.name.trim().toLowerCase()));
-    return { ...p, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), fields: validateFields(p.fields) };
+    return { ...p, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
   }
 
   async function assertBarcodesFree(barcodes: string[], exceptVariantId?: string) {

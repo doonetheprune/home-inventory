@@ -1,22 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-
-/** Signs in (setting up the household the first time) and loads the example data once. */
-async function signIn(page: Page) {
-  await page.goto('/');
-  const setup = page.getByRole('button', { name: 'Create account' });
-  const signInBtn = page.getByRole('button', { name: 'Sign in' });
-  await expect(setup.or(signInBtn)).toBeVisible();
-  await page.getByLabel('Username').fill('shaun');
-  await page.getByLabel('Password').fill('correct horse battery');
-  if (await setup.isVisible()) await setup.click();
-  else await signInBtn.click();
-  await expect(page.getByRole('link', { name: 'Larder home' })).toBeVisible();
-  const status = (await page.evaluate(async () => (await fetch('api/v1/home')).json())) as { counts: { products: number } };
-  if (status.counts.products === 0) {
-    await page.evaluate(async () => fetch('api/v1/settings/demo', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: '{}' }));
-    await page.reload();
-  }
-}
+import { signIn } from './helpers';
 
 test('home shows what needs attention', async ({ page, isMobile }) => {
   await signIn(page);
@@ -164,16 +147,31 @@ test('adds a room, then its spots one after another, and stock in a spot', async
   const sheet = page.getByRole('dialog');
   await sheet.locator('.item', { hasText: tea }).getByRole('button', { name: 'Put here' }).click();
   await expect(toast).toContainText(`${tea} put away in L${p}1`);
+  // Quick add: search, − and + for how many are here, then the tick. No second step.
   await sheet.getByLabel('Which item?').fill('cable ties');
-  await sheet.getByRole('button', { name: /Cable ties/ }).click();
-  await sheet.getByRole('button', { name: 'More quantity' }).click();
-  await sheet.getByRole('button', { name: /^Add 2/ }).click();
-  await expect(toast).toContainText(`of Cable ties to L${p}1`);
+  const ties = sheet.locator('.item', { hasText: 'Cable ties' }).first();
+  await expect(ties).toContainText('0 packs here');
+  await ties.getByRole('button', { name: `More Cable ties in L${p}1` }).click();
+  await ties.getByRole('button', { name: `More Cable ties in L${p}1` }).click();
+  await expect(ties).toContainText(/2 packs here · \d+ packs in total \(\+2 packs\)/);
+  await ties.getByRole('button', { name: `Save Cable ties in L${p}1` }).click();
+  await expect(toast).toContainText(`Added 2 packs of Cable ties to L${p}1`);
+  await expect(ties.getByRole('button', { name: `Save Cable ties in L${p}1` })).toBeDisabled();
   await sheet.getByRole('button', { name: 'Close' }).click();
   // Counted here, and changed here.
   await page.getByRole('button', { name: `More ${tea} here` }).click();
   await expect(toast).toContainText(`${tea}: 3 boxes here now`);
   await expect(page.getByLabel(`${tea} here`, { exact: true })).toHaveValue('3');
+  // Down to none: it stays here, ready for more, until it's taken off.
+  const teaRow = page.locator('.item', { hasText: tea });
+  for (const left of [2, 1, 0]) {
+    await page.getByRole('button', { name: `Less ${tea} here` }).click();
+    await expect(page.getByLabel(`${tea} here`, { exact: true })).toHaveValue(String(left));
+  }
+  await expect(teaRow).toContainText('None here now');
+  await page.getByRole('button', { name: `Don't keep ${tea} here` }).click();
+  await expect(toast).toContainText(`${tea} isn't kept here now`);
+  await expect(teaRow).toHaveCount(0);
   // Scanning from here: whatever's scanned goes here.
   await page.getByRole('link', { name: 'Scan here' }).click();
   await expect(page.locator('.vf-chip').first()).toContainText(`Adding to L${p}1`);
@@ -377,14 +375,15 @@ test('finds a shop\'s branches from its card, and offers the zones and automatio
   await expect(page.getByRole('textbox', { name: 'Automation' })).toHaveValue(/action: larder\.shopping_list_for/);
 });
 
-/** Stands in for the AI: Larder's own pages, camera and saving are real. */
-async function pretendAi(page: Page, answer: Record<string, unknown>) {
+/** Stands in for the AI: Larder's own pages, camera and saving are real. It answers once `until` settles, if given. */
+async function pretendAi(page: Page, answer: Record<string, unknown>, until?: Promise<unknown>) {
   const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
   await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', claude: set, gemini: set } }));
   const sent: string[] = [];
-  await page.route('**/api/v1/modules/ai/identify', (r) => {
+  await page.route('**/api/v1/modules/ai/identify', async (r) => {
     sent.push((r.request().postDataJSON() as { image: string }).image);
-    return r.fulfill({ json: { readable: true, brand: null, unit: 'each', categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', skipped: [], ...answer } });
+    await until;
+    return r.fulfill({ json: { readable: true, kind: null, brand: null, unit: 'each', categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [], ...answer } });
   });
   return sent;
 }
@@ -395,21 +394,28 @@ const size = (img: Locator) => img.evaluate((el) => {
   return i.complete && i.naturalWidth ? `${i.naturalWidth}x${i.naturalHeight}` : '';
 });
 
-test('Add by photo is the scanner: Read with AI names it, one press adds it, and its photo can be turned later', async ({ page }, info) => {
+test('Add by photo is the scanner: Take photo names it, one press adds it, and its photo can be turned later', async ({ page }, info) => {
   await signIn(page);
   const name = `Oat drink ${info.project.name}`;
   const shop = `Corner shop ${info.project.name}`;
+  let answer = () => {};
   const sent = await pretendAi(page, {
     name, brand: 'Oatly Barista Edition 1 L', unit: 'carton', shelfLifeDays: 90, aliases: ['oat milk'], shop: { name: shop, id: null, preset: false },
     provider: 'gemini', model: 'gemini-3.6-flash', skipped: [{ provider: 'claude', message: "Claude couldn't read the photo: Your credit balance is too low." }],
-  });
+  }, new Promise<void>((ok) => { answer = ok; }));
   await page.goto('/');
   await page.getByRole('link', { name: /Add by photo/ }).first().click();
-  // The scanner, camera on, with Read with AI under it.
+  // The scanner, camera on, with Take photo under it.
   await expect(page.locator('.viewfinder video')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Read with AI' })).toBeVisible();
-  // A volume button reads it, like a camera's shutter.
-  await page.keyboard.press('AudioVolumeDown');
+  const shutter = page.getByRole('button', { name: 'Take photo' });
+  await expect(shutter).toBeEnabled();
+  // Pressed twice in a hurry: one photo, held still while the AI reads it, and saying so.
+  await shutter.dblclick();
+  await expect(page.getByRole('img', { name: 'The photo you took' })).toBeVisible();
+  await expect(page.locator('.vf-chip', { hasText: 'Reading the photo…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reading the photo…' })).toBeDisabled();
+  await expect(page.getByText('Reading the photo with Claude…')).toBeVisible();
+  answer();
 
   const card = page.locator('.sheet-card');
   await expect(card.getByText("Read from the photo by Gemini. Claude couldn't read the photo: Your credit balance is too low. Check the name.")).toBeVisible();
@@ -423,6 +429,15 @@ test('Add by photo is the scanner: Read with AI names it, one press adds it, and
   await expect(page.locator('.toast')).toContainText(`${shop} added to your shops`);
   await card.getByRole('button', { name: 'Add 1', exact: true }).click();
   await expect(page.locator('.toast')).toContainText(`Added 1 carton · ${name}. Ready for the next scan.`);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  // Back to the live camera, ready for the next.
+  await expect(page.getByRole('img', { name: 'The photo you took' })).toHaveCount(0);
+  await expect(shutter).toBeEnabled();
+  // A volume button takes it too, like a camera's shutter.
+  await page.keyboard.press('AudioVolumeDown');
+  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  expect(sent).toHaveLength(2);
+  await card.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
 
   // It's in Larder with its photo, brand and shop, waiting to be tidied (no place yet); the photo can be turned there.
@@ -519,6 +534,20 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip' }).click();
 
+  // A pack named exactly, looked up online: the pages are shown, and an item for its kind is offered.
+  const kind = `Night-time infusion ${info.project.name}`;
+  await page.evaluate(async (n) => fetch('api/v1/products', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, unit: 'box' }) }), kind);
+  await pretendAi(page, {
+    name: `Twinings Sleep tea bags ${info.project.name}`, kind, brand: 'Twinings Sleep 20 tea bags', unit: 'box', aliases: [kind],
+    sources: [{ name: 'twinings.co.uk', url: 'https://www.twinings.co.uk/sleep' }, { name: 'tesco.com', url: 'https://www.tesco.com/sleep' }],
+  });
+  await page.getByTestId('scan-upload').setInputFiles({ name: 'tea.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64') });
+  await expect(card.getByText('Read from the photo by Claude, looked up on twinings.co.uk and tesco.com. Check the name.')).toBeVisible();
+  await expect(card.getByRole('link', { name: 'twinings.co.uk' })).toHaveAttribute('href', 'https://www.twinings.co.uk/sleep');
+  await expect(card.getByLabel('Call it')).toHaveValue(`Twinings Sleep tea bags ${info.project.name}`);
+  await expect(card.getByRole('button', { name: new RegExp(kind) })).toBeVisible();
+  await card.getByRole('button', { name: 'Skip' }).click();
+
   // An uploaded photo the AI can't make out says so.
   await pretendAi(page, { readable: false, name: 'Blurry thing' });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -555,6 +584,15 @@ test('settings set the order the AIs are asked in, and switch one off without lo
   await expect(page.getByText('Saved (…1234)')).toBeVisible();
   await page.getByRole('switch', { name: 'Use Gemini' }).click();
   await expect(page.getByText('Asked first', { exact: true })).toBeVisible();
+
+  // Looking packs up online is on unless switched off.
+  const online = page.getByRole('switch', { name: 'Look things up online' });
+  await expect(online).toBeChecked();
+  await online.click();
+  await expect(page.locator('.toast')).toContainText('The AI only goes on the photo now');
+  await expect(online).not.toBeChecked();
+  await online.click();
+  await expect(online).toBeChecked();
 });
 
 test('order emails: connecting Gmail step by step, or letting Claude do it', async ({ page, context }) => {

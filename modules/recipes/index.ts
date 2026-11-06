@@ -592,6 +592,17 @@ export default defineModule({
       return missing.map((i) => i.item ?? i.name);
     }
 
+    // A phone's offline copy: both lists, every recipe, and the lists on item and scenario pages that have any.
+    ctx.addOfflinePaths(async () => {
+      const list = await all();
+      const products = new Set(list.flatMap((r) => r.ingredients.flatMap((i) => (i.productId ? [i.productId] : []))));
+      const scenarios = new Set(list.flatMap((r) => r.scenarioIds));
+      return [
+        '/', '/?show=scenario-only', ...list.map((r) => `/${r.id}`),
+        ...[...products].map((id) => `/?productId=${id}`), ...[...scenarios].map((id) => `/?scenarioId=${id}`),
+      ];
+    });
+
     ctx.addRoute({
       method: 'GET', path: '/', summary: 'Saved recipes, with what\'s missing for each (at its default preset)',
       description: 'Without a filter, the main list: recipes kept for their scenarios are left out (ask for them with `show`).',

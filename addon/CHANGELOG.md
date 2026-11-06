@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.8.0
+
+- **Larder with no connection:** when the Wi-Fi or internet is down, a phone can still open Larder and **Load data from** a copy saved on it. Pick one (newest first) and search, look at items, places, shopping lists, scenarios and recipes as they were when it was saved. A bar at the top says which copy it is; **Change** goes back to the live Larder once it can be reached. Copies are read only.
+- **A copy each day:** Larder saves a copy on the phone when you open it and the newest is over a day old, and keeps the newest 10. **Settings → Offline copies** saves one now, opens or removes them, and turns the daily copy off. Signing out removes them.
+- **Needs Larder's own https address on the phone,** added to the home screen: the Home Assistant app has to reach Home Assistant before it shows Larder. For the add-on, open its port behind Tailscale, a Cloudflare Tunnel or your reverse proxy and make a Larder account for each person (see the add-on's documentation). Settings → Offline copies says whether a phone can use Larder with no connection.
+
+## 0.7.5
+
+- **Add by photo names the actual product:** a box of Twinings Sleep is "Twinings Sleep tea bags", not "Herbal tea". The name always says the variety or flavour ("Peppermint tea bags", "Semi-skimmed milk"), and keeps the brand when the product is that brand's own blend or range. Everyday things you'd buy any brand of keep a plain name ("Baked beans"), with the brand underneath as before.
+- **The plain kind still finds it:** "Herbal tea" becomes one of the item's other names, so searching for it finds the item, and the card offers an item you already keep for that kind ("Is it a brand of something you already have?").
+- **It can look things up online:** when the photo doesn't show exactly which product it is or its size, Claude or Gemini searches the web (at most twice a photo, about a penny a search), and the card says where it looked, e.g. "looked up on twinings.co.uk". Switch it off under **Settings → AI → Look things up online**.
+
+## 0.7.4
+
+- **How many in each place:** ask an assistant "where's the green pesto?" and it says "1 jar in Kitchen and 1 jar in Larder", not just the places. Home Assistant's **Find item** does the same.
+- **Running out somewhere doesn't forget it:** an item stays in a place at 0 when the last one there is used, ready for more, and the place's page lists it as "None here now". The ✕ beside it takes it off. Moving stock somewhere else for good moves it; something only out of place for now doesn't join where it is.
+- **Adding stock to a place is quicker:** the search comes first, and each item found shows how many are here and in total, with − and + for how many should be here and a tick to save. No second step, and you can do several in a row. To sort is under the search until you type.
+- A place's page says how many of each thing are here and how many in total when some are elsewhere.
+
+## 0.7.3
+
+- **Safer Home Assistant backups:** Home Assistant now stops Larder while it copies Larder's data (usually a few seconds), then starts it again, so the database can't be copied halfway through a change and every backup restores cleanly. Larder's sensors show as unavailable for those seconds. Backups still include everything: items, stock, places, settings (AI keys and the Gmail sign-in too) and photos, as long as your backups include add-ons.
+
+## 0.7.2
+
+- **Add by photo has a shutter again:** in the scanner's Add mode, a big **Take photo** button sits under the camera, as on Add from receipt, instead of the small **Read with AI** button that was easy to miss. Barcodes still scan by themselves. A volume button or Space takes the photo too.
+- **You can see it's been taken:** the photo stays still in the camera view while Claude or Gemini reads it, and the camera and the card both say "Reading the photo with Claude…" instead of "Paused: finish this one first" and "Looking it up…". The live camera comes back after **Add 1** or **Skip**.
+- **A double tap sends one photo**, not two.
+
 ## 0.7.1
 
 - **Larder Automations:** online shopping now goes through Larder Automations, the hub app on your Mac that runs each shop's automation (Tesco first). Set it up once in Settings → **Larder Automations**: the Mac's address and the hub's token (both from its menu), and how Home Assistant wakes the Mac and puts it back to sleep. **Test connection** shows the automations it runs and whether its Chrome extension is connected, and fills in waking from the Mac's network card. Then **Link to a shop** for each automation (Tesco to your Tesco). A provider not run by Larder Automations can still be added at its own address under **Online shops**.

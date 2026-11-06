@@ -1,10 +1,11 @@
 /**
  * AI: Claude or Gemini, with the household's own API key, reads photos: a
- * pack, to name it in the scanner, or a receipt, to add what was bought to
- * stock (receipts.ts). Each AI has its own key and model, can be switched off
- * for now without losing them, and they're tried in the household's order: if
- * the first can't (out of credit, busy), the next reads it. Nothing is saved
- * from a reading: the app shows it to check first.
+ * pack, to name it in the scanner (looking it up on the web when the photo
+ * isn't enough, unless the household has switched that off), or a receipt, to
+ * add what was bought to stock (receipts.ts). Each AI has its own key and
+ * model, can be switched off for now without losing them, and they're tried
+ * in the household's order: if the first can't (out of credit, busy), the next
+ * reads it. Nothing is saved from a reading: the app shows it to check first.
  */
 import { z } from 'zod';
 import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
@@ -22,6 +23,8 @@ interface Saved {
   off: ProviderId[];
   keys: Partial<Record<ProviderId, string>>;
   models: Partial<Record<ProviderId, string>>;
+  /** False when the household doesn't want packs looked up on the web. On unless switched off. */
+  search?: boolean;
 }
 
 /** Every AI exactly once, in the saved order, any missing at the end. */
@@ -47,6 +50,8 @@ const Status = z.object({
   order: z.array(ProviderName),
   /** The one asked first: the first in the order that's on and has a key. */
   first: ProviderName.nullable(),
+  /** Add by photo may look a pack up on the web when the photo isn't enough (a search costs about a penny). */
+  search: z.boolean(),
   claude: ProviderStatus,
   gemini: ProviderStatus,
 });
@@ -64,11 +69,19 @@ const ProviderPatch = z.object({
 
 const Model = z.object({ id: z.string(), name: z.string() });
 
+const Source = z.object({
+  /** The site, e.g. "twinings.co.uk". */
+  name: z.string(),
+  url: z.string(),
+});
+
 export const Identified = z.object({
   /** False when the AI couldn't make out a product; the rest is its best guess. */
   readable: z.boolean(),
-  /** Generic name, e.g. "Baked beans". */
+  /** What to call it, with its variety, and its brand when that's what it is: "Twinings Sleep tea bags", "Semi-skimmed milk". */
   name: z.string(),
+  /** The plain kind of thing, e.g. "Herbal tea" (also among `aliases`), or null. Finds an item the household already has for it. */
+  kind: z.string().nullable(),
   /** Brand and pack, e.g. "Heinz Baked Beanz 415 g", saved as the item's brand. */
   brand: z.string().nullable(),
   unit: z.string(),
@@ -80,6 +93,8 @@ export const Identified = z.object({
   /** The AI that read it, and its model. */
   provider: ProviderName,
   model: z.string(),
+  /** Web pages it looked at to name it (up to three, one per site); empty when the photo was enough. */
+  sources: z.array(Source),
   /** AIs asked first that couldn't read it, and why (e.g. out of credit). */
   skipped: z.array(z.object({ provider: ProviderName, message: z.string() })),
 });
@@ -114,7 +129,7 @@ export default defineModule({
 
     async function saved(): Promise<Saved> {
       const s = await store.get('ai');
-      return { order: fullOrder(s?.order), off: s?.off ?? [], keys: s?.keys ?? {}, models: s?.models ?? {} };
+      return { order: fullOrder(s?.order), off: s?.off ?? [], keys: s?.keys ?? {}, models: s?.models ?? {}, search: s?.search ?? true };
     }
     const envKey = (p: ProviderId) => ctx.config[`${p}_api_key`]?.trim() || null;
     const keyFor = (s: Saved, p: ProviderId) => s.keys[p] ?? envKey(p);
@@ -127,7 +142,7 @@ export default defineModule({
         return { enabled: !s.off.includes(p), keySet: !!key, keyHint: key ? `…${key.slice(-4)}` : null, keyFrom: s.keys[p] ? 'app' as const : key ? 'env' as const : null, model: s.models[p] ?? null };
       };
       const use = usable(s);
-      return { ready: use.length > 0, order: s.order, first: use[0] ?? null, claude: one('claude'), gemini: one('gemini') };
+      return { ready: use.length > 0, order: s.order, first: use[0] ?? null, search: s.search !== false, claude: one('claude'), gemini: one('gemini') };
     }
 
     function needKey(s: Saved, p: ProviderId): string {
@@ -147,18 +162,20 @@ export default defineModule({
     ctx.addRoute({
       method: 'PUT',
       path: '/settings',
-      summary: 'Set the order the AIs are asked in, switch one on or off, or set or forget its API key or model',
+      summary: 'Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web on or off',
       admin: true,
       body: z.object({
         /** First to ask, then next. AIs left out keep their place after these. */
         order: z.array(ProviderName).min(1).max(ALL.length).refine((o) => new Set(o).size === o.length, 'Name each AI once.').optional(),
+        /** False: Add by photo goes only on what the photo shows, never searching the web. */
+        search: z.boolean().optional(),
         claude: ProviderPatch.optional(),
         gemini: ProviderPatch.optional(),
       }),
       response: Status,
       async handler({ body }) {
         const s = await saved();
-        const next: Saved = { order: body.order ? fullOrder([...body.order, ...s.order]) : s.order, off: [...s.off], keys: { ...s.keys }, models: { ...s.models } };
+        const next: Saved = { order: body.order ? fullOrder([...body.order, ...s.order]) : s.order, off: [...s.off], keys: { ...s.keys }, models: { ...s.models }, search: body.search ?? s.search };
         for (const p of ALL) {
           const patch = body[p];
           if (!patch) continue;
@@ -170,7 +187,7 @@ export default defineModule({
           else if (patch.enabled === false && !next.off.includes(p)) next.off.push(p);
         }
         await store.put('ai', next);
-        ctx.log.info('AI settings changed', { order: next.order, off: next.off });
+        ctx.log.info('AI settings changed', { order: next.order, off: next.off, search: next.search });
         return status(next);
       },
     });
@@ -193,12 +210,12 @@ export default defineModule({
       method: 'POST',
       path: '/identify',
       summary: 'Read a photo of something and say what it is (nothing is saved)',
-      description: 'Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household\'s order; if one can\'t (out of credit, key refused, busy), the next is asked. The answer fills in the Add item page: check it, then save it as usual.',
+      description: 'Send a photo as base64 (JPEG, PNG, WebP or GIF; resize it to about 1600 pixels first). The AIs are asked in the household\'s order; if one can\'t (out of credit, key refused, busy), the next is asked. Unless switched off in Settings, the AI may search the web when the photo doesn\'t show which product it is or its size; `sources` lists the pages. The answer fills in the Add item page: check it, then save it as usual.',
       body: z.object({ image: z.string().min(100).max(MAX_PHOTO_CHARS) }),
       response: Identified,
       async handler({ body }) {
         const categories = await ctx.core.categories.list();
-        const { answer, ...by } = await ask(body.image, async () => packTask(categories.map((c) => c.name)));
+        const { answer, ...by } = await ask(body.image, async () => packTask(categories.map((c) => c.name), (await saved()).search !== false));
         return { ...(await tidy(answer, categories)), ...by };
       },
     });
@@ -220,8 +237,8 @@ export default defineModule({
       for (const p of use) {
         try {
           const model = await modelFor(p, keyFor(s, p)!);
-          const answer = await providers[p].read(keyFor(s, p)!, model, given, asking);
-          return { answer, provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
+          const { answer, sources } = await providers[p].read(keyFor(s, p)!, model, given, asking);
+          return { answer, sources, provider: p, model, skipped: skipped.map(({ provider, message }) => ({ provider, message })) };
         } catch (err) {
           // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
           if (!(err instanceof LarderError)) throw err;
@@ -261,8 +278,10 @@ export default defineModule({
     }
 
     /** Turns what the AI said into Larder's terms: the household's category and shop, sensible lengths. */
-    async function tidy(r: Reading, categories: Array<{ id: string; name: string }>): Promise<Omit<Identified, 'provider' | 'model' | 'skipped'>> {
+    async function tidy(r: Reading, categories: Array<{ id: string; name: string }>): Promise<Omit<Identified, 'provider' | 'model' | 'sources' | 'skipped'>> {
       const name = sentence(cap(r.name, 120)) || 'Something';
+      const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+      const kind = sentence(cap(r.kind, 80));
       const category = r.category ? categories.find((c) => c.name.toLowerCase() === r.category!.trim().toLowerCase()) : undefined;
       const title = cap(r.title, 120);
       const size = cap(r.size, 30);
@@ -274,11 +293,15 @@ export default defineModule({
       return {
         readable: r.readable,
         name,
+        kind: kind && !same(kind, name) ? kind : null,
         brand,
         unit: cap(r.unit, 20) || 'each',
         categoryId: category?.id ?? null,
         shelfLifeDays: typeof days === 'number' && days >= 1 ? Math.min(36500, Math.round(days)) : null,
-        aliases: [...new Set(r.other_names.map((a) => cap(a, 80)).filter((a) => a && a.toLowerCase() !== name.toLowerCase()))].slice(0, 3),
+        // The plain kind first ("Herbal tea"), so searching for it finds this; no name twice in any case.
+        aliases: [kind, ...r.other_names.map((a) => cap(a, 80))]
+          .filter((a, i, all) => a && !same(a, name) && all.findIndex((b) => same(a, b)) === i)
+          .slice(0, 3),
         shop,
       };
     }

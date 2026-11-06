@@ -5,12 +5,18 @@ import { Icon } from '../icons';
 import { ago } from '../format';
 import { Header, Stepper, Switch, useAction, useCategories, useModules, useToast } from '../ui';
 import { useEnabledWebModules } from '../modules';
+import { useOpenCopy } from '../offline/current';
+import { forgetCopies } from '../offline/state';
+import { OfflineSettings } from '../offline/ui';
 
 export function Settings() {
   const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status });
   const admin = status.data?.user?.role === 'admin';
   // Home Assistant users sign in through Home Assistant, but tokens and accounts are still for direct access.
   const local = status.data?.mode === 'local' || status.data?.mode === 'homeassistant';
+  // In a saved copy only the copies themselves can be managed: everything else needs the live Larder.
+  const copy = useOpenCopy();
+  if (copy) return <><Header title="Settings" back="/more" /><div className="content" style={{ maxWidth: 860 }}><OfflineSettings /></div></>;
   return (
     <>
       <Header title="Settings" back="/more" />
@@ -21,6 +27,7 @@ export function Settings() {
         <ModuleSettings admin={admin} />
         {local && <Tokens />}
         {local && <Accounts admin={admin} />}
+        <OfflineSettings />
         <Data admin={admin} />
       </div>
     </>
@@ -176,7 +183,7 @@ function Accounts({ admin }: { admin: boolean }) {
       <form className="card pad" onSubmit={(e) => { e.preventDefault(); void run(() => api.auth.password({ currentPassword: cur, newPassword: next }), 'Password changed').then((r) => { if (r) { setCur(''); setNext(''); } }); }}>
         <b>Change your password</b>
         <div className="inputrow"><input className="input" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} placeholder="Current" aria-label="Current password" /><input className="input" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="New (8+)" aria-label="New password" /></div>
-        <div className="btnrow"><button className="btn small" disabled={busy || !cur || next.length < 8}>Change password</button><button type="button" className="btn small" onClick={() => api.auth.logout().then(() => qc.invalidateQueries())}><Icon name="logout" size="sm" />Sign out</button></div>
+        <div className="btnrow"><button className="btn small" disabled={busy || !cur || next.length < 8}>Change password</button><button type="button" className="btn small" onClick={() => void forgetCopies().then(() => api.auth.logout()).then(() => qc.invalidateQueries())}><Icon name="logout" size="sm" />Sign out</button></div>
       </form>
     </div>
   );

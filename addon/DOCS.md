@@ -16,6 +16,20 @@ New to Larder? Turn on **Load the example household** in the options, restart, a
 
 Cameras need an https address. Opening Larder through Home Assistant (the companion app, or Nabu Casa) already is one, so camera scanning works there. USB and Bluetooth barcode scanners work anywhere.
 
+## With no connection
+
+A phone can keep Larder, and a copy of what's in it saved each day, for when the Wi-Fi or internet is down: Larder still opens and offers **Load data from** with the copies on the phone. Opened from the Home Assistant sidebar or app, it can't: the app has to reach Home Assistant before it shows Larder. So give Larder its own https address:
+
+1. Open port 8080 in the **Network** section and put it behind Tailscale, a Cloudflare Tunnel or your reverse proxy, for an https address.
+2. In Larder, make an account for each person (Settings → Accounts).
+3. On each phone, open that address in the browser, sign in and add it to the home screen. **Settings → Offline copies** shows the copies and says whether the phone can use them with no connection.
+
+More: <https://github.com/doonetheprune/home-inventory/blob/main/docs/running.md#with-no-connection>
+
+## Backups
+
+Home Assistant backups include all of Larder's data: items, stock, places, shops, recipes, history, settings (AI keys and the Gmail sign-in too) and photos, as long as your backups include add-ons. Larder stops while Home Assistant copies it (usually a few seconds) and then starts again, so the copy is always complete; its sensors show as unavailable meanwhile.
+
 ## Options
 
 - **Log level**: how much goes in the log.

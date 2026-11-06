@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { createMemoryStorage } from '../../src/adapters/storage-memory';
 import { makeCore, category, type TestCore } from '../helpers';
 
 describe('stock', () => {
@@ -308,5 +309,79 @@ describe('to tidy', () => {
     const entry = (await core.products.get(noPlace.id)).entries[0]!;
     await core.stock.updateEntry(entry.id, { placeId: shelf.id });
     expect(await core.products.list({ status: 'to_tidy' })).toEqual([]);
+  });
+});
+
+describe('places an item is kept in', () => {
+  let core: TestCore;
+  let fridge: string;
+  let garage: string;
+  let shed: string;
+  let kitchen: string;
+
+  beforeEach(async () => {
+    core = await makeCore();
+    kitchen = (await core.places.create({ name: 'Kitchen' })).id;
+    fridge = (await core.places.create({ name: 'Fridge', parentId: kitchen })).id;
+    garage = (await core.places.create({ name: 'Garage' })).id;
+    shed = (await core.places.create({ name: 'Shed' })).id;
+  });
+
+  it('keeps an item in each place it has been, at 0 once it runs out there, until it is taken off', async () => {
+    const pesto = await core.products.create({ name: 'Green pesto', unit: 'jar' });
+    await core.stock.add({ productId: pesto.id, quantity: 1, placeId: kitchen });
+    await core.stock.add({ productId: pesto.id, quantity: 1, placeId: garage });
+    const counts = async () => (await core.products.summary(pesto.id)).stockByPlace.map((x) => [x.name, x.quantity]);
+    expect(await counts()).toEqual([['Garage', 1], ['Kitchen', 1]]);
+
+    // Running out in the garage leaves it there at 0, and on the garage's page.
+    await core.stock.use({ productId: pesto.id, quantity: 1, placeId: garage });
+    expect(await counts()).toEqual([['Kitchen', 1], ['Garage', 0]]);
+    expect((await core.places.contents(garage)).items.map((i) => [i.summary.product.name, i.quantity])).toEqual([['Green pesto', 0]]);
+
+    // More can go back; a temporary move doesn't make the shed one of its places.
+    await core.stock.add({ productId: pesto.id, quantity: 2, placeId: garage });
+    await core.stock.move({ productId: pesto.id, toPlaceId: shed, fromPlaceId: kitchen, mode: 'temporary' });
+    expect(await counts()).toEqual([['Garage', 2], ['Kitchen', 1]]);
+
+    // Moved somewhere else for good: the kitchen is left behind.
+    await core.stock.returnHome({ productId: pesto.id });
+    await core.stock.move({ productId: pesto.id, toPlaceId: fridge, fromPlaceId: kitchen, mode: 'permanent' });
+    expect(await counts()).toEqual([['Garage', 2], ['Fridge', 1]]);
+
+    // Taken off by hand at 0, and when a place is removed.
+    await core.stock.use({ productId: pesto.id, quantity: 1, placeId: fridge });
+    const kept = (await core.products.summary(pesto.id)).product.keptInPlaceIds;
+    await core.products.update(pesto.id, { keptInPlaceIds: kept.filter((x) => x !== fridge) });
+    expect(await counts()).toEqual([['Garage', 2]]);
+    await core.stock.use({ productId: pesto.id, quantity: 2, placeId: garage });
+    await core.places.remove(garage);
+    expect(await counts()).toEqual([]);
+    expect((await core.products.summary(pesto.id)).product.keptInPlaceIds).toEqual([]);
+  });
+
+  it('reads items saved before kept places existed', async () => {
+    const storage = createMemoryStorage();
+    core = await makeCore({ storage });
+    kitchen = (await core.places.create({ name: 'Kitchen' })).id;
+    const p = await core.products.create({ name: 'Old jam', unit: 'jar' });
+    const { keptInPlaceIds: _, ...old } = (await storage.products.get(p.id))!;
+    await storage.products.put(old as typeof p);
+    await core.stock.add({ productId: p.id, quantity: 1, placeId: kitchen });
+    expect((await core.products.summary(p.id)).stockByPlace.map((x) => x.name)).toEqual(['Kitchen']);
+  });
+
+  it('tells assistants and Home Assistant how many are in each place', async () => {
+    const pesto = await core.products.create({ name: 'Green pesto', unit: 'jar' });
+    await core.stock.add({ productId: pesto.id, quantity: 1, placeId: kitchen });
+    expect((await core.automation.run('find_item', { item: 'green pesto' })).message).toBe('Green pesto: 1 jar in stock. In Kitchen.');
+    await core.stock.add({ productId: pesto.id, quantity: 2, placeId: garage });
+    await core.stock.add({ productId: pesto.id, quantity: 1, placeId: shed });
+    await core.stock.use({ productId: pesto.id, quantity: 1, placeId: shed });
+    expect((await core.automation.run('find_item', { item: 'green pesto' })).message).toBe('Green pesto: 3 jars in stock. 2 jars in Garage, 1 jar in Kitchen and none in Shed.');
+    expect((await core.assistant.call('search', { query: 'pesto' })).text).toContain('Green pesto: 3 jars, 2 jars in Garage, 1 jar in Kitchen and none in Shed');
+    const item = await core.assistant.call('get_item', { item: 'green pesto' });
+    expect(item.text).toContain('2 jars in Garage, 1 jar in Kitchen and none in Shed.');
+    expect(item.data?.places).toEqual([{ place: 'Garage', quantity: 2 }, { place: 'Kitchen', quantity: 1 }, { place: 'Shed', quantity: 0 }]);
   });
 });

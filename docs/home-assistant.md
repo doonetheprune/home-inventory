@@ -2,7 +2,7 @@
 
 Two parts, used together or separately:
 
-- **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data.
+- **The Larder add-on** runs Larder inside Home Assistant. It opens from the sidebar (and in the companion app, and through Nabu Casa), signed in as your Home Assistant user. Home Assistant backups include its data (when they include add-ons); Larder stops while its data is copied (usually a few seconds), so the copy is always complete.
 - **The Larder integration** connects Home Assistant to a Larder, wherever it runs, for sensors, actions, events, NFC tags, shared links and battery linking. The add-on installs and updates it for you, so you don't need HACS.
 
 Larder can also make zones for the shops you use, and an automation that sends a shop's list to your phone when you get there ([Shop arrival alerts](#shop-arrival-alerts)).
@@ -37,6 +37,10 @@ The **Network** section can open port 8080 on your network, for MCP clients, scr
 ### Who's signed in
 
 Larder is in every Home Assistant user's sidebar, not only admins'. People who open it are signed in as their Home Assistant user, with no second login (Larder trusts this only for connections that come from Home Assistant's Supervisor). They're Larder admins unless the **Larder admins** option lists who is. They can make access tokens in Larder's Settings. Anyone reaching the add-on's port directly needs a token, or a Larder account an admin made.
+
+### Using Larder with no connection
+
+Opened from Home Assistant's sidebar or app, Larder needs Home Assistant to be reachable: the app has to reach Home Assistant before it shows Larder. To keep Larder on a phone for when the Wi-Fi or internet is down (with copies saved each day to look at), give it its own https address: open port 8080 in the add-on's **Network** section and put it behind Tailscale, a Cloudflare Tunnel or your reverse proxy, make a Larder account for each person (Settings → Accounts), then open that address in the phone's browser, sign in and add it to the home screen. See [running.md](running.md#with-no-connection).
 
 ## Add the integration by hand
 

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addManageTools, finders } from './assistant-manage';
+import { placesText } from './world';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
@@ -87,7 +88,8 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${amount(s.expected, p.unit)} on the way`);
   if (s.pending) parts.push(`${amount(s.pending, p.unit)} in a pending order`);
-  if (s.places.length) parts.push(`in ${s.places.map((x) => x.path).join(' and ')}`);
+  const where = placesText(s);
+  if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
   if (s.status.low) parts.push('running low');
   if (s.nextExpiry && s.status.expiringSoon) parts.push(`expires ${when(ctx, s.nextExpiry)}`);
@@ -99,6 +101,8 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   const lines = [`${p.name}${d.category ? ` (${d.category.name})` : ''}`];
   if (p.wish) lines.push('On the wish list: the house has none yet.');
   else lines.push(`In stock: ${amount(d.inStock, p.unit)}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
+  const where = placesText(d);
+  if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
   if (here.length) {
     lines.push('Batches:');
@@ -173,7 +177,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'get_item', title: 'Look up an item', readOnly: true,
-    description: 'Everything about one item: how many, where each batch is, expiry dates, deliveries on the way, when it counts as low, which shops sell it, and notes (e.g. policy details for a renewal).',
+    description: 'Everything about one item: how many, how many in each place it\'s kept in (including places that have run out), where each batch is, expiry dates, deliveries on the way, when it counts as low, which shops sell it, and notes (e.g. policy details for a renewal).',
     input: z.object({ item: Item }),
     async run({ item }) {
       const p = await resolve.product(item);
@@ -182,6 +186,7 @@ export function createAssistant(deps: {
         text: detailText(ctx, d),
         data: {
           id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity, stock_up_to: p.stockUpTo ?? null,
+          places: (d.stockByPlace ?? []).map((x) => ({ place: x.path, quantity: x.quantity })),
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
         },
