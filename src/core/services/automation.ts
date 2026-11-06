@@ -94,7 +94,7 @@ export function createAutomation(deps: {
   const brief = (s: ProductSummary) => `${s.product.name}: ${amount(s.inStock, s.product.unit)} in stock${s.expected ? `, ${amount(s.expected, s.product.unit)} on the way` : ''}.`;
   const itemInfo = (s: ProductSummary) => ({
     item: s.product.name, id: s.product.id, in_stock: s.inStock, expected: s.expected, unit: s.product.unit, low: s.status.low,
-    next_expiry: s.nextExpiry, place: s.places[0]?.path ?? null,
+    next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, open: s.inUse, place: s.places[0]?.path ?? null,
   });
 
   function addSensor(def: SensorDefinition, module: string | null = null, enabled: () => boolean = () => true) {
@@ -112,10 +112,10 @@ export function createAutomation(deps: {
 
   addSensor({
     id: 'low_stock', name: 'Running low', icon: 'mdi:cart-arrow-down', unit: 'items',
-    description: 'Items below their minimum, counting deliveries on the way.',
+    description: 'Items below their minimum, or (for things that last a set time once started) running out within their warning window, counting deliveries on the way.',
     async read() {
       const items = (await products.list({ status: 'low' })).sort((a, b) => a.product.name.localeCompare(b.product.name));
-      return { state: items.length, attributes: { items: items.slice(0, LIST_LIMIT).map((s) => ({ item: s.product.name, in_stock: s.inStock, expected: s.expected, minimum: s.product.minQuantity, unit: s.product.unit })) } };
+      return { state: items.length, attributes: { items: items.slice(0, LIST_LIMIT).map((s) => ({ item: s.product.name, in_stock: s.inStock, expected: s.expected, minimum: s.product.minQuantity, unit: s.product.unit, ...(s.runsOutOn ? { runs_out_on: s.runsOutOn } : {}) })) } };
     },
   });
   addSensor({
@@ -168,28 +168,51 @@ export function createAutomation(deps: {
   /* ---------------------------- core actions ---------------------------- */
 
   addAction({
-    id: 'add_stock', name: 'Add stock', description: 'Add some of an item to stock, e.g. after shopping.',
+    id: 'add_stock', name: 'Add stock', description: 'Add some of an item to stock, e.g. after shopping. With a price or shop, it\'s kept in the purchase history too.',
     input: z.object({
       item: Item, quantity: Quantity,
       place: z.string().max(200).optional().describe('Where it goes: a place name or code like "G2-4". Defaults to its usual place.'),
       expires_on: IsoDate.optional().describe('Expiry date (YYYY-MM-DD). Defaults to today plus its shelf life.'),
+      brand: z.string().max(160).optional().describe('Which of the item\'s brands or packs it is'),
+      price: z.number().min(0).optional().describe('What was paid for them all, e.g. 3.20 (kept in the purchase history)'),
+      shop: z.string().max(80).optional().describe('The shop they were bought at (kept in the purchase history)'),
       note: z.string().max(200).optional(),
     }),
     async run(i) {
       const p = await resolve.product(i.item);
       const place = i.place ? await resolve.place(i.place) : null;
-      const s = await stock.add({ productId: p.id, quantity: i.quantity, placeId: place?.id, expiresOn: i.expires_on, note: i.note });
-      return { message: `${p.name}: added ${amount(i.quantity, p.unit)}${place ? ` to ${place.name}` : ''}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
+      const shop = i.shop ? await resolve.shop(i.shop) : null;
+      const variant = i.brand ? resolve.among('brand', i.brand, (await products.get(p.id)).variants) : null;
+      const bought = i.price !== undefined || !!shop;
+      const s = bought
+        ? (await shopping.purchase({ shopId: shop?.id ?? null, items: [{ productId: p.id, quantity: i.quantity, placeId: place?.id, price: i.price, expiresOn: i.expires_on, variantId: variant?.id ?? null }], ...(i.note ? { evidence: { note: i.note } } : {}) }))[0]!
+        : await stock.add({ productId: p.id, quantity: i.quantity, placeId: place?.id, expiresOn: i.expires_on, variantId: variant?.id ?? null, note: i.note });
+      const paid = bought ? `, bought${shop ? ` at ${shop.name}` : ''}${i.price !== undefined ? ` for ${i.price.toFixed(2)}` : ''}` : '';
+      return { message: `${p.name}: added ${amount(i.quantity, p.unit)}${variant ? ` (${variant.name})` : ''}${place ? ` to ${place.name}` : ''}${paid}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
     },
   });
   addAction({
-    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead.',
-    input: z.object({ item: Item, quantity: Quantity, place: z.string().max(200).optional().describe('Only use stock from this place') }),
+    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today.',
+    input: z.object({
+      item: Item, quantity: Quantity, place: z.string().max(200).optional().describe('Only use stock from this place'),
+      opened: z.boolean().optional().describe('True if it was opened and is still being used, not finished (a new jar of coffee): it shows as open until finish_item'),
+      note: z.string().max(200).optional().describe('Why, kept in its history, e.g. "Thrown away: out of date"'),
+    }),
     async run(i) {
       const p = await resolve.product(i.item);
       const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
-      const s = await stock.use({ productId: p.id, quantity: i.quantity, placeId });
-      return { message: `${p.name}: used ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} left${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
+      const s = await stock.use({ productId: p.id, quantity: i.quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
+      const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
+      return { message: `${p.name}: ${i.opened && !p.lastsDays ? 'opened' : 'used'} ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
+    },
+  });
+  addAction({
+    id: 'finish_item', name: 'Finished the open one', description: 'The open one of an item is finished (the butter\'s gone), or one that lasts a set time came off early: none is open now.',
+    input: z.object({ item: Item }),
+    async run(i) {
+      const p = await resolve.product(i.item);
+      const s = await stock.finish(p.id);
+      return { message: `${p.name}: the open one is finished. ${amount(s.inStock, p.unit)} left${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
     },
   });
   addAction({
@@ -198,20 +221,30 @@ export function createAutomation(deps: {
       item: Item, to: z.string().min(1).max(200).describe('The place it\'s going to: a name or code'),
       quantity: z.number().positive().optional().describe('How many (default all of it)'),
       permanent: z.boolean().default(false).describe('True if this is its new usual place'),
+      from: z.string().max(200).optional().describe('Only move stock from this place, or "to sort" for stock with no place yet (put away for good)'),
     }),
     async run(i) {
       const p = await resolve.product(i.item);
       const place = await resolve.place(i.to);
-      const s = await stock.move({ productId: p.id, toPlaceId: place.id, quantity: i.quantity, mode: i.permanent ? 'permanent' : 'temporary' });
-      return { message: `${p.name} moved to ${place.name}${i.permanent ? ' for good' : ''}.`, ...itemInfo(s) };
+      const toSort = !!i.from && /^(to sort|no place|unsorted|nowhere)$/i.test(i.from.trim());
+      const fromPlaceId = !i.from ? undefined : toSort ? null : (await resolve.place(i.from)).id;
+      const s = await stock.move({ productId: p.id, toPlaceId: place.id, quantity: i.quantity, mode: i.permanent || toSort ? 'permanent' : 'temporary', ...(fromPlaceId !== undefined ? { fromPlaceId } : {}) });
+      return { message: `${p.name} moved to ${place.name}${i.permanent || toSort ? ' for good' : ''}.`, ...itemInfo(s) };
     },
   });
   addAction({
     id: 'put_back', name: 'Put back', description: 'Put an out-of-place item back in its usual place.',
-    input: z.object({ item: Item }),
+    input: z.object({ item: Item, from: z.string().max(200).optional().describe('Only what\'s out of place in this place (default all of it)') }),
     async run(i) {
       const p = await resolve.product(i.item);
-      const s = await stock.returnHome({ productId: p.id });
+      let s: ProductSummary | null = null;
+      if (i.from) {
+        const where = await resolve.place(i.from);
+        const away = (await products.get(p.id)).entries.filter((e) => e.currentPlaceId === where.id && e.currentPlaceId !== e.placeId);
+        if (!away.length) throw new LarderError(`None of the ${p.name.toLowerCase()} is out of place in ${where.name}.`, 400, 'invalid');
+        for (const e of away) s = await stock.returnHome({ productId: p.id, entryId: e.id });
+      } else s = await stock.returnHome({ productId: p.id });
+      if (!s) throw new LarderError(`${p.name} is already in its usual place.`, 400, 'invalid');
       return { message: `${p.name} is back in ${s.places[0]?.path ?? 'its usual place'}.`, ...itemInfo(s) };
     },
   });
@@ -222,16 +255,22 @@ export function createAutomation(deps: {
       source: z.string().min(1).max(80).describe('Where it\'s coming from, e.g. "Tesco delivery" or "Amazon"'),
       reference: z.string().max(80).optional().describe('Order number'),
       eta: IsoDate.optional().describe('Expected date (YYYY-MM-DD)'),
+      price: z.number().min(0).optional().describe('What the order says the line costs, e.g. 4.50: kept in the purchase history when it arrives'),
+      place: z.string().max(200).optional().describe('Where it goes when it arrives: a place name or code. Defaults to its usual place'),
+      pending: z.boolean().optional().describe('True if the order isn\'t confirmed yet (a filled online basket before checkout)'),
     }),
     async run(i) {
       const p = await resolve.product(i.item);
       const was = (await products.summary(p.id)).pending;
-      const s = await stock.expect({ productId: p.id, quantity: i.quantity, source: i.source, reference: i.reference, eta: i.eta });
+      const place = i.place ? await resolve.place(i.place) : null;
+      const s = await stock.expect({ productId: p.id, quantity: i.quantity, source: i.source, reference: i.reference, eta: i.eta, price: i.price ?? null, ...(place ? { placeId: place.id } : {}), ...(i.pending ? { pending: true } : {}) });
       const confirmed = Math.max(0, roundQty(was - s.pending));
       const more = roundQty(i.quantity - confirmed);
-      const message = confirmed
-        ? `${p.name}: ${amount(confirmed, p.unit)} in the pending order confirmed, now on the way${more > 0 ? `, and ${amount(more, p.unit)} more expected from ${i.source}` : ''}.`
-        : `${p.name}: ${amount(i.quantity, p.unit)} expected from ${i.source}.`;
+      const message = i.pending
+        ? `${p.name}: ${amount(i.quantity, p.unit)} in a pending order from ${i.source}, not confirmed yet.`
+        : confirmed
+          ? `${p.name}: ${amount(confirmed, p.unit)} in the pending order confirmed, now on the way${more > 0 ? `, and ${amount(more, p.unit)} more expected from ${i.source}` : ''}.`
+          : `${p.name}: ${amount(i.quantity, p.unit)} expected from ${i.source}.`;
       return { message, confirmed, ...itemInfo(s) };
     },
   });
@@ -267,11 +306,12 @@ export function createAutomation(deps: {
       source: z.string().max(80).optional().describe('The delivery, e.g. "Tesco delivery"'),
       item: Item.optional().describe('Or one item that arrived'),
       quantity: z.number().positive().optional().describe('How many of the item arrived (default all expected)'),
+      due_by: IsoDate.optional().describe('With a source: only what was due by this day (YYYY-MM-DD), so a later order from the same shop stays on its way'),
     }),
     async run(i) {
       if (!i.source && !i.item) throw new LarderError('Say which delivery (source) or which item arrived.', 400, 'invalid');
       const productId = i.item ? (await resolve.product(i.item)).id : undefined;
-      const r = await stock.arrive({ source: i.source, productId, quantity: i.quantity });
+      const r = await stock.arrive({ source: i.source, productId, quantity: i.quantity, ...(i.due_by ? { dueBy: i.due_by } : {}) });
       const names = r.products.map((s) => s.product.name);
       const left = r.pendingLeft ? ` ${r.pendingLeft} more from that order ${r.pendingLeft === 1 ? 'was' : 'were'} never confirmed and ${r.pendingLeft === 1 ? 'is' : 'are'} still pending: confirm or remove ${r.pendingLeft === 1 ? 'it' : 'them'}.` : '';
       return { message: `Arrived: ${names.join(', ')}.${left}`, arrived: r.arrived, pending_left: r.pendingLeft, items: r.products.map(itemInfo) };
@@ -337,6 +377,8 @@ export function createAutomation(deps: {
   /* ----------------------------- expiry check ---------------------------- */
 
   type Notified = Record<string, { expiresOn: string; warned: boolean; expired: boolean }>;
+  /** Products already announced as running out, with the day they first were. */
+  type RunOutNotified = Record<string, { since: string }>;
   // One check at a time, so a manual check during the hourly one can't announce things twice.
   let checking: Promise<unknown> = Promise.resolve();
 
@@ -382,24 +424,39 @@ export function createAutomation(deps: {
     },
 
     /**
-     * Publishes `stock.expiring` once when an item enters its warning window
-     * and `stock.expired` once on the day it expires. Safe to call as often
-     * as you like; the server calls it hourly.
+     * Starts the next of anything set to start the next by itself (see
+     * stock.startNext). Then publishes `stock.expiring` once when an item enters its warning window
+     * and `stock.expired` once on the day it expires; and `stock.running_out`
+     * once when something that lasts a set time once started comes within its
+     * warning window of running out (again only after it's been restocked).
+     * Safe to call as often as you like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number }> {
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
+      const { started } = await stock.startNext();
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
+      const runOutNotified = (await ctx.storage.settings.get<RunOutNotified>('runOutNotified')) ?? {};
       const next: Notified = {};
+      const nextRunOut: RunOutNotified = {};
       let expiring = 0;
       let expired = 0;
+      let runningOut = 0;
       const world = await loadWorld(ctx);
       for (const p of world.products) {
         const s = summarise(world, p);
+        // Its run-out date moves as days pass with none in use, so it's announced once per spell in the window, not per date.
+        if (s.status.runningOut && s.runsOutOn) {
+          if (!runOutNotified[p.id]) {
+            ctx.publish('stock.running_out', { productId: p.id, name: p.name, runsOutOn: s.runsOutOn, daysToRunOut: s.daysToRunOut, inStock: s.inStock, expected: roundQty(s.expected + s.pending), unit: p.unit });
+            runningOut++;
+          }
+          nextRunOut[p.id] = runOutNotified[p.id] ?? { since: world.today };
+        }
         if (s.product.wish || !s.nextExpiry || !s.status.expiringSoon) continue;
         const prev = notified[p.id]?.expiresOn === s.nextExpiry ? notified[p.id]! : { expiresOn: s.nextExpiry, warned: false, expired: false };
         const days = s.daysToExpiry ?? daysBetween(world.today, s.nextExpiry);
@@ -417,7 +474,8 @@ export function createAutomation(deps: {
         next[p.id] = prev;
       }
       await ctx.storage.settings.set('expiryNotified', next);
-      return { expiring, expired };
+      await ctx.storage.settings.set('runOutNotified', nextRunOut);
+      return { expiring, expired, runningOut, started };
     },
   };
 }

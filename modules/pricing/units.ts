@@ -1,11 +1,19 @@
 /**
- * Price units. A price is per one of the item's own unit (a bag, a roll), or
- * by weight or volume (per 100 g, per kg, per 100 ml, per litre). Going
- * between an item and a weight needs the item's size ("1 bag = 200 g").
+ * Price units. A price is per one of the item's own unit (a bag, a roll), by
+ * weight or volume (per 100 g, per kg, per 100 ml, per litre), or per another
+ * way of counting it (per item, when 1 pack = 5 items). Going between them
+ * needs the item's measures ("1 bag = 200 g", "1 pack = 5 items").
  */
 import { z } from 'zod';
 
-export type Dim = 'item' | 'mass' | 'volume';
+/** item, mass and volume, or `count:<unit>` for another way of counting it. */
+export type Dim = string;
+
+/** Another way of counting one of the item: 1 pack = 5 items (`{ unit: 'item', amount: 5 }`). */
+export interface Count {
+  unit: string;
+  amount: number;
+}
 
 export const MEASURES: Record<string, { dim: Dim; base: number; label: string }> = {
   g: { dim: 'mass', base: 1, label: 'g' },
@@ -47,61 +55,77 @@ export function unitKey(raw: string): string {
 export const isMeasure = (unit: string) => !!MEASURES[unitKey(unit)];
 
 /** How much one `unit` is, in each dimension it can be measured in. Empty for units Larder doesn't know. */
-function amounts(unit: string, itemUnit: string, size: ItemSize | null): Partial<Record<Dim, number>> {
+function amounts(unit: string, itemUnit: string, size: ItemSize | null, counts: Count[] = []): Record<Dim, number> {
   const k = unitKey(unit);
   const m = MEASURES[k];
   if (m) return { [m.dim]: m.base };
   const own = unitKey(itemUnit);
   const ownMeasure = MEASURES[own];
-  if (k === own) return ownMeasure ? { [ownMeasure.dim]: ownMeasure.base } : { item: 1, ...(size ? { [MEASURES[size.unit]!.dim]: size.amount * MEASURES[size.unit]!.base } : {}) };
-  if (ONE.has(k) && !ownMeasure) return amounts(itemUnit, itemUnit, size);
+  // Another way of counting it ("item" when 1 pack = 5 items) wins over "item" meaning one of its own unit.
+  if (k !== own && counts.some((c) => c.unit === k)) return { [`count:${k}`]: 1 };
+  if (k === own) {
+    const perCount = Object.fromEntries(counts.map((c) => [`count:${c.unit}`, c.amount]));
+    return ownMeasure ? { [ownMeasure.dim]: ownMeasure.base, ...perCount } : { item: 1, ...(size ? { [MEASURES[size.unit]!.dim]: size.amount * MEASURES[size.unit]!.base } : {}), ...perCount };
+  }
+  if (ONE.has(k) && !ownMeasure) return amounts(itemUnit, itemUnit, size, counts);
   return {};
+}
+
+function direct(a: Record<Dim, number>, b: Record<Dim, number>): number | null {
+  for (const d of Object.keys(a)) if (a[d] && b[d]) return b[d]! / a[d]!;
+  return null;
 }
 
 /**
  * The factor that turns a price per `from` into a price per `to` (so £5 a kg
- * × 0.1 = £0.50 per 100 g), or null when they can't be compared.
+ * × 0.1 = £0.50 per 100 g), or null when they can't be compared. Units with
+ * nothing in common go through the item's own unit (per 100 g to per item, by
+ * way of the pack that holds both).
  */
-export function priceFactor(from: string, to: string, itemUnit: string, size: ItemSize | null): number | null {
-  const a = amounts(from, itemUnit, size);
-  const b = amounts(to, itemUnit, size);
-  for (const d of ['item', 'mass', 'volume'] as const) {
-    if (a[d] && b[d]) return b[d]! / a[d]!;
-  }
-  return null;
+export function priceFactor(from: string, to: string, itemUnit: string, size: ItemSize | null, counts: Count[] = []): number | null {
+  const a = amounts(from, itemUnit, size, counts);
+  const b = amounts(to, itemUnit, size, counts);
+  const d = direct(a, b);
+  if (d !== null) return d;
+  const own = amounts(itemUnit, itemUnit, size, counts);
+  const toOwn = direct(a, own);
+  const fromOwn = direct(own, b);
+  return toOwn !== null && fromOwn !== null ? toOwn * fromOwn : null;
 }
 
 /** Why two units can't be compared, in words for people and assistants. */
-export function whyNot(from: string, to: string, item: { name: string; unit: string }): string {
+export function whyNot(from: string, to: string, item: { name: string; unit: string }, counts: Count[] = []): string {
   for (const u of [from, to]) {
-    if (!Object.keys(amounts(u, item.unit, null)).length && !Object.keys(amounts(u, item.unit, { amount: 1, unit: 'g' })).length) {
-      return `Larder doesn't know the unit "${u}". Use ${isMeasure(item.unit) ? '' : `${unitKey(item.unit)}, `}g, 100 g, kg, ml, 100 ml or litre.`;
+    if (!Object.keys(amounts(u, item.unit, null, counts)).length && !Object.keys(amounts(u, item.unit, { amount: 1, unit: 'g' }, counts)).length) {
+      const others = counts.map((c) => `${c.unit}, `).join('');
+      return `Larder doesn't know the unit "${u}". Use ${isMeasure(item.unit) ? '' : `${unitKey(item.unit)}, `}${others}g, 100 g, kg, ml, 100 ml or litre, or add "${unitKey(u)}" as one of its measures (1 ${unitKey(item.unit)} = how many).`;
     }
   }
   const dims = [from, to].map((u) => MEASURES[unitKey(u)]?.dim ?? 'item');
   if (dims.includes('item')) {
     const other = MEASURES[unitKey(dims[0] === 'item' ? to : from)];
-    return `Larder doesn't know how much is in one ${unitKey(item.unit)} of ${item.name}, so it can't work out a price ${perText(dims[0] === 'item' ? to : from, item.unit)}. Say how much one holds (for example 1 ${unitKey(item.unit)} = 200 ${other?.dim === 'volume' ? 'ml' : 'g'}) with set_item_size, or on the item's price card.`;
+    return `Larder doesn't know how much is in one ${unitKey(item.unit)} of ${item.name}, so it can't work out a price ${perText(dims[0] === 'item' ? to : from, item.unit, counts)}. Say how much one holds (for example 1 ${unitKey(item.unit)} = 200 ${other?.dim === 'volume' ? 'ml' : 'g'}) with set_measure, or on the item's price card.`;
   }
   return 'A price by weight can\'t be compared with a price by volume.';
 }
 
-/** "per 100 g", "a kg", "a litre", "a bag". */
-export function perText(unit: string, itemUnit: string): string {
+/** "per 100 g", "a kg", "a litre", "a bag", "an item" (when 1 pack = 5 items). */
+export function perText(unit: string, itemUnit: string, counts: Count[] = []): string {
   const k = unitKey(unit);
   const m = MEASURES[k];
   if (m) return m.base === 100 ? `per ${m.label}` : `a ${m.label}`;
-  const name = ONE.has(k) ? unitKey(itemUnit) : k;
+  const name = ONE.has(k) && !counts.some((c) => c.unit === k) ? unitKey(itemUnit) : k;
   return /^[aeiou]/.test(name) ? `an ${name}` : `a ${name}`;
 }
 
-/** The units a price can be shown per for this item, its own unit first. */
-export function choicesFor(itemUnit: string, size: ItemSize | null): string[] {
+/** The units a price can be shown per for this item, its own unit first, then its other ways of counting it. */
+export function choicesFor(itemUnit: string, size: ItemSize | null, counts: Count[] = []): string[] {
   const own = unitKey(itemUnit);
   const ownMeasure = MEASURES[own];
-  if (ownMeasure) return ownMeasure.dim === 'mass' ? ['100g', 'kg'] : ['100ml', 'l'];
+  const others = counts.map((c) => c.unit);
+  if (ownMeasure) return [...(ownMeasure.dim === 'mass' ? ['100g', 'kg'] : ['100ml', 'l']), ...others];
   const dim = size ? MEASURES[size.unit]!.dim : null;
-  return [own, ...(dim === 'volume' ? ['100ml', 'l'] : dim === 'mass' ? ['100g', 'kg'] : ['100g', 'kg', '100ml', 'l'])];
+  return [own, ...others, ...(dim === 'volume' ? ['100ml', 'l'] : dim === 'mass' ? ['100g', 'kg'] : ['100g', 'kg', '100ml', 'l'])];
 }
 
 /** What a price card shows by default: per item, or per 100 g / kg / 100 ml / litre for things counted by weight or volume. */
@@ -111,9 +135,10 @@ export function defaultShow(itemUnit: string): string {
 }
 
 /** Units a pack's size can be given in. */
-export function packUnitsFor(itemUnit: string): string[] {
+export function packUnitsFor(itemUnit: string, counts: Count[] = []): string[] {
   const own = unitKey(itemUnit);
   const ownMeasure = MEASURES[own];
-  if (ownMeasure) return ownMeasure.dim === 'mass' ? ['g', 'kg'] : ['ml', 'l'];
-  return [own, 'g', 'kg', 'ml', 'l'];
+  const others = counts.map((c) => c.unit);
+  if (ownMeasure) return [...(ownMeasure.dim === 'mass' ? ['g', 'kg'] : ['ml', 'l']), ...others];
+  return [own, ...others, 'g', 'kg', 'ml', 'l'];
 }

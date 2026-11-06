@@ -70,6 +70,21 @@ export const Product = z.object({
   unit: z.string().min(1).max(20).default('each'),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
+  /**
+   * Things used one at a time, one after another (a glucose sensor, contact lenses, a water
+   * filter): how many days each one lasts once it's started. Larder works out when they run out.
+   */
+  lastsDays: z.number().int().min(1).max(3650).nullable().default(null),
+  /**
+   * When the one in use was started: for things that last a set time, using one sets it to
+   * today; for anything else, opening one (use with `open`) does, and Finished clears it.
+   */
+  inUseSince: IsoDate.nullable().default(null),
+  /**
+   * With `lastsDays`: when the one in use runs out, the next comes out of stock and starts by
+   * itself, the day the last one ran out (checked hourly). The first is still started with Use.
+   */
+  autoUse: z.boolean().default(false),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */
@@ -129,6 +144,8 @@ export const ExpectedInfo = z.object({
   source: z.string().min(1).max(80),
   reference: z.string().max(80).nullable().default(null),
   eta: IsoDate.nullable().default(null),
+  /** Price paid for one (in the item's unit), when the order says, so the purchase is recorded with it when it arrives. */
+  unitPrice: z.number().min(0).nullable().default(null),
 });
 export type ExpectedInfo = z.infer<typeof ExpectedInfo>;
 
@@ -160,7 +177,7 @@ export const StockEntry = z.object({
 });
 export type StockEntry = z.infer<typeof StockEntry>;
 
-export const MovementKind = z.enum(['add', 'use', 'move', 'return', 'expect', 'arrive', 'adjust', 'remove', 'flat', 'charged']);
+export const MovementKind = z.enum(['add', 'use', 'move', 'return', 'expect', 'arrive', 'adjust', 'remove', 'flat', 'charged', 'finish']);
 /** History of every stock change, kept for future usage-rate predictions. */
 export const Movement = z.object({
   id: Id,
@@ -175,6 +192,22 @@ export const Movement = z.object({
   at: IsoDateTime,
 });
 export type Movement = z.infer<typeof Movement>;
+
+/** How something was bought, kept with the purchase: a receipt's photo, or the online order. */
+export const PurchaseEvidence = z.object({
+  /** A photo of the receipt, in Larder's files. */
+  receiptFileId: Id.nullable().default(null),
+  /** How or where it was bought, in words: "Receipt", "Tesco delivery", "Amazon". */
+  source: z.string().max(80).nullable().default(null),
+  /** The order number. */
+  reference: z.string().max(80).nullable().default(null),
+  /** When it was ordered, for something delivered. */
+  orderedOn: IsoDate.nullable().default(null),
+  /** When it was bought, if not today (the date on a receipt). */
+  boughtOn: IsoDate.nullable().default(null),
+  note: z.string().max(200).nullable().default(null),
+});
+export type PurchaseEvidence = z.infer<typeof PurchaseEvidence>;
 
 /** Cached answer from a barcode lookup provider (or a remembered miss). */
 export const LookupRecord = z.object({
@@ -232,6 +265,8 @@ export const ProductStatus = z.object({
   expired: z.boolean(),
   outOfPlace: z.boolean(),
   hasExpected: z.boolean(),
+  /** Things that last a set time once started: they run out within the warning window, counting what's on order. Makes it low. */
+  runningOut: z.boolean().default(false),
 });
 export type ProductStatus = z.infer<typeof ProductStatus>;
 
@@ -251,6 +286,14 @@ export const ProductSummary = z.object({
   nextExpiry: IsoDate.nullable(),
   /** Days from today until nextExpiry (negative when expired). */
   daysToExpiry: z.number().nullable(),
+  /** One is open or in use now: opened and not finished, or (things that last a set time) within its days. */
+  inUse: z.boolean().default(false),
+  /** Things that last a set time once started: when the one in use needs replacing. Null when none is in use. */
+  inUseUntil: IsoDate.nullable().default(null),
+  /** Things that last a set time once started: the day the one in use and every one in the house are used up. */
+  runsOutOn: IsoDate.nullable().default(null),
+  /** Days from today until runsOutOn (0 when there's none left). */
+  daysToRunOut: z.number().nullable().default(null),
   status: ProductStatus,
   /** Usual places with stock, most stock first. */
   places: z.array(PlaceRef),

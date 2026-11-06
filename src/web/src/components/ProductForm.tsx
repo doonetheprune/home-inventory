@@ -8,6 +8,12 @@ export interface ProductFormValue {
   categoryId: string | null;
   unit: string;
   shelfLifeDays: number | null;
+  /** Days each one lasts once started, for things used one after another. */
+  lastsDays: number | null;
+  /** When the one in use was started (YYYY-MM-DD), or '' when none is in use. */
+  inUseSince: string;
+  /** Start the next one automatically when the one in use runs out. */
+  autoUse: boolean;
   minQuantity: number | null;
   stockUpTo: number | null;
   preferredShopIds: string[];
@@ -21,7 +27,7 @@ export interface ProductFormValue {
 export const UNITS = ['each', 'pack', 'roll', 'tin', 'bottle', 'bag', 'box', 'jar', 'carton', 'tablet', 'dose', 'pair', 'battery', 'L', 'ml', 'kg', 'g', 'm'];
 
 export function emptyForm(name = ''): ProductFormValue {
-  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
+  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, lastsDays: null, inUseSince: '', autoUse: false, minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
 }
 
 export function toPayload(v: ProductFormValue) {
@@ -36,6 +42,9 @@ export function toPayload(v: ProductFormValue) {
     categoryId: v.categoryId,
     unit: v.unit.trim() || 'each',
     shelfLifeDays: v.shelfLifeDays,
+    lastsDays: v.lastsDays,
+    inUseSince: v.lastsDays ? v.inUseSince || null : null,
+    autoUse: v.lastsDays ? v.autoUse : false,
     minQuantity: v.minQuantity,
     stockUpTo: v.stockUpTo,
     preferredShopIds: v.preferredShopIds,
@@ -83,6 +92,21 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
         <div className="numfield"><span><b>{renewal ? 'Renews every' : 'Shelf life'}</b><small>{renewal ? 'Days, e.g. 365 for yearly' : 'Days from when it’s added, for food and renewals'}</small></span>
           {value.shelfLifeDays === null ? <button type="button" className="btn small" onClick={() => set('shelfLifeDays', renewal ? 365 : 7)}>Set</button> : <div className="row"><Stepper value={value.shelfLifeDays} onChange={(n) => set('shelfLifeDays', Math.max(1, Math.round(n)))} min={1} label="shelf life in days" /><button type="button" className="link small" onClick={() => set('shelfLifeDays', null)}>Clear</button></div>}
         </div>
+        {!renewal && (
+          <div className="numfield"><span><b>Each one lasts</b><small>Days once started, for things used one after another (a sensor, lenses, a filter)</small></span>
+            {value.lastsDays === null ? <button type="button" className="btn small" aria-label="Set how long each one lasts" onClick={() => set('lastsDays', 14)}>Set</button> : <div className="row"><Stepper value={value.lastsDays} onChange={(n) => set('lastsDays', Math.max(1, Math.round(n)))} min={1} label="days each one lasts" /><button type="button" className="link small" onClick={() => onChange({ ...value, lastsDays: null, inUseSince: '', autoUse: false })}>Clear</button></div>}
+          </div>
+        )}
+        {!renewal && value.lastsDays !== null && (
+          <div className="numfield"><span><b>The one in use started</b><small>Leave blank if none is in use. Using one sets it to today</small></span>
+            <input className="input" type="date" style={{ width: 170 }} value={value.inUseSince} onChange={(e) => set('inUseSince', e.target.value)} aria-label="The one in use started" />
+          </div>
+        )}
+        {!renewal && value.lastsDays !== null && (
+          <div className="numfield"><span><b>Use the next one automatically</b><small>When one runs out, the next comes out of stock and starts that day</small></span>
+            <Switch checked={value.autoUse} onChange={(v) => set('autoUse', v)} label="Use the next one automatically" />
+          </div>
+        )}
         <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>New stock goes to</b><small>Its usual place</small></span>
           <div style={{ minWidth: 200, flex: 1, maxWidth: 360 }}><PlaceSelect value={value.defaultPlaceId} onChange={(v) => set('defaultPlaceId', v)} places={places} /></div>
         </div>

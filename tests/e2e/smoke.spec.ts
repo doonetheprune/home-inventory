@@ -316,6 +316,83 @@ async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
 }
 
+test('works out when things used one after another run out', async ({ page }, info) => {
+  await signIn(page);
+  // The example water filters: one in the jug since 10 days ago, and 2 more, 28 days each, the next starting by itself.
+  await page.goto(`/#/products/${await productId(page, 'Water filter cartridges')}`);
+  await expect(page.getByText(/One in use until \d+ \w+, then the next starts automatically\. With 2 more cartridges, enough until/)).toBeVisible();
+  await expect(page.getByText('28 days once started, the next starts automatically')).toBeVisible();
+
+  // 3 new ones that last 2 weeks each, none started yet.
+  const name = `Glucose sensor ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.getByRole('button', { name: 'More quantity' }).click();
+  await page.getByRole('button', { name: 'More quantity' }).click();
+  await page.getByRole('button', { name: 'Set how long each one lasts' }).click();
+  await expect(page.getByLabel('days each one lasts', { exact: true })).toHaveValue('14');
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.getByText(/None in use\. Starting one today, there's enough until/)).toBeVisible();
+
+  // Using one starts it.
+  await page.getByRole('button', { name: 'Use', exact: true }).click();
+  await page.getByRole('button', { name: /^Use 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('2 left, enough until');
+  await expect(page.getByText(/One in use until \d+ \w+\. With 2 more, enough until/)).toBeVisible();
+
+  // If each only lasted a day, they'd run out within the week: low, saying when.
+  await page.locator('a[aria-label="Edit"]').click();
+  await expect(page.getByLabel('The one in use started')).not.toHaveValue('');
+  await page.getByLabel('days each one lasts', { exact: true }).fill('1');
+  await page.getByLabel('days each one lasts', { exact: true }).blur();
+  await page.getByRole('switch', { name: 'Use the next one automatically' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.locator('.pill', { hasText: /^Runs out / })).toBeVisible();
+  await expect(page.getByText('1 day once started, the next starts automatically')).toBeVisible();
+});
+
+test('marks one open, keeps what was paid, and records an item\'s measures', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Butter ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.locator('.numfield', { hasText: 'Running low below' }).getByRole('button', { name: 'Set' }).click();
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+
+  // Another, bought at Aldi for £2.10: it's kept in the purchase history.
+  await page.locator('.dock').getByRole('button', { name: 'Add' }).click();
+  await page.getByLabel('Price paid (optional)').fill('2.10');
+  await page.locator('.sheet').getByLabel('Shop').selectOption({ label: 'Aldi' });
+  await page.getByRole('button', { name: /^Add 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('Added 1');
+  await expect(page.locator('.section', { hasText: 'Bought' }).getByText('£2.10')).toBeVisible();
+
+  // Opened, still using it: one open, and the last one open is "Last one open", not "Out".
+  for (let i = 0; i < 2; i++) {
+    await page.locator('.dock').getByRole('button', { name: 'Use' }).click();
+    await page.getByRole('switch', { name: 'Opened, still using it' }).click();
+    await page.getByRole('button', { name: /^Open 1/ }).click();
+    await expect(page.locator('.toast')).toContainText('Opened 1');
+  }
+  await expect(page.getByText(/One open since .*, the last one\./)).toBeVisible();
+  await expect(page.locator('.pill', { hasText: 'Last one open' })).toBeVisible();
+  await page.getByRole('button', { name: 'Finished the open one' }).click();
+  await expect(page.locator('.pill', { hasText: /^Out$/ })).toBeVisible();
+
+  // A measure on the price card: one is 250 g.
+  await page.locator('.label', { hasText: 'Measures' }).getByRole('button', { name: 'Add' }).click();
+  await page.getByLabel('How many', { exact: true }).fill('250');
+  await page.getByLabel('Measure unit').fill('g');
+  await page.getByRole('button', { name: 'Save measure' }).click();
+  await expect(page.getByText('One = 250 g')).toBeVisible();
+
+  // Purchases: what was spent, and every purchase.
+  await page.goto('/#/m/purchases/');
+  await expect(page.getByRole('heading', { name: 'Purchases' })).toBeVisible();
+  await expect(page.getByText(`${name} · 1 at Aldi`)).toBeVisible();
+});
+
 test('stock opens on the types of thing, and each type lists its items', async ({ page }) => {
   await signIn(page);
   await page.goto('/#/stock');

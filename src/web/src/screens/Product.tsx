@@ -4,13 +4,13 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { ProductDetail, StockEntryView } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { ago, expiryText, longDate, num, qty, shortDate, stockText } from '../format';
+import { ago, dayText, expiryText, longDate, num, plural, qty, shortDate, stockText } from '../format';
 import { useEnabledWebModules } from '../modules';
-import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, useAction, useIsDesktop, usePlaces } from '../ui';
+import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, Switch, useAction, useIsDesktop, usePlaces, useShops } from '../ui';
 import { NfcTags } from '../components/NfcTags';
 import { rotatePhoto } from '../components/camera';
 
-const KIND_TEXT: Record<string, string> = { add: 'Added', use: 'Used', move: 'Moved', return: 'Put back', expect: 'Ordered', arrive: 'Arrived', adjust: 'Edited', remove: 'Removed', flat: 'Went flat', charged: 'Charged' };
+const KIND_TEXT: Record<string, string> = { add: 'Added', use: 'Used', move: 'Moved', return: 'Put back', expect: 'Ordered', arrive: 'Arrived', adjust: 'Edited', remove: 'Removed', flat: 'Went flat', charged: 'Charged', finish: 'Finished the open one' };
 
 export function ProductPage() {
   const { id = '' } = useParams();
@@ -90,12 +90,15 @@ export function ProductPage() {
               <div className="meter" aria-hidden="true"><i style={{ width: `${(p.inStock / scale) * 100}%`, background: p.status.low ? 'var(--low)' : 'var(--accent)' }} /><i style={{ width: `${((p.expected + p.pending) / scale) * 100}%`, background: 'var(--coming)', opacity: 0.45 }} /></div>
             )}
             <div className="small muted">
+              {p.runsOutOn ? <><RunsOut p={p} />{' '}</> : null}
+              {p.inUse && !p.product.lastsDays && p.product.inUseSince ? <>One open since {shortDate(p.product.inUseSince)}{p.inStock + p.expected + p.pending <= 0 ? ', the last one' : ''}. </> : null}
               {min > 0 ? <>Low below {qty(min, unit)}. </> : null}
               {p.expected + p.pending > 0 ? <>With {qty(p.expected + p.pending, unit)} {p.pending ? (p.expected ? `on order (${num(p.pending)} not confirmed)` : 'in a pending order') : 'on the way'} you'll have {num(p.inStock + p.expected + p.pending)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
               {p.nextExpiry ? <> {renewal ? 'Renews' : 'Next to expire'}: {longDate(p.nextExpiry)}.</> : null}
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
             <div className="btnrow">
+              {p.inUse && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.lastsDays ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.lastsDays ? 'Finished early' : 'Finished the open one'}</button>}
               {p.product.rechargeable && (p.flat ?? 0) > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.charge({ productId: p.product.id, quantity: p.flat ?? 0 }), 'All charged')}><Icon name="zap" size="sm" />Charged {num(p.flat ?? 0)}</button>}
               {!renewal && (
                 <>
@@ -148,6 +151,7 @@ export function ProductPage() {
                 <dt>Category</dt><dd>{p.category?.name ?? '—'}</dd>
                 <dt>Counted in</dt><dd>{unit}</dd>
                 <dt>{renewal ? 'Renews every' : 'Shelf life'}</dt><dd>{p.product.shelfLifeDays ? `${p.product.shelfLifeDays} days` : <span className="muted">None</span>}</dd>
+                {p.product.lastsDays ? <><dt>Each one lasts</dt><dd>{p.product.lastsDays} day{p.product.lastsDays === 1 ? '' : 's'} once started{p.product.autoUse ? ', the next starts automatically' : ''}</dd></> : null}
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
                 {p.product.stockUpTo != null && <><dt>Stock up to</dt><dd>{p.product.stockUpTo}</dd></>}
                 <dt>Buy from</dt><dd>{p.product.preferredShopIds.length ? p.shops.map((s) => s.name).join(', ') : p.shops.length ? `Any shop (${p.shops.map((s) => s.name).join(', ')})` : <span className="muted">No shop sells this category</span>}</dd>
@@ -165,7 +169,7 @@ export function ProductPage() {
               <div className="label">History</div>
               <div className="list">
                 {p.history.slice(0, 8).map((h) => (
-                  <div className="item" key={h.id}><span className="item-main"><span className="item-name">{KIND_TEXT[h.kind] ?? h.kind} {num(Math.abs(h.quantity))}</span><span className="item-meta">{h.note && h.note !== 'temporary' && h.note !== 'permanent' ? `${h.note} · ` : ''}{ago(h.at)}{ago(h.at).match(/\d+ (day|wk)/) ? ' ago' : ''}</span></span></div>
+                  <div className="item" key={h.id}><span className="item-main"><span className="item-name">{KIND_TEXT[h.kind] ?? h.kind}{h.quantity ? ` ${num(Math.abs(h.quantity))}` : ''}</span><span className="item-meta">{h.note && h.note !== 'temporary' && h.note !== 'permanent' ? `${h.note} · ` : ''}{ago(h.at)}{ago(h.at).match(/\d+ (day|wk)/) ? ' ago' : ''}</span></span></div>
                 ))}
               </div>
             </div>
@@ -191,6 +195,15 @@ export function ProductPage() {
       {sheet === 'expect' && <ExpectSheet p={p} onClose={() => setSheet(null)} />}
     </>
   );
+}
+
+/** Things used one after another: "One in use until 20 Nov. With 3 more, enough until 1 Jan." */
+function RunsOut({ p }: { p: ProductDetail }) {
+  const until = <b style={{ color: 'var(--ink)' }}>{dayText(p.runsOutOn!, p.daysToRunOut)}</b>;
+  const more = `${num(p.inStock)} more${p.product.unit === 'each' ? '' : ` ${plural(p.product.unit, p.inStock)}`}`;
+  if (p.inUseUntil) return p.inStock > 0 ? <>One in use until {shortDate(p.inUseUntil)}{p.product.autoUse ? ', then the next starts automatically' : ''}. With {more}, enough until {until}.</> : <>One in use until {until}, and none left after it.</>;
+  if (p.inStock <= 0) return <>None left.</>;
+  return <>None in use. Starting one today, there's enough until {until}.{p.product.autoUse ? ' Use the first one; the rest follow automatically.' : ''}</>;
 }
 
 function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {
@@ -269,6 +282,26 @@ function AddSheet({ p, onClose, elsewhere = false }: { p: ProductDetail; onClose
   const [placeId, setPlaceId] = useState<string | null>(elsewhere ? null : (p.product.defaultPlaceId ?? p.places[0]?.id ?? null));
   const [expiresOn, setExpiresOn] = useState('');
   const [variantId, setVariantId] = useState<string>('');
+  // Bought it: with a price, shop or receipt it's kept in the purchase history too.
+  const shops = useShops();
+  const [price, setPrice] = useState('');
+  const [shopId, setShopId] = useState('');
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const receiptInput = useRef<HTMLInputElement>(null);
+  const bought = price.trim() !== '' || !!shopId || !!receipt;
+  const priceOk = price.trim() === '' || Number(price) >= 0;
+
+  async function add() {
+    if (!bought) return api.stock.add({ productId: p.product.id, quantity: n, placeId, expiresOn: expiresOn || undefined, variantId: variantId || null });
+    const receiptFileId = receipt ? (await api.files.upload(receipt)).id : null;
+    const [r] = await api.shopping.purchase({
+      shopId: shopId || null,
+      items: [{ productId: p.product.id, quantity: n, placeId, ...(price.trim() !== '' ? { price: Number(price) } : {}), ...(expiresOn ? { expiresOn } : {}), variantId: variantId || null }],
+      ...(receiptFileId ? { evidence: { receiptFileId } } : {}),
+    });
+    return r!;
+  }
+
   return (
     <Sheet title={elsewhere ? `Add ${p.product.name.toLowerCase()} somewhere else` : `Add ${p.product.name.toLowerCase()}`} onClose={onClose}>
       {elsewhere && <p className="small muted">For a second place it's kept, like spare rolls in the bathroom as well as the utility room. To say something's been moved, use Move instead.</p>}
@@ -278,7 +311,20 @@ function AddSheet({ p, onClose, elsewhere = false }: { p: ProductDetail; onClose
       {p.variants.length > 0 && (
         <label className="field"><span>Brand</span><select className="input" value={variantId} onChange={(e) => setVariantId(e.target.value)}><option value="">Not saying</option>{p.variants.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
       )}
-      <button type="button" className="btn primary block" disabled={busy || n <= 0 || (elsewhere && !placeId)} onClick={() => run(() => api.stock.add({ productId: p.product.id, quantity: n, placeId, expiresOn: expiresOn || undefined, variantId: variantId || null }), (r) => `Added ${num(n)}${placeId ? ` to ${places.find((x) => x.id === placeId)?.name ?? 'there'}` : ''} · ${stockText(r)}`).then((r) => r && onClose())}>
+      {!elsewhere && (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="inputrow" style={{ flexWrap: 'wrap' }}>
+            <label className="field" style={{ flex: '1 1 110px' }}><span>Price paid (optional)</span><input className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="2.50" /></label>
+            {shops.length > 0 && (
+              <label className="field" style={{ flex: '2 1 160px' }}><span>Shop</span><select className="input" value={shopId} onChange={(e) => setShopId(e.target.value)}><option value="">Not saying</option>{shops.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+            )}
+          </div>
+          <input ref={receiptInput} type="file" accept="image/*" capture="environment" hidden data-testid="add-receipt-photo" onChange={(e) => { setReceipt(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+          <button type="button" className="link small" style={{ justifySelf: 'start' }} onClick={() => (receipt ? setReceipt(null) : receiptInput.current?.click())}>{receipt ? 'Receipt photo added · take it off' : 'Add a photo of the receipt'}</button>
+          {bought && <small className="muted">Kept in the purchase history with {[price.trim() !== '' ? 'the price' : null, shopId ? 'the shop' : null, receipt ? 'the receipt' : null].filter(Boolean).join(' and ')}.</small>}
+        </div>
+      )}
+      <button type="button" className="btn primary block" disabled={busy || n <= 0 || (elsewhere && !placeId) || !priceOk} onClick={() => run(add, (r) => `Added ${num(n)}${placeId ? ` to ${places.find((x) => x.id === placeId)?.name ?? 'there'}` : ''} · ${stockText(r)}`).then((r) => r && onClose())}>
         Add {qty(n, p.product.unit)}
       </button>
     </Sheet>
@@ -290,6 +336,9 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
   const available = p.product.rechargeable ? (p.charged ?? 0) : p.inStock;
   const [n, setN] = useState(Math.min(1, available));
   const [from, setFrom] = useState<string>('');
+  // Things that last a set time are started by using one; anything else can be marked open (the butter in the fridge).
+  const [open, setOpen] = useState(false);
+  const canOpen = !p.product.rechargeable && !p.product.lastsDays;
   const placesWithStock = [...new Map(p.entries.filter((e) => e.status === 'in_stock').map((e) => [e.currentPlace?.id ?? e.place?.id ?? '', e.currentPlace ?? e.place])).values()].filter((x) => !!x);
   return (
     <Sheet title={p.product.rechargeable ? 'Mark as flat' : `Use ${p.product.name.toLowerCase()}`} onClose={onClose}>
@@ -297,8 +346,11 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
       {placesWithStock.length > 1 && (
         <label className="field"><span>From</span><select className="input" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Whatever expires first</option>{placesWithStock.map((pl) => <option key={pl!.id} value={pl!.id}>{pl!.path}</option>)}</select></label>
       )}
-      <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: n, placeId: from || undefined }), (r) => `${p.product.rechargeable ? 'Marked flat' : 'Used'} ${num(n)} · ${stockText(r)} left`).then((r) => r && onClose())}>
-        {p.product.rechargeable ? `Mark ${num(n)} flat` : `Use ${qty(n, p.product.unit)}`}
+      {canOpen && (
+        <div className="toggle" style={{ padding: 0 }}><span><b>Opened, still using it</b><br /><span className="small muted">It shows as open until you say it's finished</span></span><Switch checked={open} onChange={setOpen} label="Opened, still using it" /></div>
+      )}
+      <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: n, placeId: from || undefined, ...(canOpen && open ? { open: true } : {}) }), (r) => `${p.product.rechargeable ? 'Marked flat' : canOpen && open ? 'Opened' : 'Used'} ${num(n)} · ${stockText(r)} left${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`).then((r) => r && onClose())}>
+        {p.product.rechargeable ? `Mark ${num(n)} flat` : canOpen && open ? `Open ${qty(n, p.product.unit)}` : `Use ${qty(n, p.product.unit)}`}
       </button>
     </Sheet>
   );

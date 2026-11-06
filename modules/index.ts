@@ -7,6 +7,7 @@ import openFoodFacts from './lookup-openfoodfacts';
 import openBeautyFacts from './lookup-openbeautyfacts';
 import openProductsFacts from './lookup-openproductsfacts';
 import pricing from './pricing';
+import purchases from './purchases';
 import batteries from './batteries';
 import scenarios from './scenarios';
 import printing from './printing';
@@ -19,4 +20,4 @@ import onlineShopping from './online-shopping';
 import email from './email';
 import template from './_template';
 
-export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, batteries, scenarios, printing, recipes, mqttModule, shopLocations, ai, sharing, onlineShopping, email, template];
+export const modules: ModuleDefinition[] = [openFoodFacts, openBeautyFacts, openProductsFacts, pricing, purchases, batteries, scenarios, printing, recipes, mqttModule, shopLocations, ai, sharing, onlineShopping, email, template];

@@ -195,17 +195,20 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
     const failed: Run['failed'] = [];
     for (const item of p.items) {
       let quantity = 0;
+      // What the packs that went in cost, kept with the order so the purchase is recorded with its price.
+      let cost = 0;
       for (const line of item.lines) {
         const take = Math.min(line.packs, left.get(line.listingId) ?? 0);
         left.set(line.listingId, (left.get(line.listingId) ?? 0) - take);
         quantity += take * (line.quantity / line.packs);
+        cost += line.packs ? take * (line.cost / line.packs) : 0;
         const no = refused.get(line.listingId);
         if (take < line.packs && no) failed.push({ productId: item.productId, name: item.name, listingName: line.name, error: no.error, message: no.message });
       }
       quantity = Math.round(quantity * 1000) / 1000;
       if (quantity <= 0) continue;
       await ctx.core.stock.expect({
-        productId: item.productId, quantity, source: `${run.shopName} delivery`, pending: true,
+        productId: item.productId, quantity, source: `${run.shopName} delivery`, pending: true, price: cost > 0 ? Math.round(cost * 100) / 100 : null,
         reference: run.booking?.reference ?? null, eta: run.booking ? run.booking.start.slice(0, 10) : null,
       });
       added.push({ productId: item.productId, name: item.name, quantity, unit: item.unit });

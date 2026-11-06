@@ -128,4 +128,18 @@ describe('online shopping: item settings', () => {
       'Linked to Toilet roll.',
     ].join('\n'));
   });
+
+  it('lets assistants unlink a pack, always buy one pack, and say how many one pack gives', async () => {
+    const { core, loo } = await setup();
+    await core.assistant.call('link_listing', { item: 'loo roll', id_or_link: '1001' });
+    await core.assistant.call('link_listing', { item: 'loo roll', id_or_link: '1002' });
+    expect((await core.assistant.call('set_buying_rules', { item: 'loo roll', fixed_listing: 'andrex' })).text).toBe('Toilet roll: always Andrex Classic Clean Toilet Tissue 24 Rolls at Tesco.');
+    let f = await fields(core, loo.id);
+    const rules = Object.values(f.shops)[0]!;
+    expect([rules.packRule, rules.fixedListingId]).toEqual(['fixed', '1002']);
+    expect((await core.assistant.call('set_buying_rules', { item: 'loo roll', listing: '1001', pack_quantity: 10 })).text).toBe('Toilet roll: one pack of Tesco Soft White Toilet Tissue 9 Rolls is 10 rolls.');
+    expect((await core.assistant.call('unlink_listing', { item: 'loo roll', listing: 'tesco soft white' })).text).toBe('Tesco Soft White Toilet Tissue 9 Rolls is no longer linked to Toilet roll at Tesco.');
+    f = await fields(core, loo.id);
+    expect(Object.values(f.shops)[0]!.listings.map((l) => l.listingId)).toEqual(['1002']);
+  });
 });

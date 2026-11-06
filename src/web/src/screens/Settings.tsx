@@ -50,7 +50,7 @@ function Household({ admin }: { admin: boolean }) {
       <div className="label">Household</div>
       <div className="list">
         <label className="numfield"><span><b>Name</b></span><input className="input" value={name} onChange={(e) => setName(e.target.value)} disabled={!admin} style={{ maxWidth: '60%', textAlign: 'right', padding: '8px 10px' }} /></label>
-        <div className="numfield"><span><b>Warn before expiry</b><small>Days ahead, unless a category says otherwise</small></span><Stepper value={warn} onChange={setWarn} min={0} max={365} label="days" /></div>
+        <div className="numfield"><span><b>Warn before expiry</b><small>Days ahead, unless a category says otherwise. Things used one after another go on the list this long before they run out</small></span><Stepper value={warn} onChange={setWarn} min={0} max={365} label="days" /></div>
       </div>
       {admin && <button type="button" className="btn" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => run(() => api.settings.update({ householdName: name.trim() || 'Our house', expiryWarningDays: warn }), 'Saved')}>Save</button>}
     </div>
@@ -67,7 +67,7 @@ function Categories({ admin }: { admin: boolean }) {
       <div className="list">
         {categories.map((c) => (
           <div className="numfield" key={c.id}>
-            <span><b>{c.name}</b><small>{c.warnDays === null ? 'Household warning' : `Warns ${c.warnDays} days before expiry`}</small></span>
+            <span><b>{c.name}</b><small>{c.warnDays === null ? 'Household warning' : `Warns ${c.warnDays} days before expiry or running out`}</small></span>
             <div className="row">
               {c.warnDays === null ? (
                 <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.categories.update(c.id, { warnDays: 14 }), 'Saved')}>Own warning</button>

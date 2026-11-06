@@ -5,7 +5,7 @@
  */
 import type { Category, Place, PlaceRef, Product, ProductSummary, Shop, StockEntry } from '../model';
 import type { CoreContext } from './context';
-import { amount, andList, daysBetween, roundQty } from '../util';
+import { addDays, amount, andList, daysBetween, roundQty } from '../util';
 
 export interface World {
   products: Product[];
@@ -71,6 +71,25 @@ export function placeRef(world: Pick<World, 'placeById'>, id: string | null): Pl
   return { id: p.id, name: p.name, path: placePath(world.placeById, p.id), code: p.code };
 }
 
+/**
+ * Things used one at a time, one after another, each lasting `lastsDays` once started
+ * (a glucose sensor, contact lenses): the one in use runs until its days are up, then each
+ * one in the house lasts as long again. With 3 that last 2 weeks and none in use, they run
+ * out in 6 weeks. `withOrdersDays` counts what's on order too, for deciding what's low.
+ * Null for everything else, and for wish list items.
+ */
+function runOut(world: World, product: Product, inStock: number, onOrder: number): { inUseUntil: string | null; runsOutOn: string; withOrdersDays: number } | null {
+  // Older records have neither field.
+  const lasts = product.lastsDays ?? null;
+  if (!lasts || product.wish) return null;
+  const ends = product.inUseSince ? addDays(product.inUseSince, lasts) : null;
+  const inUseUntil = ends && ends > world.today ? ends : null;
+  const from = inUseUntil ?? world.today;
+  // Part of one (half a pack of lenses) lasts part as long.
+  const days = (n: number) => Math.floor(roundQty(n * lasts));
+  return { inUseUntil, runsOutOn: addDays(from, days(inStock)), withOrdersDays: daysBetween(world.today, from) + days(inStock + onOrder) };
+}
+
 export function summarise(world: World, product: Product): ProductSummary {
   const entries = world.entriesByProduct.get(product.id) ?? [];
   const inStockEntries = entries.filter((e) => e.status === 'in_stock' && e.quantity > 0);
@@ -87,8 +106,10 @@ export function summarise(world: World, product: Product): ProductSummary {
   const warn = category?.warnDays ?? world.warnDays;
 
   const min = product.minQuantity;
+  const supply = runOut(world, product, inStock, expected + pending);
+  const runningOut = !product.wish && supply !== null && supply.withOrdersDays <= warn;
   // On order counts, confirmed or not, so nothing is bought twice.
-  const low = !product.wish && min !== null && min > 0 && roundQty(inStock + expected + pending) < min;
+  const low = !product.wish && ((min !== null && min > 0 && roundQty(inStock + expected + pending) < min) || runningOut);
 
   const byPlace = new Map<string, number>();
   const nowIn = new Set<string>();
@@ -121,12 +142,18 @@ export function summarise(world: World, product: Product): ProductSummary {
     flat,
     nextExpiry,
     daysToExpiry,
+    // Opened (or started) and not finished; things that last a set time stop being in use when their days are up.
+    inUse: !product.wish && (product.lastsDays ? !!supply?.inUseUntil : !!product.inUseSince),
+    inUseUntil: supply?.inUseUntil ?? null,
+    runsOutOn: supply?.runsOutOn ?? null,
+    daysToRunOut: supply ? daysBetween(world.today, supply.runsOutOn) : null,
     status: {
       low,
       expiringSoon: daysToExpiry !== null && daysToExpiry <= warn,
       expired: daysToExpiry !== null && daysToExpiry < 0,
       outOfPlace,
       hasExpected: expected > 0,
+      runningOut,
     },
     places,
     stockByPlace,
@@ -154,7 +181,8 @@ export function eligibleShops(product: Product, shops: Shop[]): Shop[] {
 
 export function needsBuying(s: ProductSummary): 'low' | 'out' | 'manual' | null {
   if (s.product.wish) return null;
-  if (s.status.low) return s.inStock + s.expected + s.pending <= 0 ? 'out' : 'low';
+  // Not out while one is open or in use.
+  if (s.status.low) return s.inStock + s.expected + s.pending <= 0 && !s.inUse ? 'out' : 'low';
   if (s.product.onShoppingList) return 'manual';
   return null;
 }

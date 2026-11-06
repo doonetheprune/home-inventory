@@ -142,7 +142,8 @@ export const api = {
   },
   stock: {
     add: (b: { productId: string; quantity: number; placeId?: string | null; expiresOn?: string | null; variantId?: string | null }) => post<ProductSummary>('/stock/add', b),
-    use: (b: { productId: string; quantity: number; placeId?: string }) => post<ProductSummary>('/stock/use', b),
+    use: (b: { productId: string; quantity: number; placeId?: string; open?: boolean }) => post<ProductSummary>('/stock/use', b),
+    finished: (productId: string) => post<ProductSummary>(`/products/${productId}/finished`, {}),
     move: (b: { productId: string; toPlaceId: string; quantity?: number; fromPlaceId?: string | null; mode: 'temporary' | 'permanent' }) => post<ProductSummary>('/stock/move', b),
     returnHome: (b: { productId: string; entryId?: string }) => post<ProductSummary>('/stock/return', b),
     charge: (b: { productId: string; quantity: number }) => post<ProductSummary>('/stock/charge', b),

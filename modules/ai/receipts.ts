@@ -171,6 +171,12 @@ const AddReceipt = z.object({
   shopId: z.string().nullable().default(null),
   receiptKey: z.string().max(200).nullable().default(null),
   lines: z.array(AddLine).min(1).max(MAX_LINES),
+  /** The photo of the receipt, uploaded to Larder's files, kept with the purchases as evidence. */
+  receiptFileId: z.string().min(1).max(100).nullable().default(null),
+  /** The date on the receipt (YYYY-MM-DD). */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  /** Who read it, kept with the purchases: "Claude", or an assistant. */
+  readBy: z.string().max(60).nullable().default(null),
 });
 type AddReceipt = z.output<typeof AddReceipt>;
 
@@ -295,6 +301,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
     const added = await ctx.core.shopping.purchase({
       shopId: input.shopId,
       items: [...byItem].map(([productId, x]) => ({ productId, quantity: x.quantity, ...(x.price !== null ? { price: x.price } : {}) })),
+      evidence: { source: 'Receipt', receiptFileId: input.receiptFileId, boughtOn: input.date, note: input.readBy ? `Read by ${input.readBy}` : null },
     });
     for (const l of input.lines) await memory.remember(input.shopId, l.text, l.productId, l.quantity / l.count);
     if (input.receiptKey) await seen.put(input.receiptKey, { at: ctx.core.now(), lines: input.lines.length });
@@ -320,6 +327,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
     description: 'Add what was bought, from a till receipt or an online order, to stock in one go with the prices paid. Only for items Larder already has: match each line to one (search if unsure), leave out lines that aren\'t in Larder and say which, and don\'t add new items from a receipt unless the person asks. Give each line\'s text as printed, so Larder learns that shop\'s names for next time.',
     input: z.object({
       shop: z.string().max(60).optional().describe('The shop, e.g. "Tesco"'),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('The date on the receipt (YYYY-MM-DD), kept with the purchase history'),
       lines: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder, e.g. "baked beans"'),
         quantity: z.number().positive().describe('How much of the item\'s own unit, e.g. 18 for two 9-roll packs of toilet roll counted in rolls'),
@@ -328,7 +336,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
         count: z.number().positive().optional().describe('How many were bought on the line, e.g. 2 for "2 @ £3.25". Default 1'),
       })).min(1).max(MAX_LINES),
     }),
-    async run({ shop, lines }) {
+    async run({ shop, date, lines }) {
       let shopId: string | null = null;
       let note = '';
       if (shop) {
@@ -351,7 +359,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
       }
       if (problems.length) throw new LarderError(`Nothing was added. ${problems.join(' ')} Leave out lines that aren't in Larder, or use the item's exact name.`, 400, 'invalid');
       const r = await add(AddReceipt.parse({
-        shopId,
+        shopId, date: date ?? null, readBy: 'an assistant',
         lines: found.map(({ product, line }) => ({ productId: product.id, quantity: line.quantity, price: line.price ?? null, text: line.text ?? '', count: line.count ?? 1 })),
       }));
       return { text: r.message + note, data: r };

@@ -114,4 +114,60 @@ describe('pricing module', () => {
     await expect(call(core, 'POST', '/check', { productId: spinach.id, quantity: 1, price: 1 })).rejects.toThrow('how much is in one bag');
     await expect(call(core, 'PUT', '/usual', { productId: spinach.id, unitPrice: 1, unit: 'box' })).rejects.toThrow('doesn\'t know the unit "box"');
   });
+
+  it('keeps several measures of an item, each with a price, and compares packs by any of them', async () => {
+    const core = await makeCore({ modules: [pricing] });
+    const chicken = await core.products.create({ name: 'Chicken breasts', unit: 'pack' });
+    await call(core, 'PUT', '/usual', { productId: chicken.id, quantity: 1, price: 6 });
+    let view = (await call(core, 'PUT', '/measures', { productId: chicken.id, measures: [{ unit: 'items', amount: 5 }, { unit: 'kg', amount: 1 }] })) as PriceView;
+    expect(view.measures.map((m) => [m.label, m.per, m.recorded])).toEqual([['1 pack = 1 kg', '£6.00 a kg', false], ['1 pack = 5 items', '£1.20 an item', false]]);
+    expect(view.itemSize).toEqual({ amount: 1, unit: 'kg' });
+    expect(view.options.map((o) => o.unit)).toEqual(['pack', 'item', '100g', 'kg']);
+    expect(view.packUnits).toEqual(['pack', 'item', 'g', 'kg', 'ml', 'l']);
+
+    // 3 breasts for £3.30 is £5.50 a pack.
+    let r = (await call(core, 'POST', '/check', { productId: chicken.id, quantity: 3, unit: 'item', price: 3.3 })) as ReturnType<typeof checkPrice>;
+    expect(r.message).toBe("That's £5.50 a pack against the usual £6.00: 8% cheaper, saving about £0.30 on this pack.");
+
+    // Loose by the kg has its own usual price, which a loose pack is compared with.
+    expect((await core.assistant.call('set_measure', { item: 'chicken breasts', amount: 1, unit: 'kg', price: 5.5 })).text).toBe('Chicken breasts: 1 pack = 1 kg, £5.50 a kg.');
+    r = (await call(core, 'POST', '/check', { productId: chicken.id, quantity: 2, unit: 'kg', price: 10 })) as ReturnType<typeof checkPrice>;
+    expect(r.message).toBe("That's £5.00 a pack against the usual £5.50: 9% cheaper, saving about £1.00 on this pack.");
+    expect((await core.assistant.call('get_price', { item: 'chicken breasts' })).text).toBe([
+      'Chicken breasts: usually £6.00 a pack, £1.20 an item, £0.60 per 100 g, £6.00 a kg.',
+      '- 1 pack = 1 kg: £5.50 a kg when bought that way',
+      '- 1 pack = 5 items: £1.20 an item (worked out)',
+    ].join('\n'));
+    expect((await core.assistant.call('convert_price', { price: 6, per: 'pack', to: 'item', item: 'chicken breasts' })).text).toBe('£6.00 a pack is £1.20 an item.');
+
+    // A new weight replaces the old one, keeping the other measures.
+    expect((await core.assistant.call('set_measure', { item: 'chicken breasts', amount: 900, unit: 'g' })).text).toBe('Chicken breasts: 1 pack = 900 g, £0.667 per 100 g worked out from the usual price.');
+    view = (await call(core, 'GET', '/view/:productId', undefined, { productId: chicken.id })) as PriceView;
+    expect(view.measures.map((m) => m.label)).toEqual(['1 pack = 900 g', '1 pack = 5 items']);
+    expect(view.itemSize).toEqual({ amount: 900, unit: 'g' });
+    expect((await core.assistant.call('remove_measure', { item: 'chicken breasts', unit: 'items' })).text).toBe('Chicken breasts no longer has a measure in items.');
+    expect(((await call(core, 'GET', '/view/:productId', undefined, { productId: chicken.id })) as PriceView).measures).toHaveLength(1);
+  });
+
+  it('turns down measures that make no sense', async () => {
+    const core = await makeCore({ modules: [pricing] });
+    const chicken = await core.products.create({ name: 'Chicken breasts', unit: 'pack' });
+    const put = (measures: unknown[]) => call(core, 'PUT', '/measures', { productId: chicken.id, measures });
+    await expect(put([{ unit: 'packs', amount: 2 }])).rejects.toThrow('counted in packs already');
+    await expect(put([{ unit: 'kg', amount: 1 }, { unit: 'g', amount: 900 }])).rejects.toThrow('Give one weight or volume');
+    await expect(put([{ unit: '100 g', amount: 3 }])).rejects.toThrow('g, kg, ml or l');
+    // An item counted by weight doesn't need a weight, but can be counted another way.
+    const cheese = await core.products.create({ name: 'Cheddar', unit: 'kg' });
+    await expect(call(core, 'PUT', '/measures', { productId: cheese.id, measures: [{ unit: 'l', amount: 1 }] })).rejects.toThrow('already counted in kg');
+    const view = (await call(core, 'PUT', '/measures', { productId: cheese.id, measures: [{ unit: 'slice', amount: 40 }] })) as PriceView;
+    expect(view.measures.map((m) => m.label)).toEqual(['1 kg = 40 slices']);
+  });
+
+  it('reads an item size saved before measures existed', async () => {
+    const core = await makeCore({ modules: [pricing] });
+    const spinach = await core.products.create({ name: 'Baby spinach', unit: 'bag', fields: { pricing: { itemSize: { amount: 200, unit: 'g' }, usualUnitPrice: 1.1 } } });
+    const view = (await call(core, 'GET', '/view/:productId', undefined, { productId: spinach.id })) as PriceView;
+    expect(view.measures.map((m) => [m.label, m.per])).toEqual([['1 bag = 200 g', '£0.55 per 100 g']]);
+    expect(view.itemSize).toEqual({ amount: 200, unit: 'g' });
+  });
 });

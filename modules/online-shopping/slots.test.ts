@@ -58,7 +58,8 @@ describe('online shopping: delivery slots and "do me a shop"', () => {
     expect(filled.text.split('\n')[0]).toBe('Added 1 item to your Tesco basket, about £12.00, for delivery Friday 30 October, 17:00–18:00:');
     expect(filled.text).toContain('Delivery slot booked: Friday 30 October, 17:00–18:00 (ref TSC-1234).');
     const entry = (await core.products.get(loo.id)).entries.find((e) => e.status === 'pending');
-    expect(entry?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30' });
+    // The basket's price goes with the order, for the purchase history when it arrives.
+    expect(entry?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30', unitPrice: 0.25 });
   });
 
   it('books a slot from a day looked at before another (the app shows a few days)', async () => {
@@ -141,7 +142,7 @@ describe('online shopping: click and collect', () => {
     await core.assistant.call('link_listing', { item: 'toilet roll', id_or_link: '1002' });
     const filled = await core.assistant.call('fill_basket', {});
     expect(filled.text.split('\n')[0]).toBe('Added 1 item to your Tesco basket, about £9.00, for collection from Southport Extra on Friday 30 October, 17:00–18:00:');
-    expect((await core.products.get(loo.id)).entries.find((e) => e.status === 'pending')?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30' });
+    expect((await core.products.get(loo.id)).entries.find((e) => e.status === 'pending')?.expected).toEqual({ source: 'Tesco delivery', reference: 'TSC-1234', eta: '2026-10-30', unitPrice: 0.375 });
     expect(filled.text).toContain('Collection slot booked: Friday 30 October, 17:00–18:00, collecting from Southport Extra (ref TSC-1234).');
   });
 

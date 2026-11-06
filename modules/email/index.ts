@@ -17,7 +17,7 @@
  * which passes the sign-in on to /gmail/callback.
  */
 import { z } from 'zod';
-import { andList, defineModule, LarderError, newId, ValidationError } from '@larder/core';
+import { amount, andList, defineModule, LarderError, newId, ValidationError } from '@larder/core';
 import type { OrderEmailReading, OrderReader } from '../_shared/order-email';
 import { authorizeUrl, CALLBACK_PATH, gmail, GmailSignedOut, SCOPE, type Client, type Message } from './gmail';
 import { DEFAULT_TIMING, nextCheck, Timing, watches, type DeliveryWindow } from './schedule';
@@ -315,7 +315,7 @@ export default defineModule({
           unavailable.push(l.item?.name ?? l.text);
           lines.push({ ...line, state: 'done' });
         } else if (sure) {
-          await ctx.core.stock.expect({ productId: l.item!.id, quantity: l.quantity, source, reference, eta: l.date ?? eta });
+          await ctx.core.stock.expect({ productId: l.item!.id, quantity: l.quantity, source, reference, eta: l.date ?? eta, price: l.price ?? null });
           coming.push(l.item!.name);
           lines.push({ ...line, state: 'done' });
         } else lines.push({ ...line, state: 'todo' });
@@ -502,6 +502,27 @@ export default defineModule({
       return { seen, l };
     }
 
+    /** An order line is this item: it goes on the delivery, and the shop's name for it is remembered. */
+    async function matchLine(id: string, n: number, productId: string, quantity: number): Promise<Seen> {
+      const { seen, l } = await line(id, n);
+      const product = await ctx.core.products.summary(productId);
+      if (l.status === 'coming' && l.state !== 'done') {
+        await ctx.core.stock.expect({ productId, quantity, source: `${seen.shopName} delivery`, reference: seen.reference, eta: l.date ?? seen.delivery?.date ?? null, price: l.price ?? null });
+      }
+      await reader()?.remember(seen.shopId, l.text, productId, quantity / (l.count || 1));
+      const lines = seen.lines.map((x, i) => (i === n ? { ...x, item: { id: product.product.id, name: product.product.name, unit: product.product.unit }, quantity, match: 'learnt' as const, state: 'done' as const } : x));
+      const updated = { ...seen, lines };
+      await emails.put(seen.id, updated);
+      return updated;
+    }
+
+    async function skipLine(id: string, n: number): Promise<Seen> {
+      const { seen } = await line(id, n);
+      const updated = { ...seen, lines: seen.lines.map((x, i) => (i === n ? { ...x, state: 'skipped' as const } : x)) };
+      await emails.put(seen.id, updated);
+      return updated;
+    }
+
     ctx.addRoute({
       method: 'POST',
       path: '/emails/:id/lines/:n',
@@ -509,18 +530,7 @@ export default defineModule({
       params: lineParams,
       body: z.object({ productId: z.string().min(1), quantity: z.number().positive().max(99999) }),
       response: Seen,
-      async handler({ params, body }) {
-        const { seen, l } = await line(params.id, params.n);
-        const product = await ctx.core.products.summary(body.productId);
-        if (l.status === 'coming' && l.state !== 'done') {
-          await ctx.core.stock.expect({ productId: body.productId, quantity: body.quantity, source: `${seen.shopName} delivery`, reference: seen.reference, eta: l.date ?? seen.delivery?.date ?? null });
-        }
-        await reader()?.remember(seen.shopId, l.text, body.productId, body.quantity / (l.count || 1));
-        const lines = seen.lines.map((x, i) => (i === params.n ? { ...x, item: { id: product.product.id, name: product.product.name, unit: product.product.unit }, quantity: body.quantity, match: 'learnt' as const, state: 'done' as const } : x));
-        const updated = { ...seen, lines };
-        await emails.put(seen.id, updated);
-        return updated;
-      },
+      handler: ({ params, body }) => matchLine(params.id, params.n, body.productId, body.quantity),
     });
 
     ctx.addRoute({
@@ -529,11 +539,64 @@ export default defineModule({
       summary: 'An order line isn\'t something Larder keeps: leave it out',
       params: lineParams,
       response: Seen,
-      async handler({ params }) {
-        const { seen } = await line(params.id, params.n);
-        const updated = { ...seen, lines: seen.lines.map((x, i) => (i === params.n ? { ...x, state: 'skipped' as const } : x)) };
-        await emails.put(seen.id, updated);
-        return updated;
+      handler: ({ params }) => skipLine(params.id, params.n),
+    });
+
+    const EmailRef = z.string().min(1).max(200).describe('The email: its order number, or the id order_emails gives');
+    const LineNo = z.number().int().min(1).describe('The line\'s number, as order_emails lists it (from 1)');
+    /** An email by its id or its order number. */
+    async function findEmail(ref: string): Promise<Seen> {
+      const all = (await emails.list()).map((x) => x.data);
+      const found = all.find((x) => x.id === ref) ?? all.find((x) => x.reference && x.reference.toLowerCase() === ref.trim().toLowerCase());
+      if (!found) throw new LarderError(`Larder hasn't read an order email "${ref}". order_emails lists them.`, 404, 'not_found');
+      return found;
+    }
+
+    ctx.addTool({
+      name: 'order_emails', title: 'Order emails read', readOnly: true,
+      description: 'The shops\' order and delivery emails Larder has read, newest first: what each said and did, and order lines still waiting to be matched to an item (match_order_line, or skip_order_line for things Larder doesn\'t keep).',
+      input: z.object({ waiting_only: z.boolean().optional().describe('Only emails with lines waiting') }),
+      async run({ waiting_only }) {
+        const list = (await emails.list()).map((x) => x.data).filter((x) => x.outcome !== 'ignored' && x.message).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+        const shown = (waiting_only ? list.filter((x) => x.lines.some((l) => l.state === 'todo')) : list).slice(0, 15);
+        if (!shown.length) return { text: waiting_only ? 'No order lines are waiting.' : 'Larder hasn\'t read any order emails yet.', data: { emails: [] } };
+        const text = shown.map((e) => {
+          const todo = e.lines.map((l, i) => ({ l, n: i + 1 })).filter((x) => x.l.state === 'todo');
+          const head = `- ${e.sentAt.slice(0, 10)} ${e.shopName}${e.reference ? ` order ${e.reference}` : ''} (id ${e.id}): ${e.message}`;
+          return [head, ...todo.map(({ l, n }) => `    line ${n}: "${l.text}" ×${l.count}${l.item ? `, maybe ${l.item.name}` : ''}${l.price !== null ? `, ${l.price.toFixed(2)}` : ''}`)].join('\n');
+        }).join('\n');
+        return { text, data: { emails: shown.map((e) => ({ id: e.id, shop: e.shopName, reference: e.reference, sent: e.sentAt, outcome: e.outcome, message: e.message, waiting: e.lines.map((l, i) => ({ line: i + 1, text: l.text, count: l.count, guess: l.item?.name ?? null, state: l.state })).filter((x) => x.state === 'todo') })) } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'match_order_line', title: 'Match an order line to an item',
+      description: 'Say which item an order email\'s line is: it goes on the delivery, and the shop\'s name for it is remembered for next time.',
+      input: z.object({
+        email: EmailRef, line: LineNo,
+        item: z.string().min(1).max(200).describe('The item in Larder'),
+        quantity: z.number().positive().optional().describe('How much of the item\'s own unit the line is, e.g. 18 for two 9-roll packs (default: the line\'s count)'),
+      }),
+      async run({ email, line: n, item, quantity }) {
+        const seen = await findEmail(email);
+        const l = seen.lines[n - 1];
+        if (!l) throw new ValidationError(`That email has ${seen.lines.length} line${seen.lines.length === 1 ? '' : 's'}.`);
+        const product = await ctx.core.resolve.product(item);
+        await matchLine(seen.id, n - 1, product.id, quantity ?? l.count);
+        return { text: `"${l.text}" is ${product.name}${l.status === 'coming' ? `: ${amount(quantity ?? l.count, product.unit)} on the way from ${seen.shopName}` : ''}. Larder will know it next time.`, data: { email: seen.id, line: n, item: product.name } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'skip_order_line', title: 'Leave out an order line', destructive: true,
+      description: 'An order email\'s line isn\'t something Larder keeps (a carrier bag, a delivery charge): leave it out.',
+      input: z.object({ email: EmailRef, line: LineNo }),
+      async run({ email, line: n }) {
+        const seen = await findEmail(email);
+        const l = seen.lines[n - 1];
+        if (!l) throw new ValidationError(`That email has ${seen.lines.length} line${seen.lines.length === 1 ? '' : 's'}.`);
+        await skipLine(seen.id, n - 1);
+        return { text: `Left out "${l.text}".`, data: { email: seen.id, line: n } };
       },
     });
 

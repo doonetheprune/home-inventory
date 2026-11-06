@@ -214,12 +214,16 @@ function ReceiptPage() {
   const [cameraKey, setCameraKey] = useState(0);
   /** The shop of the last receipt, for the bottom half of a long one (which doesn't say). */
   const lastShop = useRef('');
+  /** The photo read, kept with the purchases as evidence when they're added. */
+  const photoRef = useRef<Blob | null>(null);
 
   async function read(photo: Blob) {
     setReading(true);
     try {
-      const r = await run(async () => call<Receipt>('POST', '/receipt', { image: await base64(await shrink(photo, 2400)) }));
+      const small = await shrink(photo, 2400);
+      const r = await run(async () => call<Receipt>('POST', '/receipt', { image: await base64(small) }));
       if (!r) return;
+      photoRef.current = small;
       setReceipt(r);
       // Matched before or certain: ticked. A guess is shown to check. Ticked nothing when it's been added before.
       setRows(r.lines.map((l, key) => ({ ...l, key, keep: !r.addedBefore && (l.match === 'learnt' || l.match === 'sure') })));
@@ -245,9 +249,13 @@ function ReceiptPage() {
   async function add() {
     if (!receipt || !kept.length) return;
     const r = await run(
-      () => call<{ added: number; message: string }>('POST', '/receipt/add', {
+      async () => call<{ added: number; message: string }>('POST', '/receipt/add', {
         shopId: shopId || null,
         receiptKey: receipt.receiptKey,
+        // The photo goes with the purchases as evidence; if it can't be kept, they're still added.
+        receiptFileId: photoRef.current ? (await api.files.upload(new File([photoRef.current], 'receipt.jpg', { type: photoRef.current.type || 'image/jpeg' })).catch(() => null))?.id ?? null : null,
+        date: receipt.date ?? null,
+        readBy: by,
         lines: kept.map((x) => ({ productId: x.item!.id, quantity: x.quantity, price: x.price, text: x.text, count: x.count })),
       }),
       (x) => `${x.message} Ready for the next receipt.`,

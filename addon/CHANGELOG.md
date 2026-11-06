@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.2
+
+- **Things used one after another:** for a glucose sensor, contact lenses or a water filter, set **Each one lasts** on the item (e.g. 14 days). Using one starts it, and the item says how long the one in use has left and when the rest run out: "One in use until 20 Nov. With 3 more, enough until 1 Jan." The day the one in use was started can be changed on Edit.
+- **Use the next one automatically:** switch it on for an item and, when the one in use runs out, Larder takes the next out of stock and starts it that day, so you only press Use for the first. If Larder was off, it catches up; if you'd run out, the next starts the day you add more.
+- **They go on the list in time:** when they'll run out within the warning days (Medicine warns 30 days ahead, everything else 7 unless you change it in Settings), counting what's on order, they're low, so they're on the shopping list and under Running low with "Runs out Fri 18 Dec". Home Assistant gets `larder_stock_running_out` once when that happens, and Running low lists the date.
+- **Mark one as open:** **Use** has **Opened, still using it** (the butter in the fridge). It comes out of the count and shows "One open since 3 Nov" until **Finished the open one**. With none left but one open, the item is **Last one open** and on the shopping list; only when nothing's open is it **Out**.
+- **Purchase history:** every purchase is kept with what it cost, the shop, and the evidence: the receipt's photo (Add from receipt keeps it now), or the online order with its number and the day it was ordered, and its price when the order email or the basket said. Add on an item's page takes a price, shop and receipt photo too. Each item shows what it was bought for, and the new **Purchases** page shows what was spent this month, last month, this year or ever, by shop, item and month. Tap a purchase to correct it or add the receipt's photo later. Home Assistant gets **Spent this month**.
+- **Several measures of an item:** on the price card, "1 pack = 1 kg" and "1 pack = 5 items", each with its own price for buying it that way (loose by the kg, singles), or worked out from the usual price. Packs can be checked in any of them ("3 breasts for £3.30").
+- **Assistants can do everything the app does:** new tools for opening and finishing, measures and prices, purchase history and spending, lists of items (low, out of place, to sort, open…), what's in a place, what a code is, several things bought at once, batteries, order email lines and online shopping packs, and the missing options on the others (prices, brands, notes, links, moving from To sort…). Home Assistant's actions gain them too: **Finished the open one**, and price, shop and brand on **Add stock**.
+- Assistants say when they run out (`get_item`, `search`), and `add_item` and `change_item` can set how long each one lasts.
+- The example household has water filter cartridges that last 28 days each, the next starting automatically.
+- On a phone, the − + steppers on an item's Edit page no longer push their Clear link off the edge.
+
 ## 0.8.1
 
 - **Click and collect:** a shop whose automation can collect (Tesco now) offers **Delivery** or **Click and collect** when you start a shop. For click and collect, the slots say which branch they're for, with its address, and **Collect from** picks another branch. Assistants do the same: "click and collect at the Martlesham one on Saturday". When a day has no delivery slots free, Larder offers click and collect instead. A booked collection slot says where to collect from.
