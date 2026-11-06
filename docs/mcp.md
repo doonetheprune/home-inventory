@@ -66,21 +66,26 @@ Everything you can do in the app, as plainly described tools, apart from account
 | Tool | What it does |
 |---|---|
 | `search` | Find items, places and shops by any words. Typos are fine |
-| `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, shops, notes |
-| `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them). From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
-| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, shops to buy it from, notes, wish list, rechargeable |
+| `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, when it runs out (things used one after another), the open one, shops, brands with their barcodes and shop codes, links, notes |
+| `list_items` | Items by status (low, use soon, out of place, on order, wish list, in stock, to sort, to tidy, open, running out), by category and by place |
+| `get_place` | What's in a place: what's kept there and how many (and what's run out there), what's out of place from there, what's there from elsewhere, and the places inside it |
+| `identify_code` | What a barcode, label, place code or shop code is; for an unknown barcode, what the online product databases say |
+| `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them), notes, links, how long each lasts once started, and whether it's rechargeable. From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
+| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, places it's no longer kept in, shops to buy it from, notes, links, wish list, rechargeable |
 | `remove_item` | Remove an item with all its stock |
 | `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
 | `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |
-| `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat) |
-| `move_item` | Move something for now (out of place) or for good |
-| `add_expected` | Record an order that hasn't arrived (it counts towards stock). Takes shop codes from order emails. Something in a pending order from the same shop is confirmed instead of added again |
-| `mark_arrived` | A delivery (or part of one) arrived |
+| `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat). Adding takes a brand, and a price and shop to keep it in the purchase history; using takes a note, and `opened` for one that's opened and still in use (the butter in the fridge) |
+| `finish_item` | The open one is finished (or one that lasts a set time came off early) |
+| `bought` | Several things bought at once, with their prices and the shop: added to stock and kept in the purchase history |
+| `move_item` | Move something for now (out of place) or for good, optionally only from one place, or from To sort (stock with no place yet) |
+| `add_expected` | Record an order that hasn't arrived (it counts towards stock), with its price, where it goes, and whether it's still a pending order. Takes shop codes from order emails. Something in a pending order from the same shop is confirmed instead of added again |
+| `mark_arrived` | A delivery (or part of one, or only what was due by a day) arrived |
 | `confirm_order` / `cancel_order` | A pending order (e.g. a filled online basket) went ahead and is on its way, or didn't and is removed |
 | `add_to_shopping_list` / `remove_from_shopping_list` | Put something on the list that isn't low, or take it off again |
-| `put_back` | Something out of place is back where it lives |
+| `put_back` | Something out of place is back where it lives (all of it, or only from one place) |
 | `mark_charged` / `renew` | Rechargeables charged; a renewal (insurance, MOT) renewed |
-| `shopping_list` | What to buy at a shop, or which shop to go to |
+| `shopping_list` | What to buy at a shop, which shop to go to, or (`shop: "none"`) what no shop sells |
 | `expiring` | What to use soon, and renewals coming up |
 | `deliveries` / `recent_changes` | Orders on the way and pending orders; what changed in stock lately (all, or one item) |
 | `list_shops` / `add_shop` / `change_shop` / `remove_shop` | Shops and what they sell. Common UK shops (Tesco, Aldi, Screwfix…) come with what they usually sell |
@@ -90,12 +95,18 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `add_receipt` | Add a till receipt or online order the assistant has read to stock in one go, with the prices paid, by item names. Only items Larder has: if any line isn't one, nothing is added and it says which (ai module) |
 | `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
 | `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
+| `get_price` / `set_measure` / `remove_measure` | An item's usual price in every unit; its measures ("1 pack = 1 kg", "1 pack = 5 items"), each with its own price when it's bought that way (pricing module) |
+| `purchase_history` / `spending` | What was bought, the price, the shop, and the receipt's photo or the order; what was spent by shop, item and month (purchase history module) |
+| `change_purchase` / `remove_purchase` | Correct a purchase in the history, or take one out (purchase history module) |
+| `battery_devices` / `batteries_replaced` / `link_battery` | Devices with batteries and what to do about a low one; new batteries went in; which battery a device takes (battery linking module) |
+| `check_order_emails` / `order_emails` / `match_order_line` / `skip_order_line` | Order emails: check now, what was read, and the lines waiting to be matched to an item or left out (order emails module) |
+| `link_listing` / `unlink_listing` / `set_buying_rules` | An online shop's packs for an item, which pack to always buy and how many one gives, and offers (online shopping module) |
 | `list_scenarios` / `get_scenario` | Scenarios (Power cut, Christmas…): every item, how many and where (scenarios module) |
 | `make_scenario` / `change_scenario` / `remove_scenario` / `add_to_scenario` / `remove_from_scenario` | Making and changing scenarios (scenarios module) |
 | `save_recipe` / `list_recipes` / `get_recipe` | Recipes the household liked, with what's in the house. Ingredients can have ratios, so `get_recipe` works out the amounts from what you have ("only 2 eggs"), a preset, servings or times (recipes module) |
 | `save_recipe_preset` / `forget_recipe_preset` | Keep amounts you make often under a name ("Family", "Just me"), and choose the default one (recipes module) |
 | `propose_cooking` / `confirm_cooking` | After cooking: what comes out of stock, at the amounts made, applied only once the person agrees (recipes module) |
-| `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list; forget a recipe (recipes module) |
+| `recipe_to_shopping_list` / `forget_recipe` | Put what a recipe is missing on the list, at any amount; forget a recipe (recipes module) |
 | `set_recipe_scenarios` | Put a recipe in scenarios (Christmas), and keep it only there if wanted (recipes module) |
 | `start_shop` / `list_slots` / `book_slot` | "Do me a shop": is the online shop ready (waking its computer), when, the free delivery slots that day, and booking one once the person agrees (online shopping module) |
 | `plan_basket` / `fill_basket` / `shop_status` | What's low or on offer at its target price, planned or put in the online basket and recorded as on the way; how it's going (online shopping module) |

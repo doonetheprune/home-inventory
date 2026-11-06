@@ -5,10 +5,21 @@
  * £0.36 a roll, and "£3.50 a kg" against the usual £0.40 per 100 g.
  */
 import { z } from 'zod';
-import { Id, NotFoundError, ValidationError, defineModule, type CoreApi, type Product } from '@larder/core';
-import { ItemSize, choicesFor, defaultShow, isMeasure, packUnitsFor, perText, priceFactor, unitKey, whyNot } from './units';
+import { Id, NotFoundError, ValidationError, defineModule, pluralWord, type CoreApi, type Product } from '@larder/core';
+import { ItemSize, MEASURES, choicesFor, defaultShow, isMeasure, packUnitsFor, perText, priceFactor, unitKey, whyNot, type Count } from './units';
 
 export { ItemSize } from './units';
+
+/**
+ * Another measure of one of the item: 1 pack = 1 kg, or 1 pack = 5 items. `price` is the usual price
+ * per one `unit` when it's bought that way (loose by the kg, single items), if known.
+ */
+export const Measure = z.object({
+  unit: z.string().min(1).max(20),
+  amount: z.number().positive().max(1_000_000),
+  price: z.number().min(0).nullable().default(null),
+});
+export type Measure = z.infer<typeof Measure>;
 
 export const PricingFields = z.object({
   /** Usual price per `priceUnit`, in the household currency. */
@@ -22,6 +33,8 @@ export const PricingFields = z.object({
   itemSize: ItemSize.nullable().default(null),
   /** The unit the price card shows prices per, e.g. "100g". */
   showPer: z.string().max(20).nullable().default(null),
+  /** Other measures of one: its weight or volume (kept as `itemSize` too) and other ways of counting it, each with a price if known. */
+  measures: z.array(Measure).max(10).default([]),
 });
 export type PricingFields = z.infer<typeof PricingFields>;
 
@@ -64,6 +77,15 @@ export const PriceView = z.object({
   /** The item's own unit, when it isn't a weight or volume (a bag, a roll): it can have a size. */
   itemUnit: z.string().nullable(),
   packUnits: z.array(z.string()),
+  /** Its measures: "1 pack = 1 kg", "1 pack = 5 items", each with its price, recorded or worked out from the usual price. */
+  measures: z.array(z.object({
+    unit: z.string(), amount: z.number(), label: z.string(),
+    price: z.number().nullable(), per: z.string().nullable(),
+    /** True when the price was recorded for buying it this way, false when it's worked out from the usual price. */
+    recorded: z.boolean(),
+    /** The recorded price per one `unit` as stored (null when none), to send back when changing the list. */
+    recordedPrice: z.number().nullable(),
+  })).default([]),
 }).meta({ id: 'PriceView' });
 export type PriceView = z.infer<typeof PriceView>;
 
@@ -84,21 +106,84 @@ function pricing(product: Product): PricingFields {
   return PricingFields.parse(product.fields.pricing ?? {});
 }
 
+/** Its measures, the weight or volume first. Older records only have `itemSize`. */
+export function measuresOf(p: PricingFields): Measure[] {
+  const list = p.measures.map((m) => ({ ...m, unit: unitKey(m.unit) }));
+  if (p.itemSize && !list.some((m) => isMeasure(m.unit))) list.unshift({ unit: p.itemSize.unit, amount: p.itemSize.amount, price: null });
+  return [...list.filter((m) => isMeasure(m.unit)), ...list.filter((m) => !isMeasure(m.unit))];
+}
+const sizeOf = (p: PricingFields): ItemSize | null => {
+  const m = measuresOf(p).find((x) => isMeasure(x.unit));
+  return m ? { amount: m.amount, unit: m.unit as ItemSize['unit'] } : null;
+};
+const countsOf = (p: PricingFields): Count[] => measuresOf(p).filter((m) => !isMeasure(m.unit)).map(({ unit, amount }) => ({ unit, amount }));
+
+/** Checks and tidies a list of measures for a product: one weight or volume at most, none in its own unit. */
+export function checkMeasures(product: Product, list: Array<z.input<typeof Measure>>): Measure[] {
+  const own = unitKey(product.unit);
+  const out = new Map<string, Measure>();
+  for (const raw of list) {
+    const m = Measure.parse(raw);
+    const unit = unitKey(m.unit);
+    if (unit === own || (['each', 'item', 'unit', 'one'].includes(unit) && own === 'each')) throw new ValidationError(`${product.name} is counted in ${own === 'each' ? 'ones' : pluralWord(own, 2)} already. Give another measure, e.g. 1 ${own} = 200 g, or = 5 slices.`);
+    if (MEASURES[unit] && !['g', 'kg', 'ml', 'l'].includes(unit)) throw new ValidationError('Give a weight or volume in g, kg, ml or l.');
+    if (isMeasure(unit) && isMeasure(own)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
+    out.set(unit, { unit, amount: m.amount, price: m.price === null ? null : Math.round(m.price * 1_000_000) / 1_000_000 });
+  }
+  const sized = [...out.values()].filter((m) => isMeasure(m.unit));
+  if (sized.length > 1) throw new ValidationError(`Give one weight or volume for one ${own} (e.g. 1 ${own} = 1 kg), not ${sized.length}.`);
+  return [...sized, ...[...out.values()].filter((m) => !isMeasure(m.unit))];
+}
+
+/** Fields with a new list of measures, keeping `itemSize` in step with the weight or volume among them. */
+function withMeasures(p: PricingFields, measures: Measure[]): PricingFields {
+  const next = { ...p, measures, itemSize: null };
+  return PricingFields.parse({ ...next, itemSize: sizeOf(next) });
+}
+
+/** Fields with a new size, which replaces the weight or volume among the measures (keeping its price if the unit is the same). */
+function withSize(p: PricingFields, size: ItemSize | null): PricingFields {
+  const old = measuresOf(p).find((m) => isMeasure(m.unit));
+  const rest = measuresOf(p).filter((m) => !isMeasure(m.unit));
+  return withMeasures(p, size ? [{ unit: size.unit, amount: size.amount, price: old?.unit === size.unit ? old.price : null }, ...rest] : rest);
+}
+
 /** Price per `from` as a price per `to`, or a ValidationError saying why it can't be. */
 function convert(value: number, from: string, to: string, product: Product): number {
-  const f = priceFactor(from, to, product.unit, pricing(product).itemSize);
-  if (f === null) throw new ValidationError(whyNot(from, to, product));
+  const p = pricing(product);
+  const f = priceFactor(from, to, product.unit, sizeOf(p), countsOf(p));
+  if (f === null) throw new ValidationError(whyNot(from, to, product, countsOf(p)));
   return value * f;
+}
+
+/** "1 pack = 1 kg", "1 pack = 5 items", "1 bottle = 1.5 litres". */
+function measureLabel(product: Product, m: Measure): string {
+  const name = m.unit === 'l' ? (m.amount === 1 ? 'litre' : 'litres') : isMeasure(m.unit) ? m.unit : pluralWord(m.unit, m.amount);
+  const own = unitKey(product.unit);
+  return `${own === 'each' ? 'One' : `1 ${own}`} = ${Math.round(m.amount * 1000) / 1000} ${name}`;
 }
 
 export function priceView(product: Product, currency: string): PriceView {
   const p = pricing(product);
+  const size = sizeOf(p);
+  const counts = countsOf(p);
   const stored = p.priceUnit ?? product.unit;
-  const choices = choicesFor(product.unit, p.itemSize);
+  const choices = choicesFor(product.unit, size, counts);
   const wanted = p.showPer ? unitKey(p.showPer) : defaultShow(product.unit);
+  const usualPer = (unit: string) => {
+    const f = priceFactor(stored, unit, product.unit, size, counts);
+    return p.usualUnitPrice !== null && f !== null ? Math.round(p.usualUnitPrice * f * 1_000_000) / 1_000_000 : null;
+  };
   const options = choices.map((unit) => {
-    const f = priceFactor(stored, unit, product.unit, p.itemSize);
-    return { unit, per: perText(unit, product.unit), price: p.usualUnitPrice !== null && f !== null ? Math.round(p.usualUnitPrice * f * 1_000_000) / 1_000_000 : null, needsSize: f === null };
+    const f = priceFactor(stored, unit, product.unit, size, counts);
+    return { unit, per: perText(unit, product.unit, counts), price: usualPer(unit), needsSize: f === null };
+  });
+  const measures = measuresOf(p).map((m) => {
+    // Shown as on a shelf label: per 100 g or 100 ml rather than per gram.
+    const shelf = ({ g: '100g', ml: '100ml' } as Record<string, string>)[m.unit] ?? m.unit;
+    const f = priceFactor(m.unit, shelf, product.unit, size, counts) ?? 1;
+    const value = m.price !== null ? m.price * f : usualPer(shelf);
+    return { unit: m.unit, amount: m.amount, label: measureLabel(product, m), price: value, per: value === null ? null : `${price(value, currency)} ${perText(shelf, product.unit, counts)}`, recorded: m.price !== null, recordedPrice: m.price };
   });
   // Show the chosen unit when the price can be worked out in it, else the one it's stored in.
   const shown = options.find((o) => o.unit === wanted && !o.needsSize) ?? options.find((o) => !o.needsSize) ?? options[0]!;
@@ -107,9 +192,10 @@ export function priceView(product: Product, currency: string): PriceView {
     basedOn: p.basedOn,
     showPer: shown.unit,
     options,
-    itemSize: p.itemSize,
+    itemSize: size,
     itemUnit: isMeasure(product.unit) ? null : unitKey(product.unit),
-    packUnits: packUnitsFor(product.unit),
+    packUnits: packUnitsFor(product.unit, counts),
+    measures,
   };
 }
 
@@ -119,9 +205,11 @@ export function checkPrice(product: Product, input: { quantity: number; unit?: s
   const show = priceView(product, currency).showPer;
   const packUnit = input.unit ?? product.unit;
   const unitPrice = convert(input.price / input.quantity, packUnit, show, product);
-  const usual = p.usualUnitPrice === null ? null : convert(p.usualUnitPrice, stored, show, product);
-  const per = (n: number) => `${price(n, currency)} ${perText(show, product.unit)}`;
-  const base = { productId: product.id, productName: product.name, priceUnit: show, per: perText(show, product.unit), unitPrice, usualUnitPrice: usual };
+  // Bought by a measure with its own price (loose by the kg, single items): that's the usual to compare with.
+  const byMeasure = measuresOf(p).find((m) => m.price !== null && m.unit === unitKey(packUnit));
+  const usual = byMeasure ? convert(byMeasure.price!, byMeasure.unit, show, product) : p.usualUnitPrice === null ? null : convert(p.usualUnitPrice, stored, show, product);
+  const per = (n: number) => `${price(n, currency)} ${perText(show, product.unit, countsOf(p))}`;
+  const base = { productId: product.id, productName: product.name, priceUnit: show, per: perText(show, product.unit, countsOf(p)), unitPrice, usualUnitPrice: usual };
   if (usual === null || usual === 0) {
     return { ...base, difference: null, verdict: 'no_usual_price', savingOnPack: null, message: `That's ${per(unitPrice)}. There's no usual price for ${product.name.toLowerCase()} yet, so this could become the usual price.` };
   }
@@ -163,8 +251,9 @@ export default defineModule({
      */
     async function setUsual(product: Product, unitPrice: number, unit?: string, basedOn?: string): Promise<PricingFields> {
       const given = unit ?? product.unit;
-      const f = priceFactor(given, product.unit, product.unit, pricing(product).itemSize);
-      if (f === null && !isMeasure(given)) throw new ValidationError(whyNot(given, product.unit, product));
+      const p = pricing(product);
+      const f = priceFactor(given, product.unit, product.unit, sizeOf(p), countsOf(p));
+      if (f === null && !isMeasure(given)) throw new ValidationError(whyNot(given, product.unit, product, countsOf(p)));
       const value = f === null ? unitPrice : unitPrice * f;
       const priceUnit = f === null ? unitKey(given) : product.unit;
       const updated = await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), usualUnitPrice: Math.round(value * 1_000_000) / 1_000_000, priceUnit, basedOn: basedOn ?? '', updatedAt: ctx.core.now() }));
@@ -200,7 +289,8 @@ export default defineModule({
         if (b.itemSize && isMeasure(product.unit)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
         const updated = await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => {
           const p = PricingFields.parse(cur ?? {});
-          return PricingFields.parse({ ...p, ...(b.showPer !== undefined ? { showPer: b.showPer && unitKey(b.showPer) } : {}), ...(b.itemSize !== undefined ? { itemSize: b.itemSize } : {}) });
+          const sized = b.itemSize !== undefined ? withSize(p, b.itemSize) : p;
+          return PricingFields.parse({ ...sized, ...(b.showPer !== undefined ? { showPer: b.showPer && unitKey(b.showPer) } : {}) });
         });
         return priceView(updated, await currency());
       },
@@ -278,10 +368,12 @@ export default defineModule({
         const product = item ? await ctx.core.resolve.product(item) : null;
         const itemUnit = product?.unit ?? 'each';
         if (!product && !(isMeasure(per) && isMeasure(to))) throw new ValidationError(`Say which item, so Larder knows how much one ${isMeasure(per) ? to : per} holds.`);
-        const f = priceFactor(per, to, itemUnit, product ? pricing(product).itemSize : null);
-        if (f === null) throw new ValidationError(whyNot(per, to, product ?? { name: 'that item', unit: 'each' }));
+        const p = product ? pricing(product) : null;
+        const counts = p ? countsOf(p) : [];
+        const f = priceFactor(per, to, itemUnit, p ? sizeOf(p) : null, counts);
+        if (f === null) throw new ValidationError(whyNot(per, to, product ?? { name: 'that item', unit: 'each' }, counts));
         const out = value * f;
-        return { text: `${price(value, cur)} ${perText(per, itemUnit)} is ${price(out, cur)} ${perText(to, itemUnit)}.`, data: { price: out, per: unitKey(to) } };
+        return { text: `${price(value, cur)} ${perText(per, itemUnit, counts)} is ${price(out, cur)} ${perText(to, itemUnit, counts)}.`, data: { price: out, per: unitKey(to) } };
       },
     });
 
@@ -296,9 +388,82 @@ export default defineModule({
       async run({ item, amount, unit }) {
         const product = await ctx.core.resolve.product(item);
         if (isMeasure(product.unit)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
-        await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), itemSize: { amount, unit } }));
+        await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => withSize(PricingFields.parse(cur ?? {}), { amount, unit }));
         const by = unit === 'ml' || unit === 'l' ? 'per 100 ml and per litre' : 'per 100 g and per kg';
         return { text: `One ${unitKey(product.unit)} of ${product.name} is ${amount} ${unit}. Its prices can now be compared ${by}.`, data: { amount, unit } };
+      },
+    });
+
+    ctx.addRoute({
+      method: 'PUT', path: '/measures', summary: 'Set an item\'s measures: 1 pack = 1 kg, 1 pack = 5 items, each with its price if known',
+      description: 'Replaces the list. At most one weight or volume (g, kg, ml or l), which is also the item\'s size; any other unit is another way of counting it. `price` is the usual price per one of that unit when bought that way.',
+      body: z.object({ productId: Id, measures: z.array(Measure).max(10) }),
+      response: PriceView,
+      async handler({ body }) {
+        const b = body as { productId: string; measures: Array<z.input<typeof Measure>> };
+        const product = await getProduct(ctx.core, b.productId);
+        const list = checkMeasures(product, b.measures);
+        const updated = await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => withMeasures(PricingFields.parse(cur ?? {}), list));
+        return priceView(updated, await currency());
+      },
+    });
+
+    ctx.addTool({
+      name: 'get_price', title: 'An item\'s usual price and measures', readOnly: true,
+      description: 'The usual price of an item in each unit it can be shown in (per pack, per kg, per item…), what it\'s based on, and its measures ("1 pack = 1 kg", "1 pack = 5 items") with a price for each.',
+      input: z.object({ item: z.string().min(1).max(200).describe('The item, e.g. "chicken breasts"') }),
+      async run({ item }) {
+        const product = await ctx.core.resolve.product(item);
+        const cur = await currency();
+        const view = priceView(product, cur);
+        const prices = view.options.filter((o) => o.price !== null).map((o) => `${price(o.price!, cur)} ${o.per}`);
+        const lines = [
+          view.usual ? `${product.name}: usually ${prices.join(', ')}${view.basedOn ? ` (from ${view.basedOn})` : ''}.` : `${product.name}: no usual price yet.`,
+          ...view.measures.map((m) => `- ${m.label}${m.per ? `: ${m.per}${m.recorded ? ' when bought that way' : ' (worked out)'}` : ''}`),
+        ];
+        if (!view.measures.length && view.itemUnit) lines.push(`No measures yet: set_measure records how much one ${view.itemUnit} holds (e.g. 1 kg, or 5 items).`);
+        return { text: lines.join('\n'), data: view };
+      },
+    });
+
+    ctx.addTool({
+      name: 'set_measure', title: 'Record a measure of an item', destructive: true,
+      description: 'Record how much one of an item holds in another unit, optionally with its price: "a pack of chicken is 1 kg", "a pack is 5 breasts", "loose bananas are £0.90 a kg". A weight or volume (g, kg, ml, l) is its size, for prices per kg; any other unit is another way of counting it. Replaces a measure in the same unit.',
+      input: z.object({
+        item: z.string().min(1).max(200).describe('The item, e.g. "chicken breasts"'),
+        amount: z.number().positive().describe('How much of `unit` one of the item holds, e.g. 1 (kg) or 5 (items)'),
+        unit: z.string().min(1).max(20).describe('g, kg, ml, l, or another way of counting it, e.g. "item", "slice", "breast"'),
+        price: z.number().min(0).nullable().optional().describe('The usual price for one `unit` when bought that way, e.g. 6 for £6 a kg (for g or ml, per gram or ml). null forgets it'),
+      }),
+      async run({ item, amount, unit, price: each }) {
+        const product = await ctx.core.resolve.product(item);
+        const cur = measuresOf(pricing(product));
+        const key = unitKey(unit);
+        const old = cur.find((m) => m.unit === key);
+        // A new weight replaces an old one, and a new volume an old one.
+        const kept = cur.filter((m) => m.unit !== key && !(isMeasure(key) && isMeasure(m.unit)));
+        const list = checkMeasures(product, [...kept, { unit: key, amount, price: each === undefined ? (old?.price ?? null) : each }]);
+        const updated = await ctx.core.products.updateField<unknown>(product.id, 'pricing', (c) => withMeasures(PricingFields.parse(c ?? {}), list));
+        const view = priceView(updated, await currency());
+        const m = view.measures.find((x) => x.unit === key)!;
+        return { text: `${product.name}: ${m.label}${m.per ? `, ${m.per}${m.recorded ? '' : ' worked out from the usual price'}` : ''}.`, data: view };
+      },
+    });
+
+    ctx.addTool({
+      name: 'remove_measure', title: 'Forget a measure of an item', destructive: true,
+      description: 'Forget one of an item\'s measures, e.g. its weight, or "items" when 1 pack = 5 items.',
+      input: z.object({
+        item: z.string().min(1).max(200).describe('The item'),
+        unit: z.string().min(1).max(20).describe('The measure\'s unit, e.g. "kg" or "item"'),
+      }),
+      async run({ item, unit }) {
+        const product = await ctx.core.resolve.product(item);
+        const key = unitKey(unit);
+        const cur = measuresOf(pricing(product));
+        if (!cur.some((m) => m.unit === key)) throw new ValidationError(`${product.name} has no measure in ${unit}. It has: ${cur.map((m) => m.unit).join(', ') || 'none'}.`);
+        await ctx.core.products.updateField<unknown>(product.id, 'pricing', (c) => withMeasures(PricingFields.parse(c ?? {}), measuresOf(PricingFields.parse(c ?? {})).filter((m) => m.unit !== key)));
+        return { text: `${product.name} no longer has a measure in ${unit}.`, data: { unit: key } };
       },
     });
 

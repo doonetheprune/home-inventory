@@ -68,8 +68,11 @@ export function createShoppingService(ctx: CoreContext, stock: ReturnType<typeof
     async purchase(raw: Purchase) {
       const input = PurchaseSchema.parse(raw);
       if (input.shopId && !(await ctx.storage.shops.get(input.shopId))) throw new NotFoundError('Shop', input.shopId);
-      const results = await stock.addMany(input.items.map((item) => ({ productId: item.productId, quantity: item.quantity, placeId: item.placeId ?? undefined, note: input.shopId ? 'Bought' : '' })));
-      ctx.publish('shopping.purchased', { shopId: input.shopId ?? null, items: input.items });
+      const results = await stock.addMany(input.items.map((item) => ({
+        productId: item.productId, quantity: item.quantity, placeId: item.placeId ?? undefined, note: input.shopId || input.evidence ? 'Bought' : '',
+        ...(item.expiresOn !== undefined ? { expiresOn: item.expiresOn } : {}), ...(item.variantId !== undefined ? { variantId: item.variantId } : {}),
+      })));
+      ctx.publish('shopping.purchased', { shopId: input.shopId ?? null, items: input.items, evidence: input.evidence ?? null });
       return results;
     },
   };

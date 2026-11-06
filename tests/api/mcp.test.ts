@@ -42,12 +42,12 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
     expect(names).toEqual([
-      'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'move_item', 'add_expected', 'mark_arrived', 'confirm_order', 'cancel_order', 'add_to_shopping_list',
+      'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'finish_item', 'move_item', 'add_expected', 'mark_arrived', 'confirm_order', 'cancel_order', 'add_to_shopping_list',
       'remove_from_shopping_list', 'put_back', 'mark_charged', 'renew', 'shopping_list', 'expiring',
       'list_shops', 'add_shop', 'change_shop', 'remove_shop', 'list_places', 'add_place', 'add_storage_grid', 'change_place', 'remove_place',
       'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
-      'correct_stock', 'deliveries', 'recent_changes',
-      'check_price', 'set_usual_price', 'convert_price', 'set_item_size',
+      'correct_stock', 'deliveries', 'recent_changes', 'list_items', 'get_place', 'identify_code', 'bought',
+      'check_price', 'set_usual_price', 'convert_price', 'set_item_size', 'get_price', 'set_measure', 'remove_measure',
     ]);
     for (const t of tools) {
       expect(t.description!.length, t.name).toBeGreaterThan(30);
@@ -58,8 +58,8 @@ describe('MCP server', () => {
     // Clients may skip asking before tools that only add; ones that take away or overwrite say so.
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
-      'use_stock', 'move_item', 'mark_arrived', 'cancel_order', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
-      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
+      'use_stock', 'finish_item', 'move_item', 'mark_arrived', 'cancel_order', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
+      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size', 'set_measure', 'remove_measure',
     ]);
   });
 
@@ -215,7 +215,7 @@ describe('MCP server', () => {
     r = await client.callTool({ name: 'add_brand', arguments: { item: 'oats', name: 'Scott\'s 1 kg', barcode: '5000108020523' } });
     expect(text(r)).toBe('Added Scott\'s 1 kg to Oats with barcode 5000108020523.');
     r = await client.callTool({ name: 'get_item', arguments: { item: '5000108020523' } });
-    expect(text(r)).toContain('Brands: Scott\'s 1 kg.');
+    expect(text(r)).toContain('Brands: Scott\'s 1 kg (barcode 5000108020523).');
     r = await client.callTool({ name: 'remove_brand', arguments: { item: 'oats', brand: '5000108020523' } });
     expect(text(r)).toBe('Removed Scott\'s 1 kg from Oats.');
 

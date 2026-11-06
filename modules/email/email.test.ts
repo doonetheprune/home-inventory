@@ -249,6 +249,21 @@ describe('reading order emails', () => {
     // 3 hours before 09:30 in London (GMT in November).
     expect((await call(core, 'GET', '/')).next).toEqual({ at: '2026-11-06T06:30:00.000Z', why: 'around the Tesco delivery' });
   });
+  it('lets assistants see the emails read, match a line, and leave one out', async () => {
+    const { core, ai, bread, tesco } = await household([CONFIRMED]);
+    await connect(core);
+    await call(core, 'PUT', '/settings', { rules: rules(tesco.id) });
+    await call(core, 'POST', '/check');
+    const listed = (await core.assistant.call('order_emails', { waiting_only: true })).text;
+    expect(listed).toContain('Tesco order 7712 3409 (id m1)');
+    expect(listed).toContain('line 3: "Garlic bread" ×1, 1.00');
+    expect((await core.assistant.call('match_order_line', { email: '7712 3409', line: 3, item: 'garlic bread', quantity: 2 })).text).toBe('"Garlic bread" is Garlic bread: 2 on the way from Tesco. Larder will know it next time.');
+    expect((await core.products.summary(bread.id)).expected).toBe(2);
+    expect(ai.remembered).toEqual([[tesco.id, 'Garlic bread', bread.id, 2]]);
+    expect((await core.assistant.call('order_emails', { waiting_only: true })).text).toBe('No order lines are waiting.');
+    expect((await core.assistant.call('skip_order_line', { email: 'm1', line: 2 })).text).toMatch(/^Left out "/);
+    await expect(core.assistant.call('match_order_line', { email: 'm1', line: 9, item: 'garlic bread' })).rejects.toThrow('That email has 3 lines.');
+  });
 });
 
 describe('which emails are which', () => {
@@ -302,4 +317,5 @@ describe('when to check', () => {
     expect(list).toEqual([{ why: 'around the Toolstation delivery', from: at('2026-11-07T05:00:00Z'), until: at('2026-11-07T22:00:00Z'), every: 5 }]);
     expect(nextCheck(at('2026-11-08T00:00:00Z'), at('2026-11-08T00:00:00Z'), list, timing)).toBeNull();
   });
+
 });

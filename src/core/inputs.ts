@@ -3,7 +3,7 @@
  * against these, so they also document the API.
  */
 import { z } from 'zod';
-import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, Shop, Variant } from './model';
+import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, PurchaseEvidence, Shop, Variant } from './model';
 
 /**
  * A partial version of an object schema for PATCH requests, with defaults
@@ -80,6 +80,8 @@ export const StockUse = z.object({
   /** Only use stock from this place (usual or current). */
   placeId: Id.optional(),
   note: z.string().max(200).optional(),
+  /** Opened and still being used, not finished (the butter in the fridge): it's the open one from today. Things that last a set time are always started by using one. */
+  open: z.boolean().optional(),
 });
 export type StockUse = z.input<typeof StockUse>;
 
@@ -120,6 +122,8 @@ export const StockExpect = z.object({
   reference: z.string().max(80).nullable().optional(),
   eta: IsoDate.nullable().optional(),
   placeId: Id.nullable().optional(),
+  /** What the whole line cost, when the order says: kept so the purchase is recorded with its price when it arrives. */
+  price: z.number().min(0).nullable().optional(),
   /**
    * Not confirmed yet (a filled online basket before checkout): a pending order. Without it,
    * stock in a pending order from the same shop is confirmed first rather than added again.
@@ -165,10 +169,16 @@ export const PurchaseItem = z.object({
   placeId: Id.nullable().optional(),
   /** Price paid for the whole line, in the household currency. */
   price: z.number().min(0).optional(),
+  /** Defaults to today plus the product's shelf life. */
+  expiresOn: IsoDate.nullable().optional(),
+  /** The brand or pack bought. */
+  variantId: Id.nullable().optional(),
 });
 export const Purchase = z.object({
   shopId: Id.nullable().optional(),
   items: z.array(PurchaseItem).min(1),
+  /** How it was bought, kept with the purchase history: a receipt's photo, an online order. */
+  evidence: PurchaseEvidence.optional(),
 });
 export type Purchase = z.input<typeof Purchase>;
 

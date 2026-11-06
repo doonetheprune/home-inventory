@@ -142,6 +142,8 @@ export function summarise(world: World, product: Product): ProductSummary {
     flat,
     nextExpiry,
     daysToExpiry,
+    // Opened (or started) and not finished; things that last a set time stop being in use when their days are up.
+    inUse: !product.wish && (product.lastsDays ? !!supply?.inUseUntil : !!product.inUseSince),
     inUseUntil: supply?.inUseUntil ?? null,
     runsOutOn: supply?.runsOutOn ?? null,
     daysToRunOut: supply ? daysBetween(world.today, supply.runsOutOn) : null,
@@ -179,8 +181,8 @@ export function eligibleShops(product: Product, shops: Shop[]): Shop[] {
 
 export function needsBuying(s: ProductSummary): 'low' | 'out' | 'manual' | null {
   if (s.product.wish) return null;
-  // Not out while one that lasts a set time once started is still in use.
-  if (s.status.low) return s.inStock + s.expected + s.pending <= 0 && !s.inUseUntil ? 'out' : 'low';
+  // Not out while one is open or in use.
+  if (s.status.low) return s.inStock + s.expected + s.pending <= 0 && !s.inUse ? 'out' : 'low';
   if (s.product.onShoppingList) return 'manual';
   return null;
 }

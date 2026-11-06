@@ -163,19 +163,74 @@ export default defineModule({
       },
     });
 
+    async function replaced(device: string) {
+      const d = await findDevice(device);
+      const battery = await linkedBattery(d.id);
+      if (!battery) throw new ValidationError(`Link a battery type to ${d.name} in Larder first.`);
+      const need = d.batteryQuantity ?? 1;
+      const s = await core.stock.use({ productId: battery.product.id, quantity: need, note: `Into ${d.name}` });
+      await devices.put(d.id, { ...d, low: false, updatedAt: core.now() });
+      const left = battery.product.rechargeable ? `${s.charged ?? 0} charged, ${s.flat ?? 0} flat` : `${amount(s.inStock, battery.product.unit)} left`;
+      return { message: `${d.name}: ${amount(need, battery.product.unit)} replaced. ${battery.product.name}: ${left}.`, device: d.name, item: battery.product.name, in_stock: s.inStock };
+    }
+
+    const DeviceRef = z.string().min(1).max(120).describe('The device, by name or Home Assistant device id');
     ctx.addAction({
       id: 'batteries_replaced', name: 'Batteries replaced',
       description: 'New batteries went into a device: takes them out of stock (rechargeables count as flat until charged).',
-      input: z.object({ device: z.string().min(1).max(120).describe('The device, by name or Home Assistant device id') }),
+      input: z.object({ device: DeviceRef }),
+      run: ({ device }) => replaced(device),
+    });
+
+    ctx.addTool({
+      name: 'battery_devices', title: 'Devices with batteries', readOnly: true,
+      description: 'The devices Home Assistant says have batteries, low ones first, with their level, the battery type each takes, and for a low one what to do (swap in a charged one, charge some, use a spare, wait for a delivery, or buy). Give a device for just that one.',
+      input: z.object({ device: DeviceRef.optional() }),
       async run({ device }) {
+        if (device) {
+          const d = await findDevice(device);
+          const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) });
+          return { text: `${d.name}${d.area ? ` (${d.area})` : ''}: battery ${d.level === null ? 'level not known' : `at ${d.level}%`}${d.low ? ', low' : ''}. ${a.message}`, data: a };
+        }
+        const list = await view();
+        if (!list.length) return { text: 'Larder hasn\'t been sent any devices with batteries. The Home Assistant integration sends them.', data: { devices: [] } };
+        const text = list.map((d) => `- ${d.name}${d.area ? ` (${d.area})` : ''}: ${d.level === null ? 'level not known' : `${d.level}%`}${d.low ? ', LOW' : ''}; takes ${d.batteries.length ? d.batteries.map((b) => b.name).join(' or ') : 'no battery type linked yet'}${d.batteryQuantity && d.batteryQuantity > 1 ? ` ×${d.batteryQuantity}` : ''}`).join('\n');
+        return { text, data: { devices: list.map((d) => ({ device: d.name, id: d.id, area: d.area, level: d.level, low: d.low, battery: d.batteries.map((b) => b.name) })) } };
+      },
+    });
+
+    ctx.addTool({
+      name: 'batteries_replaced', title: 'Batteries replaced in a device', destructive: true,
+      description: 'New batteries went into a device: takes them out of stock (rechargeables count as flat until charged) and clears its low flag.',
+      input: z.object({ device: DeviceRef }),
+      async run({ device }) {
+        const { message, ...data } = await replaced(device);
+        return { text: message, data };
+      },
+    });
+
+    ctx.addTool({
+      name: 'link_battery', title: 'Say which battery a device takes', destructive: true,
+      description: 'Link a battery item (e.g. "AA batteries") to a device that takes it, so a low battery says swap, charge or buy. A device takes one battery type: linking another replaces it. unlink: true takes the link off.',
+      input: z.object({
+        device: DeviceRef,
+        battery: z.string().min(1).max(200).describe('The battery item in Larder, e.g. "AA batteries"'),
+        unlink: z.boolean().optional().describe('True to take this link off'),
+      }),
+      async run({ device, battery, unlink }) {
         const d = await findDevice(device);
-        const battery = await linkedBattery(d.id);
-        if (!battery) throw new ValidationError(`Link a battery type to ${d.name} in Larder first.`);
-        const need = d.batteryQuantity ?? 1;
-        const s = await core.stock.use({ productId: battery.product.id, quantity: need, note: `Into ${d.name}` });
-        await devices.put(d.id, { ...d, low: false, updatedAt: core.now() });
-        const left = battery.product.rechargeable ? `${s.charged ?? 0} charged, ${s.flat ?? 0} flat` : `${amount(s.inStock, battery.product.unit)} left`;
-        return { message: `${d.name}: ${amount(need, battery.product.unit)} replaced. ${battery.product.name}: ${left}.`, device: d.name, item: battery.product.name, in_stock: s.inStock };
+        const product = await core.resolve.product(battery);
+        if (unlink) {
+          if (!product.haDeviceIds.includes(d.id)) throw new ValidationError(`${d.name} isn't linked to ${product.name}.`);
+          await core.products.update(product.id, { haDeviceIds: product.haDeviceIds.filter((x) => x !== d.id) });
+          return { text: `${d.name} is no longer linked to ${product.name}.`, data: { device: d.name, battery: null } };
+        }
+        for (const other of (await core.products.list()).filter((x) => x.product.id !== product.id && x.product.haDeviceIds.includes(d.id))) {
+          await core.products.update(other.product.id, { haDeviceIds: other.product.haDeviceIds.filter((x) => x !== d.id) });
+        }
+        if (!product.haDeviceIds.includes(d.id)) await core.products.update(product.id, { haDeviceIds: [...product.haDeviceIds, d.id] });
+        const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) });
+        return { text: `${d.name} takes ${product.name}.${d.low ? ` It's low: ${a.message}` : ''}`, data: { device: d.name, battery: product.name } };
       },
     });
 

@@ -191,3 +191,61 @@ describe('things that last a set time once started', () => {
     expect((await core.products.list()).find((p) => p.product.name === 'Contact lenses')?.product.lastsDays).toBe(30);
   });
 });
+
+describe('opened, not finished', () => {
+  it('marks one open, is the last one open rather than out, and finishes it', async () => {
+    const core = await makeCore();
+    const aldi = await core.shops.create({ name: 'Aldi' });
+    const butter = await core.products.create({ name: 'Butter', unit: 'pack', minQuantity: 1, preferredShopIds: [aldi.id] });
+    await core.stock.add({ productId: butter.id, quantity: 2 });
+    let s = await core.stock.use({ productId: butter.id, quantity: 1, open: true });
+    expect([s.inStock, s.inUse, s.product.inUseSince, s.status.low]).toEqual([1, true, '2026-10-28', false]);
+    expect((await core.products.get(butter.id)).history[0]).toMatchObject({ kind: 'use', note: 'Opened' });
+
+    // Opening the last one: low and on the list, but not out while one is open.
+    core.clock.set('2026-11-02T09:00:00.000Z');
+    s = await core.stock.use({ productId: butter.id, quantity: 1, open: true });
+    expect([s.inStock, s.inUse, s.product.inUseSince, s.status.low]).toEqual([0, true, '2026-11-02', true]);
+    const reasons = async () => (await core.shopping.forShop(aldi.id)).groups.flatMap((g) => g.items).map((i) => [i.summary.product.name, i.reason]);
+    expect(await reasons()).toEqual([['Butter', 'low']]);
+
+    // Finished: none open, so it's out.
+    s = await core.stock.finish(butter.id);
+    expect([s.inUse, s.product.inUseSince]).toEqual([false, null]);
+    expect(await reasons()).toEqual([['Butter', 'out']]);
+    expect((await core.products.get(butter.id)).history[0]).toMatchObject({ kind: 'finish', quantity: 0 });
+    await expect(core.stock.finish(butter.id)).rejects.toThrow("There's no butter open.");
+
+    // Used without saying it was opened: nothing is open.
+    const cream = await core.products.create({ name: 'Cream', minQuantity: 1, preferredShopIds: [aldi.id] });
+    await core.stock.add({ productId: cream.id, quantity: 1 });
+    s = await core.stock.use({ productId: cream.id, quantity: 1 });
+    expect([s.inUse, s.product.inUseSince]).toEqual([false, null]);
+  });
+
+  it('can stop one that lasts a set time early', async () => {
+    const core = await makeCore();
+    const sensor = await core.products.create({ name: 'Glucose sensor', lastsDays: 14, autoUse: true });
+    await core.stock.add({ productId: sensor.id, quantity: 2 });
+    await core.stock.use({ productId: sensor.id, quantity: 1 });
+    const s = await core.stock.finish(sensor.id);
+    expect([s.inUse, s.inUseUntil, s.runsOutOn]).toEqual([false, null, '2026-11-11']);
+    // Nothing in use, so nothing starts by itself.
+    core.clock.set('2026-11-20T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).started).toBe(0);
+    await expect(core.stock.finish(sensor.id)).rejects.toThrow("There's no glucose sensor open or in use.");
+  });
+
+  it('works from Home Assistant and assistants', async () => {
+    const core = await makeCore();
+    const coffee = await core.products.create({ name: 'Ground coffee', unit: 'bag', minQuantity: 1 });
+    await core.stock.add({ productId: coffee.id, quantity: 1 });
+    const opened = await core.automation.run('use_stock', { item: 'ground coffee', opened: true });
+    expect(opened.message).toBe('Ground coffee: opened 1 bag. 0 bags left, running low.');
+    expect(opened.open).toBe(true);
+    expect((await core.assistant.call('get_item', { item: 'ground coffee' })).text).toContain('One open since 2026-10-28 (today), not counted in stock: it is the last one.');
+    expect((await core.assistant.call('search', { query: 'coffee' })).text).toContain('one open since 2026-10-28');
+    const done = await core.assistant.call('finish_item', { item: 'ground coffee' });
+    expect(done.text).toBe('Ground coffee: the open one is finished. 0 bags left, running low.');
+  });
+});

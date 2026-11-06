@@ -91,7 +91,7 @@ describe('online shopping: planning and filling a basket', () => {
     const r = await core.assistant.call('add_expected', { item: 'toilet roll', quantity: 33, source: 'Tesco', reference: 'TSC-998', eta: '2026-10-30' });
     expect(r.text).toBe('Toilet roll: 33 rolls in the pending order confirmed, now on the way.');
     const entries = (await core.products.get(loo.id)).entries.filter((e) => e.status !== 'in_stock');
-    expect(entries.map((e) => [e.status, e.quantity, e.expected])).toEqual([['expected', 33, { source: 'Tesco delivery', reference: 'TSC-998', eta: '2026-10-30' }]]);
+    expect(entries.map((e) => [e.status, e.quantity, e.expected])).toEqual([['expected', 33, { source: 'Tesco delivery', reference: 'TSC-998', eta: '2026-10-30', unitPrice: 0.363636 }]]);
   });
 
   it('only buys what belongs on that shop\'s list, and says which linked items are bought elsewhere', async () => {

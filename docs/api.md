@@ -19,14 +19,15 @@ Everything the web app does goes through the REST API, so integrations can do it
 | `GET /products/{id}` | One product: stock by place, brands and barcodes, shops, history |
 | `POST /products` | New product `{ name, aliases, categoryId, unit, minQuantity, shelfLifeDays, lastsDays, autoUse, preferredShopIds, defaultPlaceId, wish }`. `lastsDays`: for things used one after another, how long each lasts once started (`autoUse`: the next comes out of stock and starts by itself, checked hourly); summaries then say `inUseUntil`, `runsOutOn` and `daysToRunOut`, and it's low (`status.runningOut`) when it runs out within the warning window |
 | `POST /stock/add` | `{ productId, quantity, placeId?, expiresOn? }` |
-| `POST /stock/use` | `{ productId, quantity, placeId? }` (soonest-expiring first; rechargeables go flat; with `lastsDays`, sets `inUseSince` to today) |
+| `POST /stock/use` | `{ productId, quantity, placeId?, open? }` (soonest-expiring first; rechargeables go flat; with `lastsDays`, or `open`, sets `inUseSince` to today: one is open) |
+| `POST /products/{id}/finished` | The open one is finished: `inUseSince` is cleared |
 | `POST /stock/move` | `{ productId, toPlaceId, mode: "temporary" \| "permanent", quantity? }` |
 | `POST /stock/return` | `{ productId }` puts out-of-place stock back |
-| `POST /stock/expect` | `{ productId, quantity, source: "Tesco delivery", eta? }` ordered, not arrived |
+| `POST /stock/expect` | `{ productId, quantity, source: "Tesco delivery", eta?, price? }` ordered, not arrived. `price` is the line's, kept with the purchase when it arrives |
 | `POST /stock/arrive` | `{ source }` or `{ productId, quantity }` the delivery arrived |
 | `GET /shopping` | Count per shop and the suggested shop |
 | `GET /shopping/{shopId}` | That shop's list, grouped by category |
-| `POST /shopping/purchase` | `{ shopId, items: [{ productId, quantity, price? }] }` bought: adds to stock |
+| `POST /shopping/purchase` | `{ shopId, items: [{ productId, quantity, price?, placeId?, expiresOn?, variantId? }], evidence? }` bought: adds to stock. `evidence` (a receipt's photo id, source, order number, bought on…) goes to the purchase history |
 | `GET /identify?code=…` | What a barcode, QR label, place code or NFC tag is |
 | `POST /identify/remember` | Name an unknown barcode once |
 | `GET /places/tree`, `GET /places/{id}` | Places with counts; what's in one |

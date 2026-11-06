@@ -65,4 +65,22 @@ describe('batteries module', () => {
     await call(core, 'PUT', '/devices', { devices: [{ id: 'remote', name: 'TV remote' }] });
     expect(((await call(core, 'GET', '/devices')) as unknown[]).length).toBe(1);
   });
+
+  it('answers assistants: devices and advice, batteries replaced, and which battery a device takes', async () => {
+    const { core, aa } = await setup();
+    await core.stock.add({ productId: aa.id, quantity: 4 });
+    const list = (await core.assistant.call('battery_devices', {})).text;
+    expect(list.split('\n')[0]).toBe('- Hall smoke alarm (Hall): 18%, LOW; takes 9V batteries');
+    expect(list).toContain('- Front door sensor: 90%; takes no battery type linked yet');
+    expect((await core.assistant.call('battery_devices', { device: 'tv remote' })).text).toBe('TV remote (Lounge): battery at 40%. TV remote needs 2 batteries. Swap in charged AA batteries from Hall drawer (4 charged).');
+    expect((await core.assistant.call('batteries_replaced', { device: 'TV remote' })).text).toBe('TV remote: 2 batteries replaced. AA batteries: 2 charged, 2 flat.');
+
+    const coin = await core.products.create({ name: 'CR2032 coin cells', unit: 'battery' });
+    expect((await core.assistant.call('link_battery', { device: 'front door sensor', battery: 'CR2032' })).text).toBe('Front door sensor takes CR2032 coin cells.');
+    expect((await core.products.summary(coin.id)).product.haDeviceIds).toEqual(['door']);
+    // A device takes one type: linking another moves it.
+    await core.assistant.call('link_battery', { device: 'door', battery: 'AA batteries' });
+    expect((await core.products.summary(coin.id)).product.haDeviceIds).toEqual([]);
+    expect((await core.assistant.call('link_battery', { device: 'door', battery: 'AA batteries', unlink: true })).text).toBe('Front door sensor is no longer linked to AA batteries.');
+  });
 });

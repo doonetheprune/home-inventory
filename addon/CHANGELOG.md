@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- **Mark one as open:** **Use** has **Opened, still using it** (the butter in the fridge). It comes out of the count and shows "One open since 3 Nov" until **Finished the open one**. With none left but one open, the item is **Last one open** and on the shopping list; only when nothing's open is it **Out**.
+- **Purchase history:** every purchase is kept with what it cost, the shop, and the evidence: the receipt's photo (Add from receipt keeps it now), or the online order with its number and the day it was ordered, and its price when the order email or the basket said. Add on an item's page takes a price, shop and receipt photo too. Each item shows what it was bought for, and the new **Purchases** page shows what was spent this month, last month, this year or ever, by shop, item and month. Tap a purchase to correct it or add the receipt's photo later. Home Assistant gets **Spent this month**.
+- **Several measures of an item:** on the price card, "1 pack = 1 kg" and "1 pack = 5 items", each with its own price for buying it that way (loose by the kg, singles), or worked out from the usual price. Packs can be checked in any of them ("3 breasts for £3.30").
+- **Assistants can do everything the app does:** new tools for opening and finishing, measures and prices, purchase history and spending, lists of items (low, out of place, to sort, open…), what's in a place, what a code is, several things bought at once, batteries, order email lines and online shopping packs, and the missing options on the others (prices, brands, notes, links, moving from To sort…). Home Assistant's actions gain them too: **Finished the open one**, and price, shop and brand on **Add stock**.
+- Plus everything below, from 0.7.6, which wasn't released on its own.
+
 ## 0.7.6
 
 - **Things used one after another:** for a glucose sensor, contact lenses or a water filter, set **Each one lasts** on the item (e.g. 14 days). Using one starts it, and the item says how long the one in use has left and when the rest run out: "One in use until 20 Nov. With 3 more, enough until 1 Jan." The day the one in use was started can be changed on Edit.

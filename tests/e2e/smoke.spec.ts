@@ -369,6 +369,47 @@ test('works out when things used one after another run out', async ({ page }, in
   await expect(page.getByText('1 day once started, the next starts automatically')).toBeVisible();
 });
 
+test('marks one open, keeps what was paid, and records an item\'s measures', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Butter ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.locator('.numfield', { hasText: 'Running low below' }).getByRole('button', { name: 'Set' }).click();
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+
+  // Another, bought at Aldi for £2.10: it's kept in the purchase history.
+  await page.locator('.dock').getByRole('button', { name: 'Add' }).click();
+  await page.getByLabel('Price paid (optional)').fill('2.10');
+  await page.locator('.sheet').getByLabel('Shop').selectOption({ label: 'Aldi' });
+  await page.getByRole('button', { name: /^Add 1/ }).click();
+  await expect(page.locator('.toast')).toContainText('Added 1');
+  await expect(page.locator('.section', { hasText: 'Bought' }).getByText('£2.10')).toBeVisible();
+
+  // Opened, still using it: one open, and the last one open is "Last one open", not "Out".
+  for (let i = 0; i < 2; i++) {
+    await page.locator('.dock').getByRole('button', { name: 'Use' }).click();
+    await page.getByRole('switch', { name: 'Opened, still using it' }).click();
+    await page.getByRole('button', { name: /^Open 1/ }).click();
+    await expect(page.locator('.toast')).toContainText('Opened 1');
+  }
+  await expect(page.getByText(/One open since .*, the last one\./)).toBeVisible();
+  await expect(page.locator('.pill', { hasText: 'Last one open' })).toBeVisible();
+  await page.getByRole('button', { name: 'Finished the open one' }).click();
+  await expect(page.locator('.pill', { hasText: /^Out$/ })).toBeVisible();
+
+  // A measure on the price card: one is 250 g.
+  await page.locator('.label', { hasText: 'Measures' }).getByRole('button', { name: 'Add' }).click();
+  await page.getByLabel('How many', { exact: true }).fill('250');
+  await page.getByLabel('Measure unit').fill('g');
+  await page.getByRole('button', { name: 'Save measure' }).click();
+  await expect(page.getByText('One = 250 g')).toBeVisible();
+
+  // Purchases: what was spent, and every purchase.
+  await page.goto('/#/m/purchases/');
+  await expect(page.getByRole('heading', { name: 'Purchases' })).toBeVisible();
+  await expect(page.getByText(`${name} · 1 at Aldi`)).toBeVisible();
+});
+
 test('stock opens on the types of thing, and each type lists its items', async ({ page }) => {
   await signIn(page);
   await page.goto('/#/stock');

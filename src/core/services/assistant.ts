@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
+import { addBrowseTools } from './assistant-browse';
 import { addManageTools, finders } from './assistant-manage';
 import { placesText } from './world';
 import type { Automation } from './automation';
@@ -91,6 +92,7 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   const where = placesText(s);
   if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
+  if (s.inUse && !p.lastsDays && p.inUseSince) parts.push(`one open since ${p.inUseSince}`);
   if (s.status.low) parts.push('running low');
   if (s.runsOutOn) parts.push(`enough until ${when(ctx, s.runsOutOn)}`);
   if (s.nextExpiry && s.status.expiringSoon) parts.push(`expires ${when(ctx, s.nextExpiry)}`);
@@ -127,9 +129,11 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   if (p.stockUpTo) lines.push(`Stock up to ${amount(p.stockUpTo, p.unit)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
   if (p.lastsDays && d.runsOutOn) lines.push(`${lastsText(ctx, d)}${d.status.runningOut ? ': it is low now' : ''}.`);
+  else if (d.inUse && p.inUseSince) lines.push(`One open since ${when(ctx, p.inUseSince)}, not counted in stock${d.inStock + d.expected + d.pending <= 0 ? ': it is the last one' : ''}.`);
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
-  if (d.variants.length) lines.push(`Brands: ${d.variants.map((v) => v.name).join('; ')}.`);
+  if (d.variants.length) lines.push(`Brands: ${d.variants.map((v) => `${v.name}${v.barcodes.length ? ` (barcode ${v.barcodes.join(', ')})` : ''}${v.shopCodes.length ? ` (shop code ${v.shopCodes.map((c) => `${c.code}${d.shops.find((s) => s.id === c.shopId) ? ` at ${d.shops.find((s) => s.id === c.shopId)!.name}` : ''}`).join(', ')})` : ''}`).join('; ')}.`);
+  if (p.links.length) lines.push(`Links: ${p.links.map((l) => (l.title ? `${l.title} ${l.url}` : l.url)).join(', ')}`);
   if (p.notes) lines.push(`Notes: ${p.notes}`);
   lines.push(`id: ${p.id}`);
   return lines.join('\n');
@@ -242,6 +246,9 @@ export function createAssistant(deps: {
       barcode: z.string().max(64).optional(),
       brand: z.string().max(160).optional().describe('The brand as the person said it or as on the label, e.g. "Flahavan\'s" or "Heinz Baked Beanz 415 g". Saved as the item\'s brand, with the barcode, and used to find a photo of it'),
       wish_list: z.boolean().optional().describe('True to put it on the wish list instead (wanted, none yet)'),
+      rechargeable: z.boolean().optional().describe('True for rechargeable batteries and similar (stock is charged or flat)'),
+      notes: z.string().max(5000).optional(),
+      links: z.array(z.string().url().max(2000)).max(10).optional().describe('Web pages for it, e.g. where to buy it or its manual'),
     }),
     async run(i) {
       const existing = await resolve.product(i.name).catch(() => null);
@@ -257,6 +264,7 @@ export function createAssistant(deps: {
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
         shelfLifeDays: i.shelf_life_days ?? null, lastsDays: i.lasts_days ?? null, autoUse: i.auto_use ?? false, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        rechargeable: i.rechargeable ?? false, notes: i.notes ?? '', links: (i.links ?? []).map((url) => ({ url, title: '' })),
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
       const brand = i.brand?.trim();
@@ -280,7 +288,8 @@ export function createAssistant(deps: {
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. For things that last a set time once started (a sensor, lenses), it\'s how to say a new one was started today.', true);
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. For things that last a set time once started (a sensor, lenses), it\'s how to say a new one was started today. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item.', true);
+  fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or one that lasts a set time came off early. Use use_stock with opened: true when one is opened.', true);
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
@@ -295,8 +304,14 @@ export function createAssistant(deps: {
   addTool({
     name: 'shopping_list', title: 'Shopping list', readOnly: true,
     description: 'What to buy. With a shop: everything that shop can supply (its favourites plus items from any shop in categories it sells). Without: how many things each shop can supply and which shop to go to.',
-    input: z.object({ shop: z.string().max(80).optional().describe('e.g. "Aldi". Leave out for an overview of every shop') }),
+    input: z.object({ shop: z.string().max(80).optional().describe('e.g. "Aldi". Leave out for an overview of every shop; "none" for the things no shop sells') }),
     async run({ shop }) {
+      if (shop && /^(none|no shop|nowhere|unassigned|no shops)$/i.test(shop.trim())) {
+        const groups = await shopping.unassigned();
+        const items = groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, category: g.category?.name ?? 'Other' })));
+        if (!items.length) return { text: 'Everything to buy can come from one of the shops.', data: { items } };
+        return { text: [`No shop sells these (${items.length}): give them a shop with change_item, or say which categories a shop sells with change_shop.`, ...groups.map((g) => `${g.category?.name ?? 'Other'}: ${g.items.map((it) => `${it.summary.product.name} ×${amount(it.quantity, it.summary.product.unit)}`).join(', ')}`)].join('\n'), data: { items } };
+      }
       if (!shop) {
         const s = await shopping.summary();
         const best = s.shops.find((x) => x.shop.id === s.suggestedShopId)?.shop.name;
@@ -330,6 +345,7 @@ export function createAssistant(deps: {
   });
 
   addManageTools(addTool, deps);
+  addBrowseTools(addTool, { ...deps, line: (s) => summaryLine(ctx, s) });
 
   return {
     addTool,

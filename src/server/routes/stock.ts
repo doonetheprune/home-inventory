@@ -13,6 +13,9 @@ export function registerStockRoutes(app: ZodApp, { core }: { core: CoreApi }) {
   app.post('/stock/use', {
     schema: { tags, summary: 'Use stock (soonest-expiring first). For rechargeables this marks them flat.', body: StockUse, response: res },
   }, (r) => core.stock.use(r.body));
+  app.post('/products/:id/finished', {
+    schema: { tags, summary: 'The open one is finished (or one that lasts a set time came off early): none is open now', params: IdParams, response: res },
+  }, (r) => core.stock.finish(r.params.id));
   app.post('/stock/move', {
     schema: { tags, summary: 'Move stock', description: '`temporary` leaves it out of place until it goes back; `permanent` changes where it usually lives.', body: StockMove, response: res },
   }, (r) => core.stock.move(r.body));

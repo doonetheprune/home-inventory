@@ -17,7 +17,7 @@ import { loadWorld, summarise, type World } from './world';
 const EPS = 1e-9;
 
 function entryKey(e: StockEntry): string {
-  return [e.status, e.placeId, e.currentPlaceId, e.expiresOn, e.variantId, e.charge, e.expected?.source, e.expected?.reference, e.expected?.eta].join('|');
+  return [e.status, e.placeId, e.currentPlaceId, e.expiresOn, e.variantId, e.charge, e.expected?.source, e.expected?.reference, e.expected?.eta, e.expected?.unitPrice ?? ''].join('|');
 }
 
 /** Merge identical batches and drop empty ones. */
@@ -157,9 +157,9 @@ export function createStockService(ctx: CoreContext) {
     return { wish: false, onShoppingList: false };
   }
 
-  /** Things that last a set time once started: using one starts it today. */
-  function started(product: Product): Partial<Product> | undefined {
-    return product.lastsDays ? { inUseSince: ctx.today() } : undefined;
+  /** Using one of something that lasts a set time once started starts it today, and so does opening anything. */
+  function started(product: Product, open?: boolean): Partial<Product> | undefined {
+    return product.lastsDays || open ? { inUseSince: ctx.today() } : undefined;
   }
 
   /** Pending entries chosen by source (a whole order), entry ids, or one item's (optionally from one source). */
@@ -266,8 +266,8 @@ export function createStockService(ctx: CoreContext) {
       const input = In.StockUse.parse(raw);
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
-      const movements = takeFrom(t, work, input);
-      return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product));
+      const movements = takeFrom(t, work, { ...input, note: input.note ?? (input.open ? 'Opened' : undefined) });
+      return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product, input.open));
     },
 
     /** Several uses (a recipe's ingredients) that all happen, or none do. */
@@ -279,12 +279,20 @@ export function createStockService(ctx: CoreContext) {
         let c = changes.get(input.productId);
         if (!c) {
           const t = txn(world, input.productId);
-          c = { t, next: t.original.map((e) => ({ ...e })), movements: [], kind: t.product.rechargeable ? 'flat' : 'use', productUpdate: started(t.product) };
+          c = { t, next: t.original.map((e) => ({ ...e })), movements: [], kind: t.product.rechargeable ? 'flat' : 'use' };
           changes.set(input.productId, c);
         }
+        c.productUpdate = started(c.t.product, input.open) ?? c.productUpdate;
         c.movements.push(...takeFrom(c.t, c.next, input));
       }
       return commitAll([...changes.values()]);
+    },
+
+    /** The open one (or, for things that last a set time, the one in use) is finished: none is open now. */
+    async finish(productId: string): Promise<ProductSummary> {
+      const t = await begin(productId);
+      if (!t.before.inUse) throw new ValidationError(`There's no ${t.product.name.toLowerCase()} open${t.product.lastsDays ? ' or in use' : ''}.`);
+      return commit(t, t.original, [movement(t.product, 'finish', 0)], 'finish', { inUseSince: null });
     },
 
     /** Rechargeables: turn flat batteries back into charged ones. */
@@ -398,13 +406,15 @@ export function createStockService(ctx: CoreContext) {
       const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
       await assertPlace(placeId);
       const work = t.original.map((e) => ({ ...e }));
+      // Kept per one, so splitting or merging batches never has to share out a total.
+      const unitPrice = input.price === undefined || input.price === null ? null : Math.round((input.price / input.quantity) * 1_000_000) / 1_000_000;
       let left = input.quantity;
       if (!input.pending) {
         const waiting = work.filter((e) => e.status === 'pending' && e.expected && sameOrder(e.expected.source, input.source)).sort((a, b) => a.addedAt.localeCompare(b.addedAt));
         for (const e of waiting) {
           if (left <= EPS) break;
           const q = Math.min(e.quantity, left);
-          const confirmed: StockEntry = { ...e, id: q < e.quantity ? newId() : e.id, quantity: q, status: 'expected', expected: { source: e.expected!.source, reference: input.reference ?? e.expected!.reference, eta: input.eta ?? e.expected!.eta } };
+          const confirmed: StockEntry = { ...e, id: q < e.quantity ? newId() : e.id, quantity: q, status: 'expected', expected: { source: e.expected!.source, reference: input.reference ?? e.expected!.reference, eta: input.eta ?? e.expected!.eta, unitPrice: unitPrice ?? e.expected!.unitPrice ?? null } };
           if (q < e.quantity) {
             e.quantity = roundQty(e.quantity - q);
             work.push(confirmed);
@@ -416,7 +426,7 @@ export function createStockService(ctx: CoreContext) {
       if (left > EPS) {
         const entry = StockEntrySchema.parse({
           id: newId(), productId: t.product.id, quantity: left, placeId, addedAt: ctx.now(), status: input.pending ? 'pending' : 'expected',
-          expected: { source: input.source.trim(), reference: input.reference ?? null, eta: input.eta ?? null },
+          expected: { source: input.source.trim(), reference: input.reference ?? null, eta: input.eta ?? null, unitPrice },
           charge: t.product.rechargeable ? 'charged' : null,
         });
         work.push(entry);
@@ -487,6 +497,7 @@ export function createStockService(ctx: CoreContext) {
       const byProduct = new Map<string, typeof chosen>();
       for (const c of chosen) byProduct.set(c.entry.productId, [...(byProduct.get(c.entry.productId) ?? []), c]);
       const world = await loadWorld(ctx);
+      const { timeZone } = await ctx.household();
       const changes: Change[] = [];
       for (const [productId, items] of byProduct) {
         const t = txn(world, productId);
@@ -506,6 +517,18 @@ export function createStockService(ctx: CoreContext) {
         changes.push({ t, next: work, movements, kind: 'arrive', productUpdate: clearFlags(t.product) });
       }
       const products = await commitAll(changes);
+      // What arrived, for a purchase history: each line with its order and, when the order said, its price.
+      ctx.publish('stock.arrived', {
+        items: chosen.map(({ entry, quantity }) => {
+          const p = world.productById.get(entry.productId);
+          const each = entry.expected?.unitPrice ?? null;
+          return {
+            productId: entry.productId, name: p?.name ?? '', unit: p?.unit ?? 'each', quantity,
+            source: entry.expected?.source ?? null, reference: entry.expected?.reference ?? null,
+            orderedOn: localDate(new Date(entry.addedAt), timeZone), price: each === null ? null : Math.round(each * quantity * 100) / 100,
+          };
+        }),
+      });
       return { arrived: chosen.length, products, pendingLeft };
     },
 
@@ -571,7 +594,7 @@ export function createStockService(ctx: CoreContext) {
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'startNext'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'startNext'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

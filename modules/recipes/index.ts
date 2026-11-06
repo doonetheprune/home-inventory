@@ -817,11 +817,11 @@ export default defineModule({
     });
     ctx.addTool({
       name: 'recipe_to_shopping_list', title: 'Shop for a recipe',
-      description: 'Put the ingredients a saved recipe needs that the house has none or too little of on the shopping list.',
-      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"') }),
-      async run({ recipe }) {
+      description: 'Put the ingredients a saved recipe needs that the house has none or too little of on the shopping list. At its default preset, or another amount as for get_recipe (a preset, servings, times or what they have).',
+      input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"'), ...ScaleInput.shape }),
+      async run({ recipe, ...scale }) {
         const r = await find(recipe);
-        const added = await missingToList(r);
+        const added = await missingToList(r, scale);
         return { text: added.length ? `On the shopping list for ${r.title}: ${andList(added)}.` : `Everything ${r.title} needs is in the house.`, data: { id: r.id, added } };
       },
     });

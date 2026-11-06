@@ -62,7 +62,7 @@ export function finders(deps: Pick<ManageDeps, 'categories' | 'resolve'>) {
 
 const MOVEMENT_WORDS: Record<Movement['kind'], string> = {
   add: 'added', use: 'used', move: 'moved', return: 'put back', expect: 'ordered', arrive: 'arrived',
-  adjust: 'corrected', remove: 'removed', flat: 'went flat', charged: 'charged',
+  adjust: 'corrected', remove: 'removed', flat: 'went flat', charged: 'charged', finish: 'finished the open one',
 };
 
 export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
@@ -293,7 +293,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_item', title: 'Change an item', destructive: true,
-    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, which shops to buy it from, notes, wish list or rechargeable. Only the fields given change.',
+    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, places it\'s no longer kept in, which shops to buy it from, notes, links, wish list or rechargeable. Only the fields given change.',
     input: z.object({
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
@@ -311,6 +311,8 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       notes: z.string().max(5000).optional(),
       wish_list: z.boolean().optional().describe('True if it\'s wanted but the house has none'),
       rechargeable: z.boolean().optional().describe('True for rechargeable batteries and similar (stock is charged or flat)'),
+      links: z.array(z.string().url().max(2000)).max(10).optional().describe('Every web page for it (replaces the old list); [] for none'),
+      not_kept_in: z.array(z.string().max(200)).max(20).optional().describe('Places it\'s no longer kept in (it has none there now): they stop listing it at 0'),
     }),
     async run(i) {
       const p = await resolve.product(i.item);
@@ -321,6 +323,11 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       const categoryId = i.category === undefined ? undefined : i.category === null ? null : (await find.category(i.category)).id;
       const defaultPlaceId = i.usual_place === undefined ? undefined : i.usual_place === null ? null : (await find.place(i.usual_place)).id;
       const preferredShopIds = i.shops ? await Promise.all(i.shops.map(async (s) => (await find.shop(s)).id)) : undefined;
+      const leaving = i.not_kept_in ? await Promise.all(i.not_kept_in.map(async (x) => find.place(x))) : [];
+      if (leaving.length) {
+        const here = (await products.get(p.id)).stockByPlace.filter((x) => leaving.some((l) => l.id === x.id) && x.quantity > 0);
+        if (here.length) throw new ValidationError(`${p.name} still has stock in ${andList(here.map((x) => x.path))}. Move it (move_item, permanent) or use it up first.`);
+      }
       const next = await products.update(p.id, {
         ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit ? { unit: i.unit } : {}),
         ...(i.aliases ? { aliases: i.aliases } : {}), ...(i.minimum !== undefined ? { minQuantity: i.minimum } : {}),
@@ -331,6 +338,8 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         ...(defaultPlaceId !== undefined ? { defaultPlaceId } : {}),
         ...(preferredShopIds ? { preferredShopIds } : {}), ...(i.notes !== undefined ? { notes: i.notes } : {}),
         ...(i.wish_list !== undefined ? { wish: i.wish_list } : {}), ...(i.rechargeable !== undefined ? { rechargeable: i.rechargeable } : {}),
+        ...(i.links ? { links: i.links.map((url) => ({ url, title: p.links.find((l) => l.url === url)?.title ?? '' })) } : {}),
+        ...(leaving.length ? { keptInPlaceIds: (p.keptInPlaceIds ?? []).filter((id) => !leaving.some((l) => l.id === id)) } : {}),
       });
       const d = await products.get(next.id);
       const said: string[] = [];
@@ -341,6 +350,8 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
       if (i.lasts_days !== undefined) said.push(i.lasts_days === null ? 'no set time once started' : `each lasts ${i.lasts_days} day${i.lasts_days === 1 ? '' : 's'} once started`);
       if (i.in_use_since !== undefined) said.push(i.in_use_since ? `the one in use was started on ${i.in_use_since}` : 'none in use');
+      if (leaving.length) said.push(`no longer kept in ${andList(leaving.map((l) => l.name))}`);
+      if (i.links) said.push(i.links.length ? `${i.links.length} link${i.links.length === 1 ? '' : 's'}` : 'no links');
       if (i.auto_use !== undefined) said.push(i.auto_use ? 'the next one starts automatically when one runs out' : 'each one is started with use_stock');
       if (d.runsOutOn && (i.lasts_days || i.in_use_since !== undefined)) said.push(`enough until ${d.runsOutOn}${d.status.runningOut ? ', so it\'s low' : ''}`);
       return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.`, data: { id: next.id, name: next.name } };

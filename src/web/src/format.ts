@@ -81,8 +81,12 @@ export function statusPills(s: ProductSummary): Array<{ kind: PillKind; text: st
   if (s.product.wish) out.push({ kind: 'wish', text: 'Wish list' });
   if (s.status.expired) out.push({ kind: 'low', text: renewal ? 'Renewal overdue' : 'Expired' });
   else if (s.status.expiringSoon && s.nextExpiry) out.push({ kind: 'soon', text: expiryText(s.nextExpiry, s.daysToExpiry, renewal) });
-  // Something that lasts a set time once started says when it runs out (the one in use may still have days left).
-  if (s.status.low) out.push({ kind: 'low', text: s.status.runningOut && s.runsOutOn && (s.daysToRunOut ?? 0) > 0 ? `Runs out ${dayText(s.runsOutOn, s.daysToRunOut)}` : s.inStock + s.expected + s.pending <= 0 ? 'Out' : 'Low' });
+  // Something that lasts a set time once started says when it runs out (the one in use may still have days left);
+  // with none left but one marked open, it's the last one open, not out.
+  if (s.status.low) {
+    const none = s.inStock + s.expected + s.pending <= 0;
+    out.push({ kind: 'low', text: s.status.runningOut && s.runsOutOn && (s.daysToRunOut ?? 0) > 0 ? `Runs out ${dayText(s.runsOutOn, s.daysToRunOut)}` : none && s.inUse ? 'Last one open' : none ? 'Out' : 'Low' });
+  }
   if (s.status.outOfPlace && s.nowIn[0]) out.push({ kind: 'away', text: `Now in ${s.nowIn[0].name}` });
   if (s.status.hasExpected) out.push({ kind: 'coming', text: `+${num(s.expected)} on the way` });
   if (s.pending > 0) out.push({ kind: 'coming', text: `+${num(s.pending)} ordered, not confirmed` });

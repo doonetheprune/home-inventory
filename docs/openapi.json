@@ -244,6 +244,54 @@
             "items": {
               "type": "string"
             }
+          },
+          "measures": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "per": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "recorded": {
+                  "type": "boolean"
+                },
+                "recordedPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "unit",
+                "amount",
+                "label",
+                "price",
+                "per",
+                "recorded",
+                "recordedPrice"
+              ]
+            }
           }
         },
         "required": [
@@ -254,6 +302,287 @@
           "itemSize",
           "itemUnit",
           "packUnits"
+        ]
+      },
+      "PurchaseRecordInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PurchaseRecordInput",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shop": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "how": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "receipt",
+              "order"
+            ]
+          },
+          "on": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "at": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "receiptFileId": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "orderedOn": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "boughtOn": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "note": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "name",
+          "quantity",
+          "unit",
+          "price",
+          "currency",
+          "shopId",
+          "shop",
+          "how",
+          "on",
+          "at",
+          "evidence"
+        ]
+      },
+      "SpendingReportInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SpendingReportInput",
+        "type": "object",
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "unpriced": {
+            "type": "number"
+          },
+          "byShop": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "shop": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "shop"
+              ]
+            }
+          },
+          "byItem": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ]
+            }
+          },
+          "byMonth": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "month": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "month"
+              ]
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "currency",
+          "total",
+          "count",
+          "unpriced",
+          "byShop",
+          "byItem",
+          "byMonth"
         ]
       },
       "BatteryDeviceInput": {
@@ -2733,6 +3062,18 @@
                 "type": "null"
               }
             ]
+          },
+          "unitPrice": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2908,7 +3249,8 @@
               "adjust",
               "remove",
               "flat",
-              "charged"
+              "charged",
+              "finish"
             ]
           },
           "quantity": {
@@ -3090,6 +3432,10 @@
               "number",
               "null"
             ]
+          },
+          "inUse": {
+            "default": false,
+            "type": "boolean"
           },
           "inUseUntil": {
             "default": null,
@@ -3402,6 +3748,10 @@
               "number",
               "null"
             ]
+          },
+          "inUse": {
+            "default": false,
+            "type": "boolean"
           },
           "inUseUntil": {
             "default": null,
@@ -4429,6 +4779,55 @@
             "items": {
               "type": "string"
             }
+          },
+          "measures": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "per": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "recorded": {
+                  "type": "boolean"
+                },
+                "recordedPrice": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "unit",
+                "amount",
+                "label",
+                "price",
+                "per",
+                "recorded",
+                "recordedPrice"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -4438,7 +4837,303 @@
           "options",
           "itemSize",
           "itemUnit",
-          "packUnits"
+          "packUnits",
+          "measures"
+        ],
+        "additionalProperties": false
+      },
+      "PurchaseRecord": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/PurchaseRecord",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "shopId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shop": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "how": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "receipt",
+              "order"
+            ]
+          },
+          "on": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "at": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "receiptFileId": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "orderedOn": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "boughtOn": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "note": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "receiptFileId",
+              "source",
+              "reference",
+              "orderedOn",
+              "boughtOn",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "name",
+          "quantity",
+          "unit",
+          "price",
+          "currency",
+          "shopId",
+          "shop",
+          "how",
+          "on",
+          "at",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "SpendingReport": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/SpendingReport",
+        "type": "object",
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "unpriced": {
+            "type": "number"
+          },
+          "byShop": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "shop": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "shop"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "byItem": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "productId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "productId",
+                "name",
+                "quantity",
+                "unit"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "byMonth": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "month": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "total",
+                "count",
+                "month"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "currency",
+          "total",
+          "count",
+          "unpriced",
+          "byShop",
+          "byItem",
+          "byMonth"
         ],
         "additionalProperties": false
       },
@@ -7067,12 +7762,25 @@
                 "type": "null"
               }
             ]
+          },
+          "unitPrice": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "source",
           "reference",
-          "eta"
+          "eta",
+          "unitPrice"
         ],
         "additionalProperties": false
       },
@@ -7254,7 +7962,8 @@
               "adjust",
               "remove",
               "flat",
-              "charged"
+              "charged",
+              "finish"
             ]
           },
           "quantity": {
@@ -7446,6 +8155,10 @@
               "null"
             ]
           },
+          "inUse": {
+            "default": false,
+            "type": "boolean"
+          },
           "inUseUntil": {
             "default": null,
             "anyOf": [
@@ -7540,6 +8253,7 @@
           "flat",
           "nextExpiry",
           "daysToExpiry",
+          "inUse",
           "inUseUntil",
           "runsOutOn",
           "daysToRunOut",
@@ -7774,6 +8488,10 @@
               "null"
             ]
           },
+          "inUse": {
+            "default": false,
+            "type": "boolean"
+          },
           "inUseUntil": {
             "default": null,
             "anyOf": [
@@ -7892,6 +8610,7 @@
           "flat",
           "nextExpiry",
           "daysToExpiry",
+          "inUse",
           "inUseUntil",
           "runsOutOn",
           "daysToRunOut",
@@ -11353,6 +12072,9 @@
                   "note": {
                     "type": "string",
                     "maxLength": 200
+                  },
+                  "open": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -11363,6 +12085,38 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/{id}/finished": {
+      "post": {
+        "summary": "The open one is finished (or one that lasts a set time came off early): none is open now",
+        "tags": [
+          "Stock"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response",
@@ -11594,6 +12348,17 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "price": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
                       },
                       {
                         "type": "null"
@@ -12194,12 +12959,113 @@
                         "price": {
                           "type": "number",
                           "minimum": 0
+                        },
+                        "expiresOn": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "variantId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
                         "productId",
                         "quantity"
                       ]
+                    }
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "receiptFileId": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "reference": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "orderedOn": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "boughtOn": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "note": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
                     }
                   }
                 },
@@ -14056,6 +14922,44 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "measures": {
+                      "default": [],
+                      "maxItems": 10,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 20
+                          },
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "price": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "unit",
+                          "amount",
+                          "price"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -14064,7 +14968,8 @@
                     "basedOn",
                     "updatedAt",
                     "itemSize",
-                    "showPer"
+                    "showPer",
+                    "measures"
                   ],
                   "additionalProperties": false
                 }
@@ -14134,6 +15039,434 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/pricing/measures": {
+      "put": {
+        "summary": "Set an item's measures: 1 pack = 1 kg, 1 pack = 5 items, each with its price if known",
+        "tags": [
+          "Module: pricing"
+        ],
+        "description": "Replaces the list. At most one weight or volume (g, kg, ml or l), which is also the item's size; any other unit is another way of counting it. `price` is the usual price per one of that unit when bought that way.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "measures": {
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "unit": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 20
+                        },
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "price": {
+                          "default": null,
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "unit",
+                        "amount"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "productId",
+                  "measures"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/purchases/item/{productId}": {
+      "get": {
+        "summary": "One item's purchases, newest first",
+        "tags": [
+          "Module: purchases"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "productId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PurchaseRecord"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/purchases/list": {
+      "get": {
+        "summary": "Purchases, newest first, optionally between two dates, for one item or at one shop",
+        "tags": [
+          "Module: purchases"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "productId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PurchaseRecord"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/purchases/report": {
+      "get": {
+        "summary": "What was spent: in all, by shop, by item and by month",
+        "tags": [
+          "Module: purchases"
+        ],
+        "description": "Only purchases with a price count towards the totals; `unpriced` says how many had none.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "from",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "to",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "productId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "shopId",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpendingReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/purchases/{id}": {
+      "patch": {
+        "summary": "Correct a purchase: its price, how many, the shop, the day, or add the receipt's photo",
+        "tags": [
+          "Module: purchases"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "price": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "shopId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "on": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "receiptFileId": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "source": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "reference": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "orderedOn": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "boughtOn": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "note": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRecord"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a purchase recorded by mistake (stock is not changed)",
+        "tags": [
+          "Module: purchases"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "removed"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -17732,6 +19065,43 @@
                         "quantity"
                       ]
                     }
+                  },
+                  "receiptFileId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "date": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "readBy": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [

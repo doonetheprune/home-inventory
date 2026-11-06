@@ -53,11 +53,12 @@ export default defineModule({
 
 | Event | Data |
 |---|---|
-| `stock.changed` | `{ productId, name, kind, inStock, expected, unit, low }` (`kind`: add, use, flat, charged, move, return, adjust, remove, expect, arrive, renew) |
+| `stock.changed` | `{ productId, name, kind, inStock, expected, unit, low }` (`kind`: add, use, flat, charged, move, return, adjust, remove, expect, arrive, renew, finish) |
+| `stock.arrived` | `{ items: [{ productId, name, unit, quantity, source, reference, orderedOn, price }] }`: ordered stock arrived, with its order and (when the order said) its price |
 | `stock.low` / `stock.restocked` | Same as above, when a product crosses its minimum |
 | `product.created` / `product.updated` / `product.deleted` | `{ id, name }` |
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
-| `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }] }` |
+| `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }], evidence }`: `evidence` is how it was bought (`PurchaseEvidence`: receipt photo, source, order number, ordered on, bought on, note) or null |
 | `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
 | `stock.running_out` | `{ productId, name, runsOutOn, daysToRunOut, inStock, expected, unit }`, once when something that lasts a set time once started (`product.lastsDays`) will run out within its warning window, counting what's on order (checked hourly; again only after it's restocked) |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
@@ -120,7 +121,8 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | Module | What it does |
 |---|---|
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes (Open Food Facts also finds a photo for a brand added by name) |
-| `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till |
+| `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till, and an item's measures (1 pack = 1 kg = 5 items), each with its own price |
+| `purchases` | Every purchase with its price, shop and evidence (the receipt's photo, or the online order), and what was spent by shop, item and month |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |
 | `printing` | QR label sheets for places and items (Avery L7160, L7163, L7651, plain A4) |

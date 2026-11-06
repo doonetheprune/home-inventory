@@ -11,6 +11,7 @@ interface View {
   itemSize: { amount: number; unit: SizeUnit } | null;
   itemUnit: string | null;
   packUnits: string[];
+  measures: Array<{ unit: string; amount: number; label: string; price: number | null; per: string | null; recorded: boolean; recordedPrice: number | null }>;
 }
 interface Check { unitPrice: number; usualUnitPrice: number | null; verdict: 'cheaper' | 'dearer' | 'same' | 'no_usual_price'; message: string; priceUnit: string; per: string }
 
@@ -47,6 +48,55 @@ function SizeEditor({ productId, view, wanted, onDone }: { productId: string; vi
         <button type="button" className="btn small" disabled={busy || !(n > 0)} onClick={() => void save()}>Save</button>
         <button type="button" className="btn small ghost" onClick={onDone}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+/** "1 pack = 1 kg", "1 pack = 5 items": each with its price, recorded for buying it that way or worked out. */
+function Measures({ productId, view }: { productId: string; view: View }) {
+  const { run, busy } = useAction();
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [unit, setUnit] = useState('');
+  const [price, setPrice] = useState('');
+  const own = view.itemUnit ?? 'one';
+  const current = view.measures.map((m) => ({ unit: m.unit, amount: m.amount, price: m.recordedPrice }));
+  const save = (measures: typeof current, done: string) => run(() => api.modules.call('pricing', 'PUT', '/measures', { productId, measures }), done);
+  const n = Number(amount);
+  const p = price.trim() === '' ? null : Number(price);
+  const valid = n > 0 && unit.trim() !== '' && (p === null || p >= 0);
+  const add = () => save([...current.filter((m) => m.unit !== unit.trim().toLowerCase()), { unit: unit.trim(), amount: n, price: p }], 'Measure saved').then((r) => {
+    if (!r) return;
+    setAdding(false);
+    setAmount('');
+    setUnit('');
+    setPrice('');
+  });
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="label" style={{ margin: '6px 0 0' }}>Measures {!adding && <button type="button" className="link" onClick={() => setAdding(true)}>Add</button>}</div>
+      {view.measures.length === 0 && !adding && <span className="small muted">How much one {own} holds, e.g. 1 kg, or 5 items, so it can be priced and compared that way too.</span>}
+      {view.measures.map((m) => (
+        <div key={m.unit} className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span className="small"><b>{m.label}</b>{m.per ? <span className="muted"> · {m.per}{m.recorded ? '' : ' (worked out)'}</span> : null}</span>
+          <button type="button" className="link small" disabled={busy} onClick={() => void save(current.filter((x) => x.unit !== m.unit), 'Measure removed')}>Remove</button>
+        </div>
+      ))}
+      {adding && (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="inputrow" style={{ flexWrap: 'wrap', alignItems: 'end' }}>
+            <span className="small" style={{ alignSelf: 'center' }}>1 {own} =</span>
+            <input className="input" inputMode="decimal" style={{ flex: '1 1 70px', minWidth: 0 }} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5" aria-label="How many" />
+            <input className="input" list="measure-units" style={{ flex: '2 1 110px', minWidth: 0 }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="items, kg, slices" aria-label="Measure unit" />
+            <datalist id="measure-units">{['g', 'kg', 'ml', 'l', 'items', 'slices', 'pieces', 'portions'].map((u) => <option key={u} value={u} />)}</datalist>
+          </div>
+          <label className="field"><span>Price for one {unit.trim() || 'of them'}, when bought that way (optional)</span><input className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Worked out from the usual price" /></label>
+          <div className="btnrow">
+            <button type="button" className="btn small" disabled={busy || !valid} onClick={() => void add()}>Save measure</button>
+            <button type="button" className="btn small ghost" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -133,13 +183,8 @@ function ProductPricePanel({ product }: { product: ProductDetail }) {
         ) : (
           <p className="small muted">No usual price yet. Check a pack below, or add the price when you tick it off at the shop.</p>
         )}
-        {view.itemUnit && !sizing && (
-          <span className="small muted">
-            {view.itemSize ? <>One {view.itemUnit} holds {view.itemSize.amount} {view.itemSize.unit} · </> : <>Size of one {view.itemUnit} not set · </>}
-            <button type="button" className="link small" onClick={() => setSizing({})}>{view.itemSize ? 'Change' : 'Set it'}</button>
-          </span>
-        )}
         {sizing && <SizeEditor productId={id} view={view} wanted={sizing.wanted} onDone={() => setSizing(null)} />}
+        {!sizing && <Measures productId={id} view={view} />}
         <div className="label" style={{ margin: '6px 0 0' }}>Spotted a different pack?</div>
         <PackChecker productId={id} view={view} />
       </div>
