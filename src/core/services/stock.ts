@@ -10,7 +10,7 @@ import { StockEntry as StockEntrySchema } from '../model';
 import * as In from '../inputs';
 import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
-import { addDays, newId, roundQty } from '../util';
+import { addDays, localDate, newId, roundQty } from '../util';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
@@ -528,6 +528,41 @@ export function createStockService(ctx: CoreContext) {
       return commit(t, [...kept, entry], movements, 'renew', clearFlags(t.product));
     },
 
+    /**
+     * Things that last a set time once started and start the next by themselves (`autoUse`):
+     * when the one in use has had its days, the next comes out of stock, started the day the
+     * last one ran out, or the day there was one to start if it ran out with none left. Several
+     * in a row if Larder was off for a while. The first one is always started with Use.
+     */
+    async startNext(): Promise<{ started: number; products: ProductSummary[] }> {
+      const world = await loadWorld(ctx);
+      const { timeZone } = await ctx.household();
+      const changes: Change[] = [];
+      let started = 0;
+      for (const product of world.products) {
+        const lasts = product.lastsDays ?? null;
+        // Older records have no autoUse.
+        if (!product.autoUse || !lasts || !product.inUseSince || product.wish || product.rechargeable) continue;
+        const t = txn(world, product.id);
+        const work = t.original.map((e) => ({ ...e }));
+        const movements: Movement[] = [];
+        let since = product.inUseSince;
+        for (;;) {
+          const ended = addDays(since, lasts);
+          if (ended > world.today) break;
+          const left = work.filter((e) => e.status === 'in_stock' && e.quantity > 0);
+          const available = roundQty(left.reduce((n, e) => n + e.quantity, 0));
+          if (available <= EPS) break;
+          const here = left.map((e) => localDate(new Date(e.addedAt), timeZone)).sort()[0]!;
+          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(1, available), note: 'Next one started automatically' }));
+          since = here > ended ? here : ended;
+          started++;
+        }
+        if (movements.length) changes.push({ t, next: work, movements, kind: 'use', productUpdate: { inUseSince: since } });
+      }
+      return { started, products: changes.length ? await commitAll(changes) : [] };
+    },
+
     /** Deliveries on the way (confirmed), by source. */
     deliveries: () => grouped('expected'),
 
@@ -536,7 +571,7 @@ export function createStockService(ctx: CoreContext) {
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'startNext'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

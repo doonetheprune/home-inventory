@@ -77,6 +77,11 @@ export const Product = z.object({
   lastsDays: z.number().int().min(1).max(3650).nullable().default(null),
   /** When the one in use was started (only with `lastsDays`). Using one sets it to today. */
   inUseSince: IsoDate.nullable().default(null),
+  /**
+   * With `lastsDays`: when the one in use runs out, the next comes out of stock and starts by
+   * itself, the day the last one ran out (checked hourly). The first is still started with Use.
+   */
+  autoUse: z.boolean().default(false),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */

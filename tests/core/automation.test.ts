@@ -152,19 +152,19 @@ describe('expiry events', () => {
     // Two checks at once (the hourly one and a manual one) still announce it once.
     const both = await Promise.all([core.automation.checkExpiry(), core.automation.checkExpiry()]);
     expect(both.map((r) => r.expiring).sort()).toEqual([0, 1]);
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0 });
+    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0, started: 0 });
     const ev = core.events.log.find((e) => e.type === 'stock.expiring');
     expect(ev?.data).toMatchObject({ name: 'Milk', expiresOn: '2026-11-02', daysToExpiry: 5, place: 'Fridge' });
 
     core.clock.set('2026-11-02T08:00:00.000Z');
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 1, runningOut: 0 });
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0 });
+    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 1, runningOut: 0, started: 0 });
+    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0, started: 0 });
 
     // Fresh stock is a new expiry date, so it's announced again when it's due.
     await core.stock.use({ productId: milk.id, quantity: 1 });
     await core.stock.add({ productId: milk.id, quantity: 1 });
     core.clock.set('2026-11-05T08:00:00.000Z');
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 1, expired: 0, runningOut: 0 });
+    expect(await core.automation.checkExpiry()).toEqual({ expiring: 1, expired: 0, runningOut: 0, started: 0 });
   });
 });
 

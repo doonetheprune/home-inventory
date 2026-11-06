@@ -2461,6 +2461,10 @@
               }
             ]
           },
+          "autoUse": {
+            "default": false,
+            "type": "boolean"
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -6761,6 +6765,10 @@
               }
             ]
           },
+          "autoUse": {
+            "default": false,
+            "type": "boolean"
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -6891,6 +6899,7 @@
           "shelfLifeDays",
           "lastsDays",
           "inUseSince",
+          "autoUse",
           "minQuantity",
           "stockUpTo",
           "preferredShopIds",
@@ -10455,6 +10464,10 @@
                       }
                     ]
                   },
+                  "autoUse": {
+                    "default": false,
+                    "type": "boolean"
+                  },
                   "minQuantity": {
                     "default": null,
                     "anyOf": [
@@ -10696,6 +10709,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "autoUse": {
+                    "type": "boolean"
                   },
                   "minQuantity": {
                     "anyOf": [
@@ -12406,6 +12422,10 @@
                           }
                         ]
                       },
+                      "autoUse": {
+                        "default": false,
+                        "type": "boolean"
+                      },
                       "minQuantity": {
                         "default": null,
                         "anyOf": [
@@ -13046,7 +13066,7 @@
     },
     "/api/v1/automation/check-expiry": {
       "post": {
-        "summary": "Publish stock.expiring / stock.expired / stock.running_out events for anything newly due (the server also does this hourly)",
+        "summary": "Start the next of anything set to use the next one automatically, then publish stock.expiring / stock.expired / stock.running_out events for anything newly due (the server also does this hourly)",
         "tags": [
           "Automation"
         ],
@@ -13066,12 +13086,16 @@
                     },
                     "runningOut": {
                       "type": "number"
+                    },
+                    "started": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "expiring",
                     "expired",
-                    "runningOut"
+                    "runningOut",
+                    "started"
                   ],
                   "additionalProperties": false
                 }

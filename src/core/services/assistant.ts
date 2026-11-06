@@ -100,7 +100,7 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
 /** "Each lasts 14 days once started, one after another. One in use since …, until …. Enough until …" */
 function lastsText(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
-  const each = `Each lasts ${p.lastsDays} days once started, one after another.`;
+  const each = `Each lasts ${p.lastsDays} day${p.lastsDays === 1 ? '' : 's'} once started, one after another${p.autoUse ? ', the next starting automatically when one runs out' : ''}.`;
   if (!s.inUseUntil && s.inStock <= 0) return `${each} None in use and none left`;
   const inUse = s.inUseUntil ? ` One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}.` : ' None in use.';
   return `${each}${inUse} Enough until ${when(ctx, s.runsOutOn)}`;
@@ -234,6 +234,7 @@ export function createAssistant(deps: {
       stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       lasts_days: z.number().int().positive().max(3650).optional().describe('For things used one at a time, one after another (a glucose sensor, contact lenses, a water filter): how many days each one lasts once started. Larder works out when they run out'),
+      auto_use: z.boolean().optional().describe('With lasts_days: true to start the next one automatically (taking it out of stock) when the one in use runs out'),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
       new_shop: z.boolean().optional().describe('True to add the shop to Larder if it isn\'t there yet. Only after the person has said yes'),
@@ -255,7 +256,7 @@ export function createAssistant(deps: {
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
-        shelfLifeDays: i.shelf_life_days ?? null, lastsDays: i.lasts_days ?? null, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        shelfLifeDays: i.shelf_life_days ?? null, lastsDays: i.lasts_days ?? null, autoUse: i.auto_use ?? false, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
       const brand = i.brand?.trim();

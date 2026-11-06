@@ -107,7 +107,7 @@ describe('things that last a set time once started', () => {
     const sensor = await core.products.create({ name: 'Glucose sensor', unit: 'sensor', lastsDays: 14 });
     await core.stock.add({ productId: sensor.id, quantity: 1 });
     await core.stock.use({ productId: sensor.id, quantity: 1 });
-    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0 });
+    expect(await core.automation.checkExpiry()).toEqual({ expiring: 0, expired: 0, runningOut: 0, started: 0 });
 
     core.clock.set('2026-11-05T09:00:00.000Z');
     const both = await Promise.all([core.automation.checkExpiry(), core.automation.checkExpiry()]);
@@ -129,6 +129,43 @@ describe('things that last a set time once started', () => {
     expect((await core.automation.checkExpiry()).runningOut).toBe(1);
   });
 
+  it('starts the next one automatically when set to, the day the last one ran out', async () => {
+    const core = await makeCore();
+    const sensor = await core.products.create({ name: 'Glucose sensor', unit: 'sensor', lastsDays: 14, autoUse: true });
+    const lenses = await core.products.create({ name: 'Contact lenses', unit: 'pair', lastsDays: 14 });
+    await core.stock.add({ productId: sensor.id, quantity: 4 });
+    await core.stock.add({ productId: lenses.id, quantity: 2 });
+    // Nothing starts by itself until the first one is used.
+    expect((await core.automation.checkExpiry()).started).toBe(0);
+    await core.stock.use({ productId: sensor.id, quantity: 1 });
+    await core.stock.use({ productId: lenses.id, quantity: 1 });
+
+    core.clock.set('2026-11-10T23:00:00.000Z');
+    expect((await core.automation.checkExpiry()).started).toBe(0);
+    core.clock.set('2026-11-11T00:30:00.000Z');
+    expect((await core.automation.checkExpiry()).started).toBe(1);
+    let s = await core.products.summary(sensor.id);
+    expect([s.inStock, s.product.inUseSince, s.inUseUntil, s.runsOutOn]).toEqual([2, '2026-11-11', '2026-11-25', '2026-12-23']);
+    expect((await core.products.get(sensor.id)).history[0]).toMatchObject({ kind: 'use', quantity: -1, note: 'Next one started automatically' });
+    expect(core.events.log.filter((e) => e.type === 'stock.changed').at(-1)?.data).toMatchObject({ name: 'Glucose sensor', kind: 'use', inStock: 2 });
+    // Without it, the next is started with Use.
+    expect((await core.products.summary(lenses.id)).inStock).toBe(1);
+
+    // Larder was off for a while: it catches up, still one after another.
+    core.clock.set('2026-12-10T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).started).toBe(2);
+    s = await core.products.summary(sensor.id);
+    expect([s.inStock, s.product.inUseSince, s.inUseUntil, s.runsOutOn]).toEqual([0, '2026-12-09', '2026-12-23', '2026-12-23']);
+
+    // None left when the last one runs out; more bought later start the day they're added.
+    core.clock.set('2026-12-24T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).started).toBe(0);
+    await core.stock.add({ productId: sensor.id, quantity: 2 });
+    expect((await core.automation.checkExpiry()).started).toBe(1);
+    s = await core.products.summary(sensor.id);
+    expect([s.inStock, s.product.inUseSince, s.runsOutOn]).toEqual([1, '2026-12-24', '2027-01-21']);
+  });
+
   it('tells Home Assistant and assistants when they run out', async () => {
     const core = await makeCore();
     const sensor = await core.products.create({ name: 'Glucose sensor', unit: 'sensor', lastsDays: 14 });
@@ -144,6 +181,10 @@ describe('things that last a set time once started', () => {
 
     const changed = await core.assistant.call('change_item', { item: 'glucose sensor', lasts_days: 10, in_use_since: '2026-10-25' });
     expect(changed.text).toBe('Glucose sensor is updated: each lasts 10 days once started, the one in use was started on 2026-10-25, enough until 2026-11-24.');
+
+    const auto = await core.assistant.call('change_item', { item: 'glucose sensor', auto_use: true });
+    expect(auto.text).toBe('Glucose sensor is updated: the next one starts automatically when one runs out.');
+    expect((await core.assistant.call('get_item', { item: 'glucose sensor' })).text).toContain('Each lasts 10 days once started, one after another, the next starting automatically when one runs out.');
 
     const added = await core.assistant.call('add_item', { name: 'Contact lenses', unit: 'pair', lasts_days: 30 });
     expect(added.text).toContain('Contact lenses');

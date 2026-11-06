@@ -129,7 +129,7 @@ actions:
       message: "{{ trigger.event.data.name }} is running low ({{ trigger.event.data.inStock }} left)."
 ```
 
-Expiry is checked every hour, so `larder_stock_expiring` (and `larder_stock_running_out`) arrives within an hour of an item becoming due.
+Expiry is checked every hour, so `larder_stock_expiring` (and `larder_stock_running_out`) arrives within an hour of an item becoming due. The same check starts the next of anything set to use the next one automatically, which arrives as `larder_stock_changed` (kind `use`).
 
 ## NFC tags
 

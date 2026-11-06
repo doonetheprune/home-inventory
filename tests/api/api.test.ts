@@ -173,8 +173,8 @@ describe('API', () => {
       d.setUTCDate(d.getUTCDate() + days);
       return d.toISOString().slice(0, 10);
     };
-    const sensor = (await call<Any>('POST', '/api/v1/products', { name: 'Glucose sensor', unit: 'sensor', lastsDays: 14 })).body;
-    expect(sensor).toMatchObject({ lastsDays: 14, inUseSince: null });
+    const sensor = (await call<Any>('POST', '/api/v1/products', { name: 'Glucose sensor', unit: 'sensor', lastsDays: 14, autoUse: true })).body;
+    expect(sensor).toMatchObject({ lastsDays: 14, inUseSince: null, autoUse: true });
     await call('POST', '/api/v1/stock/add', { productId: sensor.id, quantity: 3 });
     const used = (await call<Any>('POST', '/api/v1/stock/use', { productId: sensor.id, quantity: 1 })).body;
     expect(used).toMatchObject({ inStock: 2, inUseUntil: plus(14), runsOutOn: plus(42), daysToRunOut: 42, status: { low: false, runningOut: false } });
@@ -185,7 +185,7 @@ describe('API', () => {
     expect((await call<Any>('PATCH', `/api/v1/products/${sensor.id}`, { inUseSince: plus(-10) })).body.inUseSince).toBe(plus(-10));
     expect((await call<Any>('GET', `/api/v1/products/${sensor.id}`)).body).toMatchObject({ inUseUntil: plus(4), runsOutOn: plus(4), daysToRunOut: 4, status: { low: true, runningOut: true } });
     expect((await call<Any[]>('GET', '/api/v1/products?status=low')).body.map((x) => x.product.name)).toEqual(['Glucose sensor']);
-    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, runningOut: 1 });
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, runningOut: 1, started: 0 });
   });
 
   it('builds a grid of places', async () => {

@@ -335,10 +335,10 @@ async function productId(page: Page, name: string): Promise<string> {
 
 test('works out when things used one after another run out', async ({ page }, info) => {
   await signIn(page);
-  // The example water filters: one in the jug since 10 days ago, and 2 more, 28 days each.
+  // The example water filters: one in the jug since 10 days ago, and 2 more, 28 days each, the next starting by itself.
   await page.goto(`/#/products/${await productId(page, 'Water filter cartridges')}`);
-  await expect(page.getByText(/One in use until \d+ \w+\. With 2 more cartridges, enough until/)).toBeVisible();
-  await expect(page.getByText('28 days once started')).toBeVisible();
+  await expect(page.getByText(/One in use until \d+ \w+, then the next starts automatically\. With 2 more cartridges, enough until/)).toBeVisible();
+  await expect(page.getByText('28 days once started, the next starts automatically')).toBeVisible();
 
   // 3 new ones that last 2 weeks each, none started yet.
   const name = `Glucose sensor ${info.project.name}`;
@@ -362,9 +362,11 @@ test('works out when things used one after another run out', async ({ page }, in
   await expect(page.getByLabel('The one in use started')).not.toHaveValue('');
   await page.getByLabel('days each one lasts', { exact: true }).fill('1');
   await page.getByLabel('days each one lasts', { exact: true }).blur();
+  await page.getByRole('switch', { name: 'Use the next one automatically' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
   await expect(page.locator('.pill', { hasText: /^Runs out / })).toBeVisible();
+  await expect(page.getByText('1 day once started, the next starts automatically')).toBeVisible();
 });
 
 test('stock opens on the types of thing, and each type lists its items', async ({ page }) => {

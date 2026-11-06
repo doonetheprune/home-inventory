@@ -68,7 +68,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `search` | Find items, places and shops by any words. Typos are fine |
 | `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, shops, notes |
 | `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them). From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
-| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, how long each one lasts once started (and when the one in use was started), usual place, shops to buy it from, notes, wish list, rechargeable |
+| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, shops to buy it from, notes, wish list, rechargeable |
 | `remove_item` | Remove an item with all its stock |
 | `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
 | `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |

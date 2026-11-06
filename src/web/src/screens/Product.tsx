@@ -149,7 +149,7 @@ export function ProductPage() {
                 <dt>Category</dt><dd>{p.category?.name ?? '—'}</dd>
                 <dt>Counted in</dt><dd>{unit}</dd>
                 <dt>{renewal ? 'Renews every' : 'Shelf life'}</dt><dd>{p.product.shelfLifeDays ? `${p.product.shelfLifeDays} days` : <span className="muted">None</span>}</dd>
-                {p.product.lastsDays ? <><dt>Each one lasts</dt><dd>{p.product.lastsDays} days once started</dd></> : null}
+                {p.product.lastsDays ? <><dt>Each one lasts</dt><dd>{p.product.lastsDays} day{p.product.lastsDays === 1 ? '' : 's'} once started{p.product.autoUse ? ', the next starts automatically' : ''}</dd></> : null}
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
                 {p.product.stockUpTo != null && <><dt>Stock up to</dt><dd>{p.product.stockUpTo}</dd></>}
                 <dt>Buy from</dt><dd>{p.product.preferredShopIds.length ? p.shops.map((s) => s.name).join(', ') : p.shops.length ? `Any shop (${p.shops.map((s) => s.name).join(', ')})` : <span className="muted">No shop sells this category</span>}</dd>
@@ -199,8 +199,9 @@ export function ProductPage() {
 function RunsOut({ p }: { p: ProductDetail }) {
   const until = <b style={{ color: 'var(--ink)' }}>{dayText(p.runsOutOn!, p.daysToRunOut)}</b>;
   const more = `${num(p.inStock)} more${p.product.unit === 'each' ? '' : ` ${plural(p.product.unit, p.inStock)}`}`;
-  if (p.inUseUntil) return p.inStock > 0 ? <>One in use until {shortDate(p.inUseUntil)}. With {more}, enough until {until}.</> : <>One in use until {until}, and none left after it.</>;
-  return p.inStock > 0 ? <>None in use. Starting one today, there's enough until {until}.</> : <>None left.</>;
+  if (p.inUseUntil) return p.inStock > 0 ? <>One in use until {shortDate(p.inUseUntil)}{p.product.autoUse ? ', then the next starts automatically' : ''}. With {more}, enough until {until}.</> : <>One in use until {until}, and none left after it.</>;
+  if (p.inStock <= 0) return <>None left.</>;
+  return <>None in use. Starting one today, there's enough until {until}.{p.product.autoUse ? ' Use the first one; the rest follow automatically.' : ''}</>;
 }
 
 function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {

@@ -385,19 +385,21 @@ export function createAutomation(deps: {
     },
 
     /**
-     * Publishes `stock.expiring` once when an item enters its warning window
+     * Starts the next of anything set to start the next by itself (see
+     * stock.startNext). Then publishes `stock.expiring` once when an item enters its warning window
      * and `stock.expired` once on the day it expires; and `stock.running_out`
      * once when something that lasts a set time once started comes within its
      * warning window of running out (again only after it's been restocked).
      * Safe to call as often as you like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number; runningOut: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number; runningOut: number }> {
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
+      const { started } = await stock.startNext();
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
       const runOutNotified = (await ctx.storage.settings.get<RunOutNotified>('runOutNotified')) ?? {};
       const next: Notified = {};
@@ -434,7 +436,7 @@ export function createAutomation(deps: {
       }
       await ctx.storage.settings.set('expiryNotified', next);
       await ctx.storage.settings.set('runOutNotified', nextRunOut);
-      return { expiring, expired, runningOut };
+      return { expiring, expired, runningOut, started };
     },
   };
 }

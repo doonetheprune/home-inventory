@@ -36,7 +36,7 @@ export function registerAutomationRoutes(app: ZodApp, { core }: { core: CoreApi 
   }, async (request) => core.automation.run(request.params.id, request.body ?? {}, { userId: user(request).id }));
 
   app.post('/automation/check-expiry', {
-    schema: { tags, summary: 'Publish stock.expiring / stock.expired / stock.running_out events for anything newly due (the server also does this hourly)', response: { 200: z.object({ expiring: z.number(), expired: z.number(), runningOut: z.number() }) } },
+    schema: { tags, summary: 'Start the next of anything set to use the next one automatically, then publish stock.expiring / stock.expired / stock.running_out events for anything newly due (the server also does this hourly)', response: { 200: z.object({ expiring: z.number(), expired: z.number(), runningOut: z.number(), started: z.number() }) } },
   }, async () => core.automation.checkExpiry());
 
   const nfcTags = ['NFC'];
