@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeCore } from '../../tests/helpers';
 import pricing from '../pricing/index';
 import ai from './index';
-import type { ReceiptReading } from './receipts';
+import { householdItems, type ReceiptReading } from './receipts';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
 const route = (core: Core, moduleId: string, method: string, path: string) =>
@@ -141,6 +141,12 @@ describe('AI module: receipts', () => {
     expect(again.lines).toMatchObject([{ item: { id: loo.id }, quantity: 27, match: 'learnt' }, { item: { id: milk.id }, quantity: 4, match: 'learnt' }]);
     expect(again.addedBefore).toBeNull();
     expect(net.prompts()[1]).toContain('"ANDREX CLASSIC 9PK" at Tesco is item 3, 9 roll for each one bought');
+
+    // Counted in sheets from now on (a roll holds 200): what Tesco's names were learnt as follows.
+    await core.stock.recount(loo.id, { unit: 'sheet', holds: 200 });
+    await new Promise((res) => setTimeout(res, 10));
+    const recounted = await call<{ lines: Array<{ item: { id: string } | null; quantity: number; match: string }> }>(core, 'POST', '/receipt', { image: JPEG });
+    expect(recounted.lines[0]).toMatchObject({ item: { id: loo.id }, quantity: 5400, match: 'learnt' });
   });
 
   it('says when the same receipt was added before', async () => {
@@ -189,5 +195,10 @@ describe('AI module: receipts', () => {
     expect((await core.products.summary(beans.id)).inStock).toBe(4);
     // A shop Larder doesn't have doesn't stop it.
     expect((await core.assistant.call('add_receipt', { shop: 'Lidl', lines: [{ item: 'beans', quantity: 1 }] })).text).toBe("Added Baked beans to stock. Larder doesn't have a shop called Lidl, so the prices were kept without one.");
+  });
+
+  it('tells the AI what an item comes in, so a box of 80 is 80 tea bags', () => {
+    const lines = householdItems([{ id: 't', name: 'Yorkshire tea', unit: 'tea bag', aliases: [], brands: [], pack: { name: 'box', holds: 80 } }], [], () => null);
+    expect(lines).toContain('1. Yorkshire tea (counted in tea bag, comes in boxes of 80)');
   });
 });

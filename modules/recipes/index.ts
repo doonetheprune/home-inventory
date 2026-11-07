@@ -382,6 +382,18 @@ export default defineModule({
       return run;
     };
 
+    // An item now counted in what's inside (2 boxes became 40 tea bags): what cooking takes of it follows.
+    ctx.on('product.recounted', async (event) => {
+      const { productId, factor } = event.data as { productId: string; factor: number };
+      await serial(async () => {
+        for (const r of await all()) {
+          if (!r.ingredients.some((i) => i.productId === productId && i.quantity !== null)) continue;
+          const ingredients = r.ingredients.map((i) => (i.productId === productId && i.quantity !== null ? { ...i, quantity: roundQty(i.quantity * factor) } : i));
+          await recipes.put(r.id, Recipe.parse({ ...r, ingredients }));
+        }
+      });
+    });
+
     async function get(id: string): Promise<Recipe> {
       const r = await recipes.get(id);
       if (!r) throw new NotFoundError('Recipe', id);

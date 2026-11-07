@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Delivery, Id, ProductSummary, Purchase, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse,
+  Delivery, Id, ProductSummary, Purchase, Recount, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse,
   type CoreApi,
 } from '@larder/core';
 import type { ZodApp } from '../app';
@@ -14,8 +14,15 @@ export function registerStockRoutes(app: ZodApp, { core }: { core: CoreApi }) {
     schema: { tags, summary: 'Use stock (soonest-expiring first). For rechargeables this marks them flat.', body: StockUse, response: res },
   }, (r) => core.stock.use(r.body));
   app.post('/products/:id/finished', {
-    schema: { tags, summary: 'The open one is finished (or one that lasts a set time came off early): none is open now', params: IdParams, response: res },
+    schema: { tags, summary: 'The open one is finished (or the one in use is stopped): none is open or in use now', params: IdParams, response: res },
   }, (r) => core.stock.finish(r.params.id));
+  app.post('/products/:id/recount', {
+    schema: {
+      tags, summary: 'Count what\'s inside: what it was counted in becomes its pack, and the numbers are multiplied (2 boxes become 40 tea bags)',
+      description: 'Stock in every status, orders\' prices, the minimum, the stock-up amount and the usage are rescaled. Modules get `product.recounted`.',
+      params: IdParams, body: Recount, response: res,
+    },
+  }, (r) => core.stock.recount(r.params.id, r.body));
   app.post('/stock/move', {
     schema: { tags, summary: 'Move stock', description: '`temporary` leaves it out of place until it goes back; `permanent` changes where it usually lives.', body: StockMove, response: res },
   }, (r) => core.stock.move(r.body));

@@ -16,7 +16,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1)",
+          "description": "How many, in the item's own unit (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -48,6 +48,11 @@
         "note": {
           "type": "string",
           "maxLength": 200
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         }
       },
       "required": [
@@ -58,7 +63,7 @@
   {
     "id": "use_stock",
     "name": "Use stock",
-    "description": "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today.",
+    "description": "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things Larder takes out by itself (a tea bag a day), this is an extra one; to start a new one now (a sensor that came off early) set opened.",
     "module": null,
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -71,8 +76,7 @@
           "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
         },
         "quantity": {
-          "default": 1,
-          "description": "How many, in the item's own unit (default 1)",
+          "description": "How many, in the item's own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -82,13 +86,18 @@
           "maxLength": 200
         },
         "opened": {
-          "description": "True if it was opened and is still being used, not finished (a new jar of coffee): it shows as open until finish_item",
+          "description": "True if it was opened and is still being used (a new jar of coffee: it shows as open until finish_item), or, for something Larder takes out by itself, a new one started now",
           "type": "boolean"
         },
         "note": {
           "description": "Why, kept in its history, e.g. \"Thrown away: out of date\"",
           "type": "string",
           "maxLength": 200
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         }
       },
       "required": [
@@ -99,7 +108,7 @@
   {
     "id": "finish_item",
     "name": "Finished the open one",
-    "description": "The open one of an item is finished (the butter's gone), or one that lasts a set time came off early: none is open now.",
+    "description": "The open one of an item is finished (the butter's gone), or the one in use is stopped: none is open, and Larder stops taking them out until one is started again.",
     "module": null,
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -139,9 +148,14 @@
           "description": "The place it's going to: a name or code"
         },
         "quantity": {
-          "description": "How many (default all of it)",
+          "description": "How many (default all of it), in the item's own unit or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         },
         "permanent": {
           "default": false,
@@ -203,7 +217,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1)",
+          "description": "How many, in the item's own unit (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -222,6 +236,11 @@
           "description": "Expected date (YYYY-MM-DD)",
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         },
         "price": {
           "description": "What the order says the line costs, e.g. 4.50: kept in the purchase history when it arrives",
@@ -311,9 +330,14 @@
           "maxLength": 200
         },
         "quantity": {
-          "description": "How many of the item arrived (default all expected)",
+          "description": "How many of the item arrived (default all expected), in its own unit or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         },
         "due_by": {
           "description": "With a source: only what was due by this day (YYYY-MM-DD), so a later order from the same shop stays on its way",
@@ -382,7 +406,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1)",
+          "description": "How many, in the item's own unit (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         }

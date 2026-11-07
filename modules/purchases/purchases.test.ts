@@ -85,6 +85,19 @@ describe('purchase history', () => {
     expect(sensor.purchases_this_month).toMatchObject({ state: 4.75, attributes: { purchases: 2, shops: { Tesco: 4.75 } } });
   });
 
+  it('follows an item counted again in what is inside', async () => {
+    const core = await makeCore({ modules: [purchases] });
+    const tea = await core.products.create({ name: 'Sleep tea', unit: 'box' });
+    await core.shopping.purchase({ items: [{ productId: tea.id, quantity: 2, price: 6 }] });
+    await settle();
+    await core.stock.recount(tea.id, { unit: 'tea bag', holds: 20 });
+    await settle();
+    expect((await history(core, tea.id)).map((r) => [r.quantity, r.unit, r.price])).toEqual([[40, 'tea bag', 6]]);
+    // Corrected in boxes: it was 3.
+    await core.assistant.call('change_purchase', { item: 'sleep tea', quantity: 3, unit: 'boxes' });
+    expect((await history(core, tea.id)).map((r) => r.quantity)).toEqual([60]);
+  });
+
   it('answers assistants', async () => {
     const { core, aldi, tesco, butter, oats } = await setup();
     await core.shopping.purchase({ shopId: aldi.id, items: [{ productId: butter.id, quantity: 2, price: 3.2 }] });

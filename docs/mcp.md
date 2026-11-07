@@ -66,26 +66,26 @@ Everything you can do in the app, as plainly described tools, apart from account
 | Tool | What it does |
 |---|---|
 | `search` | Find items, places and shops by any words. Typos are fine |
-| `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, when it runs out (things used one after another), the open one, shops, brands with their barcodes and shop codes, links, notes |
-| `list_items` | Items by status (low, use soon, out of place, on order, wish list, in stock, to sort, to tidy, open, running out), by category and by place |
+| `get_item` | Everything about one item: how many, each batch's place and expiry, deliveries on the way, when it counts as low, how fast it's used and when it runs out, what it comes in, the open one, shops, brands with their barcodes and shop codes, links, notes |
+| `list_items` | Items by status (low, use soon, out of place, on order, wish list, in stock, to sort, to tidy, open), by category and by place |
 | `get_place` | What's in a place: what's kept there and how many (and what's run out there), what's out of place from there, what's there from elsewhere, and the places inside it |
 | `identify_code` | What a barcode, label, place code or shop code is; for an unknown barcode, what the online product databases say |
-| `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them), notes, links, how long each lasts once started, and whether it's rechargeable. From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
-| `change_item` | Change anything about an item afterwards: name, category, unit, other names, minimum, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, places it's no longer kept in, shops to buy it from, notes, links, wish list, rechargeable |
+| `add_item` | Add something Larder doesn't know yet, with its brand and barcode (and a photo found from them), notes, links, what it comes in (`comes_in`: a box of 20), how fast it's used (`uses`: 1 every day) and whether Larder takes them out by itself, and whether it's rechargeable. From a photo, the assistant reads the pack itself. A shop Larder doesn't have is only added once the person agrees (`new_shop`); a place or category that isn't set up yet is refused (nothing is added) with a suggestion to add it first |
+| `change_item` | Change anything about an item afterwards: name, category, unit, what it comes in (with `recount` to turn 2 boxes into 40 tea bags), other names, minimum, shelf life, how fast it's used, whether Larder takes them out of stock by itself, and when the current one started, usual place, places it's no longer kept in, shops to buy it from, notes, links, wish list, rechargeable |
 | `remove_item` | Remove an item with all its stock |
 | `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
-| `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |
-| `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat). Adding takes a brand, and a price and shop to keep it in the purchase history; using takes a note, and `opened` for one that's opened and still in use (the butter in the fridge) |
-| `finish_item` | The open one is finished (or one that lasts a set time came off early) |
+| `correct_stock` | Fix one batch: how many there really are (in the item's unit or its pack), its expiry date, or remove it |
+| `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat). Adding takes a brand, and a price and shop to keep it in the purchase history; using takes a note, and `opened` for one that's opened and still in use (the butter in the fridge), or, for something Larder takes out by itself, a new one started now; otherwise a use is an extra one. Both take `unit` for amounts in the item's pack ("2 boxes") |
+| `finish_item` | The open one is finished (or the one in use stopped: Larder stops taking them out until one is started) |
 | `bought` | Several things bought at once, with their prices and the shop: added to stock and kept in the purchase history |
-| `move_item` | Move something for now (out of place) or for good, optionally only from one place, or from To sort (stock with no place yet) |
+| `move_item` | Move something for now (out of place) or for good, all of it or some (in the item's unit or its pack: "1 box"), optionally only from one place, or from To sort (stock with no place yet) |
 | `add_expected` | Record an order that hasn't arrived (it counts towards stock), with its price, where it goes, and whether it's still a pending order. Takes shop codes from order emails. Something in a pending order from the same shop is confirmed instead of added again |
-| `mark_arrived` | A delivery (or part of one, or only what was due by a day) arrived |
+| `mark_arrived` | A delivery (or part of one, in the item's unit or its pack, or only what was due by a day) arrived |
 | `confirm_order` / `cancel_order` | A pending order (e.g. a filled online basket) went ahead and is on its way, or didn't and is removed |
 | `add_to_shopping_list` / `remove_from_shopping_list` | Put something on the list that isn't low, or take it off again |
 | `put_back` | Something out of place is back where it lives (all of it, or only from one place) |
 | `mark_charged` / `renew` | Rechargeables charged; a renewal (insurance, MOT) renewed |
-| `shopping_list` | What to buy at a shop, which shop to go to, or (`shop: "none"`) what no shop sells |
+| `shopping_list` | What to buy at a shop (in whole packs for things that come in them: "Tea bags ×1 box (80 tea bags)"), which shop to go to, or (`shop: "none"`) what no shop sells |
 | `expiring` | What to use soon, and renewals coming up |
 | `deliveries` / `recent_changes` | Orders on the way and pending orders; what changed in stock lately (all, or one item) |
 | `list_shops` / `add_shop` / `change_shop` / `remove_shop` | Shops and what they sell. Common UK shops (Tesco, Aldi, Screwfix…) come with what they usually sell |
@@ -94,10 +94,10 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?" or "spinach is £4.40/kg here, is that good?", and making it the usual price. Both take the pack's unit (the item's own, g, kg, ml, l) (pricing module) |
 | `add_receipt` | Add a till receipt or online order the assistant has read to stock in one go, with the prices paid, by item names. Only items Larder has: if any line isn't one, nothing is added and it says which (ai module) |
 | `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
-| `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
-| `get_price` / `set_measure` / `remove_measure` | An item's usual price in every unit; its measures ("1 pack = 1 kg", "1 pack = 5 items"), each with its own price when it's bought that way (pricing module) |
+| `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg; with `per: "box"`, the weight of the pack it comes in (a 250 g box of 80 tea bags is 3.125 g a tea bag) (pricing module) |
+| `get_price` | An item's usual price in every unit it can be shown in: its own, its pack, and by weight once `set_item_size` says how much one holds (pricing module) |
 | `purchase_history` / `spending` | What was bought, the price, the shop, and the receipt's photo or the order; what was spent by shop, item and month (purchase history module) |
-| `change_purchase` / `remove_purchase` | Correct a purchase in the history, or take one out (purchase history module) |
+| `change_purchase` / `remove_purchase` | Correct a purchase in the history (how many in the item's unit or its pack), or take one out (purchase history module) |
 | `battery_devices` / `batteries_replaced` / `link_battery` | Devices with batteries and what to do about a low one; new batteries went in; which battery a device takes (battery linking module) |
 | `check_order_emails` / `order_emails` / `match_order_line` / `skip_order_line` | Order emails: check now, what was read, and the lines waiting to be matched to an item or left out (order emails module) |
 | `link_listing` / `unlink_listing` / `set_buying_rules` | An online shop's packs for an item, which pack to always buy and how many one gives, and offers (online shopping module) |

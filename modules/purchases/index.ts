@@ -6,7 +6,7 @@
  * or added with a price on an item's page. Kept for reports on spending.
  */
 import { z } from 'zod';
-import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amount, defineModule, localDate, newId, type ModuleContext, type Shop } from '@larder/core';
+import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amount, defineModule, inOwnUnit, localDate, newId, type ModuleContext, type Shop } from '@larder/core';
 
 export const PurchaseRecord = z.object({
   id: z.string(),
@@ -145,6 +145,14 @@ export default defineModule({
       const s = source?.trim().toLowerCase();
       return s ? (shops.find((x) => s === x.name.toLowerCase() || s.startsWith(`${x.name.toLowerCase()} `)) ?? null) : null;
     };
+
+    // Counted again in what's inside (2 boxes became 40 tea bags): its purchases say so too. A line's price is its total, so it stays.
+    ctx.on('product.recounted', async (event) => {
+      const { productId, to, factor } = event.data as { productId: string; to: string; factor: number };
+      for (const { id, data } of await store.list()) {
+        if (data.productId === productId) await store.put(id, PurchaseRecord.parse({ ...data, quantity: Math.round(data.quantity * factor * 1000) / 1000, unit: to }));
+      }
+    });
 
     // Ticked off at a shop, added from a receipt, or added with a price.
     ctx.on('shopping.purchased', async (event) => {
@@ -330,12 +338,14 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
       item: Item,
       on: DateInput.describe('The day it was bought, if not the latest (YYYY-MM-DD)'),
       price: z.number().min(0).nullable().optional().describe('What the line cost, e.g. 3.2; null if not known'),
-      quantity: z.number().positive().optional().describe('How many were bought, in the item\'s own unit'),
+      quantity: z.number().positive().optional().describe('How many were bought, in the item\'s own unit or in unit'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
       shop: z.string().max(80).nullable().optional().describe('The shop; null for none'),
       note: z.string().max(200).optional(),
     }),
-    async run({ item, on, price, quantity, shop, note }) {
+    async run({ item, on, price, quantity: given, unit, shop, note }) {
       const r = await pick(item, on);
+      const quantity = given === undefined ? undefined : inOwnUnit(await ctx.core.resolve.product(item), given, unit);
       const shopId = shop === undefined ? undefined : shop === null ? null : (await ctx.core.resolve.shop(shop)).id;
       const next = await change(r.id, { price, quantity, shopId, ...(note !== undefined ? { evidence: { note } } : {}) });
       return { text: `Changed: ${line(next, true)}.`, data: next };

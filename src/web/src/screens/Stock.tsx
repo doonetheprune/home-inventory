@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { stockText } from '../format';
+import { oneBought, stockText } from '../format';
 import { Empty, ErrorBox, Header, Loading, PlaceText, ProductTile, Seg, StatusPills, useAction, useCategories, useIsDesktop } from '../ui';
 
 const STATUSES: Array<[string, string]> = [['low', 'Low'], ['expiring', 'Use soon'], ['out_of_place', 'Out of place'], ['expected', 'On the way'], ['in_stock', 'In stock'], ['to_tidy', 'To tidy']];
@@ -173,7 +173,7 @@ function StockPane({ s }: { s: ProductSummary }) {
       {s.product.notes && <p className="small muted">{s.product.notes}</p>}
       <div className="btnrow">
         <button className="btn small" type="button" disabled={busy || s.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: s.product.id, quantity: 1 }), (r) => `Used 1 · ${stockText(r)}`)}><Icon name="minus" size="sm" />Use</button>
-        <button className="btn small primary" type="button" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1 }), (r) => `Added 1 · ${stockText(r)}`)}><Icon name="plus" size="sm" />Add</button>
+        <button className="btn small primary" type="button" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1, unit: oneBought(s.product).unit }), (r) => `Added ${oneBought(s.product).text} · ${stockText(r)}`)}><Icon name="plus" size="sm" />Add</button>
       </div>
       <Link className="link small" to={`/products/${s.product.id}?add=elsewhere`}>Add at another place</Link>
       <Link className="btn block" to={`/products/${s.product.id}`}>Open full page<Icon name="chev" size="sm" /></Link>

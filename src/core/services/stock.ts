@@ -8,9 +8,10 @@
 import type { Movement, Product, ProductSummary, StockEntry } from '../model';
 import { StockEntry as StockEntrySchema } from '../model';
 import * as In from '../inputs';
-import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
+import type { Recount, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
-import { addDays, localDate, newId, roundQty } from '../util';
+import { addDays, localDate, newId, pluralWord, roundQty } from '../util';
+import { inOwnUnit, oneOf, sameUnit, singular, startsOne } from './packs';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
@@ -157,10 +158,17 @@ export function createStockService(ctx: CoreContext) {
     return { wish: false, onShoppingList: false };
   }
 
-  /** Using one of something that lasts a set time once started starts it today, and so does opening anything. */
+  /**
+   * Opening one (or, when Larder takes them out, starting the next early) starts it today.
+   * With a usage that Larder doesn't take out, every Use starts one. When Larder does, a
+   * plain Use is an extra and leaves its schedule alone, unless none has been started (it was
+   * finished, or never started): then it starts one, and Larder carries on from there.
+   */
   function started(product: Product, open?: boolean): Partial<Product> | undefined {
-    return product.lastsDays || open ? { inUseSince: ctx.today() } : undefined;
+    return open || startsOne(product) ? { inUseSince: ctx.today() } : undefined;
   }
+
+  const isRenewal = (world: World, product: Product) => !!product.categoryId && world.categoryById.get(product.categoryId)?.name === 'Renewals';
 
   /** Pending entries chosen by source (a whole order), entry ids, or one item's (optionally from one source). */
   async function pendingEntries(raw: StockOrders): Promise<StockEntry[]> {
@@ -200,11 +208,12 @@ export function createStockService(ctx: CoreContext) {
     await assertPlace(placeId);
     if (input.variantId && !(await ctx.storage.variants.get(input.variantId))) throw new NotFoundError('Variant', input.variantId);
     const expiresOn = input.expiresOn !== undefined ? input.expiresOn : t.product.shelfLifeDays ? addDays(ctx.today(), t.product.shelfLifeDays) : null;
+    const quantity = inOwnUnit(t.product, input.quantity, input.unit);
     const entry: StockEntry = StockEntrySchema.parse({
-      id: newId(), productId: t.product.id, variantId: input.variantId ?? null, quantity: input.quantity, placeId,
+      id: newId(), productId: t.product.id, variantId: input.variantId ?? null, quantity, placeId,
       expiresOn, addedAt: ctx.now(), status: 'in_stock', charge: t.product.rechargeable ? (input.charge ?? 'charged') : null,
     });
-    return { entry, move: movement(t.product, 'add', input.quantity, { entryId: entry.id, toPlaceId: placeId, note: input.note ?? '' }) };
+    return { entry, move: movement(t.product, 'add', quantity, { entryId: entry.id, toPlaceId: placeId, note: input.note ?? '' }) };
   }
 
   /** Takes stock out of `work` (soonest-expiring first), returning the history. Throws if there isn't enough. */
@@ -266,7 +275,8 @@ export function createStockService(ctx: CoreContext) {
       const input = In.StockUse.parse(raw);
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
-      const movements = takeFrom(t, work, { ...input, note: input.note ?? (input.open ? 'Opened' : undefined) });
+      const quantity = inOwnUnit(t.product, input.quantity, input.unit);
+      const movements = takeFrom(t, work, { ...input, quantity, note: input.note ?? (input.open ? (t.product.usage ? 'Started' : 'Opened') : startsOne(t.product) ? 'Started' : undefined) });
       return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product, input.open));
     },
 
@@ -283,15 +293,15 @@ export function createStockService(ctx: CoreContext) {
           changes.set(input.productId, c);
         }
         c.productUpdate = started(c.t.product, input.open) ?? c.productUpdate;
-        c.movements.push(...takeFrom(c.t, c.next, input));
+        c.movements.push(...takeFrom(c.t, c.next, { ...input, quantity: inOwnUnit(c.t.product, input.quantity, input.unit) }));
       }
       return commitAll([...changes.values()]);
     },
 
-    /** The open one (or, for things that last a set time, the one in use) is finished: none is open now. */
+    /** The open one (or, with a usage, the one in use) is finished: none is open, and Larder stops taking them out until one is started. */
     async finish(productId: string): Promise<ProductSummary> {
       const t = await begin(productId);
-      if (!t.before.inUse) throw new ValidationError(`There's no ${t.product.name.toLowerCase()} open${t.product.lastsDays ? ' or in use' : ''}.`);
+      if (!t.before.inUse) throw new ValidationError(`There's no ${t.product.name.toLowerCase()} open${t.product.usage ? ' or in use' : ''}.`);
       return commit(t, t.original, [movement(t.product, 'finish', 0)], 'finish', { inUseSince: null });
     },
 
@@ -401,8 +411,9 @@ export function createStockService(ctx: CoreContext) {
      * the same shop is confirmed rather than added again (an order email confirming a filled basket).
      */
     async expect(raw: StockExpect): Promise<ProductSummary> {
-      const input = In.StockExpect.parse(raw);
-      const t = await begin(input.productId);
+      const parsed = In.StockExpect.parse(raw);
+      const t = await begin(parsed.productId);
+      const input = { ...parsed, quantity: inOwnUnit(t.product, parsed.quantity, parsed.unit) };
       const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
       await assertPlace(placeId);
       const work = t.original.map((e) => ({ ...e }));
@@ -552,38 +563,68 @@ export function createStockService(ctx: CoreContext) {
     },
 
     /**
-     * Things that last a set time once started and start the next by themselves (`autoUse`):
-     * when the one in use has had its days, the next comes out of stock, started the day the
-     * last one ran out, or the day there was one to start if it ran out with none left. Several
-     * in a row if Larder was off for a while. The first one is always started with Use.
+     * Items whose usage Larder takes out by itself: each period that has started since the
+     * last, its amount comes out of stock (or what's left), and the period moves on. Several
+     * in a row if Larder was off. With none left it stops; when more is added, the next period
+     * starts the day it was added. Nothing happens until a period has been started.
      */
-    async startNext(): Promise<{ started: number; products: ProductSummary[] }> {
+    async takeDue(): Promise<{ taken: number; products: ProductSummary[] }> {
       const world = await loadWorld(ctx);
       const { timeZone } = await ctx.household();
       const changes: Change[] = [];
-      let started = 0;
+      let taken = 0;
       for (const product of world.products) {
-        const lasts = product.lastsDays ?? null;
-        // Older records have no autoUse.
-        if (!product.autoUse || !lasts || !product.inUseSince || product.wish || product.rechargeable) continue;
+        const usage = product.usage ?? null;
+        if (!usage?.auto || !product.inUseSince || product.wish || product.rechargeable || isRenewal(world, product)) continue;
         const t = txn(world, product.id);
         const work = t.original.map((e) => ({ ...e }));
         const movements: Movement[] = [];
         let since = product.inUseSince;
-        for (;;) {
-          const ended = addDays(since, lasts);
-          if (ended > world.today) break;
+        // Bounded, so a tiny amount after years off can't run away.
+        for (let i = 0; i < 4000; i++) {
+          const next = addDays(since, usage.everyDays);
+          if (next > world.today) break;
           const left = work.filter((e) => e.status === 'in_stock' && e.quantity > 0);
           const available = roundQty(left.reduce((n, e) => n + e.quantity, 0));
           if (available <= EPS) break;
-          const here = left.map((e) => localDate(new Date(e.addedAt), timeZone)).sort()[0]!;
-          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(1, available), note: 'Next one started automatically' }));
-          since = here > ended ? here : ended;
-          started++;
+          const added = left.map((e) => localDate(new Date(e.addedAt), timeZone)).sort()[0]!;
+          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(usage.amount, available), note: 'Taken by Larder' }));
+          since = added > next ? added : next;
+          taken++;
         }
         if (movements.length) changes.push({ t, next: work, movements, kind: 'use', productUpdate: { inUseSince: since } });
       }
-      return { started, products: changes.length ? await commitAll(changes) : [] };
+      return { taken, products: changes.length ? await commitAll(changes) : [] };
+    },
+
+    /**
+     * Count what's inside: what it was counted in becomes its pack, and the stock, orders,
+     * minimum, stock-up amount and usage are multiplied by how many one holds (2 boxes become
+     * 40 tea bags). Publishes `product.recounted`, so modules rescale their own numbers.
+     */
+    async recount(productId: string, raw: Recount): Promise<ProductSummary> {
+      const parsed = In.Recount.parse(raw);
+      // Said "tea bags", it's counted in "tea bag" (2 tea bags).
+      const input = { ...parsed, unit: oneOf(parsed.unit), pack: parsed.pack === undefined ? undefined : singular(parsed.pack) };
+      const t = await begin(productId);
+      const p = t.product;
+      if (sameUnit(input.unit, p.unit)) throw new ValidationError(`${p.name} is already counted in ${pluralWord(input.unit, 2)}.`);
+      const packName = input.pack ?? (p.unit === 'each' ? null : singular(p.unit));
+      if (!packName) throw new ValidationError(`Say what one of the ${p.name.toLowerCase()} counted so far is (a box?), so it can become the pack.`);
+      if (sameUnit(packName, input.unit)) throw new ValidationError(`A ${packName} can't come in ${pluralWord(packName, 2)}. Count what's inside (tea bags, say) and say how many a ${packName} holds.`);
+      const f = input.holds;
+      const times = (n: number | null) => (n === null ? null : roundQty(n * f));
+      const work = t.original.map((e) => ({
+        ...e, quantity: roundQty(e.quantity * f),
+        expected: e.expected ? { ...e.expected, unitPrice: e.expected.unitPrice == null ? null : Math.round((e.expected.unitPrice / f) * 1_000_000) / 1_000_000 } : null,
+      }));
+      const update: Partial<Product> = {
+        unit: input.unit, pack: { name: packName, holds: f }, minQuantity: times(p.minQuantity), stockUpTo: times(p.stockUpTo ?? null),
+        usage: p.usage ? { ...p.usage, amount: roundQty(p.usage.amount * f) } : null,
+      };
+      const s = await commit(t, work, [movement(p, 'adjust', 0, { note: `Now counted in ${pluralWord(input.unit, 2)} (1 ${packName} = ${f})` })], 'adjust', update);
+      ctx.publish('product.recounted', { productId, name: p.name, from: p.unit, to: input.unit, factor: f });
+      return s;
     },
 
     /** Deliveries on the way (confirmed), by source. */
@@ -594,7 +635,7 @@ export function createStockService(ctx: CoreContext) {
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'startNext'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'takeDue', 'recount'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

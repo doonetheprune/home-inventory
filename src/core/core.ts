@@ -123,6 +123,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   await ctx.household();
   await core.instanceId();
   await categories.ensureDefaults();
+  await products.upgradeStored();
   await modules.start(core);
   return core;
 }

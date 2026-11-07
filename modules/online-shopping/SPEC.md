@@ -65,7 +65,7 @@ In the app, beside a shop's shopping list: **Start a shop** opens the day picker
 4. **Needed** = level − stock − on order. Something on the list by hand gets at least one pack, and once it's in the basket it comes off the list (as when ticked off in a shop), so it isn't bought again.
 5. **Packs**: a fixed pack buys enough of that listing; the cheapest mix tries every mix of the six cheapest listings (up to 99 packs each) and takes the cheapest that covers it, then the one least over, then the fewest packs. Unavailable listings are left out; gone ones (`listing_dead`) are marked on the item for relinking.
 6. **Multibuys** (3 for £2, buy 2 get 1 free, 25% off 6 or more) are rounded up to complete the deal when that keeps stock within the household's allowance over the level (**Multibuys may go over by**, 25% unless changed).
-7. **Perishables** (items with a shelf life) are capped at what gets used before it goes off: daily use (stock used over the last 90 days, or since the oldest movement if sooner; at least a week of history) × shelf life, never below the minimum. With no usage history, something keeping under 90 days only tops up to the normal amount, never the on-offer one.
+7. **Perishables** (items with a shelf life) are capped at what gets used before it goes off: daily use (the item's **We use**, if it says; otherwise stock used over the last 90 days, or since the oldest movement if sooner, with at least a week of history) × shelf life, never below the minimum. With no usage history, something keeping under 90 days only tops up to the normal amount, never the on-offer one.
 8. One basket line per listing goes to the provider's `/basket/add`.
 
 Before that, an item low at the shop with no listing there (milk from any shop) is matched to the shop's favourites waiting in Pending (the provider's copy, brought in first): when every word of its name, or else of one of its aliases, is in exactly one favourite's name ("Whole milk" in "Tesco British Whole Milk 4 Pints"), that favourite is linked to it (as **Link to an item** would, so it's remembered) and it's planned like any other. Several matching are listed for the person to link one, never guessed between; none matching, it's listed as not linked. Plan basket links them too.
@@ -104,6 +104,8 @@ Tools wait up to 50 seconds for a shop, then answer "Still working…" with a `j
 Action `larder.online_shopping_sync_favourites` (`shop`, optional): for a weekly automation.
 
 ## Events
+
+Listens to `product.recounted` (2 boxes became 40 tea bags): each listing's `packQuantity` and the stock-up amount on offer are multiplied, and target prices divided, by how many a box holds.
 
 `online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ pending_order, shop, run_id, items, total, failed, relink, slot, summary }`, for a notification (with `sensor.larder_pending_orders` for a reminder to confirm it). `online-shopping.slot_booked`: `{ shop, slot, start, end, reference, reserved_until, method, store }` (`method` is `delivery` or `collection`, `store` the branch for collection; `slot` in words, `start` and `end` as the shop gives them, e.g. `2026-11-06T09:30`); the email module watches for that delivery's email. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 

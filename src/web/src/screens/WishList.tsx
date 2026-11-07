@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { ProductSummary } from '@larder/core';
 import { api } from '../api';
+import { oneBought } from '../format';
 import { Icon } from '../icons';
 import { Empty, Header, Loading, PlaceSelect, ProductTile, Sheet, useAction, useIsDesktop, usePlaces } from '../ui';
 import { useEnabledWebModules } from '../modules';
@@ -49,7 +50,7 @@ function BoughtSheet({ s, onClose }: { s: ProductSummary; onClose: () => void })
   return (
     <Sheet title={`Where did you put the ${s.product.name.toLowerCase()}?`} onClose={onClose}>
       <PlaceSelect value={placeId} onChange={setPlaceId} places={places} />
-      <button type="button" className="btn primary block" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1, placeId }), `${s.product.name} moved into stock`).then((r) => r && onClose())}>Move into stock</button>
+      <button type="button" className="btn primary block" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1, unit: oneBought(s.product).unit, placeId }), `${s.product.name} moved into stock`).then((r) => r && onClose())}>Move into stock</button>
     </Sheet>
   );
 }

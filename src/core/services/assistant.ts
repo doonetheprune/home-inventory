@@ -13,7 +13,8 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addBrowseTools } from './assistant-browse';
-import { addManageTools, finders } from './assistant-manage';
+import { addManageTools, ComesInInput, finders, TakesOutInput, UsesInput, usageFields } from './assistant-manage';
+import { daysFor, packsText, usageText, worthText } from './packs';
 import { placesText } from './world';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
@@ -24,7 +25,7 @@ import type { Resolver } from './resolve';
 import type { createSearchService } from './search';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
-import { amount, andList, daysBetween } from '../util';
+import { amount, andList, daysBetween, pluralWord } from '../util';
 
 export interface ToolResult {
   /** What the assistant reads. Short, plain sentences or lines. */
@@ -92,27 +93,31 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   const where = placesText(s);
   if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
-  if (s.inUse && !p.lastsDays && p.inUseSince) parts.push(`one open since ${p.inUseSince}`);
+  if (s.inUse && !p.usage && p.inUseSince) parts.push(`one open since ${p.inUseSince}`);
+  if (p.usage) parts.push(`uses ${usageText(p)}${p.usage.auto ? ' (taken out by Larder)' : ''}`);
   if (s.status.low) parts.push('running low');
   if (s.runsOutOn) parts.push(`enough until ${when(ctx, s.runsOutOn)}`);
   if (s.nextExpiry && s.status.expiringSoon) parts.push(`expires ${when(ctx, s.nextExpiry)}`);
   return parts.join(', ');
 }
 
-/** "Each lasts 14 days once started, one after another. One in use since …, until …. Enough until …" */
-function lastsText(ctx: CoreContext, s: ProductSummary): string {
+/** "Uses 1 tea bag a day, taken out of stock by Larder. One in use since …, until …. Enough until …" */
+function usageLine(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
-  const each = `Each lasts ${p.lastsDays} day${p.lastsDays === 1 ? '' : 's'} once started, one after another${p.autoUse ? ', the next starting automatically when one runs out' : ''}.`;
-  if (!s.inUseUntil && s.inStock <= 0) return `${each} None in use and none left`;
-  const inUse = s.inUseUntil ? ` One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}.` : ' None in use.';
-  return `${each}${inUse} Enough until ${when(ctx, s.runsOutOn)}`;
+  const u = p.usage!;
+  const parts = [`Uses ${usageText(p)}${u.auto ? ', taken out of stock by Larder' : ''}.`];
+  if (s.inUseUntil && u.everyDays >= 2) parts.push(`One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}, not counted in stock.`);
+  else if (u.auto && !p.inUseSince) parts.push('None started yet, so nothing is taken out until one is (use_stock with opened, or change_item in_use_since).');
+  if (s.runsOutOn) parts.push(s.inStock <= 0 && !s.inUseUntil ? 'None left.' : `Enough until ${when(ctx, s.runsOutOn)}.`);
+  return parts.join(' ');
 }
 
 function detailText(ctx: CoreContext, d: ProductDetail): string {
   const p = d.product;
   const lines = [`${p.name}${d.category ? ` (${d.category.name})` : ''}`];
   if (p.wish) lines.push('On the wish list: the house has none yet.');
-  else lines.push(`In stock: ${amount(d.inStock, p.unit)}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
+  else lines.push(`In stock: ${amount(d.inStock, p.unit)}${packsText(p, d.inStock) ? ` (${packsText(p, d.inStock)})` : ''}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
+  if (p.pack) lines.push(`Comes in ${pluralWord(p.pack.name, 2)} of ${p.pack.holds}.`);
   const where = placesText(d);
   if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
@@ -125,10 +130,11 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   }
   for (const e of d.entries.filter((x) => x.status === 'expected')) lines.push(`- ${amount(e.quantity, p.unit)} expected from ${e.expected?.source ?? 'an order'}${e.expected?.eta ? ` on ${e.expected.eta}` : ''}${e.expected?.reference ? ` (order ${e.expected.reference})` : ''}`);
   for (const e of d.entries.filter((x) => x.status === 'pending')) lines.push(`- ${amount(e.quantity, p.unit)} in a pending order (${e.expected?.source ?? 'an order'}, not confirmed yet)`);
-  if (p.minQuantity) lines.push(`Running low below ${amount(p.minQuantity, p.unit)}${d.status.low ? ': it is low now' : ''}.`);
+  const worth = p.minQuantity ? daysFor(p, p.minQuantity) : null;
+  if (p.minQuantity) lines.push(`Running low below ${amount(p.minQuantity, p.unit)}${worth !== null ? ` (${worthText(worth)})` : ''}${d.status.low ? ': it is low now' : ''}.`);
   if (p.stockUpTo) lines.push(`Stock up to ${amount(p.stockUpTo, p.unit)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
-  if (p.lastsDays && d.runsOutOn) lines.push(`${lastsText(ctx, d)}${d.status.runningOut ? ': it is low now' : ''}.`);
+  if (p.usage) lines.push(usageLine(ctx, d));
   else if (d.inUse && p.inUseSince) lines.push(`One open since ${when(ctx, p.inUseSince)}, not counted in stock${d.inStock + d.expected + d.pending <= 0 ? ': it is the last one' : ''}.`);
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
@@ -204,6 +210,9 @@ export function createAssistant(deps: {
           places: (d.stockByPlace ?? []).map((x) => ({ place: x.path, quantity: x.quantity })),
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
+          comes_in: p.pack ? { name: p.pack.name, holds: p.pack.holds } : null,
+          uses: p.usage ? { amount: p.usage.amount, every_days: p.usage.everyDays, taken_out_by_larder: p.usage.auto } : null,
+          in_use_since: p.inUseSince ?? null, in_use_until: d.inUseUntil, runs_out_on: d.runsOutOn,
         },
       };
     },
@@ -237,8 +246,9 @@ export function createAssistant(deps: {
       minimum: z.number().min(0).optional().describe('Running low below this many'),
       stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
-      lasts_days: z.number().int().positive().max(3650).optional().describe('For things used one at a time, one after another (a glucose sensor, contact lenses, a water filter): how many days each one lasts once started. Larder works out when they run out'),
-      auto_use: z.boolean().optional().describe('With lasts_days: true to start the next one automatically (taking it out of stock) when the one in use runs out'),
+      comes_in: ComesInInput.optional(),
+      uses: UsesInput.optional(),
+      takes_out_automatically: TakesOutInput.optional(),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
       shop: z.string().max(80).optional().describe('Preferred shop'),
       new_shop: z.boolean().optional().describe('True to add the shop to Larder if it isn\'t there yet. Only after the person has said yes'),
@@ -263,7 +273,7 @@ export function createAssistant(deps: {
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
-        shelfLifeDays: i.shelf_life_days ?? null, lastsDays: i.lasts_days ?? null, autoUse: i.auto_use ?? false, defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        shelfLifeDays: i.shelf_life_days ?? null, pack: i.comes_in ?? null, ...usageFields(null, i.uses, i.uses ? i.takes_out_automatically : undefined), defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
         rechargeable: i.rechargeable ?? false, notes: i.notes ?? '', links: (i.links ?? []).map((url) => ({ url, title: '' })),
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
@@ -288,8 +298,8 @@ export function createAssistant(deps: {
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. For things that last a set time once started (a sensor, lenses), it\'s how to say a new one was started today. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item.', true);
-  fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or one that lasts a set time came off early. Use use_stock with opened: true when one is opened.', true);
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in the item\'s own unit, or set unit to its pack ("box").', true);
+  fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or the one in use is stopped (Larder stops taking them out until one is started). Use use_stock with opened: true when one is opened or started.', true);
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
   fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
@@ -322,9 +332,14 @@ export function createAssistant(deps: {
       }
       const found = await resolve.shop(shop);
       const list = await shopping.forShop(found.id);
-      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, in_stock: it.summary.inStock, category: g.category?.name ?? 'Other' })));
+      // Things bought in packs are bought in whole packs: "Tea bags ×1 box (80 tea bags)".
+      const howMany = (it: (typeof list.groups)[number]['items'][number]) => {
+        const p = it.summary.product;
+        return p.pack && it.packs ? `${amount(it.packs, p.pack.name)} (${amount(it.quantity, p.unit)})` : amount(it.quantity, p.unit);
+      };
+      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, packs: it.packs ?? null, pack: it.summary.product.pack?.name ?? null, in_stock: it.summary.inStock, category: g.category?.name ?? 'Other' })));
       if (!items.length) return { text: `Nothing to get at ${found.name}.`, data: { shop: found.name, items } };
-      const text = [`At ${found.name} (${items.length}):`, ...list.groups.map((g) => `${g.category?.name ?? 'Other'}: ${g.items.map((it) => `${it.summary.product.name} ×${amount(it.quantity, it.summary.product.unit)}`).join(', ')}`)].join('\n');
+      const text = [`At ${found.name} (${items.length}):`, ...list.groups.map((g) => `${g.category?.name ?? 'Other'}: ${g.items.map((it) => `${it.summary.product.name} ×${howMany(it)}`).join(', ')}`)].join('\n');
       return { text, data: { shop: found.name, items } };
     },
   });
