@@ -2,14 +2,16 @@
  * AI: Claude or Gemini, with the household's own API key, reads photos: a
  * pack, to name it in the scanner (looking it up on the web when the photo
  * isn't enough, unless the household has switched that off), or a receipt, to
- * add what was bought to stock (receipts.ts). Each AI has its own key and
+ * add what was bought to stock (receipts.ts). It also reads what an online
+ * database says about a scanned barcode, unless switched off, to work out the
+ * same things (what it's counted in, what it comes in). Each AI has its own key and
  * model, can be switched off for now without losing them, and they're tried
  * in the household's order: if the first can't (out of credit, busy), the next
  * reads it. Nothing is saved from a reading: the app shows it to check first.
  */
 import { z } from 'zod';
-import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
-import { claude, gemini, packTask, PROVIDER_NAMES, type Input, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
+import { defineModule, LarderError, LookupResult, oneOf, photoType, sameUnit, singular, SHOP_PRESETS } from '@larder/core';
+import { barcodeTask, claude, gemini, packTask, PROVIDER_NAMES, type Input, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
 import { orderReader } from './orders';
 import { itemMemory, receipts, type Asked } from './receipts';
 
@@ -25,6 +27,8 @@ interface Saved {
   models: Partial<Record<ProviderId, string>>;
   /** False when the household doesn't want packs looked up on the web. On unless switched off. */
   search?: boolean;
+  /** False when barcodes found online shouldn't also go to the AI. On unless switched off. */
+  barcodes?: boolean;
 }
 
 /** Every AI exactly once, in the saved order, any missing at the end. */
@@ -52,6 +56,8 @@ const Status = z.object({
   first: ProviderName.nullable(),
   /** Add by photo may look a pack up on the web when the photo isn't enough (a search costs about a penny). */
   search: z.boolean(),
+  /** A barcode found online goes to the AI too, to work out what it's counted in and comes in. */
+  barcodes: z.boolean(),
   claude: ProviderStatus,
   gemini: ProviderStatus,
 });
@@ -84,7 +90,10 @@ export const Identified = z.object({
   kind: z.string().nullable(),
   /** Brand and pack, e.g. "Heinz Baked Beanz 415 g", saved as the item's brand. */
   brand: z.string().nullable(),
+  /** The single thing used one at a time: "tea bag", "roll", "tin"; or the bottle or bag of something used a bit at a time. */
   unit: z.string(),
+  /** What it comes in, when a pack holds several: a box of 80 tea bags. */
+  pack: z.object({ name: z.string(), holds: z.number() }).nullable(),
   categoryId: z.string().nullable(),
   shelfLifeDays: z.number().int().nullable(),
   aliases: z.array(z.string()),
@@ -134,7 +143,7 @@ export default defineModule({
 
     async function saved(): Promise<Saved> {
       const s = await store.get('ai');
-      return { order: fullOrder(s?.order), off: s?.off ?? [], keys: s?.keys ?? {}, models: s?.models ?? {}, search: s?.search ?? true };
+      return { order: fullOrder(s?.order), off: s?.off ?? [], keys: s?.keys ?? {}, models: s?.models ?? {}, search: s?.search ?? true, barcodes: s?.barcodes ?? true };
     }
     const envKey = (p: ProviderId) => ctx.config[`${p}_api_key`]?.trim() || null;
     const keyFor = (s: Saved, p: ProviderId) => s.keys[p] ?? envKey(p);
@@ -147,7 +156,7 @@ export default defineModule({
         return { enabled: !s.off.includes(p), keySet: !!key, keyHint: key ? `…${key.slice(-4)}` : null, keyFrom: s.keys[p] ? 'app' as const : key ? 'env' as const : null, model: s.models[p] ?? null };
       };
       const use = usable(s);
-      return { ready: use.length > 0, order: s.order, first: use[0] ?? null, search: s.search !== false, claude: one('claude'), gemini: one('gemini') };
+      return { ready: use.length > 0, order: s.order, first: use[0] ?? null, search: s.search !== false, barcodes: s.barcodes !== false, claude: one('claude'), gemini: one('gemini') };
     }
 
     function needKey(s: Saved, p: ProviderId): string {
@@ -167,20 +176,22 @@ export default defineModule({
     ctx.addRoute({
       method: 'PUT',
       path: '/settings',
-      summary: 'Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web on or off',
+      summary: 'Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web, or reading barcode results, on or off',
       admin: true,
       body: z.object({
         /** First to ask, then next. AIs left out keep their place after these. */
         order: z.array(ProviderName).min(1).max(ALL.length).refine((o) => new Set(o).size === o.length, 'Name each AI once.').optional(),
         /** False: Add by photo goes only on what the photo shows, never searching the web. */
         search: z.boolean().optional(),
+        /** False: a barcode found online fills in the new item from what the database says, without asking the AI. */
+        barcodes: z.boolean().optional(),
         claude: ProviderPatch.optional(),
         gemini: ProviderPatch.optional(),
       }),
       response: Status,
       async handler({ body }) {
         const s = await saved();
-        const next: Saved = { order: body.order ? fullOrder([...body.order, ...s.order]) : s.order, off: [...s.off], keys: { ...s.keys }, models: { ...s.models }, search: body.search ?? s.search };
+        const next: Saved = { order: body.order ? fullOrder([...body.order, ...s.order]) : s.order, off: [...s.off], keys: { ...s.keys }, models: { ...s.models }, search: body.search ?? s.search, barcodes: body.barcodes ?? s.barcodes };
         for (const p of ALL) {
           const patch = body[p];
           if (!patch) continue;
@@ -192,7 +203,7 @@ export default defineModule({
           else if (patch.enabled === false && !next.off.includes(p)) next.off.push(p);
         }
         await store.put('ai', next);
-        ctx.log.info('AI settings changed', { order: next.order, off: next.off, search: next.search });
+        ctx.log.info('AI settings changed', { order: next.order, off: next.off, search: next.search, barcodes: next.barcodes });
         return status(next);
       },
     });
@@ -225,6 +236,29 @@ export default defineModule({
       },
     });
 
+    ctx.addRoute({
+      method: 'POST',
+      path: '/describe',
+      summary: 'Say what a scanned barcode is from what an online product database found for it (nothing is saved)',
+      description: 'Send what the barcode lookup found (`GET /api/v1/identify/{code}` with kind `external`). The AI works out the same as from a photo: what to call it, its category and shelf life, what it\'s counted in (the single thing used, a tea bag) and what it comes in (a box of 80). Unless switched off in Settings, it may search the web when the description isn\'t enough. Refused with `ai_not_set_up` when no AI is set up, or `ai_barcodes_off` when Read barcode results with AI is off.',
+      body: LookupResult.pick({ barcode: true, name: true, brand: true, quantityText: true, categories: true }),
+      response: Identified,
+      async handler({ body }) {
+        const s = await saved();
+        if (s.barcodes === false) throw new LarderError('Read barcode results with AI is off in Settings → AI.', 409, 'ai_barcodes_off');
+        const text = [
+          `Barcode: ${cap(body.barcode, 40)}`,
+          `Name: ${cap(body.name, 200) || 'not given'}`,
+          `Brand: ${cap(body.brand, 120) || 'not given'}`,
+          `Quantity: ${cap(body.quantityText, 80) || 'not given'}`,
+          `Categories: ${body.categories.slice(0, 8).map((c: string) => cap(c, 60)).join(', ') || 'not given'}`,
+        ].join('\n');
+        const categories = await ctx.core.categories.list();
+        const { answer, ...by } = await askAbout(() => ({ text, what: 'barcode' }), async () => barcodeTask(categories.map((c) => c.name), s.search !== false), 'barcode');
+        return { ...(await tidy(answer, categories)), ...by };
+      },
+    });
+
     /** Asks the AIs in the household's order about a photo (base64), until one answers. */
     const ask = <T>(image: string, task: () => Promise<Task<T>>): Promise<Asked<T>> => askAbout(() => ({ photo: photoFrom(image) }), task, 'photo');
 
@@ -232,10 +266,10 @@ export default defineModule({
      * Asks the AIs in the household's order about a photo or some text, until one answers. The task is
      * made only once the input has passed its checks, so nothing is looked up for a bad photo.
      */
-    async function askAbout<T>(input: () => Input, task: () => Promise<Task<T>>, what: 'photo' | 'email'): Promise<Asked<T>> {
+    async function askAbout<T>(input: () => Input, task: () => Promise<Task<T>>, what: 'photo' | 'email' | 'barcode'): Promise<Asked<T>> {
       const s = await saved();
       const use = usable(s);
-      if (!use.length) throw new LarderError(`Switch on Claude or Gemini in Settings → AI, with an API key, to read ${what === 'photo' ? 'photos' : 'order emails'}.`, 409, 'ai_not_set_up');
+      if (!use.length) throw new LarderError(`Switch on Claude or Gemini in Settings → AI, with an API key, to read ${({ photo: 'photos', email: 'order emails', barcode: 'barcode results' })[what]}.`, 409, 'ai_not_set_up');
       const given = input();
       const asking = await task();
       const skipped: Array<{ provider: ProviderId; message: string; error: LarderError }> = [];
@@ -247,7 +281,7 @@ export default defineModule({
         } catch (err) {
           // The AIs only throw LarderErrors on purpose; anything else is a bug, not a reason to ask the next.
           if (!(err instanceof LarderError)) throw err;
-          ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read ${what === 'email' ? 'an email' : 'a photo'}`, { message: err.message });
+          ctx.log.warn(`${PROVIDER_NAMES[p]} couldn't read ${({ photo: 'a photo', email: 'an email', barcode: 'a barcode result' })[what]}`, { message: err.message });
           skipped.push({ provider: p, message: err.message, error: err });
         }
       }
@@ -295,12 +329,19 @@ export default defineModule({
       const brand = cap([title, size && !squash(title).includes(squash(size)) ? size : ''].filter(Boolean).join(' '), 160) || null;
       const shop = await shopFor(cap(r.shop, 60) || null);
       const days = r.shelf_life_days;
+      // Said in the singular, as Larder says units ("2 tea bags"): "Tea bags" is "Tea bag".
+      const unit = (cap(r.unit, 20) && oneOf(cap(r.unit, 20))) || 'each';
+      // A pack holds several of what it's counted in; "a box of boxes" or a pack of one isn't one.
+      const packName = cap(r.pack, 30) && singular(cap(r.pack, 30));
+      const holds = typeof r.pack_holds === 'number' && r.pack_holds > 1 && r.pack_holds <= 100000 ? Math.round(r.pack_holds * 1000) / 1000 : null;
+      const pack = packName && holds && !sameUnit(packName, unit) ? { name: packName, holds } : null;
       return {
         readable: r.readable,
         name,
         kind: kind && !same(kind, name) ? kind : null,
         brand,
-        unit: cap(r.unit, 20) || 'each',
+        unit,
+        pack,
         categoryId: category?.id ?? null,
         shelfLifeDays: typeof days === 'number' && days >= 1 ? Math.min(36500, Math.round(days)) : null,
         // The plain kind first ("Herbal tea"), so searching for it finds this; no name twice in any case.

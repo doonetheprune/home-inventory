@@ -18449,6 +18449,9 @@
                     "search": {
                       "type": "boolean"
                     },
+                    "barcodes": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -18545,6 +18548,7 @@
                     "order",
                     "first",
                     "search",
+                    "barcodes",
                     "claude",
                     "gemini"
                   ],
@@ -18558,7 +18562,7 @@
     },
     "/api/v1/modules/ai/settings": {
       "put": {
-        "summary": "Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web on or off (admin)",
+        "summary": "Set the order the AIs are asked in, switch one on or off, set or forget its API key or model, or switch looking packs up on the web, or reading barcode results, on or off (admin)",
         "tags": [
           "Module: ai"
         ],
@@ -18582,6 +18586,9 @@
                     }
                   },
                   "search": {
+                    "type": "boolean"
+                  },
+                  "barcodes": {
                     "type": "boolean"
                   },
                   "claude": {
@@ -18695,6 +18702,9 @@
                     "search": {
                       "type": "boolean"
                     },
+                    "barcodes": {
+                      "type": "boolean"
+                    },
                     "claude": {
                       "type": "object",
                       "properties": {
@@ -18791,6 +18801,7 @@
                     "order",
                     "first",
                     "search",
+                    "barcodes",
                     "claude",
                     "gemini"
                   ],
@@ -18921,6 +18932,29 @@
                     "unit": {
                       "type": "string"
                     },
+                    "pack": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "holds": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "holds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "categoryId": {
                       "type": [
                         "string",
@@ -19034,6 +19068,240 @@
                     "kind",
                     "brand",
                     "unit",
+                    "pack",
+                    "categoryId",
+                    "shelfLifeDays",
+                    "aliases",
+                    "shop",
+                    "provider",
+                    "model",
+                    "sources",
+                    "skipped"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules/ai/describe": {
+      "post": {
+        "summary": "Say what a scanned barcode is from what an online product database found for it (nothing is saved)",
+        "tags": [
+          "Module: ai"
+        ],
+        "description": "Send what the barcode lookup found (`GET /api/v1/identify/{code}` with kind `external`). The AI works out the same as from a photo: what to call it, its category and shelf life, what it's counted in (the single thing used, a tea bag) and what it comes in (a box of 80). Unless switched off in Settings, it may search the web when the description isn't enough. Refused with `ai_not_set_up` when no AI is set up, or `ai_barcodes_off` when Read barcode results with AI is off.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "barcode": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "brand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "quantityText": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "barcode",
+                  "name",
+                  "brand",
+                  "quantityText",
+                  "categories"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "readable": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "brand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "pack": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "holds": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "holds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "categoryId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "shelfLifeDays": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "shop": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "preset": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "id",
+                            "preset"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "gemini"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "gemini"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "readable",
+                    "name",
+                    "kind",
+                    "brand",
+                    "unit",
+                    "pack",
                     "categoryId",
                     "shelfLifeDays",
                     "aliases",

@@ -597,6 +597,44 @@ test('Add from receipt matches lines to items, leaves the rest out, and adds wha
   expect(stock).toEqual([1, 2, 1]);
 });
 
+test('a barcode found online goes to the AI, which works out it comes in a box of 80 tea bags', async ({ page }, info) => {
+  await signIn(page);
+  const code = `5000${info.project.name === 'phone' ? '1' : '2'}08023402`;
+  const name = `PG Tips tea bags ${info.project.name}`;
+  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', search: true, barcodes: true, claude: set, gemini: set } }));
+  // Open Food Facts knows it (stood in for here); the AI is asked about what it found.
+  const found = { provider: 'openfoodfacts', barcode: code, name: 'PG tips original 80 pyramid tea bags', brand: 'PG Tips', quantityText: '232 g', imageUrl: null, categories: ['Teas'] };
+  await page.route(`**/api/v1/identify?code=${code}`, (r) => r.fulfill({ json: { kind: 'external', code, result: found, suggestions: [] } }));
+  const asked: unknown[] = [];
+  await page.route('**/api/v1/modules/ai/describe', (r) => {
+    asked.push(r.request().postDataJSON());
+    return r.fulfill({ json: { readable: true, name, kind: 'Black tea', brand: 'PG Tips Original 80 tea bags', unit: 'tea bag', pack: { name: 'box', holds: 80 }, categoryId: null, shelfLifeDays: 540, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [] } });
+  });
+  await page.goto('/#/scan');
+  await page.getByLabel('Barcode or code').fill(code);
+  await page.getByLabel('Barcode or code').press('Enter');
+  const card = page.locator('.sheet-card');
+  await expect(card.getByText('Found in Open Food Facts, worked out by Claude. Check the name. Counted in tea bags, comes in boxes of 80')).toBeVisible();
+  expect(asked).toEqual([{ barcode: code, name: found.name, brand: 'PG Tips', quantityText: '232 g', categories: ['Teas'] }]);
+  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  await card.getByRole('button', { name: 'Add 1 box (80 tea bags)' }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 box (80 tea bags) · ${name}`);
+  const item = await page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { name: string; unit: string; pack: unknown; shelfLifeDays: number }; inStock: number }>).find((s) => s.product.name === n)!, name);
+  expect([item.product.unit, item.product.pack, item.product.shelfLifeDays, item.inStock]).toEqual(['tea bag', { name: 'box', holds: 80 }, 540, 80]);
+
+  // The AI can't (out of credit): what the barcode database says is still there to add.
+  const other = `${code}9`;
+  await page.route(`**/api/v1/identify?code=${other}`, (r) => r.fulfill({ json: { kind: 'external', code: other, result: { ...found, barcode: other }, suggestions: [] } }));
+  await page.unroute('**/api/v1/modules/ai/describe');
+  await page.route('**/api/v1/modules/ai/describe', (r) => r.fulfill({ status: 402, json: { error: 'ai_failed', message: 'Claude is out of credit.' } }));
+  await page.getByLabel('Barcode or code').fill(other);
+  await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.locator('.toast')).toContainText("Claude is out of credit. Here's what the barcode database says.");
+  await expect(card.getByText('Not in Larder yet. Found in Open Food Facts.')).toBeVisible();
+  await expect(card.getByLabel('Call it')).toHaveValue(found.name);
+});
+
 test('a barcode nothing knows can be read with AI, and is remembered', async ({ page }, info) => {
   test.skip(info.project.name === 'phone', 'Once is enough');
   await signIn(page);
