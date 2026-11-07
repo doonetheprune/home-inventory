@@ -7,8 +7,8 @@ next: SQLite synchronous = FULL; then spikes S2 and S6
 updated: 2026-11-07
 blockers: []
 contracts:
-  web-transport: 0.1 owner
-  local-enrolment: 0.2 owner
+  web-transport: 0.2 owner
+  local-enrolment: 0.3 owner
   releases: 0.2 owner
   cloud-link: 0.2
 ---

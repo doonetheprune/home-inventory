@@ -23,7 +23,7 @@ Larder runs at home today, as a Home Assistant add-on, in Docker, or on a Raspbe
   - It passes changes back to Larder at home.
   - Later, it adds plug-and-play services: AI reads with no key of your own, backups to Google Drive, the Claude connector from anywhere, and phone notifications.
 - **The Larder app**, in the App Store and Google Play. It's Larder's own web app in a native shell, which:
-  - talks to Larder directly on the home Wi-Fi, including when Larder is the Home Assistant add-on
+  - talks to Larder at home on the Wi-Fi: directly, or through Home Assistant when Larder is the add-on
   - goes through Larder Cloud everywhere else
   - opens with no connection at all
 
@@ -86,8 +86,8 @@ Larder at home: the Home Assistant add-on, Docker or the Pi box
   └ Larder Automations, track B: an add-on, Docker, a Mac or the Pi
     └ providers: Tesco, Toolstation
 
-At home on the Wi-Fi, the app talks to Larder directly
-(for the add-on, through the add-on's own port).
+At home on the Wi-Fi, the app talks to Larder directly,
+or through Home Assistant when Larder is the add-on.
 ```
 
 ## 5. Design
@@ -153,7 +153,7 @@ At home on the Wi-Fi, the app talks to Larder directly
 | Adding people and phones | Home only | Home only |
 | Switching off a phone or person | ✔ | ✔ |
 
-At home on the Wi-Fi, the app talks to Larder directly, and with the Home Assistant add-on that means the add-on's own port (D21). Home Assistant, NFC, MQTT and assistants keep talking to Larder at home as they do now. Larder opened at home, or inside Home Assistant, is unchanged.
+At home on the Wi-Fi, the app talks to Larder directly. With the Home Assistant add-on it goes through Home Assistant instead, so the add-on's own port stays closed (see Larder in Home Assistant). Home Assistant, NFC, MQTT and assistants keep talking to Larder at home as they do now. Larder opened at home, or inside Home Assistant, is unchanged.
 
 ### People, phones and keys
 
@@ -161,20 +161,26 @@ At home on the Wi-Fi, the app talks to Larder directly, and with the Home Assist
   - the household
   - each person's Larder id, name and role
   - each phone's public key
-- **Setting up a phone happens at home** (D22).
-  1. Signed in to Larder as usual (with a Larder password, or through Home Assistant), the person opens Settings → Larder app → **Add a phone**. Larder shows a code (a QR code) for a few minutes.
-  2. On the home Wi-Fi, they scan it with the app. The code tells the app where Larder is on the network and which Larder it is, so a look-alike can't fool it.
-  3. The app connects straight to Larder to finish. Larder only accepts the code from its own network, not through a tunnel or Larder Cloud, which proves the phone is at home.
-  4. The phone makes a key pair. The private half stays in its secure chip, optionally behind Face ID or a fingerprint.
-  5. Larder gives the phone:
-     - its own access token, for talking to Larder directly
+- **Setting up a phone happens at home** (D22). How the person proves who they are depends on how Larder is installed:
+  - **The Home Assistant add-on: Sign in with Home Assistant.**
+    - The app finds Home Assistant on the home network (or the person types its address) and opens Home Assistant's own login page.
+    - Then a page asks "Allow the Larder app to use Larder?". This is the same sign-in Larder's Claude connector already uses through Home Assistant.
+    - The integration only shows that page when the sign-in comes from the home network, not through Nabu Casa or another outside address.
+    - Nobody needs a Larder password.
+  - **Docker or the Pi box: a code from Larder's settings.**
+    - Signed in to Larder as usual, the person opens Settings → Larder app → **Add a phone**, and Larder shows a QR code for a few minutes.
+    - On the home Wi-Fi, they scan it with the app. The code tells the app where Larder is and which Larder it is, so a look-alike can't fool it.
+    - The app connects straight to Larder to finish. Larder only accepts the code from its own network, not through a tunnel or Larder Cloud.
+- **Either way, the set-up then finishes the same:**
+  1. The phone makes a key pair. The private half stays in its secure chip, optionally behind Face ID or a fingerprint.
+  2. Larder gives the phone:
+     - a Larder token for that person: never a Home Assistant token, so the app can use Larder but nothing else in Home Assistant
      - a registration with Larder Cloud, if the household is linked
      - the household key, locked to the phone's key
-  6. Admins see a notice: "Alex added a Pixel 8 at 19:42 · Remove".
-- **With the Home Assistant add-on**, step 3 needs the add-on's own port open on the home network (D21; D23 covers what happens if it stays closed). Nobody needs a Larder password.
+  3. Admins see a notice: "Alex added a Pixel 8 at 19:42 · Remove".
 - **Signing in to Larder Cloud.** The phone signs a challenge. A function checks it against the phones Larder registered and returns a Firebase custom token naming the household, person, role and phone. Firebase then keeps the phone signed in, and Larder Cloud can cancel that at any time.
 - **Removing someone, or one of their phones,** happens in Larder at home:
-  - The phone's access token is revoked.
+  - The phone's Larder token is revoked.
   - Larder Cloud cancels its sessions and refuses new ones.
   - The household key changes. The new key reaches the remaining phones through the cloud, locked to each phone's own key.
   - The removed app wipes its copy as soon as it's told.
@@ -190,7 +196,7 @@ At home on the Wi-Fi, the app talks to Larder directly, and with the Home Assist
 - **Sign-up only from the Larder app, started in Larder's own settings** (Settings → Larder Cloud → **Link**), never from a web page. The one function that creates a household needs all four of:
   1. Larder's signature
   2. proof it's the genuine app on a real phone (App Check, using App Attest or Play Integrity; test builds use App Check's debug provider)
-  3. the code Larder showed in its settings, scanned by the app
+  3. a one-time code from Larder: shown in Larder's settings and scanned by the app, or passed straight to the app for an admin signed in through Home Assistant
   4. a store purchase, or a claim to the free plan
 
   Larder's own page can't pass the app check, so the app is the only way in. It works the same for the add-on, Docker and the Pi box.
@@ -212,16 +218,19 @@ At home on the Wi-Fi, the app talks to Larder directly, and with the Home Assist
 
 ### Larder in Home Assistant
 
-The add-on is the first Larder the main track is tested with.
-- **Linking:** it links to Larder Cloud like any other Larder, from Settings → Larder Cloud, opened through Home Assistant as now. It only needs ordinary outbound internet.
-- **The app's local route** talks to the add-on's own port on the home network. That port is off by default today (D21). Larder's settings say whether the app can reach it, and how to open it.
-- **Where Larder is:** Larder tells the app the Home Assistant machine's address and the add-on's port, in the set-up code and through Larder Cloud (spike S6). If the address changes, the app uses the latest one Larder reported, then tries `homeassistant.local`.
-- **People who sign in through Home Assistant** set up the app with a code from Larder's settings, so nobody needs a Larder password (D22).
+The add-on is the first Larder the main track is tested with. Everything goes through Home Assistant's own API, with a Home Assistant user in front of it, so the add-on's own port stays closed.
+- **Linking:** the add-on links to Larder Cloud like any other Larder, from Settings → Larder Cloud, opened through Home Assistant as now. It only needs ordinary outbound internet.
+- **The app goes through Home Assistant**, the way Larder's Claude connector already does:
+  - Today the integration passes MCP through Home Assistant at `/api/larder/mcp` (`custom_components/larder/mcp.py`). Its sign-in (`oauth.py`) gives the connector a Larder token after Home Assistant's own login.
+  - The app uses the same sign-in, plus a new passthrough for Larder's whole API at `/api/larder/v1/…`, including photos and live updates.
+  - The app only ever holds a Larder token for that person, never a Home Assistant token, so it can use Larder but nothing else in Home Assistant.
+- **Routes:** at home, the app uses Home Assistant's home address. Away, it uses Larder Cloud, or Home Assistant's outside address if there is one (Nabu Casa, or your own).
+- **When Home Assistant is restarting** (an update, say), the app uses its copy or Larder Cloud until it's back.
 - **Backups:**
   - Larder's credential for Larder Cloud lives in the add-on's data folder, so it's in Home Assistant backups.
   - A backup restored on a second machine mustn't become a second home for the same household. Larder Cloud accepts one connection per household and asks before moving it.
   - Home Assistant's cold backups stop Larder for a few seconds. Larder Cloud shows home as offline briefly, and changes wait.
-- **Unchanged:** the integration, sensors, actions and MCP through Home Assistant carry on as now.
+- **Unchanged:** the integration's sensors and actions, and MCP through Home Assistant, carry on as now.
 
 ### Cloud services
 
@@ -359,11 +368,11 @@ Try the risky parts first, and make the decisions that shape M1.
 |---|---|---|
 | S2 | `home-inventory` | Can Larder's core, running in a browser, answer every page of the example household? |
 | S3 | `larder-cloud`, `home-inventory` | How do Firestore and Firebase Auth behave from Node inside the Home Assistant add-on, on aarch64 and amd64: memory use, reconnecting after a drop, custom-token sign-in? |
-| S4 | `larder-app` | Can a Capacitor shell load a Larder web build and reach the add-on's own port, and a Docker Larder, on the home network? Set up App Attest and Play Integrity with App Check. |
+| S4 | `larder-app` | Can a Capacitor shell load a Larder web build, reach a Docker Larder on the home network, and sign in through Home Assistant's own login page? Set up App Attest and Play Integrity with App Check. |
 | S5 | `larder-app`, `home-inventory` | How long does encrypting and decrypting a big household take on a mid-range phone? |
-| S6 | `home-inventory` | What can the add-on tell the app about where it is (the machine's address, `homeassistant.local`, the add-on's port)? What happens when the port is closed or the address changes? |
+| S6 | `home-inventory` | Can the integration pass Larder's whole API through Home Assistant, photos and live updates included? Can it tell whether a request came from the home network or through Nabu Casa? |
 
-Decisions needed first: D1, D2, D5, D20, D21, D22.
+Decisions needed first: D1, D2, D5, D20 and D22.
 
 **Done when:** each spike is reported to the owner, those decisions are made, and drafting of `cloud-link` has started.
 
@@ -409,13 +418,12 @@ The owner's second milestone.
   - routes as data
   - phone mode
   - Larder's core in the browser, with offline copies running on it too
-  - setting up a phone with a code
-  - access tokens for phones on Larder's own port
-  - the add-on's port for the app
+  - the integration's passthrough for Larder's whole API, and Sign in with Home Assistant for the app
+  - setting up a phone with a code, for Docker and the Pi box
   - removing a phone
   - the web app's third way to reach Larder (the phone's copy), with the sync bar and waiting changes
 - `larder-app`:
-  - three routes: straight to Larder at home, through Larder Cloud, and no connection
+  - three routes: at home (through Home Assistant, or straight to Larder), through Larder Cloud, and no connection
   - the phone's copy
   - loading the version home runs
   - setting up a phone, and finding Larder again after its address changes
@@ -425,7 +433,7 @@ The owner's second milestone.
   - the household key for each phone, changed when one is removed
 
 **Done when:**
-- The app, set up from Larder inside Home Assistant, works three ways: on the home Wi-Fi straight to the add-on, through Larder Cloud on 4G, and with no connection at all.
+- The app, signed in with Home Assistant, works three ways: on the home Wi-Fi through Home Assistant, through Larder Cloud on 4G, and with no connection at all. The add-on's port stays closed.
 - A change made on 4G while Larder is off arrives at home when it's back.
 - A phone can be removed, after which it can't read anything new.
 
@@ -520,7 +528,7 @@ Spike S1, run by `larder-pi`, `larder-automations` and `larder-provider-tesco`: 
 | Linking (M2) | Numbered changes, as-of, done once and home-only data (`home-inventory` M1); `cloud-link` (`larder-cloud` M1) |
 | Web app hosting (`larder-cloud` M2) | The web app bundle in each release (`home-inventory` M2, `releases`) |
 | The app's local and offline routes (M3) | Larder's core in the browser and `local-enrolment` (`home-inventory` M3) |
-| The app talking to the add-on at home (M3) | The add-on's port (D21) and spike S6 |
+| The app talking to the add-on at home (M3) | The integration's passthrough (`home-inventory` M3) and spike S6 |
 | Changes showing straight away (M4) | The app's three routes (M3) |
 | Plans (M5) | The cost model (`larder-cloud` M0) |
 | Live view away from home (M6) | Live view (B1) and the relay (`larder-cloud` M6) |
@@ -566,7 +574,8 @@ The items noted during the design conversation, and where they now live.
 |---|---|
 | The phone and home disagree | Home always wins; a parity test compares them |
 | Firebase from Node inside the add-on (memory, reconnecting) | Spike S3 |
-| The add-on's port is closed by default, so the app can't reach it at home | D21 (open by default) and D23 (if it stays closed); Larder says what to do |
+| Home Assistant restarting (an update, say) cuts the app's route at home for a minute | The app uses its copy, or Larder Cloud |
+| The passthrough has to carry photos and live updates through Home Assistant | Spike S6 |
 | A Home Assistant backup restored on another machine looks like a second home for the household | One connection per household; Larder Cloud asks before moving it |
 | SD cards and power cuts | `synchronous = FULL`; an SSD or a UPS helps |
 | Losing the household key | Home holds it; an optional recovery key |
@@ -582,7 +591,7 @@ The items noted during the design conversation, and where they now live.
 For the owner:
 1. Create the private repos `agent-hub` (with this hub in it), `larder-cloud` and `larder-app`. `larder-pi` can wait for track B.
 2. Add the snippet from `templates/AGENTS-snippet.md` to each repo's `AGENTS.md` or `CLAUDE.md`.
-3. Decide D1, D2, D5, D20, D21 and D22.
+3. Decide D1, D2, D5, D20 and D22.
 4. Start a session for each agent, each with its own repo and this hub:
    - `home-inventory`: its Now tasks, then spikes S2 and S6
    - `larder-cloud`: set-up, spike S3 and the cost model

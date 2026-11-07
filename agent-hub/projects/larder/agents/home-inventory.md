@@ -14,7 +14,7 @@ It must not become tied to Firebase: Firebase code lives only in `modules/cloud-
 
 ## Read first
 
-- In this repo: `AGENTS.md`, `docs/DECISIONS.md`, `docs/ARCHITECTURE.md` and `addon/config.yaml`.
+- In this repo: `AGENTS.md`, `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `addon/config.yaml`, and the integration's `custom_components/larder/oauth.py` and `mcp.py`.
 - In the hub, `PLAN.md`, especially these sections: Sync; People, phones and keys; Larder in Home Assistant.
 
 ## Contracts
@@ -37,7 +37,7 @@ Tick tasks as you finish them; that's the only change you make to this file.
 ### M0 — Decide and try
 
 - [ ] Spike S2: Larder's core, running in a browser, answers every page of the example household. Report the results in a message to the owner.
-- [ ] Spike S6: work out what the add-on can tell the app about where it is (the machine's address, `homeassistant.local`, the add-on's port), and what happens when the port is closed or the address changes. Report to the owner, for D21 and D23.
+- [ ] Spike S6: can the integration pass Larder's whole API through Home Assistant, photos and live updates included? Can it tell whether a request came from the home network or through Nabu Casa? Report to the owner.
 - [ ] Spike S3, with `larder-cloud`: Firestore and Firebase Auth from Node inside the add-on, on aarch64 and amd64.
 
 ### M1 — Ready to link
@@ -95,14 +95,16 @@ Tick tasks as you finish them; that's the only change you make to this file.
 - [ ] Tests:
   - every module's pages answer in phone mode on the example household
   - a parity test runs random requests two ways, through phone mode plus sync and directly, and compares the records
-- [ ] Setting up a phone (`local-enrolment`, D22, board 6):
-  - Settings → Larder app → **Add a phone** shows a code with Larder's addresses and key.
-  - The app finishes the set-up on the home network.
-  - Larder gives the phone an access token for its own port, and registers it with Larder Cloud.
-  - People who sign in through Home Assistant need no Larder password.
-- [ ] The add-on's own port for the app (D21, D23): Larder's settings say whether the app can reach Larder at home, and how to open the port.
+- [ ] The integration's passthrough (`custom_components/larder`, with tests in `tests/ha`):
+  - Larder's whole API at `/api/larder/v1/…`, with photos and live updates streamed
+  - Larder tokens passed on as they are, as `/api/larder/mcp` does
+- [ ] Sign in with Home Assistant for the app (`local-enrolment`, D22, board 6):
+  - reuse the connector sign-in in `oauth.py` for the Larder app
+  - only from the home network, not through Nabu Casa or another outside address
+  - the same step registers the phone's key, and hands back a Larder token and the household key
+- [ ] Setting up a phone with a code, for Docker and the Pi box (`local-enrolment`): Settings → Larder app → **Add a phone** shows a code with Larder's addresses and key, and the app finishes the set-up on the home network.
 - [ ] Removing a phone (boards 9, 11):
-  - its access token is revoked
+  - its Larder token is revoked
   - Larder Cloud is told
   - the household key changes
   - Settings → Accounts lists each person's phones
@@ -110,7 +112,7 @@ Tick tasks as you finish them; that's the only change you make to this file.
   - a sync bar ("At home", "Through Larder Cloud", "No connection")
   - the list of waiting changes
   - reporting Larder's version to the shell
-- [ ] Add rules to `AGENTS.md`: routes are data; mark secret collections home-only; timers use `ctx.every`; modules must be safe in phone mode. Add the matching `docs/DECISIONS.md` entries, and add-on release notes for the port (D21).
+- [ ] Add rules to `AGENTS.md`: routes are data; mark secret collections home-only; timers use `ctx.every`; modules must be safe in phone mode. Add the matching `docs/DECISIONS.md` entries, and describe the app in `docs/home-assistant.md`.
 
 ### M4 — Everyone in the house
 

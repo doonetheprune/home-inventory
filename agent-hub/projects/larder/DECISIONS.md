@@ -10,6 +10,7 @@ From the design conversation, November 2026:
   - First, any Larder links to Larder Cloud, including the one inside Home Assistant.
   - Then, the app works with any Larder both at home and through the cloud, including when Larder is the Home Assistant add-on.
   - Automations on any device, and the Pi box, are a second track that those milestones don't wait for.
+- **The app reaches the Home Assistant add-on through Home Assistant's API**, signed in as a Home Assistant user, the way Larder's Claude connector already does. The add-on's own port stays closed.
 - **One household per Larder at home.** One add-on, Docker or Pi install is one household in Larder Cloud.
 - **People exist only in Larder at home.**
   - A household can have several people.
@@ -57,14 +58,9 @@ Each has a recommendation. Tick one when it's decided, and say what was chosen. 
 - [ ] **D20. How agents use this hub.** Recommendation:
   - messages, status and ticks are pushed straight to `main`
   - the plan, briefs, contracts and decisions change by pull request
-- [ ] **D21. The Home Assistant add-on's own port.** The app's route at home needs it open on the home network, but today it's off by default (`8080/tcp: null`). Recommendation:
-  - Open it by default from the version that adds the app.
-  - It still needs a token or a Larder account, as it does now, so it only answers phones and people Larder knows.
-  - Say so in the add-on's release notes.
-- [ ] **D22. How a phone is set up, for everyone.** Recommendation: a code shown in Larder's settings, scanned by the app, and finished on the home Wi-Fi.
-  - This works the same for the add-on, Docker and the Pi box.
-  - People who sign in through Home Assistant don't need a Larder password.
-  - It replaces typing a Larder username and password into the app.
-- [ ] **D23. If the add-on's port stays closed.** Recommendation:
-  - The app still works through Larder Cloud, even at home.
-  - An admin can choose to let phones finish set-up through Larder Cloud instead of on the home Wi-Fi. This is off by default, because it means a phone can be added away from home.
+- [x] **D21. The Home Assistant add-on's own port.** Decided: it stays closed (`8080/tcp: null`, as today). The app goes through Home Assistant's API instead.
+- [ ] **D22. How a phone is set up.** Recommendation:
+  - The Home Assistant add-on: **Sign in with Home Assistant** in the app (Home Assistant's own login, then "Allow the Larder app to use Larder?"), only from the home network.
+  - Docker and the Pi box: a code shown in Larder's settings, scanned by the app, and finished on the home Wi-Fi.
+  - Either way, nobody types a Larder username and password into the app, and nobody signing in through Home Assistant needs a Larder password.
+- [x] **D23. If the add-on's port stays closed.** No longer needed: the app goes through Home Assistant whether the port is open or not.

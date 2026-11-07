@@ -2,7 +2,7 @@
 name: web-transport
 owner: home-inventory
 consumers: [larder-app, larder-cloud]
-version: 0.1
+version: 0.2
 status: draft
 ---
 
@@ -23,6 +23,7 @@ How Larder's web app reaches Larder when Larder itself isn't serving it: in the 
   - see the route in use: at home, through Larder Cloud, or no connection
 - **Versions.** Each Larder release's web app is published at `/v/<version>/`. Shells load the version home reports, and keep it. When home's version changes, the shell switches after sending what's waiting.
 - **Live updates** come from the sync channel instead of server events. The web app refreshes its pages the same way as today.
+- **Where requests go** is the shell's choice. Straight to Larder for Docker and the Pi box. For the Home Assistant add-on, through Home Assistant at `/api/larder/v1/…` with a Larder token, the way the integration already passes MCP on. The web app sees the same API either way.
 
 ## To write in M1 and M3
 
@@ -33,4 +34,5 @@ How Larder's web app reaches Larder when Larder itself isn't serving it: in the 
 
 ## Changes
 
+- 0.2 (2026-11-07): requests for the Home Assistant add-on go through Home Assistant.
 - 0.1 (2026-11-07): first draft.

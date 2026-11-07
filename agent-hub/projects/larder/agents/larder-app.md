@@ -16,7 +16,7 @@ Every Larder screen is Larder's web app. The shell only adds set-up, connection 
 ## Read first
 
 - In the hub, `PLAN.md`: Principles; Sync; People, phones and keys; Sign-up and plans; Larder in Home Assistant.
-- In `home-inventory`: `src/web`, especially `src/web/src/api.ts` (the one request function) and `src/web/src/offline/`, plus `addon/config.yaml`.
+- In `home-inventory`: `src/web`, especially `src/web/src/api.ts` (the one request function) and `src/web/src/offline/`, plus the integration's sign-in, `custom_components/larder/oauth.py`.
 
 ## Contracts
 
@@ -31,7 +31,7 @@ Tick tasks as you finish them; that's the only change you make to this file.
 
 ### M0 — Decide and try
 
-- [ ] Spike S4: a Capacitor shell loads a Larder web build and reaches, through native HTTP, both the Home Assistant add-on's own port and a Docker Larder on the home network. Set up App Attest and Play Integrity with Firebase App Check.
+- [ ] Spike S4: a Capacitor shell loads a Larder web build, reaches a Docker Larder on the home network through native HTTP, and signs in through Home Assistant's own login page. Set up App Attest and Play Integrity with Firebase App Check.
 - [ ] Spike S5, with `home-inventory`: time encrypting and decrypting a big household's records on a mid-range phone.
 
 ### M2 — Linked
@@ -44,18 +44,17 @@ Tick tasks as you finish them; that's the only change you make to this file.
 ### M3 — The app, at home and away
 
 - [ ] The shell loads the version of the web app that home runs, downloaded from `/v/<version>/` and kept on the phone, with a bundled version for the first run.
-- [ ] Set up this phone by scanning the code from Settings → Larder app (`local-enrolment`, D22):
-  - check Larder's key before sending anything
-  - finish the set-up on the home network
-  - keep the access token, and a key pair made in the Secure Enclave or Android Keystore (Face ID or fingerprint optional)
-  - receive the household key
+- [ ] Set up this phone (`local-enrolment`, D22):
+  - the Home Assistant add-on: **Sign in with Home Assistant**, finding Home Assistant on the home network or by its address
+  - Docker or the Pi box: scan the code from Settings → Larder app, check Larder's key, and finish on the home network
+  - either way, keep the Larder token and a key pair made in the Secure Enclave or Android Keystore (Face ID or fingerprint optional), and receive the household key
 - [ ] Three routes:
-  - at home: straight to Larder (the add-on's own port, Docker or the Pi box)
-  - elsewhere: through Larder Cloud
+  - at home: through Home Assistant's home address (the add-on), or straight to Larder (Docker or the Pi box)
+  - elsewhere: through Larder Cloud, or Home Assistant's outside address if there is one
   - no connection: the phone's copy, kept in SQLite
 
-  At home, hand waiting changes to Larder over the Wi-Fi first. The bar says which route is in use.
-- [ ] Find Larder again after its address changes: first the latest address Larder reported through Larder Cloud, then `homeassistant.local` or `_larder._tcp` where available.
+  At home, hand waiting changes to Larder first. The bar says which route is in use.
+- [ ] Find Larder again after an address changes: the latest addresses reported through Larder Cloud, then `homeassistant.local` or `_larder._tcp` where available.
 
 ### M4 — Everyone in the house
 
