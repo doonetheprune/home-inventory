@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1
+
+Assistants ask less. The Claude app asks before every use of a tool marked as destructive, which made voice chat stop at nearly everything.
+
+- **Everyday changes aren't marked destructive any more:** using, finishing and moving stock, deliveries arriving, taking something off the shopping list, new batteries going in, and taking a cooked recipe's ingredients out (which you've already agreed to in the chat). Each can be undone by doing the opposite, and stock history keeps them. Removing something or overwriting what was set (removing an item, changing a price, correcting a count) still asks.
+- **Working out a recipe's ingredients to take out** (`propose_cooking`) is marked read-only, since it changes nothing.
+- **To stop the asking altogether:** in Claude, Customize → Connectors → Larder → Tool permissions, set the groups to **Always allow**. Pressing Allow in a chat doesn't stop it asking next time. See the MCP guide.
+
 ## 0.9.0
 
 One way to say how fast things go, for tea bags, sensors and everything else. It replaces 0.8.2's **Each one lasts** and pricing's **measures**, so read **Changed or gone** below.

@@ -44,8 +44,12 @@ export interface AssistantTool<I extends z.ZodObject = z.ZodObject> {
   /** True for tools that only read. */
   readOnly?: boolean;
   /**
-   * True when it changes or takes away what's there (uses stock, moves things,
-   * overwrites a value), not only adds. MCP clients may ask the person first.
+   * True when it removes something or overwrites what was set (a removed item,
+   * a changed price, a corrected count), so doing the opposite doesn't undo it.
+   * MCP clients such as the Claude app ask the person before each call. Not for
+   * everyday stock changes that the opposite tool undoes and stock history
+   * records (using, finishing, moving, arriving, taking off the shopping list):
+   * asking before every one makes talking to an assistant hard work.
    */
   destructive?: boolean;
   run(input: z.output<I>, caller: { userId: string | null }): Promise<ToolResult>;
@@ -298,15 +302,15 @@ export function createAssistant(deps: {
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in the item\'s own unit, or set unit to its pack ("box").', true);
-  fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or the one in use is stopped (Larder stops taking them out until one is started). Use use_stock with opened: true when one is opened or started.', true);
-  fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.', true);
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in the item\'s own unit, or set unit to its pack ("box").');
+  fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or the one in use is stopped (Larder stops taking them out until one is started). Use use_stock with opened: true when one is opened or started.');
+  fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.');
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');
-  fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.', true);
+  fromAction('mark_arrived', 'mark_arrived', 'Mark a delivery arrived', 'A delivery arrived: give the source (e.g. "Tesco delivery") for all of it, or an item and quantity for part of it.');
   fromAction('confirm_order', 'confirm_order', 'Confirm a pending order', 'A pending order (e.g. a filled online basket) was checked out, so it\'s on its way: give the source for all of it, or one item.');
   fromAction('cancel_order', 'cancel_order', 'Remove a pending order', 'A pending order didn\'t go ahead (the basket wasn\'t checked out): give the source for all of it, or one item. What\'s still low is bought next time.', true);
   fromAction('add_to_shopping_list', 'add_to_shopping_list', 'Put on the shopping list', 'Put an item on the shopping list even though it isn\'t low.');
-  fromAction('remove_from_shopping_list', 'remove_from_shopping_list', 'Take off the shopping list', 'Take an item that was put on the shopping list by hand off it again. Items that are low stay on until restocked.', true);
+  fromAction('remove_from_shopping_list', 'remove_from_shopping_list', 'Take off the shopping list', 'Take an item that was put on the shopping list by hand off it again. Items that are low stay on until restocked.');
   fromAction('put_back', 'put_back', 'Put an item back', 'Something that was out of place is back in its usual place.');
   fromAction('mark_charged', 'mark_charged', 'Mark batteries charged', 'Rechargeable batteries (or similar): some flat ones have been charged.');
   fromAction('renew', 'renew', 'Renew', 'A renewal (insurance, MOT, boiler service) has been renewed: restart its clock from today.');

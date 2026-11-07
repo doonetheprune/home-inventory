@@ -55,12 +55,17 @@ describe('MCP server', () => {
     }
     expect(tools.find((t) => t.name === 'search')?.annotations?.readOnlyHint).toBe(true);
     expect(tools.find((t) => t.name === 'add_stock')?.annotations?.readOnlyHint).toBe(false);
-    // Clients may skip asking before tools that only add; ones that take away or overwrite say so.
+    // The Claude app asks before every call to a destructive tool, so only ones that remove or overwrite say so.
+    // Everyday stock changes that the opposite tool undoes (and stock history records) don't, so talking to it doesn't stop at each one.
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
-      'use_stock', 'finish_item', 'move_item', 'mark_arrived', 'cancel_order', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
+      'cancel_order', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
       'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
     ]);
+    for (const name of ['use_stock', 'finish_item', 'move_item', 'mark_arrived', 'remove_from_shopping_list']) {
+      const hints = tools.find((t) => t.name === name)?.annotations;
+      expect(hints, name).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    }
   });
 
   it('adds, finds and uses stock by name, answering in plain text', async () => {

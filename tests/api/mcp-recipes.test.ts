@@ -31,11 +31,13 @@ describe('MCP recipe ratios and presets', () => {
     await app.close();
   });
 
-  it('serves the recipe tools, with presets that only forget marked destructive', async () => {
+  it('serves the recipe tools, with forgetting marked destructive and proposing read-only', async () => {
     const { tools } = await client.listTools();
     const mine = tools.filter((t) => /recipe|cooking/.test(t.name));
     expect(mine.map((t) => t.name)).toEqual(['save_recipe', 'list_recipes', 'get_recipe', 'set_recipe_scenarios', 'recipe_to_shopping_list', 'forget_recipe', 'save_recipe_preset', 'forget_recipe_preset', 'propose_cooking', 'confirm_cooking']);
-    expect(mine.filter((t) => t.annotations?.destructiveHint).map((t) => t.name)).toEqual(['set_recipe_scenarios', 'forget_recipe', 'forget_recipe_preset', 'confirm_cooking']);
+    expect(mine.filter((t) => t.annotations?.destructiveHint).map((t) => t.name)).toEqual(['set_recipe_scenarios', 'forget_recipe', 'forget_recipe_preset']);
+    // propose_cooking only works out a list; confirm_cooking applies it once the person has agreed in the chat, so neither asks again.
+    expect(mine.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name)).toEqual(['list_recipes', 'get_recipe', 'propose_cooking']);
     const get = tools.find((t) => t.name === 'get_recipe')!.inputSchema as Any;
     expect(Object.keys(get.properties)).toEqual(['recipe', 'preset', 'servings', 'times', 'have']);
     expect(get.properties.have.items.required).toEqual(['ingredient', 'amount']);

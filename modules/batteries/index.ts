@@ -200,7 +200,7 @@ export default defineModule({
     });
 
     ctx.addTool({
-      name: 'batteries_replaced', title: 'Batteries replaced in a device', destructive: true,
+      name: 'batteries_replaced', title: 'Batteries replaced in a device',
       description: 'New batteries went into a device: takes them out of stock (rechargeables count as flat until charged) and clears its low flag.',
       input: z.object({ device: DeviceRef }),
       async run({ device }) {
