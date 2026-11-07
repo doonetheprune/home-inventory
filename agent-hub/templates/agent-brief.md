@@ -17,7 +17,7 @@ One paragraph: what this repo is for in the project, and what it must never beco
 
 ## Tasks
 
-Tick tasks as you finish them; that's the only change you make to this file. Milestone headings start with `### Now`, `### M<n>` or `### Later`, so the board can count them.
+Tick tasks as you finish them; that's the only change you make to this file. Milestone headings start with `### Now`, `### Later`, or a letter and a number (`### M1`, or `### B1` for a second track), so the board can count them.
 
 ### M1 — Name
 

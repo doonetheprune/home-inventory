@@ -1,9 +1,9 @@
 ---
 agent: larder-automations
 state: not-started
-milestone: M0
+milestone: B0
 now:
-next: Spike S1, with larder-pi and larder-provider-tesco
+next: Track B, when there's time: spike S1, with larder-pi and larder-provider-tesco
 updated: 2026-11-07
 blockers: []
 contracts:

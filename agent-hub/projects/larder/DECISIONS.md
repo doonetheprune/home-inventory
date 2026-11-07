@@ -6,14 +6,18 @@ The owner's decisions for this project. Agents ask in a `decision` message to `o
 
 From the design conversation, November 2026:
 
-- **One household per Larder at home.** One Pi, add-on or Docker install is one household in Larder Cloud.
-- **People exist only on the Pi.**
-  - A household can have several people, each a Larder account.
-  - Phones are set up only on the home network, by signing in to the Pi.
-  - The Pi tells Larder Cloud who's been added or removed.
-  - Usernames and passwords are changed only on the Pi and never sent to Firebase.
-- **Larder Cloud sign-up happens only from the Larder app at home**, never from a web page, so the Firebase side stays locked down.
-- **Automations can run on the Larder box itself:** "Run automations on this device", with Devices and Providers lists in Larder's settings.
+- **The first milestones don't need the Pi box.**
+  - First, any Larder links to Larder Cloud, including the one inside Home Assistant.
+  - Then, the app works with any Larder both at home and through the cloud, including when Larder is the Home Assistant add-on.
+  - Automations on any device, and the Pi box, are a second track that those milestones don't wait for.
+- **One household per Larder at home.** One add-on, Docker or Pi install is one household in Larder Cloud.
+- **People exist only in Larder at home.**
+  - A household can have several people.
+  - Phones are set up only on the home network, after signing in to Larder at home. D22 covers how this works for Home Assistant users.
+  - Larder tells Larder Cloud who's been added or removed.
+  - Usernames and passwords are changed only at home and never sent to Firebase.
+- **Larder Cloud sign-up happens only from the Larder app, started in Larder's own settings**, never from a web page, so the Firebase side stays locked down.
+- **Automations can run beside Larder:** "Run automations on this device", with Devices and Providers lists in Larder's settings.
 - **Shop sign-in details are typed into Larder and sent to Larder Automations to keep.** Larder never stores them.
 - **Larder shows the automations' browser:** screenshots of where a run stopped, and a slim live view.
 - **Plug and play:** Larder Cloud supplies the AI keys. The free cloud plan includes 100 product lookups a month, counted centrally.
@@ -23,7 +27,7 @@ From the design conversation, November 2026:
 
 ## Needed
 
-Each has a recommendation. Tick one when it's decided, and say what was chosen.
+Each has a recommendation. Tick one when it's decided, and say what was chosen. Decisions marked **track B** can wait until that track starts.
 
 - [ ] **D1. Run Larder's core on the phone.** Recommendation: yes. Every page then works and changes show straight away, even with home offline. The alternative is a mirror of the app's answers, like today's offline copies. That's less work in Larder, but changes made away don't show until home has done them, and only saved pages work.
 - [ ] **D2. End-to-end encryption of records and changes.** Recommendation: yes, from the first cloud version. The cloud then sees only ids, numbers, sizes and times.
@@ -38,18 +42,29 @@ Each has a recommendation. Tick one when it's decided, and say what was chosen.
   - Recommendation for the free plan: sync, plus 100 AI reads a month without web searches.
   - Recommendation for paid plans: more reads, web searches, live view away from home, Drive backups and the Claude connector.
   - Set prices after `larder-cloud`'s cost model.
-- [ ] **D11. Where a Pi keeps the key to shop sign-in details.**
-  - Recommendation: Larder Cloud holds the key for cloud households, so a stolen SD card on its own is no use.
-  - A TPM board as an option.
-  - On the SD card only as a last resort, with a warning.
-- [ ] **D12. Main hardware.** Recommendation: Pi 5, with a 4 GB Pi 4 also supported.
-- [ ] **D13. The Wi-Fi set-up page.** Recommendation: comitup's own page at first; a Larder-branded one later.
+- [ ] **D11. Where a Linux device keeps the key to shop sign-in details** (track B).
+  - Recommendation: Larder Cloud holds the key for cloud households, so a copied disk or backup on its own is no use.
+  - A TPM board as an option on a Pi.
+  - On the disk only as a last resort, with a warning.
+- [ ] **D12. Main hardware for the Pi box** (track B). Recommendation: Pi 5, with a 4 GB Pi 4 also supported.
+- [ ] **D13. The Pi box's Wi-Fi set-up page** (track B). Recommendation: comitup's own page at first; a Larder-branded one later.
 - [ ] **D14. Approving the Claude connector.** Recommendation: on the home network only.
 - [ ] **D15. HTTPS at home without Tailscale**, using a certificate authority per box. Recommendation: leave it until later; the app and Tailscale cover most people.
-- [ ] **D16. Setting up a new phone.** Recommendation: at home only, with a key per phone. Passkeys, which move with the person's Apple or Google account, could come later.
+- [ ] **D16. Setting up a new phone.** Recommendation: at home only, with a code from Larder's settings and a key per phone. Passkeys, which move with the person's Apple or Google account, could come later.
 - [ ] **D17. Shopping ticks.** Recommendation: send each tick as it happens, so two people shopping at once see each other's. Today ticks are sent all together when you press Done.
-- [ ] **D18. Signing releases.** Recommendation: minisign. It's simple, and the Pi can check signatures with no extra services.
-- [ ] **D19. The shops' terms.** Recommendation: check Tesco's and Toolstation's terms before any store listing or website offers them.
+- [ ] **D18. Signing releases.** Recommendation: minisign. It's simple, and the Pi box can check signatures with no extra services.
+- [ ] **D19. The shops' terms** (track B). Recommendation: check Tesco's and Toolstation's terms before any store listing or website offers them.
 - [ ] **D20. How agents use this hub.** Recommendation:
   - messages, status and ticks are pushed straight to `main`
   - the plan, briefs, contracts and decisions change by pull request
+- [ ] **D21. The Home Assistant add-on's own port.** The app's route at home needs it open on the home network, but today it's off by default (`8080/tcp: null`). Recommendation:
+  - Open it by default from the version that adds the app.
+  - It still needs a token or a Larder account, as it does now, so it only answers phones and people Larder knows.
+  - Say so in the add-on's release notes.
+- [ ] **D22. How a phone is set up, for everyone.** Recommendation: a code shown in Larder's settings, scanned by the app, and finished on the home Wi-Fi.
+  - This works the same for the add-on, Docker and the Pi box.
+  - People who sign in through Home Assistant don't need a Larder password.
+  - It replaces typing a Larder username and password into the app.
+- [ ] **D23. If the add-on's port stays closed.** Recommendation:
+  - The app still works through Larder Cloud, even at home.
+  - An admin can choose to let phones finish set-up through Larder Cloud instead of on the home Wi-Fi. This is off by default, because it means a phone can be added away from home.

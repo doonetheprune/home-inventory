@@ -8,6 +8,8 @@ status: draft
 
 # Contract: live-view
 
+**Track B.** Only the live view away from home (M6) waits for it.
+
 Seeing a provider's browser from Larder, and using it when needed.
 
 ## Agreed so far

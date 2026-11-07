@@ -1,4 +1,4 @@
-# Plan: Larder at home, in the cloud, on a phone and on a Pi
+# Plan: Larder in the cloud and on your phone, with any Larder at home
 
 The plan for the Larder project. Every agent reads this, then its brief in `agents/`. The owner changes this file; agents suggest changes by message (see `PROTOCOL.md`).
 
@@ -6,7 +6,7 @@ The plan for the Larder project. Every agent reads this, then its brief in `agen
 2. Principles
 3. Repos and agents
 4. How it fits together
-5. Design: sync, what works where, people, phones and keys, sign-up and plans, automations, cloud services, the Larder Pi box, security and privacy
+5. Design: sync, what works where, people, phones and keys, sign-up and plans, Larder in Home Assistant, cloud services, automations (track B), the Larder Pi box (track B), security and privacy
 6. Milestones
 7. What depends on what
 8. Board items
@@ -15,45 +15,49 @@ The plan for the Larder project. Every agent reads this, then its brief in `agen
 
 ## 1. What we're building
 
-Larder runs at home today, on a Raspberry Pi, a NAS or as a Home Assistant add-on, with the shopping automations running on a Mac. This project adds four things:
+Larder runs at home today, as a Home Assistant add-on, in Docker, or on a Raspberry Pi. The main track builds two things that work with any of them, including the Home Assistant add-on:
 
 - **Larder Cloud:** one Firebase project for every household.
+  - Any Larder can link to it from its own settings.
   - It keeps a copy of each household, so the app works away from home, even when home is offline.
   - It passes changes back to Larder at home.
-  - It offers plug-and-play services: AI reads with no key of your own, backups to Google Drive, the Claude connector from anywhere, and a live view of the automations.
+  - Later, it adds plug-and-play services: AI reads with no key of your own, backups to Google Drive, the Claude connector from anywhere, and phone notifications.
 - **The Larder app**, in the App Store and Google Play. It's Larder's own web app in a native shell, which:
-  - finds Larder at home and talks to it directly on the home Wi-Fi
+  - talks to Larder directly on the home Wi-Fi, including when Larder is the Home Assistant add-on
   - goes through Larder Cloud everywhere else
   - opens with no connection at all
-- **The Larder Pi box:** an image to flash onto a Raspberry Pi. It sets up its own Wi-Fi, runs Larder and the shopping automations, and updates itself.
-- **Automations on any device:** Larder Automations and the shop providers run on the Pi box or a Mac, and are controlled entirely from Larder.
+
+A second track, **track B**, runs alongside whenever there's time. Nothing in the main track waits for it, except the live view from away from home.
+- **Automations on any device:** Larder Automations and the shop providers run beside any Larder (as an add-on, in Docker, on a Mac or on a Pi), and are controlled entirely from Larder.
+- **The Larder Pi box:** an image to flash onto a Raspberry Pi. It sets up its own Wi-Fi, runs Larder and the automations, and updates itself.
 
 ## 2. Principles
 
-1. **Larder at home is the source of truth.** Larder Cloud keeps a copy and a queue. It never runs Larder's rules.
-2. **Changes go up as API requests; results come down as records.** "Used 2 milk" is `POST /stock/use`, and Larder at home applies it through its own API.
-3. **One front end.** The same Larder web app runs on the Pi, in the app and in Larder Cloud. Only how it reaches Larder changes. No feature is built twice.
-4. **The phone runs the version home runs.** The app and Larder Cloud load the version of the web app that Larder at home reports.
-5. **Adding access needs the home network; taking it away works from anywhere.**
-6. **Secrets stay where they're used:**
-   - Passwords live only on the Pi.
-   - Shop sign-in details live only on the automations device.
-   - Larder Cloud's own keys live only in Larder Cloud.
+1. **Any Larder at home will do:** the Home Assistant add-on, Docker or the Pi box. The first milestones are tested with the add-on.
+2. **Larder at home is the source of truth.** Larder Cloud keeps a copy and a queue. It never runs Larder's rules.
+3. **Changes go up as API requests; results come down as records.** "Used 2 milk" is `POST /stock/use`, and Larder at home applies it through its own API.
+4. **One front end.** The same Larder web app runs at home, in the app and in Larder Cloud; only how it reaches Larder changes. No feature is built twice.
+5. **The phone runs the version home runs.** The app and Larder Cloud load the version of the web app that Larder at home reports.
+6. **Adding access needs the home network; taking it away works from anywhere.**
+7. **Secrets stay where they're used:**
+   - Passwords stay in Larder at home, or in Home Assistant.
+   - Shop sign-in details stay on the automations device.
+   - Larder Cloud's own keys stay in Larder Cloud.
    - Records and changes in the cloud are encrypted end to end (D2).
-7. **Repos meet only at contracts.** Each contract is versioned, owned by one agent and has conformance tests on both sides.
-8. **One agent per repo; the owner decides.**
+8. **Repos meet only at contracts.** Each contract is versioned, owned by one agent, and has conformance tests on both sides.
+9. **One agent per repo; the owner decides.**
 
 ## 3. Repos and agents
 
 | Repo | | What it is | Agent |
 |---|---|---|---|
 | `home-inventory` | existing, public | Larder: core, server, web app, modules, the Home Assistant add-on and integration | `home-inventory` |
-| `larder-automations` | existing | The automations hub, today a Mac menu bar app with a Chrome extension | `larder-automations` |
-| `larder-provider-tesco` | existing | The Tesco provider | `larder-provider-tesco` |
-| `larder-provider-toolstation` | existing | The Toolstation provider | `larder-provider-toolstation` |
 | `larder-cloud` | new | The Firebase project: rules, functions, hosting, the live view relay | `larder-cloud` |
 | `larder-app` | new | The store app: a Capacitor shell around Larder's web app | `larder-app` |
-| `larder-pi` | new | The Pi image, Wi-Fi set-up, updater and system helper | `larder-pi` |
+| `larder-automations` | existing, track B | The automations hub, today a Mac menu bar app with a Chrome extension | `larder-automations` |
+| `larder-provider-tesco` | existing, track B | The Tesco provider | `larder-provider-tesco` |
+| `larder-provider-toolstation` | existing, track B | The Toolstation provider | `larder-provider-toolstation` |
+| `larder-pi` | new, track B | The Pi image, Wi-Fi set-up, updater and system helper | `larder-pi` |
 | `agent-hub` | new | This hub: plan, contracts, status, messages | `coordinator` (optional) |
 
 ## 4. How it fits together
@@ -67,22 +71,23 @@ Phone or laptop, anywhere
         ↑ changes (API requests)      ↓ records
 
 Larder Cloud: one Firebase project, every household
-  Auth         phones sign in with keys the Pi registered
+  Auth         phones sign in with keys Larder registered
   Firestore    records · changes · members and phones
   Realtime DB  is home connected?
   Storage      snapshots · photos
   Hosting      /v/<version>/ web apps
   Functions    households · sign-in · AI reads · Drive · MCP
-  Cloud Run    live view relay
+  Cloud Run    live view relay (track B)
 
         ↑ records (every write, numbered)   ↓ changes
 
-Larder at home: the Pi box, a Home Assistant add-on or Docker
+Larder at home: the Home Assistant add-on, Docker or the Pi box
   Larder, with the Cloud link module
-  └ Larder Automations: on this Pi, or a paired Mac
+  └ Larder Automations, track B: an add-on, Docker, a Mac or the Pi
     └ providers: Tesco, Toolstation
 
-At home on the Wi-Fi, the app talks to Larder directly.
+At home on the Wi-Fi, the app talks to Larder directly
+(for the add-on, through the add-on's own port).
 ```
 
 ## 5. Design
@@ -104,8 +109,8 @@ At home on the Wi-Fi, the app talks to Larder directly.
   - who made it (person and phone)
   - when it was made
   - which version of each record the phone was looking at
-- With no signal, a change waits on the phone (Firestore keeps it) and goes when there's signal. At home, the app hands it to the Pi over Wi-Fi.
-- The Pi applies changes in the order they reach Firestore:
+- With no signal, a change waits on the phone (Firestore keeps it) and goes when there's signal. At home, the app hands it to Larder over the Wi-Fi.
+- Larder at home applies changes in the order they reach Firestore:
   - through its own API, as the person who made them
   - as of when they were made
   - with ids made from the change's id
@@ -131,7 +136,7 @@ At home on the Wi-Fi, the app talks to Larder directly.
 4. **The same thing recorded twice:** if the same item is bought at the same shop within minutes from two phones, Larder asks "Count both?". Purchases at different shops both count.
 5. **Questions** show on every phone and at home. The first answer settles it.
 
-**Durability:** SQLite runs with `synchronous = FULL`. The Pi reports a change done only once it's on disk.
+**Durability:** SQLite runs with `synchronous = FULL`. Larder at home reports a change done only once it's on disk.
 
 ### What works where
 
@@ -142,51 +147,56 @@ At home on the Wi-Fi, the app talks to Larder directly.
 | Scanning | ✔ | Known barcodes ✔; new ones need home |
 | Add by photo, receipts | ✔ | ✔ through Larder Cloud's AI reads |
 | Start a shop, slots, fill basket | ✔ | Waits, if you choose |
-| Live view of the automations | ✔ | ✗ |
+| Live view of the automations (track B) | ✔ | ✗ |
 | Household settings, module switches | ✔ | ✔ waits |
 | Settings with secrets, shop sign-in details | ✔ encrypted | ✗ |
 | Adding people and phones | Home only | Home only |
 | Switching off a phone or person | ✔ | ✔ |
 
-Home Assistant, NFC, MQTT and assistants keep talking to Larder at home directly. The Larder you open at home is unchanged.
+At home on the Wi-Fi, the app talks to Larder directly, and with the Home Assistant add-on that means the add-on's own port (D21). Home Assistant, NFC, MQTT and assistants keep talking to Larder at home as they do now. Larder opened at home, or inside Home Assistant, is unchanged.
 
 ### People, phones and keys
 
-- **The Pi is the only place people exist.** Accounts, usernames, passwords and roles belong to Larder and are managed in Settings → Accounts, as today. Larder Cloud only knows:
+- **Larder at home is the only place people exist.** Accounts, usernames, passwords and roles belong to Larder (or, for the add-on, come from Home Assistant) and are managed as today. Larder Cloud only knows:
   - the household
   - each person's Larder id, name and role
   - each phone's public key
-- **Setting up a phone happens at home only.**
-  1. On the home Wi-Fi, the app finds Larder and the person signs in with their Larder username and password.
-  2. The phone proves it's at home by quoting the code Larder is announcing on the network that minute. Checking the address alone isn't enough, because tunnels and Docker can make outside requests look local.
-  3. The phone makes a key pair. The private half stays in its secure chip, optionally behind Face ID or a fingerprint.
-  4. Larder registers the phone with Larder Cloud, and gives it the household key locked to the phone's key.
-  5. Admins see a notice: "Alex added a Pixel 8 at 19:42 · Remove".
+- **Setting up a phone happens at home** (D22).
+  1. Signed in to Larder as usual (with a Larder password, or through Home Assistant), the person opens Settings → Larder app → **Add a phone**. Larder shows a code (a QR code) for a few minutes.
+  2. On the home Wi-Fi, they scan it with the app. The code tells the app where Larder is on the network and which Larder it is, so a look-alike can't fool it.
+  3. The app connects straight to Larder to finish. Larder only accepts the code from its own network, not through a tunnel or Larder Cloud, which proves the phone is at home.
+  4. The phone makes a key pair. The private half stays in its secure chip, optionally behind Face ID or a fingerprint.
+  5. Larder gives the phone:
+     - its own access token, for talking to Larder directly
+     - a registration with Larder Cloud, if the household is linked
+     - the household key, locked to the phone's key
+  6. Admins see a notice: "Alex added a Pixel 8 at 19:42 · Remove".
+- **With the Home Assistant add-on**, step 3 needs the add-on's own port open on the home network (D21; D23 covers what happens if it stays closed). Nobody needs a Larder password.
 - **Signing in to Larder Cloud.** The phone signs a challenge. A function checks it against the phones Larder registered and returns a Firebase custom token naming the household, person, role and phone. Firebase then keeps the phone signed in, and Larder Cloud can cancel that at any time.
-- **Removing someone** happens on the Pi:
-  - Larder Cloud cancels that person's sessions and refuses new ones.
+- **Removing someone, or one of their phones,** happens in Larder at home:
+  - The phone's access token is revoked.
+  - Larder Cloud cancels its sessions and refuses new ones.
   - The household key changes. The new key reaches the remaining phones through the cloud, locked to each phone's own key.
-  - Their app wipes its copy as soon as it's told.
-  - Nothing new is readable on their phones straight away, and within the hour they can't reach Firebase at all. What their phones already had stays on them.
-- **Switching off a phone or a person** works from anywhere (admins only), even with the Pi offline. The Pi confirms it when it's back. Keys are per phone, so a lost phone can go without removing the person.
-- **Usernames, passwords and roles** change on the Pi only. Phones use keys, not the password, so **Change password** asks "Sign out your phones too?".
-- **Laptops:** Larder's own page at home shows a short-lived code under **Add this computer**, which you type into Larder Cloud on that computer. The key then lives in that browser.
-- **The Home Assistant add-on:** people need Larder accounts, as offline copies already do.
+  - The removed app wipes its copy as soon as it's told.
+  - Nothing new is readable on that phone straight away, and within the hour it can't reach Firebase at all. What it already had stays on it.
+- **Switching off a phone or a person** works from anywhere (admins only), even with Larder offline. Larder confirms it when it's back. Keys are per phone, so a lost phone can go without removing the person.
+- **Usernames, passwords and roles** change only in Larder at home, or in Home Assistant. Phones use keys, not the password, so **Change password** asks "Sign out your phones too?".
+- **Laptops:** the same code, typed into Larder Cloud on that computer. The key then lives in that browser.
 - **No-login mode:** Larder Cloud needs accounts switched on.
-- **No email or Google sign-in.** Recovery means going home and signing in again. A new phone is set up at home (D16).
+- **No email or Google sign-in.** Recovery means going home and setting the phone up again (D16).
 
 ### Sign-up and plans
 
-- **Sign-up happens only from the Larder app at home.** There's no sign-up page anywhere. The one function that creates a household needs all four of:
-  1. the Pi's signature
-  2. proof it's the genuine app on a real phone (App Check, using App Attest or Play Integrity)
-  3. the code Larder is announcing at home
+- **Sign-up only from the Larder app, started in Larder's own settings** (Settings → Larder Cloud → **Link**), never from a web page. The one function that creates a household needs all four of:
+  1. Larder's signature
+  2. proof it's the genuine app on a real phone (App Check, using App Attest or Play Integrity; test builds use App Check's debug provider)
+  3. the code Larder showed in its settings, scanned by the app
   4. a store purchase, or a claim to the free plan
 
-  The Pi's own web page can't pass the app check, so the app is the only way in.
+  Larder's own page can't pass the app check, so the app is the only way in. It works the same for the add-on, Docker and the Pi box.
 - **After sign-up, Larder Cloud has three ways in:**
-  - the Pi, with its key
-  - the phones the Pi added, with their keys
+  - Larder at home, with its key
+  - the phones Larder added, with their keys
   - the stores' payment notices, through RevenueCat
 
   No client can create or change a household directly.
@@ -200,32 +210,70 @@ Home Assistant, NFC, MQTT and assistants keep talking to Larder at home directly
   - rate limits per household
   - a monthly spending cap across all households, with alerts
 
-### Automations
+### Larder in Home Assistant
 
-**Where they run.** Larder Automations runs on any paired device: the Larder box itself (Settings → Automations → **Run automations on this device**), a Mac, or another computer.
-- On the same device it's a separate service or container, never part of Larder. That way:
+The add-on is the first Larder the main track is tested with.
+- **Linking:** it links to Larder Cloud like any other Larder, from Settings → Larder Cloud, opened through Home Assistant as now. It only needs ordinary outbound internet.
+- **The app's local route** talks to the add-on's own port on the home network. That port is off by default today (D21). Larder's settings say whether the app can reach it, and how to open it.
+- **Where Larder is:** Larder tells the app the Home Assistant machine's address and the add-on's port, in the set-up code and through Larder Cloud (spike S6). If the address changes, the app uses the latest one Larder reported, then tries `homeassistant.local`.
+- **People who sign in through Home Assistant** set up the app with a code from Larder's settings, so nobody needs a Larder password (D22).
+- **Backups:**
+  - Larder's credential for Larder Cloud lives in the add-on's data folder, so it's in Home Assistant backups.
+  - A backup restored on a second machine mustn't become a second home for the same household. Larder Cloud accepts one connection per household and asks before moving it.
+  - Home Assistant's cold backups stop Larder for a few seconds. Larder Cloud shows home as offline briefly, and changes wait.
+- **Unchanged:** the integration, sensors, actions and MCP through Home Assistant carry on as now.
+
+### Cloud services
+
+- **AI reads** (`ai-lookups`):
+  - Larder Cloud is the first reader in Settings → AI ("63 of 100 left this month"), ahead of the household's own Claude or Gemini key.
+  - Larder at home, or a phone when home is offline, sends the photo.
+  - A function checks the plan and this month's count, reads the photo with Larder Cloud's key (from Secret Manager), records the read in the same transaction as the count, and answers in the AI module's own format.
+  - Photos aren't kept. Web searches cost more (D10).
+- **Google Drive backups:**
+  - Larder Cloud owns one verified Google client that only asks for the files it creates (`drive.file`).
+  - Larder at home makes and encrypts the backup (the database and photos, each photo only once) and uploads it straight to a "Larder backups" folder using a short-lived pass. The last 30 are kept.
+  - Restore happens when setting up a new Larder, using the household key from a phone or a backup password.
+  - Home Assistant users can already back up to Drive through Home Assistant.
+- **The Claude connector:**
+  - Larder Cloud's MCP address passes each request to Larder's own `/mcp` at home and brings back the answer.
+  - Connector sign-in is approved at home (D14).
+  - It works whenever home is connected; while home is offline, the assistant says so (D9).
+- **Notifications:** "Needs you", basket filled, running low.
+- **Live view relay** (for track B): a small Cloud Run service that Larder at home and the phone both connect out to.
+- **Secrets in the cloud**, all in collections no app can read:
+
+  | Secret | Kept as |
+  |---|---|
+  | Larder at home's credential, connector tokens | hashes |
+  | Google Drive sign-ins | encrypted with Cloud KMS |
+  | Subscriptions | held by RevenueCat |
+  | Larder Cloud's own keys | Secret Manager |
+
+  Never in the cloud: passwords, usernames, shop sign-in details, households' own AI keys, or Gmail sign-ins.
+
+### Automations (track B)
+
+**Where they run.** Larder Automations runs beside any Larder, on any paired device: a second Home Assistant add-on, a second Docker service, a Mac, or the Pi box. In Larder: Settings → Automations → **Run automations on this device**.
+- It's always a separate service or container, never part of Larder. That way:
   - shop passwords stay out of Larder's data and backups
   - a browser visiting shop websites is kept apart from the inventory
   - it can crash or update without touching Larder
-- How it's installed:
-  - Home Assistant add-on: a second add-on.
-  - Docker: a second service.
-  - The Pi box: already installed.
-- The Pi is always on, so it never needs waking, and Home Assistant isn't needed for shopping.
+- A device that's always on (the add-on, Docker, the Pi box) never needs waking.
 
 **Settings → Automations:**
 
 ```
-Run automations on this Pi                  [On]
+Run automations on this device              [On]
 
 Devices
-  This Pi          Larder Automations 1.6   Ready
+  This device      Larder Automations 1.6   Ready
   Mac mini                                  Asleep · woken when needed
   + Add a device
 
 Providers
-  Tesco         on This Pi    shop: Tesco          Signed in · s•••@gmail.com
-  Toolstation   on Mac mini   shop: Toolstation    Needs you: sign in again
+  Tesco         on This device  shop: Tesco          Signed in · s•••@gmail.com
+  Toolstation   on Mac mini     shop: Toolstation    Needs you: sign in again
   + Add a provider
 ```
 
@@ -234,7 +282,7 @@ Providers
 - **Shop sign-in details:**
   - They're encrypted in the browser for that device before they leave it.
   - Larder and Larder Cloud pass them on without being able to read them.
-  - The device keeps them encrypted: in the Keychain on a Mac, or with the key kept elsewhere on a Pi (D11).
+  - The device keeps them encrypted: in the Keychain on a Mac, or with the key kept elsewhere on Linux (D11).
   - Larder only shows "Signed in as s•••@gmail.com, set 7 Nov", with **Change** and **Remove**.
   - Moving a provider to another device means typing them again.
 - **Needs you:** when a provider has to sign in again, or Tesco sends a code, the app asks for it and passes the answer straight back.
@@ -248,38 +296,9 @@ Providers
   - Later, a Pi could optionally show its whole virtual screen through noVNC. A Mac's desktop is never shown.
 - **Never in the cloud:** providers don't run in Larder Cloud. That would put everyone's shop passwords in one place, and the shops' bot checks would see datacentre addresses.
 
-### Cloud services
+### The Larder Pi box (track B)
 
-- **AI reads** (`ai-lookups`):
-  - Larder Cloud is the first reader in Settings → AI ("63 of 100 left this month"), ahead of the household's own Claude or Gemini key.
-  - Larder at home, or a phone when home is offline, sends the photo.
-  - A function checks the plan and this month's count, reads the photo with Larder Cloud's key (from Secret Manager), records the read in the same transaction as the count, and answers in the AI module's own format.
-  - Photos aren't kept. Web searches cost more (D10).
-- **Google Drive backups:**
-  - Larder Cloud owns one verified Google client that only asks for the files it creates (`drive.file`).
-  - The Pi makes and encrypts the backup (the database and photos, each photo only once) and uploads it straight to a "Larder backups" folder using a short-lived pass. The last 30 are kept.
-  - Restore happens when setting up a new Larder, using the household key from a phone or a backup password.
-  - Home Assistant users can already back up to Drive through Home Assistant.
-- **The Claude connector:**
-  - Larder Cloud's MCP address passes each request to Larder's own `/mcp` at home and brings back the answer.
-  - Connector sign-in is approved at home (D14).
-  - It works whenever home is connected; while home is offline, the assistant says so (D9).
-- **Live view relay:** a small Cloud Run service. The Pi and the phone both connect out to it.
-- **Notifications:** "Needs you", basket filled, running low.
-- **Secrets in the cloud**, all in collections no app can read:
-
-  | Secret | Kept as |
-  |---|---|
-  | The Pi's credential, connector tokens | hashes |
-  | Google Drive sign-ins | encrypted with Cloud KMS |
-  | Subscriptions | held by RevenueCat |
-  | Larder Cloud's own keys | Secret Manager |
-
-  Never in the cloud: passwords, usernames, shop sign-in details, households' own AI keys, or Gmail sign-ins.
-
-### The Larder Pi box
-
-This brings in the Pi plan from the owner's other chat, reconciled with the rest of this plan.
+This brings in the Pi plan from the owner's other chat, as an optional second way to run Larder.
 
 - **Hardware:** a Pi 4 (4 GB) at least; a Pi 5 is recommended (D12). Later, a Zero 2 W could get a separate "Larder only" image.
 - **The image:**
@@ -313,7 +332,7 @@ This brings in the Pi plan from the owner's other chat, reconciled with the rest
   - The updater moves to `larder-pi`.
   - "Away from home" now includes Larder Cloud.
   - Screenshots and VNC become the run trail and live view.
-  - Where the Pi keeps the shop sign-in key is D11.
+  - Where the device keeps the shop sign-in key is D11.
   - The per-box certificate authority waits (D15), because the app and Tailscale cover most people.
 
 ### Security and privacy
@@ -330,7 +349,7 @@ This brings in the Pi plan from the owner's other chat, reconciled with the rest
 
 ## 6. Milestones
 
-M2 and M3 run side by side once M1 is done. Each agent's brief breaks its part down into tasks.
+The main track runs M0 to M6. Your two milestones are **M2 (Linked)** and **M3 (The app, at home and away)**. Track B runs alongside whenever there's time. Each agent's brief breaks its part down into tasks.
 
 ### M0 — Decide and try
 
@@ -338,103 +357,157 @@ Try the risky parts first, and make the decisions that shape M1.
 
 | Spike | Who | Question |
 |---|---|---|
-| S1 | `larder-pi`, `larder-automations`, `larder-provider-tesco` | Does Chromium on a Pi 4, with the extension, read Tesco favourites without being blocked? This decides whether the image needs a desktop session. |
 | S2 | `home-inventory` | Can Larder's core, running in a browser, answer every page of the example household? |
-| S3 | `larder-cloud`, `home-inventory` | How do Firestore and Firebase Auth behave from Node on a Pi: memory use, reconnecting after a drop, custom-token sign-in? |
-| S4 | `larder-app` | Can a Capacitor shell load a Larder web build and reach a Larder on the home network? Set up App Attest and Play Integrity with App Check. |
+| S3 | `larder-cloud`, `home-inventory` | How do Firestore and Firebase Auth behave from Node inside the Home Assistant add-on, on aarch64 and amd64: memory use, reconnecting after a drop, custom-token sign-in? |
+| S4 | `larder-app` | Can a Capacitor shell load a Larder web build and reach the add-on's own port, and a Docker Larder, on the home network? Set up App Attest and Play Integrity with App Check. |
 | S5 | `larder-app`, `home-inventory` | How long does encrypting and decrypting a big household take on a mid-range phone? |
+| S6 | `home-inventory` | What can the add-on tell the app about where it is (the machine's address, `homeassistant.local`, the add-on's port)? What happens when the port is closed or the address changes? |
 
-Decisions needed first: D1, D2, D5, D12, D20.
+Decisions needed first: D1, D2, D5, D20, D21, D22.
 
-**Done when:** each spike is reported to the owner, those decisions are made, and drafting of `cloud-link` and automations 1.5 has started.
+**Done when:** each spike is reported to the owner, those decisions are made, and drafting of `cloud-link` has started.
 
-### M1 — Foundations
+### M1 — Ready to link
 
-There's no cloud yet; each piece is useful on its own.
 - `home-inventory`:
-  - routes as data
   - numbered changes
   - applying changes as of a time, done once
   - home-only data
+  - history sorted by when things were made
+- `larder-cloud`: `cloud-link` 0.x, with conformance tests against the emulators.
+
+**Done when:**
+- The storage contract tests cover numbered changes, and a home-only collection can't appear in them.
+- `home-inventory` and `larder-app` have agreed `cloud-link` 0.x.
+
+### M2 — Linked
+
+The owner's first milestone.
+- `larder-cloud`:
+  - the project, in its location
+  - the rules
+  - functions to create a household and for Larder's sign-in
+  - one connection per household
+  - presence and snapshots
+  - web app hosting and limits
+- `home-inventory`:
+  - the Cloud link module: Settings → Larder Cloud (link with a code, status, waiting changes)
+  - records up, changes down, presence
+  - working from the add-on
+  - the web app bundle in each release
+- `larder-app`: a first version, through TestFlight and Play internal testing, that scans the code and links the household.
+
+**Done when:**
+- A Larder running as the Home Assistant add-on is linked from its own settings using the app, and so is a Docker Larder.
+- Its records are in Larder Cloud and stay up to date, including after Larder has been off.
+- A change put in Larder Cloud (from the app's test screen or the conformance tests) is done at home within seconds, or when Larder comes back.
+
+### M3 — The app, at home and away
+
+The owner's second milestone.
+- `home-inventory`:
+  - routes as data
   - phone mode
-  - Larder's core in the browser, with offline copies running on it
-- `larder-automations` and the providers: Linux support, pairing, sign-in details, "Needs you", the run trail, live view, contract 1.5.
-- `larder-cloud`: `cloud-link` 0.x, with conformance tests.
-
-**Done when:**
-- Offline copies run on Larder's core in the browser, with every page and search working.
-- A provider on Linux is paired without tokens and can be watched live.
-- The contract drafts are agreed.
-
-### M2 — The Larder Pi box
-
-- `larder-pi`: the image, Wi-Fi set-up, updater and system helper.
-- `larder-automations`: the signed catalogue, and packaging for the Pi, the add-on and Docker.
-- `home-inventory`:
-  - Settings → Automations
-  - live view at home
-  - the Pi box's settings
-  - a listener that serves only the AI routes
-  - signed releases
-
-**Done when:** a freshly flashed Pi:
-- joins the Wi-Fi and opens at `larder.local`
-- fills a Tesco basket by itself, and can be watched live from Larder
-- updates itself, and rolls back a bad update
-
-### M3 — Larder Cloud, first version
-
-- `larder-cloud`: the project, rules, functions, presence, snapshots, hosting, limits and privacy.
-- `home-inventory`:
-  - phone set-up at home
-  - the Cloud link module
-  - people and phones
-  - the web app's third way to reach Larder
+  - Larder's core in the browser, with offline copies running on it too
+  - setting up a phone with a code
+  - access tokens for phones on Larder's own port
+  - the add-on's port for the app
+  - removing a phone
+  - the web app's third way to reach Larder (the phone's copy), with the sync bar and waiting changes
 - `larder-app`:
-  - the shell
-  - finding home
-  - setting up a phone
-  - the three routes: at home, through Larder Cloud, no connection
-  - sign-up on the free plan
+  - three routes: straight to Larder at home, through Larder Cloud, and no connection
+  - the phone's copy
+  - loading the version home runs
+  - setting up a phone, and finding Larder again after its address changes
+- `larder-cloud`:
+  - registering and removing phones
+  - phone sign-in
+  - the household key for each phone, changed when one is removed
 
 **Done when:**
-- A household signs up from the app at home.
-- Something added in Tesco reaches home within seconds.
-- With the Pi off, a change waits and arrives when the Pi is back.
-- A second person can be added at home and removed again.
+- The app, set up from Larder inside Home Assistant, works three ways: on the home Wi-Fi straight to the add-on, through Larder Cloud on 4G, and with no connection at all.
+- A change made on 4G while Larder is off arrives at home when it's back.
+- A phone can be removed, after which it can't read anything new.
 
-### M4 — Away from home, properly
+### M4 — Everyone in the house
 
 - Changes show straight away, and every phone agrees.
 - The clash rules, and the "Count both?" check.
 - Switching off a phone or person from anywhere.
 - Phone clock checks.
-- Larder Cloud in a browser, for laptops.
+- "Sign out your phones too?" on a password change.
 
 **Done when:**
-- Two phones with the Pi off agree.
+- Two phones with Larder off agree.
 - Every clash rule has a test.
-- A lost phone can be switched off from another phone while the Pi is off.
+- A lost phone can be switched off from another phone while Larder is off.
 
-### M5 — Plug and play
+### M5 — In the stores
 
-- Plans and purchases.
-- AI reads, with the free 100 a month, and the free-plan guards.
-- Live view away from home.
+- Plans through the stores, with the free plan first.
+- App Check enforced.
+- The free plan guards.
+- A privacy notice, and deletion.
+- Store listings and review.
+- Larder Cloud in a browser, for laptops.
+
+**Done when:** anyone can install the app, link their Larder (the add-on, Docker or the Pi box) on the free plan, and delete everything again.
+
+### M6 — Plug and play
+
+- AI reads, with the free 100 a month.
 - Drive backups.
 - The Claude connector through Larder Cloud.
 - Notifications.
 - Share to Larder.
+- Native scanning.
+- The live view away from home, once B1 is done.
 
 **Done when:**
 - A new household gets 100 AI reads without a key of its own.
-- A paid plan unlocks the rest.
-- A stuck shop can be fixed from a phone on 4G.
 - A backup lands in Drive and restores.
+- The Claude app reaches Larder through Larder Cloud.
+
+### Track B — Automations and the Larder Pi box
+
+This runs alongside the main track whenever there's time. Only the live view away from home (M6) waits for it.
+
+#### B0 — Try
+
+Spike S1, run by `larder-pi`, `larder-automations` and `larder-provider-tesco`: does Chromium on a Pi 4, with the extension, read Tesco favourites without being blocked? This also covers the add-on case, since Home Assistant often runs on a Pi. It decides how automations run on Linux.
+
+#### B1 — Automations on any device
+
+- `larder-automations` and the providers:
+  - Linux support, a Home Assistant add-on and a Docker service
+  - pairing without tokens
+  - sign-in details
+  - "Needs you"
+  - the run trail and live view
+  - contract 1.5 and the signed catalogue
+- `home-inventory`:
+  - Settings → Automations
+  - sign-in details encrypted for the device
+  - "Needs you"
+  - the run trail, and live view at home
+  - a module hook for connections that stay open
+
+**Done when:** with Larder running as the Home Assistant add-on, the Larder Automations add-on fills a Tesco basket by itself, set up and watched entirely from Larder.
+
+#### B2 — The Larder Pi box
+
+- `larder-pi`: the image, Wi-Fi set-up, updater and system helper.
+- `larder-automations`: packaging for the Pi.
+- `home-inventory`: the Pi box's settings, signed tarballs, and a listener for the AI routes only (Tailscale Funnel).
+
+**Done when:** a freshly flashed Pi:
+- joins the Wi-Fi and opens at `larder.local`
+- fills a Tesco basket by itself
+- updates itself, and rolls back a bad update
 
 ### Later
 
-- Restore a new Pi from the cloud.
+- Restore a new Larder from the cloud.
 - HTTPS at home without Tailscale (D15).
 - The whole virtual screen through noVNC on a Pi.
 - A "Larder only" image for a Zero 2 W.
@@ -444,18 +517,19 @@ There's no cloud yet; each piece is useful on its own.
 
 | This | Needs |
 |---|---|
-| The app (M3), offline copies on the core | Larder's core in the browser (`home-inventory` M1) |
-| The Cloud link module (M3) | Numbered changes and done-once (`home-inventory` M1); `cloud-link` (`larder-cloud` M1) |
-| The app's set-up, and creating a household (M3) | `local-enrolment` (`home-inventory` M3) |
-| Settings → Automations and live view (`home-inventory` M2); packaging (`larder-pi` M2) | Contract 1.5 and `live-view` (`larder-automations` M1) |
-| The Pi image and updater (`larder-pi` M2); web app hosting (`larder-cloud` M3); the app's bundles (`larder-app` M3) | `releases` (`home-inventory` M2) |
-| The Pi box's settings in Larder (`home-inventory` M2) | `pi-system` (`larder-pi` M2) |
-| Whether the image has a desktop session (`larder-pi` M2) | Spike S1 |
-| Live view away from home (M5) | The relay (`larder-cloud` M5) |
+| Linking (M2) | Numbered changes, as-of, done once and home-only data (`home-inventory` M1); `cloud-link` (`larder-cloud` M1) |
+| Web app hosting (`larder-cloud` M2) | The web app bundle in each release (`home-inventory` M2, `releases`) |
+| The app's local and offline routes (M3) | Larder's core in the browser and `local-enrolment` (`home-inventory` M3) |
+| The app talking to the add-on at home (M3) | The add-on's port (D21) and spike S6 |
+| Changes showing straight away (M4) | The app's three routes (M3) |
+| Plans (M5) | The cost model (`larder-cloud` M0) |
+| Live view away from home (M6) | Live view (B1) and the relay (`larder-cloud` M6) |
+| Settings → Automations (`home-inventory` B1) | Contract 1.5 and `live-view` (`larder-automations` B1) |
+| The Pi box (B2) | Spike S1 (B0), signed tarballs (`releases`), `pi-system` |
 
 ## 8. Board items
 
-The items noted during the design conversation, and where they live.
+The items noted during the design conversation, and where they now live.
 
 | # | Item | Repos | Milestone |
 |---|---|---|---|
@@ -470,20 +544,20 @@ The items noted during the design conversation, and where they live.
 | 9 | Phones listed under each person, each removable | `home-inventory` | M3 |
 | 10 | Switching off a phone or person from anywhere | `larder-cloud`, `larder-app`, `home-inventory` | M4 |
 | 11 | Changing the household key when someone is removed | `home-inventory`, `larder-cloud` | M3 |
-| 12 | Change password: "Sign out your phones too?" | `home-inventory` | M3 |
-| 13 | Controlling providers from Larder: sign-in details, "Needs you", pairing | `larder-automations`, `home-inventory` | M1, M2 |
-| 14 | Larder Cloud as an AI reader, with a monthly allowance | `larder-cloud`, `home-inventory` | M5 |
-| 15 | Households created only from the app at home, with four proofs | `larder-cloud`, `larder-app`, `home-inventory` | M3 |
+| 12 | Change password: "Sign out your phones too?" | `home-inventory` | M4 |
+| 13 | Controlling providers from Larder: sign-in details, "Needs you", pairing | `larder-automations`, `home-inventory` | B1 |
+| 14 | Larder Cloud as an AI reader, with a monthly allowance | `larder-cloud`, `home-inventory` | M6 |
+| 15 | Households created only from the app, with four proofs | `larder-cloud`, `larder-app`, `home-inventory` | M2 |
 | 16 | Free plan guards | `larder-cloud`, `larder-app` | M5 |
-| 17 | Run automations on this device | `larder-automations`, `larder-pi`, `home-inventory` | M2 |
-| 18 | Devices and Providers lists, with a signed catalogue | `home-inventory`, `larder-automations` | M2 |
-| 19 | Sign-in details encrypted in the browser for the device; write-only in Larder | `larder-automations`, `home-inventory` | M1, M2 |
-| 20 | Where a Pi keeps the key to sign-in details (D11) | `larder-automations`, `larder-pi` | M2 |
-| 21 | Spike: Tesco from Chromium on a Pi | `larder-pi`, `larder-automations`, `larder-provider-tesco` | M0 |
-| 22 | A screenshot trail for every run | `larder-automations`, `home-inventory` | M1, M2 |
-| 23 | Live view, with Take control and Hand back | `larder-automations`, `home-inventory` | M1, M2 |
-| 24 | The live view relay, encrypted end to end | `larder-cloud` | M5 |
-| 25 | A module hook for connections that stay open | `home-inventory` | M2 |
+| 17 | Run automations on this device | `larder-automations`, `home-inventory` | B1 |
+| 18 | Devices and Providers lists, with a signed catalogue | `home-inventory`, `larder-automations` | B1 |
+| 19 | Sign-in details encrypted in the browser for the device; write-only in Larder | `larder-automations`, `home-inventory` | B1 |
+| 20 | Where a Linux device keeps the key to sign-in details (D11) | `larder-automations`, `larder-pi` | B1, B2 |
+| 21 | Spike: Tesco from Chromium on a Pi | `larder-pi`, `larder-automations`, `larder-provider-tesco` | B0 |
+| 22 | A screenshot trail for every run | `larder-automations`, `home-inventory` | B1 |
+| 23 | Live view, with Take control and Hand back | `larder-automations`, `home-inventory` | B1 |
+| 24 | The live view relay, encrypted end to end | `larder-cloud` | M6 |
+| 25 | A module hook for connections that stay open | `home-inventory` | B1 |
 | 26 | The whole virtual screen through noVNC on a Pi | `larder-pi`, `larder-automations` | Later |
 
 ## 9. Risks
@@ -491,25 +565,26 @@ The items noted during the design conversation, and where they live.
 | Risk | What we do about it |
 |---|---|
 | The phone and home disagree | Home always wins; a parity test compares them |
-| Firestore's SDK on a Pi (memory, reconnecting) | Spike S3 |
-| The shops' bot checks against Chromium on a Pi | Spike S1; a Mac stays an option for each provider |
-| A Pi's resources | One shop at a time; a Pi 5 recommended |
+| Firebase from Node inside the add-on (memory, reconnecting) | Spike S3 |
+| The add-on's port is closed by default, so the app can't reach it at home | D21 (open by default) and D23 (if it stays closed); Larder says what to do |
+| A Home Assistant backup restored on another machine looks like a second home for the household | One connection per household; Larder Cloud asks before moving it |
 | SD cards and power cuts | `synchronous = FULL`; an SSD or a UPS helps |
 | Losing the household key | Home holds it; an optional recovery key |
 | Free plan abuse (anyone can run a Larder) | The free plan guards (M5) |
 | Store review (downloaded web code, apps that wrap a website) | Real native features, and clear review notes |
-| The shops' terms | D19 |
 | Costs | Budget alerts, per-household limits, a cost model (`larder-cloud` M0) |
 | UK GDPR | A privacy notice, deletion, Google's terms, a European location |
+| The shops' bot checks against Chromium on Linux (track B) | Spike S1; a Mac stays an option for each provider |
+| The shops' terms (track B) | D19 |
 
 ## 10. Getting started
 
 For the owner:
-1. Create the private repos `agent-hub` (with this hub in it), `larder-cloud`, `larder-app` and `larder-pi`.
+1. Create the private repos `agent-hub` (with this hub in it), `larder-cloud` and `larder-app`. `larder-pi` can wait for track B.
 2. Add the snippet from `templates/AGENTS-snippet.md` to each repo's `AGENTS.md` or `CLAUDE.md`.
-3. Decide D1, D2, D5, D12 and D20.
+3. Decide D1, D2, D5, D20, D21 and D22.
 4. Start a session for each agent, each with its own repo and this hub:
-   - `home-inventory`: its Now tasks
-   - `larder-automations`, `larder-provider-tesco` and `larder-pi`: spike S1
-   - `larder-cloud`: set-up, and S3
-   - `larder-app`: S4
+   - `home-inventory`: its Now tasks, then spikes S2 and S6
+   - `larder-cloud`: set-up, spike S3 and the cost model
+   - `larder-app`: spikes S4 and S5
+5. Start track B (`larder-automations`, the providers, `larder-pi`) whenever there's time.

@@ -1,9 +1,9 @@
 ---
 agent: larder-pi
 state: not-started
-milestone: M0
+milestone: B0
 now:
-next: Waiting for the repo to be created; then spike S1 and measuring a Pi 4 and a Pi 5
+next: Track B: the repo can wait; then spike S1 and measuring a Pi 4 and a Pi 5
 updated: 2026-11-07
 blockers: []
 contracts:

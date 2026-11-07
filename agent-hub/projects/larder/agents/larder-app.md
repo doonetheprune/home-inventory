@@ -4,8 +4,8 @@
 
 ## Mission
 
-The Larder app in the App Store and Google Play: a Capacitor shell around Larder's own web app. It:
-- finds Larder at home and talks to it directly
+The Larder app in the App Store and Google Play: a Capacitor shell around Larder's own web app. It works with any Larder at home, including the Home Assistant add-on. It:
+- talks to Larder directly on the home Wi-Fi
 - goes through Larder Cloud everywhere else
 - opens with no connection at all
 - holds the phone's keys
@@ -15,15 +15,15 @@ Every Larder screen is Larder's web app. The shell only adds set-up, connection 
 
 ## Read first
 
-- In the hub, `PLAN.md`: Principles; Sync; People, phones and keys; Sign-up and plans.
-- In `home-inventory`: `src/web`, especially `src/web/src/api.ts` (the one request function) and `src/web/src/offline/`.
+- In the hub, `PLAN.md`: Principles; Sync; People, phones and keys; Sign-up and plans; Larder in Home Assistant.
+- In `home-inventory`: `src/web`, especially `src/web/src/api.ts` (the one request function) and `src/web/src/offline/`, plus `addon/config.yaml`.
 
 ## Contracts
 
 - **Uses:**
   - `web-transport` and `local-enrolment`, from `home-inventory`
   - `cloud-link`, from `larder-cloud`
-  - `live-view`, from `larder-automations`
+  - `live-view` (track B), from `larder-automations`
 
 ## Tasks
 
@@ -31,38 +31,49 @@ Tick tasks as you finish them; that's the only change you make to this file.
 
 ### M0 — Decide and try
 
-- [ ] Spike S4: a Capacitor shell loads a Larder web build and reaches a Larder on the home network through native HTTP. Set up App Attest and Play Integrity with Firebase App Check.
+- [ ] Spike S4: a Capacitor shell loads a Larder web build and reaches, through native HTTP, both the Home Assistant add-on's own port and a Docker Larder on the home network. Set up App Attest and Play Integrity with Firebase App Check.
 - [ ] Spike S5, with `home-inventory`: time encrypting and decrypting a big household's records on a mid-range phone.
 
-### M3 — Larder Cloud, first version
+### M2 — Linked
+
+- [ ] A first version for testing, through TestFlight and Play internal testing, that:
+  - scans the code from Settings → Larder Cloud
+  - links the household, using App Check with the debug provider while testing (board 15)
+- [ ] A test screen that sends a change through Larder Cloud and shows when home has done it.
+
+### M3 — The app, at home and away
 
 - [ ] The shell loads the version of the web app that home runs, downloaded from `/v/<version>/` and kept on the phone, with a bundled version for the first run.
-- [ ] Find Larder at home: try the last known address first, then look for `_larder._tcp`. Check it really is your Larder before sending anything.
-- [ ] Set up this phone at home (`local-enrolment`):
-  - sign in to Larder
-  - make a key pair in the Secure Enclave or Android Keystore, with Face ID or fingerprint optional
+- [ ] Set up this phone by scanning the code from Settings → Larder app (`local-enrolment`, D22):
+  - check Larder's key before sending anything
+  - finish the set-up on the home network
+  - keep the access token, and a key pair made in the Secure Enclave or Android Keystore (Face ID or fingerprint optional)
   - receive the household key
 - [ ] Three routes:
-  - at home: straight to the Pi
+  - at home: straight to Larder (the add-on's own port, Docker or the Pi box)
   - elsewhere: through Larder Cloud
   - no connection: the phone's copy, kept in SQLite
 
-  At home, hand waiting changes to the Pi over Wi-Fi first. The bar says which route is in use.
-- [ ] Sign-up from the app at home: Settings → Larder Cloud, free plan first, with App Check and the at-home code (board 15).
+  At home, hand waiting changes to Larder over the Wi-Fi first. The bar says which route is in use.
+- [ ] Find Larder again after its address changes: first the latest address Larder reported through Larder Cloud, then `homeassistant.local` or `_larder._tcp` where available.
 
-### M4 — Away from home, properly
+### M4 — Everyone in the house
 
 - [ ] Changes shown straight away, and "Needs a look". These are built in Larder's web app; the shell keeps the phone's copy and the waiting changes.
 - [ ] Switch off a phone or person from anywhere (board 10).
 - [ ] Check the phone's clock against Firebase's (board 7).
 
-### M5 — Plug and play
+### M5 — In the stores
 
 - [ ] Purchases through RevenueCat, including restoring purchases.
-- [ ] Notifications, where "Needs you" opens the live view at the step that's stuck.
+- [ ] App Check with the production providers.
+- [ ] Store listings, privacy labels, and review notes explaining that the downloaded web code is the app's own.
+
+### M6 — Plug and play
+
+- [ ] Notifications, where "Needs you" opens the live view (track B) at the step that's stuck.
 - [ ] Share to Larder from other apps.
 - [ ] Native barcode scanning, offered to Larder's scanner.
-- [ ] Store listings, privacy labels, and review notes explaining that the downloaded web code is the app's own.
 
 ## Boundaries
 
@@ -72,6 +83,6 @@ Tick tasks as you finish them; that's the only change you make to this file.
 
 ## Who to ask
 
-- `home-inventory`: the web app, `web-transport`, `local-enrolment`.
+- `home-inventory`: the web app, `web-transport`, `local-enrolment`, the add-on.
 - `larder-cloud`: `cloud-link`, App Check, purchases.
 - `owner`: store listings and prices.

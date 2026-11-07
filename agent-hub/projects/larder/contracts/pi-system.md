@@ -8,6 +8,8 @@ status: draft
 
 # Contract: pi-system
 
+**Track B (B2).** Nothing in the main track depends on it.
+
 How Larder's settings change things on the Larder Pi box that only root can.
 
 ## Agreed so far

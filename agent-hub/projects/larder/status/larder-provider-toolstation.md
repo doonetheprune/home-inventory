@@ -1,9 +1,9 @@
 ---
 agent: larder-provider-toolstation
 state: not-started
-milestone: M0
+milestone: B0
 now:
-next: The same check as spike S1, once it passes for Tesco
+next: Track B: the same check as spike S1, once it passes for Tesco
 updated: 2026-11-07
 blockers: []
 contracts:

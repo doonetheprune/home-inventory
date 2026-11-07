@@ -8,6 +8,8 @@ status: released
 
 # Contract: automations
 
+**Track B.** Nothing in the main track depends on it.
+
 The contract between Larder, Larder Automations and the shop providers. The full text lives in `larder-automations/CONTRACT.md` (1.x), and Larder reads it in `modules/online-shopping/contract.ts`. This page tracks what's planned for 1.5.
 
 ## Planned for 1.5

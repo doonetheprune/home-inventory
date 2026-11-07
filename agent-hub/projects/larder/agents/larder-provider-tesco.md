@@ -1,10 +1,10 @@
 # larder-provider-tesco: brief
 
-**Repo:** `doonetheprune/larder-provider-tesco` · **Project:** larder
+**Repo:** `doonetheprune/larder-provider-tesco` · **Project:** larder · **Track B:** runs alongside the main track whenever there's time.
 
 ## Mission
 
-Keep the Tesco provider working wherever Larder Automations runs, including Chromium on a Pi. Support contract 1.5: signing in by itself, asking for what it can't do, and reporting each step.
+Keep the Tesco provider working wherever Larder Automations runs, including Chromium on Linux (the add-on, Docker and the Pi box). Support contract 1.5: signing in by itself, asking for what it can't do, and reporting each step.
 
 ## Read first
 
@@ -20,20 +20,16 @@ Keep the Tesco provider working wherever Larder Automations runs, including Chro
 
 Tick tasks as you finish them; that's the only change you make to this file.
 
-### M0 — Decide and try
+### B0 — Try
 
 - [ ] Spike S1, with `larder-automations` and `larder-pi`: read favourites from Chromium on a Pi 4 without being blocked. Note any bot checks, and how often they appear (board 21).
 
-### M1 — Foundations
+### B1 — Automations on any device
 
 - [ ] Sign in by itself with the stored details when Tesco asks again.
 - [ ] Ask through "Needs you" for one-time codes and challenges, and wait for the answer.
 - [ ] Report each step for the run trail.
-
-### M2 — The Larder Pi box
-
-- [ ] Package the provider for the signed catalogue.
-- [ ] Make it run under Chromium on Linux (arm64) as well as Chrome on the Mac.
+- [ ] Run under Chromium on Linux (arm64 and amd64) as well as Chrome on the Mac, and package the provider for the signed catalogue.
 
 ## Boundaries
 

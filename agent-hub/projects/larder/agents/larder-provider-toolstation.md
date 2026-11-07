@@ -1,10 +1,10 @@
 # larder-provider-toolstation: brief
 
-**Repo:** `doonetheprune/larder-provider-toolstation` · **Project:** larder
+**Repo:** `doonetheprune/larder-provider-toolstation` · **Project:** larder · **Track B:** runs alongside the main track whenever there's time.
 
 ## Mission
 
-Keep the Toolstation provider working wherever Larder Automations runs, including Chromium on a Pi, with the same contract 1.5 features as Tesco.
+Keep the Toolstation provider working wherever Larder Automations runs, including Chromium on Linux, with the same contract 1.5 features as Tesco.
 
 ## Read first
 
@@ -20,20 +20,16 @@ Keep the Toolstation provider working wherever Larder Automations runs, includin
 
 Tick tasks as you finish them; that's the only change you make to this file.
 
-### M0 — Decide and try
+### B0 — Try
 
 - [ ] Once spike S1 passes for Tesco, run the same check for Toolstation on a Pi.
 
-### M1 — Foundations
+### B1 — Automations on any device
 
 - [ ] Sign in by itself with the stored details.
 - [ ] Ask through "Needs you" for anything it can't do itself.
 - [ ] Report each step for the run trail.
-
-### M2 — The Larder Pi box
-
-- [ ] Package the provider for the signed catalogue.
-- [ ] Make it run under Chromium on Linux (arm64).
+- [ ] Run under Chromium on Linux (arm64 and amd64), and package the provider for the signed catalogue.
 
 ## Boundaries
 

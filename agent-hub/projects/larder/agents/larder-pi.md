@@ -1,10 +1,10 @@
 # larder-pi: brief
 
-**Repo:** `doonetheprune/larder-pi` (new) · **Project:** larder
+**Repo:** `doonetheprune/larder-pi` (new; can wait) · **Project:** larder · **Track B:** runs alongside the main track whenever there's time.
 
 ## Mission
 
-The Larder Pi box: an image you flash with Raspberry Pi Imager. It joins the Wi-Fi, runs Larder and the shopping automations, and keeps itself up to date safely. No monitor is needed.
+The Larder Pi box is an optional way to run Larder, alongside the Home Assistant add-on and Docker. It's an image you flash with Raspberry Pi Imager. It joins the Wi-Fi, runs Larder and the shopping automations, and keeps itself up to date safely. No monitor is needed. Nothing in the main track depends on it.
 
 ## Read first
 
@@ -20,12 +20,12 @@ The Larder Pi box: an image you flash with Raspberry Pi Imager. It joins the Wi-
 
 Tick tasks as you finish them; that's the only change you make to this file.
 
-### M0 — Decide and try
+### B0 — Try
 
 - [ ] Spike S1, with `larder-automations` and `larder-provider-tesco` (board 21).
 - [ ] Measure a 4 GB Pi 4 and a Pi 5 running Larder plus one shop, so the owner can choose the main hardware (D12).
 
-### M2 — The Larder Pi box
+### B2 — The Larder Pi box
 
 - [ ] pi-gen with a Larder stage, built by GitHub Actions on each version tag, with the `.img.xz` attached to the release.
 - [ ] Raspberry Pi OS 64-bit, with a light desktop session that logs in by itself so Chromium can run.

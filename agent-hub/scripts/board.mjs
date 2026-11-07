@@ -57,15 +57,18 @@ function frontMatter(text) {
   return data;
 }
 
-/** Ticked and unticked tasks under each `### Now` / `### M<n>` / `### Later` heading of a brief. */
+/**
+ * Ticked and unticked tasks under each milestone heading of a brief: `### Now`,
+ * `### Later`, or a letter and a number (`### M1`, or `### B1` for a second track).
+ */
 function tasks(text) {
   const out = {};
   let section = null;
   for (const line of text.split(/\r?\n/)) {
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     if (heading) {
-      const m = /^(M\d+|Now|Later)\b/i.exec(heading[1]);
-      section = m ? (/^m/i.test(m[1]) ? m[1].toUpperCase() : m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()) : null;
+      const m = /^(Now|Later|[A-Za-z]\d+)\b/i.exec(heading[1]);
+      section = m ? (/^(now|later)$/i.test(m[1]) ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() : m[1].toUpperCase()) : null;
       continue;
     }
     const task = /^\s*[-*]\s+\[( |x|X)\]\s+/.exec(line);
@@ -120,9 +123,13 @@ const decisions = existsSync(decisionsFile) ? neededDecisions(read(decisionsFile
 
 const contracts = mdFiles('contracts').map((f) => ({ name: basename(f, '.md'), ...frontMatter(read(f)) }));
 
-// Milestone columns, in order: Now, M0, M1…, Later.
+// Milestone columns, in order: Now, M0, M1…, then other tracks (B0, B1…), then Later.
 const progress = new Map([...briefs].map(([agent, text]) => [agent, tasks(text)]));
-const order = (k) => (k === 'Now' ? -1 : k === 'Later' ? 1e6 : Number(k.slice(1)));
+const order = (k) => {
+  if (k === 'Now') return -1;
+  if (k === 'Later') return 1e9;
+  return (k[0] === 'M' ? 0 : (k.charCodeAt(0) - 64) * 1000) + Number(k.slice(1));
+};
 const columns = [...new Set([...progress.values()].flatMap((t) => Object.keys(t)))].sort((a, b) => order(a) - order(b));
 
 const latest = [...statuses.values()].map((s) => s.updated).filter(Boolean).sort().at(-1);
