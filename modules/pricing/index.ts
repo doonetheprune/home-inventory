@@ -352,12 +352,24 @@ export default defineModule({
 
     // 0.9.0: measures moved out of pricing. A weight or volume is already its size; "1 pack = 5 items" is
     // now "counted in items, comes in packs of 5", which needs a recount the owner chooses, so it's dropped.
+    // A price kept for a measure becomes the usual price when there isn't one.
     void (async () => {
+      type Old = { unit: string; amount: number; price?: number | null };
       for (const s of await ctx.core.products.list({ status: 'all' }).catch(() => [])) {
-        const raw = s.product.fields.pricing as { measures?: unknown[] } | undefined;
+        const raw = s.product.fields.pricing as { measures?: Old[] } | undefined;
         if (!raw || !('measures' in raw)) continue;
-        if (raw.measures?.length) ctx.log.info(`Dropped ${s.product.name}'s old measures (1 ${s.product.unit} = …): say what it comes in on its Edit page instead.`);
-        await ctx.core.products.updateField<unknown>(s.product.id, 'pricing', (cur) => PricingFields.parse(cur ?? {})).catch(() => undefined);
+        const old = (raw.measures ?? []).filter((m) => m && typeof m.unit === 'string' && m.amount > 0);
+        const counts = old.filter((m) => !isMeasure(m.unit));
+        if (counts.length) ctx.log.info(`${s.product.name} had "1 ${s.product.unit} = ${counts.map((m) => `${m.amount} ${m.unit}`).join(' = ')}" on its price card: say what it comes in on its Edit page instead.`);
+        await ctx.core.products.updateField<unknown>(s.product.id, 'pricing', (cur) => {
+          const p = PricingFields.parse(cur ?? {});
+          const priced = old.find((m) => typeof m.price === 'number');
+          if (p.usualUnitPrice !== null || !priced) return p;
+          // A weight's price stays per that weight; "£1.20 an item" with 5 to a pack is £6 a pack.
+          return isMeasure(priced.unit)
+            ? { ...p, usualUnitPrice: priced.price!, priceUnit: unitKey(priced.unit) }
+            : { ...p, usualUnitPrice: Math.round(priced.price! * priced.amount * 1_000_000) / 1_000_000, priceUnit: null };
+        }).catch(() => undefined);
       }
     })();
 

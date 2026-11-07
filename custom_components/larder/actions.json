@@ -76,8 +76,7 @@
           "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
         },
         "quantity": {
-          "default": 1,
-          "description": "How many, in the item's own unit (default 1), or in `unit`",
+          "description": "How many, in the item's own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)",
           "type": "number",
           "exclusiveMinimum": 0
         },

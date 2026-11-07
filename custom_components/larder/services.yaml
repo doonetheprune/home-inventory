@@ -84,9 +84,8 @@ use_stock:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1), or in `unit`"
+      description: "How many, in the item's own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)"
       required: false
-      default: 1
       selector:
         number:
           mode: "box"

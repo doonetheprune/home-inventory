@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Product, Variant, type ProductDetail, type ProductSummary, type StockEntryView } from '../model';
 import { ProductCreate, ProductPatch, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { newId, pluralWord, unique } from '../util';
+import { addDays, newId, pluralWord, unique } from '../util';
 import { sameUnit, singular } from './packs';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
@@ -40,8 +40,16 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     if (!cur) throw new NotFoundError('Product', id);
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
     const next = tidy(Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }));
-    // Switching on taking them out with nothing started counts from today.
-    if (next.usage?.auto && !cur.usage?.auto && !next.inUseSince) next.inUseSince = ctx.today();
+    if (patch.inUseSince === undefined) {
+      // Switching on taking them out counts from today, unless the one in use still has days left: an older
+      // start was already taken out by Use, so counting from it would take the days since twice.
+      if (next.usage?.auto && !cur.usage?.auto) {
+        const running = next.inUseSince && addDays(next.inUseSince, next.usage.everyDays) > ctx.today();
+        if (!running) next.inUseSince = ctx.today();
+      }
+      // With no usage any more, nothing is in use (it isn't "open" either).
+      if (!next.usage && cur.usage) next.inUseSince = null;
+    }
     await assertRefs(next);
     await ctx.storage.products.put(next);
     ctx.publish('product.updated', { id, name: next.name });

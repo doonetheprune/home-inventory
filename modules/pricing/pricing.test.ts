@@ -149,11 +149,18 @@ describe('pricing module', () => {
   it('drops measures saved by 0.8, keeping the weight', async () => {
     const storage = (await import('../../src/adapters/storage-memory')).createMemoryStorage();
     const old = await makeCore({ storage });
-    const chicken = await old.products.create({ name: 'Chicken breasts', unit: 'pack', fields: { pricing: { usualUnitPrice: 6, itemSize: { amount: 1, unit: 'kg' }, measures: [{ unit: 'items', amount: 5, unitPrice: null }, { unit: 'kg', amount: 1, unitPrice: 5.5 }] } } });
+    const chicken = await old.products.create({ name: 'Chicken breasts', unit: 'pack', fields: { pricing: { usualUnitPrice: 6, itemSize: { amount: 1, unit: 'kg' }, measures: [{ unit: 'items', amount: 5, price: null }, { unit: 'kg', amount: 1, price: 5.5 }] } } });
+    // No usual price, but one for each item: £1.20 an item, 5 to a pack, is £6 a pack.
+    const eggs = await old.products.create({ name: 'Eggs', unit: 'box', fields: { pricing: { measures: [{ unit: 'egg', amount: 6, price: 0.3 }] } } });
+    const flour = await old.products.create({ name: 'Flour', unit: 'bag', fields: { pricing: { itemSize: { amount: 1.5, unit: 'kg' }, measures: [{ unit: 'kg', amount: 1.5, price: 0.8 }] } } });
     const core = await makeCore({ storage, modules: [pricing] });
     await new Promise((r) => setTimeout(r, 10));
-    const p = (await core.products.summary(chicken.id)).product.fields.pricing as Record<string, unknown>;
+    const fields = async (id: string) => (await core.products.summary(id)).product.fields.pricing as Record<string, unknown>;
+    const p = await fields(chicken.id);
     expect(p).toMatchObject({ usualUnitPrice: 6, itemSize: { amount: 1, unit: 'kg' } });
     expect('measures' in p).toBe(false);
+    expect(await fields(eggs.id)).toMatchObject({ usualUnitPrice: 1.8, priceUnit: null });
+    expect(await fields(flour.id)).toMatchObject({ usualUnitPrice: 0.8, priceUnit: 'kg' });
+    expect((await core.assistant.call('get_price', { item: 'flour' })).text).toContain('£1.20 a bag');
   });
 });

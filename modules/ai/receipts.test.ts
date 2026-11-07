@@ -141,6 +141,12 @@ describe('AI module: receipts', () => {
     expect(again.lines).toMatchObject([{ item: { id: loo.id }, quantity: 27, match: 'learnt' }, { item: { id: milk.id }, quantity: 4, match: 'learnt' }]);
     expect(again.addedBefore).toBeNull();
     expect(net.prompts()[1]).toContain('"ANDREX CLASSIC 9PK" at Tesco is item 3, 9 roll for each one bought');
+
+    // Counted in sheets from now on (a roll holds 200): what Tesco's names were learnt as follows.
+    await core.stock.recount(loo.id, { unit: 'sheet', holds: 200 });
+    await new Promise((res) => setTimeout(res, 10));
+    const recounted = await call<{ lines: Array<{ item: { id: string } | null; quantity: number; match: string }> }>(core, 'POST', '/receipt', { image: JPEG });
+    expect(recounted.lines[0]).toMatchObject({ item: { id: loo.id }, quantity: 5400, match: 'learnt' });
   });
 
   it('says when the same receipt was added before', async () => {

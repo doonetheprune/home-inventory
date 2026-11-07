@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { Icon } from '../icons';
@@ -10,6 +10,7 @@ import { ErrorBox, Header, Loading, useAction, useCategories, usePlaces, useShop
 export function ProductEdit() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: p, error, isLoading } = useQuery({ queryKey: ['product', id], queryFn: () => api.products.get(id) });
   const categories = useCategories();
   const shops = useShops();
@@ -34,12 +35,13 @@ export function ProductEdit() {
   const was = p!.product;
   const have = p!.inStock + p!.expected + p!.pending;
 
-  /** Counting what's inside now (box → tea bag, the box becoming its pack), with numbers to carry over? */
+  /**
+   * Counting what's inside now: what it was counted in (box) is what it comes in, and it's counted in
+   * something else (tea bag). Asked even with none in stock, as its prices and recipes follow too.
+   */
   function recountOffer(f: ProductFormValue) {
     const packName = f.packName.trim();
-    if (sameUnit(f.unit, was.unit) || !packName || f.packHolds <= 1) return null;
-    if (!sameUnit(packName, was.unit) && was.unit !== 'each') return null;
-    if (have <= 0 && !was.minQuantity && !was.stockUpTo && !was.usage) return null;
+    if (sameUnit(f.unit, was.unit) || !packName || f.packHolds <= 1 || !sameUnit(packName, was.unit)) return null;
     return { packName, holds: f.packHolds };
   }
 
@@ -53,7 +55,16 @@ export function ProductEdit() {
     const scaled: ProductFormValue = { ...f, minQuantity: times(f.minQuantity, initial!.minQuantity), stockUpTo: times(f.stockUpTo, initial!.stockUpTo), usageAmount: sameUsage ? times(f.usageAmount, initial!.usageAmount) : f.usageAmount };
     return run(async () => {
       await api.stock.recount(id, { unit: f.unit.trim(), holds: r.holds, pack: r.packName });
-      return api.products.update(id, toPayload(scaled));
+      try {
+        return await api.products.update(id, toPayload(scaled));
+      } catch (err) {
+        // It's counted again, but the rest wasn't saved: show what is saved now, to check and save again.
+        setRecount(null);
+        setForm(null);
+        setInitial(null);
+        await qc.invalidateQueries({ queryKey: ['product', id] });
+        throw err;
+      }
     }, `Now counted in ${plural(f.unit.trim(), 2)}`).then((x) => x && navigate(`/products/${id}`));
   }
 
@@ -70,13 +81,13 @@ export function ProductEdit() {
         <ProductForm value={form} onChange={setForm} categories={categories} shops={shops} places={places} />
         {recount ? (
           <div className="card pad" role="alertdialog" aria-label="Count what's inside?">
-            <b>{have > 0 ? `You have ${qty(have, was.unit === 'each' ? recount.packName : was.unit)}.` : `${was.name} is counted in ${plural(was.unit, 2)}.`} Count {have > 0 ? 'them' : 'it'} in {plural(form.unit.trim(), 2)} now?</b>
+            <b>{have > 0 ? `You have ${qty(have, was.unit)}.` : `${was.name} is counted in ${plural(was.unit, 2)}.`} Count {have > 0 ? 'them' : 'it'} in {plural(form.unit.trim(), 2)} now?</b>
             <p className="small muted" style={{ margin: 0 }}>
-              1 {recount.packName} = {num(recount.holds)} {plural(form.unit.trim(), recount.holds)}, so {have > 0 ? `${qty(have, was.unit === 'each' ? recount.packName : was.unit)} become ${qty(have * recount.holds, form.unit.trim())}` : 'its numbers are multiplied'}.
-              Low below, stock up to and how fast it's used follow, and so do deliveries, online shop packs and recipes.
+              1 {recount.packName} = {num(recount.holds)} {plural(form.unit.trim(), recount.holds)}, so {have > 0 ? `${qty(have, was.unit)} become ${qty(have * recount.holds, form.unit.trim())}` : 'its numbers are multiplied'}.
+              Low below, stock up to and how fast it's used follow, and so do prices, deliveries, online shop packs and recipes.
             </p>
             <div className="btnrow">
-              <button type="button" className="btn primary" disabled={busy} onClick={() => void saveRecounted(recount)}>{have > 0 ? `Count them as ${qty(have * recount.holds, form.unit.trim())}` : 'Count it again'}</button>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => void saveRecounted(recount)}>{have > 0 ? `Count them as ${qty(have * recount.holds, form.unit.trim())}` : `Count it in ${plural(form.unit.trim(), 2)}`}</button>
               <button type="button" className="btn" disabled={busy} onClick={() => void save(form)}>Keep the numbers, just rename</button>
               <button type="button" className="btn ghost" onClick={() => setRecount(null)}>Back</button>
             </div>

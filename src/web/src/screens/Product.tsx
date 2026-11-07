@@ -210,16 +210,22 @@ function UsageLine({ p }: { p: ProductDetail }) {
     <>
       Uses {usageText(p.product.unit, u)}{u.auto ? ', taken out by Larder' : ''}.{' '}
       {p.inUseUntil && u.everyDays >= 2 ? <>One in use until {shortDate(p.inUseUntil)}{none ? ', and none left after it' : ''}. </> : null}
-      {u.auto && !p.product.inUseSince ? <>Stopped: Larder carries on once one is started (Use, and tick Started). </> : null}
+      {u.auto && !p.product.inUseSince ? <>None in use: the next Use starts one, and Larder takes them out from then. </> : null}
       {until && !(none && p.inUseUntil && u.everyDays >= 2) ? (none && !p.inUseUntil ? <>None left. </> : <>Enough until {until}. </>) : null}
     </>
   );
 }
 
+/**
+ * Whether a plain Use starts one: with a usage Larder doesn't take out, always; with one it does,
+ * only when none is started (otherwise it's an extra).
+ */
+const startsOne = (p: ProductDetail) => !!p.product.usage && (!p.product.usage.auto || !p.product.inUseSince);
+
 /** What a Use did, in a toast: Larder's own takes make a plain Use an extra. */
 function usedText(p: ProductDetail, r: ProductSummary, n: number, open: boolean): string {
   const u = p.product.usage;
-  const what = p.product.rechargeable ? 'Marked flat' : !u ? (open ? 'Opened' : 'Used') : !u.auto ? 'Started' : open ? 'Started a new one:' : 'Used an extra';
+  const what = p.product.rechargeable ? 'Marked flat' : !u ? (open ? 'Opened' : 'Used') : startsOne(p) ? 'Started' : open ? 'Started a new one:' : 'Used an extra';
   return `${what} ${num(n)} · ${stockText(r)} left${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`;
 }
 
@@ -365,13 +371,16 @@ function AddSheet({ p, onClose, elsewhere = false }: { p: ProductDetail; onClose
 function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
   const { run, busy } = useAction();
   const available = p.product.rechargeable ? (p.charged ?? 0) : p.inStock;
-  const [n, setN] = useState(Math.min(1, available));
-  const [from, setFrom] = useState<string>('');
   // Anything without a usage can be marked open (the butter in the fridge). When Larder takes them out, a Use is
-  // an extra unless it starts a new one now (a sensor that came off early); without, using one starts it.
-  const [open, setOpen] = useState(false);
+  // an extra unless it starts a new one now (a sensor that came off early); without, or with none started,
+  // using one starts it, and starting one takes its usual amount (2 lenses).
   const usage = p.product.usage ?? null;
-  const canOpen = !p.product.rechargeable && (!usage || (usage.auto && usage.everyDays >= 2));
+  const starts = startsOne(p);
+  const [n, setN] = useState(Math.min(starts ? usage!.amount : 1, available));
+  const [from, setFrom] = useState<string>('');
+  const [open, setOpen] = useState(false);
+  const extra = !!usage?.auto && !starts;
+  const canOpen = !p.product.rechargeable && (!usage || (extra && usage.everyDays >= 2));
   const placesWithStock = [...new Map(p.entries.filter((e) => e.status === 'in_stock').map((e) => [e.currentPlace?.id ?? e.place?.id ?? '', e.currentPlace ?? e.place])).values()].filter((x) => !!x);
   return (
     <Sheet title={p.product.rechargeable ? 'Mark as flat' : `Use ${p.product.name.toLowerCase()}`} onClose={onClose}>
@@ -379,8 +388,8 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
       {placesWithStock.length > 1 && (
         <label className="field"><span>From</span><select className="input" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Whatever expires first</option>{placesWithStock.map((pl) => <option key={pl!.id} value={pl!.id}>{pl!.path}</option>)}</select></label>
       )}
-      {usage?.auto && <p className="small muted" style={{ margin: 0 }}>Larder already takes out {usageText(p.product.unit, usage)} by itself, so this is an extra one.</p>}
-      {usage && !usage.auto && <p className="small muted" style={{ margin: 0 }}>Using one starts it: it's the one in use from today.</p>}
+      {extra && <p className="small muted" style={{ margin: 0 }}>Larder already takes out {usageText(p.product.unit, usage!)} by itself, so this is an extra one.</p>}
+      {usage && starts && <p className="small muted" style={{ margin: 0 }}>{usage.auto ? `None in use: using one starts it, and Larder takes out ${usageText(p.product.unit, usage)} from then.` : 'Using one starts it: it\'s the one in use from today.'}</p>}
       {canOpen && (
         <div className="toggle" style={{ padding: 0 }}>
           <span><b>{usage ? 'Started a new one now' : 'Opened, still using it'}</b><br /><span className="small muted">{usage ? 'The one in use came off early: this one starts today' : 'It shows as open until you say it\'s finished'}</span></span>
@@ -388,7 +397,7 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
         </div>
       )}
       <button type="button" className="btn primary block" disabled={busy || n <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: n, placeId: from || undefined, ...(canOpen && open ? { open: true } : {}) }), (r) => usedText(p, r, n, canOpen && open)).then((r) => r && onClose())}>
-        {p.product.rechargeable ? `Mark ${num(n)} flat` : canOpen && open ? `${usage ? 'Start' : 'Open'} ${qty(n, p.product.unit)}` : `Use ${qty(n, p.product.unit)}${usage?.auto ? ' extra' : ''}`}
+        {p.product.rechargeable ? `Mark ${num(n)} flat` : canOpen && open ? `${usage ? 'Start' : 'Open'} ${qty(n, p.product.unit)}` : `Use ${qty(n, p.product.unit)}${extra ? ' extra' : ''}`}
       </button>
     </Sheet>
   );

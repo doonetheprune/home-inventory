@@ -76,7 +76,7 @@ Every action can return Larder's answer, including a `message` for a notificatio
 | Action | Fields |
 |---|---|
 | `larder.add_stock` | item, quantity (1), unit (its pack, e.g. box: 1 box of 20 tea bags adds 20), place, expires_on, brand, price, shop, note. With a price or shop it's kept in the purchase history |
-| `larder.use_stock` | item, quantity (1), unit, place, opened (one opened and still in use; for something Larder takes out by itself, a new one started now), note. For something Larder takes out by itself, a plain use is an extra one |
+| `larder.use_stock` | item, quantity (1, or the usual amount when it starts one: 2 lenses), unit, place, opened (one opened and still in use; for something Larder takes out by itself, a new one started now), note. For something Larder takes out by itself, a plain use is an extra one, unless none is started: then it starts one |
 | `larder.finish_item` | item: the open one is finished |
 | `larder.move_item` | item, to, quantity (all), permanent (false), from (a place, or "to sort") |
 | `larder.put_back` | item, from (only what's out of place there) |

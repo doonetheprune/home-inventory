@@ -11,7 +11,7 @@ import * as In from '../inputs';
 import type { Recount, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
 import { addDays, localDate, newId, pluralWord, roundQty } from '../util';
-import { inOwnUnit, sameUnit, singular } from './packs';
+import { inOwnUnit, oneOf, sameUnit, singular, startsOne } from './packs';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
@@ -161,11 +161,11 @@ export function createStockService(ctx: CoreContext) {
   /**
    * Opening one (or, when Larder takes them out, starting the next early) starts it today.
    * With a usage that Larder doesn't take out, every Use starts one. When Larder does, a
-   * plain Use is an extra and leaves its schedule alone.
+   * plain Use is an extra and leaves its schedule alone, unless none has been started (it was
+   * finished, or never started): then it starts one, and Larder carries on from there.
    */
   function started(product: Product, open?: boolean): Partial<Product> | undefined {
-    const usage = product.usage ?? null;
-    return open || (usage && !usage.auto) ? { inUseSince: ctx.today() } : undefined;
+    return open || startsOne(product) ? { inUseSince: ctx.today() } : undefined;
   }
 
   const isRenewal = (world: World, product: Product) => !!product.categoryId && world.categoryById.get(product.categoryId)?.name === 'Renewals';
@@ -276,7 +276,7 @@ export function createStockService(ctx: CoreContext) {
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
       const quantity = inOwnUnit(t.product, input.quantity, input.unit);
-      const movements = takeFrom(t, work, { ...input, quantity, note: input.note ?? (input.open ? (t.product.usage ? 'Started' : 'Opened') : undefined) });
+      const movements = takeFrom(t, work, { ...input, quantity, note: input.note ?? (input.open ? (t.product.usage ? 'Started' : 'Opened') : startsOne(t.product) ? 'Started' : undefined) });
       return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product, input.open));
     },
 
@@ -605,12 +605,13 @@ export function createStockService(ctx: CoreContext) {
     async recount(productId: string, raw: Recount): Promise<ProductSummary> {
       const parsed = In.Recount.parse(raw);
       // Said "tea bags", it's counted in "tea bag" (2 tea bags).
-      const input = { ...parsed, unit: singular(parsed.unit), pack: parsed.pack === undefined ? undefined : singular(parsed.pack) };
+      const input = { ...parsed, unit: oneOf(parsed.unit), pack: parsed.pack === undefined ? undefined : singular(parsed.pack) };
       const t = await begin(productId);
       const p = t.product;
       if (sameUnit(input.unit, p.unit)) throw new ValidationError(`${p.name} is already counted in ${pluralWord(input.unit, 2)}.`);
-      const packName = input.pack ?? (p.unit === 'each' ? null : p.unit);
+      const packName = input.pack ?? (p.unit === 'each' ? null : singular(p.unit));
       if (!packName) throw new ValidationError(`Say what one of the ${p.name.toLowerCase()} counted so far is (a box?), so it can become the pack.`);
+      if (sameUnit(packName, input.unit)) throw new ValidationError(`A ${packName} can't come in ${pluralWord(packName, 2)}. Count what's inside (tea bags, say) and say how many a ${packName} holds.`);
       const f = input.holds;
       const times = (n: number | null) => (n === null ? null : roundQty(n * f));
       const work = t.original.map((e) => ({

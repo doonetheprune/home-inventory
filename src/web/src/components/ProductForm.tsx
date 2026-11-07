@@ -65,6 +65,16 @@ export function toPayload(v: ProductFormValue) {
 
 /** The pack the form describes, or null (none, holds 1, or the same as what it's counted in). */
 export const packOf = (v: ProductFormValue) => (v.packName.trim() && v.packHolds > 1 && !sameUnit(v.packName, v.unit) ? { name: v.packName.trim(), holds: v.packHolds } : null);
+/** Today on this device, as YYYY-MM-DD. */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const addDaysIso = (iso: string, days: number) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
 const everyDays = (v: ProductFormValue) => Math.max(1, Math.round(v.usageEvery)) * (v.usagePer === 'week' ? 7 : 1);
 /** Containers, not the thing used: counting these with a usage is probably a slip. */
 const CONTAINERS = new Set(['box', 'pack', 'packet', 'case', 'multipack', 'tray', 'bundle', 'crate']);
@@ -93,6 +103,13 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
   const usageAllowed = !renewal && !value.rechargeable;
   const packSlip = !!value.packName.trim() && sameUnit(value.packName, unit);
   const containerSlip = !!usage && !pack && (unit === 'each' || CONTAINERS.has(unit.toLowerCase()));
+  // Switched on, Larder counts from today, unless the one in use still has days left (it was taken out
+  // when it was started, so counting from an older day would take those days out again).
+  const takeOut = (on: boolean) => {
+    const today = localToday();
+    const running = !!usage && !!value.inUseSince && addDaysIso(value.inUseSince, usage.everyDays) > today;
+    onChange({ ...value, takeOut: on, ...(on && !value.takeOut && !running ? { inUseSince: today } : {}) });
+  };
   const toggleShop = (id: string) => set('preferredShopIds', value.preferredShopIds.includes(id) ? value.preferredShopIds.filter((s) => s !== id) : [...value.preferredShopIds, id]);
 
   return (
@@ -151,11 +168,11 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
         )}
         {usageAllowed && usage && (
           <div className="numfield"><span><b>Take them out of stock for me</b><small>{value.takeOut ? 'Larder takes them out as they\'re used, so you don\'t press Use. Press Use only for an extra one' : 'Or press Use as each one is used'}</small></span>
-            <Switch checked={value.takeOut} onChange={(v) => set('takeOut', v)} label="Take them out of stock for me" />
+            <Switch checked={value.takeOut} onChange={takeOut} label="Take them out of stock for me" />
           </div>
         )}
         {usageAllowed && usage && (
-          <div className="numfield"><span><b>{usage.everyDays >= 2 && usage.amount <= 1 ? 'The one in use started' : 'Counting from'}</b><small>{value.takeOut ? 'Larder takes the next out once this period is up. Blank: from today' : 'Leave blank if none has been started'}</small></span>
+          <div className="numfield"><span><b>{usage.everyDays >= 2 && usage.amount <= 1 ? 'The one in use started' : 'Counting from'}</b><small>{value.takeOut ? 'Larder takes the next out once this period is up. Blank: none started yet, so the next Use starts one' : 'Leave blank if none has been started'}</small></span>
             <input className="input" type="date" style={{ width: 170 }} value={value.inUseSince} onChange={(e) => set('inUseSince', e.target.value)} aria-label="Started on" />
           </div>
         )}

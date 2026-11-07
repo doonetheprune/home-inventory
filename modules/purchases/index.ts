@@ -146,6 +146,14 @@ export default defineModule({
       return s ? (shops.find((x) => s === x.name.toLowerCase() || s.startsWith(`${x.name.toLowerCase()} `)) ?? null) : null;
     };
 
+    // Counted again in what's inside (2 boxes became 40 tea bags): its purchases say so too. A line's price is its total, so it stays.
+    ctx.on('product.recounted', async (event) => {
+      const { productId, to, factor } = event.data as { productId: string; to: string; factor: number };
+      for (const { id, data } of await store.list()) {
+        if (data.productId === productId) await store.put(id, PurchaseRecord.parse({ ...data, quantity: Math.round(data.quantity * factor * 1000) / 1000, unit: to }));
+      }
+    });
+
     // Ticked off at a shop, added from a receipt, or added with a price.
     ctx.on('shopping.purchased', async (event) => {
       const data = event.data as { shopId: string | null; items: Array<{ productId: string; quantity: number; price?: number }>; evidence?: unknown };

@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { defineModule, LarderError, photoType, SHOP_PRESETS } from '@larder/core';
 import { claude, gemini, packTask, PROVIDER_NAMES, type Input, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
 import { orderReader } from './orders';
-import { receipts, type Asked } from './receipts';
+import { itemMemory, receipts, type Asked } from './receipts';
 
 const ProviderName = z.enum(['claude', 'gemini']);
 const ALL: ProviderId[] = ['claude', 'gemini'];
@@ -125,6 +125,11 @@ export default defineModule({
   defaultEnabled: true,
   setup(ctx) {
     const store = ctx.collection<Saved>('settings');
+    // Shops' names for an item, learnt from receipts and order emails, follow it when it's counted again.
+    ctx.on('product.recounted', async (event) => {
+      const { productId, factor } = event.data as { productId: string; factor: number };
+      await itemMemory(ctx).recounted(productId, factor);
+    });
     const providers: Record<ProviderId, Provider> = { claude: claude(ctx.fetch), gemini: gemini(ctx.fetch) };
 
     async function saved(): Promise<Saved> {

@@ -6,9 +6,13 @@ import { ValidationError } from '../errors';
 import type { Product } from '../model';
 import { amount, pluralWord, roundQty } from '../util';
 
+/** Words that end in s but are one of them. */
+const ONE_WITH_S = /(^|\s)(lens|series|species|gas|bus|plus)$/;
+
 /** "Tea bags" → "tea bag", "boxes" → "box", "batteries" → "battery". */
 export function singular(raw: string): string {
   const w = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (ONE_WITH_S.test(w)) return w;
   if (w.length > 4 && w.endsWith('ies')) return `${w.slice(0, -3)}y`;
   if (/(x|ch|sh|ss)es$/.test(w)) return w.slice(0, -2);
   if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
@@ -16,6 +20,14 @@ export function singular(raw: string): string {
 }
 
 export const sameUnit = (a: string, b: string) => singular(a) === singular(b);
+
+/** One of a unit as it was typed, keeping its capitals: "Tea bags" → "Tea bag", "L" → "L". */
+export function oneOf(raw: string): string {
+  const w = raw.trim().replace(/\s+/g, ' ');
+  const s = singular(w);
+  if (s === w.toLowerCase()) return w;
+  return w.toLowerCase().startsWith(s) ? w.slice(0, s.length) : `${w.slice(0, -3)}y`;
+}
 
 /** "tea bags", or "ones" for things counted as "each". */
 const many = (unit: string) => (unit === 'each' ? 'ones' : pluralWord(unit, 2));
@@ -52,6 +64,15 @@ export function everyText(days: number): string {
 export function usageText(product: Pick<Product, 'unit' | 'usage'>): string {
   const u = product.usage;
   return u ? `${amount(u.amount, product.unit)} ${everyText(u.everyDays)}` : '';
+}
+
+/**
+ * Whether a plain Use starts one: with a usage Larder doesn't take out, always; with one it
+ * does, only when none has been started (otherwise it's an extra).
+ */
+export function startsOne(product: Pick<Product, 'usage' | 'inUseSince'>): boolean {
+  const u = product.usage ?? null;
+  return !!u && (!u.auto || !product.inUseSince);
 }
 
 /** How many days `quantity` lasts at its usage, or null without one. */

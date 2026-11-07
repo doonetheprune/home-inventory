@@ -61,7 +61,7 @@ export default defineModule({
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }], evidence }`: `evidence` is how it was bought (`PurchaseEvidence`: receipt photo, source, order number, ordered on, bought on, note) or null |
 | `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
-| `product.recounted` | `{ productId, name, from, to, factor }`: the item is now counted in what's inside (`from` box, `to` tea bag, `factor` 20). Core has multiplied its stock, minimum, stock-up amount and usage; rescale your own quantities (×) and prices (÷) |
+| `product.recounted` | `{ productId, name, from, to, factor }`: the item is now counted in what's inside (`from` box, `to` tea bag, `factor` 20). Core has multiplied its stock, minimum, stock-up amount and usage; rescale your own quantities (×) and prices (÷), as pricing, purchases, online shopping, recipes and the AI module's learnt receipt names do |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |
 | `<module>.*` | anything a module publishes, e.g. `batteries.low` |

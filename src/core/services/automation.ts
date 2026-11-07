@@ -18,7 +18,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
 import { loadWorld, needsBuying, placesText, summarise } from './world';
-import { inOwnUnit, usageText } from './packs';
+import { inOwnUnit, startsOne, usageText } from './packs';
 import { amount, daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
@@ -198,7 +198,9 @@ export function createAutomation(deps: {
   addAction({
     id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things Larder takes out by itself (a tea bag a day), this is an extra one; to start a new one now (a sensor that came off early) set opened.',
     input: z.object({
-      item: Item, quantity: Quantity, place: z.string().max(200).optional().describe('Only use stock from this place'),
+      item: Item,
+      quantity: z.number().positive().optional().describe('How many, in the item\'s own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)'),
+      place: z.string().max(200).optional().describe('Only use stock from this place'),
       opened: z.boolean().optional().describe('True if it was opened and is still being used (a new jar of coffee: it shows as open until finish_item), or, for something Larder takes out by itself, a new one started now'),
       note: z.string().max(200).optional().describe('Why, kept in its history, e.g. "Thrown away: out of date"'),
       unit: Unit,
@@ -206,11 +208,14 @@ export function createAutomation(deps: {
     async run(i) {
       const p = await resolve.product(i.item);
       const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
-      const quantity = inOwnUnit(p, i.quantity, i.unit);
+      // Starting one takes its usual amount unless told otherwise (or what's left, if less).
+      const starts = !!p.usage && (!!i.opened || startsOne(p));
+      const quantity = i.quantity !== undefined ? inOwnUnit(p, i.quantity, i.unit)
+        : starts ? await (async () => { const left = (await products.summary(p.id)).inStock; return left > 0 ? Math.min(p.usage!.amount, left) : p.usage!.amount; })() : 1;
       const s = await stock.use({ productId: p.id, quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
       const n = amount(quantity, p.unit);
       const what = !p.usage ? `${i.opened ? 'opened' : 'used'} ${n}`
-        : !p.usage.auto ? `started ${n}`
+        : startsOne(p) ? `started ${n}${p.usage.auto ? `, and Larder takes them out from here (${usageText(p)})` : ''}`
           : i.opened ? `started a new one now (${n})` : `used ${n} extra (Larder also takes out ${usageText(p)})`;
       const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
       return { message: `${p.name}: ${what}. ${amount(s.inStock, p.unit)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };

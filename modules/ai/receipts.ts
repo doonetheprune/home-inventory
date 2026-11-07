@@ -207,6 +207,12 @@ export function itemMemory(ctx: ModuleContext) {
       const learnt = (await this.learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);
       return { known, learnt };
     },
+    /** The item is now counted in what's inside (a box became 80 tea bags): "1 box" on a receipt is 80 now. */
+    async recounted(productId: string, factor: number): Promise<void> {
+      for (const { id, data } of await names.list()) {
+        if (data.productId === productId) await names.put(id, { ...data, each: tidyNum(data.each * factor) });
+      }
+    },
     async remember(shopId: string | null, text: string, productId: string, each: number): Promise<void> {
       const said = saidAs(text);
       if (!said) return;

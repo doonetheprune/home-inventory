@@ -174,6 +174,51 @@ describe('Larder taking them out by itself', () => {
     await expect(core.stock.finish(sensor.id)).rejects.toThrow("There's no glucose sensor open or in use.");
   });
 
+  it('switched on later, counts from today unless the one in use still has days left', async () => {
+    const core = await makeCore();
+    // Used by pressing Use, one started each time: the last on 28 Oct.
+    const bags = await core.products.create({ ...tea, usage: { amount: 1, everyDays: 1, auto: false } });
+    await core.stock.add({ productId: bags.id, quantity: 20 });
+    await core.stock.use({ productId: bags.id, quantity: 1 });
+    core.clock.set('2026-11-07T09:00:00.000Z');
+    // Ten days later Larder takes them out: from today, not catching up on days already Used.
+    let p = await core.products.update(bags.id, { usage: { amount: 1, everyDays: 1, auto: true } });
+    expect(p.inUseSince).toBe('2026-11-07');
+    core.clock.set('2026-11-08T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).taken).toBe(1);
+    expect((await core.products.summary(bags.id)).inStock).toBe(18);
+
+    // A sensor started 4 days ago carries on: its 14 days were taken out when it was started.
+    const sensor = await core.products.create({ name: 'Glucose sensor', unit: 'sensor', usage: { amount: 1, everyDays: 14, auto: false } });
+    await core.stock.add({ productId: sensor.id, quantity: 3 });
+    await core.stock.use({ productId: sensor.id, quantity: 1 });
+    core.clock.set('2026-11-12T09:00:00.000Z');
+    p = await core.products.update(sensor.id, { usage: { amount: 1, everyDays: 14, auto: true } });
+    expect(p.inUseSince).toBe('2026-11-08');
+
+    // Its usage cleared: nothing's in use, or open.
+    p = await core.products.update(sensor.id, { usage: null });
+    expect(p.inUseSince).toBeNull();
+  });
+
+  it('with none started, Use starts one, and from Home Assistant takes the usual amount', async () => {
+    const core = await makeCore();
+    const lenses = await core.products.create({ name: 'Contact lenses', unit: 'lens', usage: { amount: 2, everyDays: 14, auto: true } });
+    await core.stock.add({ productId: lenses.id, quantity: 8 });
+    // A new pair started early: both lenses come out, and Larder counts from today.
+    core.clock.set('2026-11-02T09:00:00.000Z');
+    let r = await core.automation.run('use_stock', { item: 'contact lenses', opened: true });
+    expect(r.message).toBe('Contact lenses: started a new one now (2 lenses). 6 lenses left, enough until 2026-12-28.');
+    // Stopped, then started again with a plain Use.
+    await core.automation.run('finish_item', { item: 'contact lenses' });
+    r = await core.automation.run('use_stock', { item: 'contact lenses' });
+    expect(r.message).toBe('Contact lenses: started 2 lenses, and Larder takes them out from here (2 lenses every 2 weeks). 4 lenses left, enough until 2026-12-14.');
+    expect((await core.products.summary(lenses.id)).product.inUseSince).toBe('2026-11-02');
+    // Started now, a Use is an extra one.
+    r = await core.automation.run('use_stock', { item: 'contact lenses' });
+    expect(r.message).toBe('Contact lenses: used 1 lens extra (Larder also takes out 2 lenses every 2 weeks). 3 lenses left, enough until 2026-12-07.');
+  });
+
   it('never takes out renewals or rechargeables', async () => {
     const core = await makeCore();
     const renewals = await category(core, 'Renewals');
@@ -245,6 +290,11 @@ describe('counting what is inside', () => {
     expect(s.runsOutOn).toBe('2026-12-07');
 
     await expect(core.stock.recount(sleep.id, { unit: 'tea bags', holds: 20 })).rejects.toThrow('Sleep tea is already counted in tea bags.');
+    // What it comes in can't be what it's counted in.
+    const cups = await core.products.create({ name: 'Paper cups' });
+    await expect(core.stock.recount(cups.id, { unit: 'sleeve', holds: 50, pack: 'sleeves' })).rejects.toThrow("A sleeve can't come in sleeves.");
+    // Said in the plural, it's counted in one, keeping its capitals.
+    expect((await core.stock.recount(cups.id, { unit: 'Cups', holds: 50, pack: 'sleeve' })).product.unit).toBe('Cup');
     const pens = await core.products.create({ name: 'Pens' });
     await expect(core.stock.recount(pens.id, { unit: 'pen', holds: 10 })).rejects.toThrow('Say what one of the pens counted so far is (a box?), so it can become the pack.');
     s = await core.stock.recount(pens.id, { unit: 'pen', holds: 10, pack: 'pack' });
