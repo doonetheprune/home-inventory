@@ -18,6 +18,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
 import { loadWorld, needsBuying, placesText, summarise } from './world';
+import { inOwnUnit, usageText } from './packs';
 import { amount, daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
@@ -78,7 +79,8 @@ export interface SensorInfo {
 const LIST_LIMIT = 25;
 
 const Item = z.string().min(1).max(200).describe('The item: its name or alias ("loo roll"), barcode, or id');
-const Quantity = z.number().positive().default(1).describe('How many, in the item\'s own unit (default 1)');
+const Quantity = z.number().positive().default(1).describe('How many, in the item\'s own unit (default 1), or in `unit`');
+const Unit = z.string().max(30).optional().describe('What the quantity is in, if not the item\'s own unit: its pack, e.g. "box" (1 box = 20 tea bags)');
 
 export function createAutomation(deps: {
   ctx: CoreContext;
@@ -112,7 +114,7 @@ export function createAutomation(deps: {
 
   addSensor({
     id: 'low_stock', name: 'Running low', icon: 'mdi:cart-arrow-down', unit: 'items',
-    description: 'Items below their minimum, or (for things that last a set time once started) running out within their warning window, counting deliveries on the way.',
+    description: 'Items below their minimum, counting deliveries on the way.',
     async read() {
       const items = (await products.list({ status: 'low' })).sort((a, b) => a.product.name.localeCompare(b.product.name));
       return { state: items.length, attributes: { items: items.slice(0, LIST_LIMIT).map((s) => ({ item: s.product.name, in_stock: s.inStock, expected: s.expected, minimum: s.product.minQuantity, unit: s.product.unit, ...(s.runsOutOn ? { runs_out_on: s.runsOutOn } : {}) })) } };
@@ -177,37 +179,45 @@ export function createAutomation(deps: {
       price: z.number().min(0).optional().describe('What was paid for them all, e.g. 3.20 (kept in the purchase history)'),
       shop: z.string().max(80).optional().describe('The shop they were bought at (kept in the purchase history)'),
       note: z.string().max(200).optional(),
+      unit: Unit,
     }),
     async run(i) {
       const p = await resolve.product(i.item);
+      const quantity = inOwnUnit(p, i.quantity, i.unit);
       const place = i.place ? await resolve.place(i.place) : null;
       const shop = i.shop ? await resolve.shop(i.shop) : null;
       const variant = i.brand ? resolve.among('brand', i.brand, (await products.get(p.id)).variants) : null;
       const bought = i.price !== undefined || !!shop;
       const s = bought
-        ? (await shopping.purchase({ shopId: shop?.id ?? null, items: [{ productId: p.id, quantity: i.quantity, placeId: place?.id, price: i.price, expiresOn: i.expires_on, variantId: variant?.id ?? null }], ...(i.note ? { evidence: { note: i.note } } : {}) }))[0]!
-        : await stock.add({ productId: p.id, quantity: i.quantity, placeId: place?.id, expiresOn: i.expires_on, variantId: variant?.id ?? null, note: i.note });
+        ? (await shopping.purchase({ shopId: shop?.id ?? null, items: [{ productId: p.id, quantity, placeId: place?.id, price: i.price, expiresOn: i.expires_on, variantId: variant?.id ?? null }], ...(i.note ? { evidence: { note: i.note } } : {}) }))[0]!
+        : await stock.add({ productId: p.id, quantity, placeId: place?.id, expiresOn: i.expires_on, variantId: variant?.id ?? null, note: i.note });
       const paid = bought ? `, bought${shop ? ` at ${shop.name}` : ''}${i.price !== undefined ? ` for ${i.price.toFixed(2)}` : ''}` : '';
-      return { message: `${p.name}: added ${amount(i.quantity, p.unit)}${variant ? ` (${variant.name})` : ''}${place ? ` to ${place.name}` : ''}${paid}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
+      return { message: `${p.name}: added ${amount(quantity, p.unit)}${variant ? ` (${variant.name})` : ''}${place ? ` to ${place.name}` : ''}${paid}. ${amount(s.inStock, p.unit)} in stock.`, ...itemInfo(s) };
     },
   });
   addAction({
-    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today.',
+    id: 'use_stock', name: 'Use stock', description: 'Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things Larder takes out by itself (a tea bag a day), this is an extra one; to start a new one now (a sensor that came off early) set opened.',
     input: z.object({
       item: Item, quantity: Quantity, place: z.string().max(200).optional().describe('Only use stock from this place'),
-      opened: z.boolean().optional().describe('True if it was opened and is still being used, not finished (a new jar of coffee): it shows as open until finish_item'),
+      opened: z.boolean().optional().describe('True if it was opened and is still being used (a new jar of coffee: it shows as open until finish_item), or, for something Larder takes out by itself, a new one started now'),
       note: z.string().max(200).optional().describe('Why, kept in its history, e.g. "Thrown away: out of date"'),
+      unit: Unit,
     }),
     async run(i) {
       const p = await resolve.product(i.item);
       const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
-      const s = await stock.use({ productId: p.id, quantity: i.quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
+      const quantity = inOwnUnit(p, i.quantity, i.unit);
+      const s = await stock.use({ productId: p.id, quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
+      const n = amount(quantity, p.unit);
+      const what = !p.usage ? `${i.opened ? 'opened' : 'used'} ${n}`
+        : !p.usage.auto ? `started ${n}`
+          : i.opened ? `started a new one now (${n})` : `used ${n} extra (Larder also takes out ${usageText(p)})`;
       const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
-      return { message: `${p.name}: ${i.opened && !p.lastsDays ? 'opened' : 'used'} ${amount(i.quantity, p.unit)}. ${amount(s.inStock, p.unit)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
+      return { message: `${p.name}: ${what}. ${amount(s.inStock, p.unit)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(s) };
     },
   });
   addAction({
-    id: 'finish_item', name: 'Finished the open one', description: 'The open one of an item is finished (the butter\'s gone), or one that lasts a set time came off early: none is open now.',
+    id: 'finish_item', name: 'Finished the open one', description: 'The open one of an item is finished (the butter\'s gone), or the one in use is stopped: none is open, and Larder stops taking them out until one is started again.',
     input: z.object({ item: Item }),
     async run(i) {
       const p = await resolve.product(i.item);
@@ -255,6 +265,7 @@ export function createAutomation(deps: {
       source: z.string().min(1).max(80).describe('Where it\'s coming from, e.g. "Tesco delivery" or "Amazon"'),
       reference: z.string().max(80).optional().describe('Order number'),
       eta: IsoDate.optional().describe('Expected date (YYYY-MM-DD)'),
+      unit: Unit,
       price: z.number().min(0).optional().describe('What the order says the line costs, e.g. 4.50: kept in the purchase history when it arrives'),
       place: z.string().max(200).optional().describe('Where it goes when it arrives: a place name or code. Defaults to its usual place'),
       pending: z.boolean().optional().describe('True if the order isn\'t confirmed yet (a filled online basket before checkout)'),
@@ -263,14 +274,15 @@ export function createAutomation(deps: {
       const p = await resolve.product(i.item);
       const was = (await products.summary(p.id)).pending;
       const place = i.place ? await resolve.place(i.place) : null;
-      const s = await stock.expect({ productId: p.id, quantity: i.quantity, source: i.source, reference: i.reference, eta: i.eta, price: i.price ?? null, ...(place ? { placeId: place.id } : {}), ...(i.pending ? { pending: true } : {}) });
+      const quantity = inOwnUnit(p, i.quantity, i.unit);
+      const s = await stock.expect({ productId: p.id, quantity, source: i.source, reference: i.reference, eta: i.eta, price: i.price ?? null, ...(place ? { placeId: place.id } : {}), ...(i.pending ? { pending: true } : {}) });
       const confirmed = Math.max(0, roundQty(was - s.pending));
-      const more = roundQty(i.quantity - confirmed);
+      const more = roundQty(quantity - confirmed);
       const message = i.pending
-        ? `${p.name}: ${amount(i.quantity, p.unit)} in a pending order from ${i.source}, not confirmed yet.`
+        ? `${p.name}: ${amount(quantity, p.unit)} in a pending order from ${i.source}, not confirmed yet.`
         : confirmed
           ? `${p.name}: ${amount(confirmed, p.unit)} in the pending order confirmed, now on the way${more > 0 ? `, and ${amount(more, p.unit)} more expected from ${i.source}` : ''}.`
-          : `${p.name}: ${amount(i.quantity, p.unit)} expected from ${i.source}.`;
+          : `${p.name}: ${amount(quantity, p.unit)} expected from ${i.source}.`;
       return { message, confirmed, ...itemInfo(s) };
     },
   });
@@ -377,8 +389,6 @@ export function createAutomation(deps: {
   /* ----------------------------- expiry check ---------------------------- */
 
   type Notified = Record<string, { expiresOn: string; warned: boolean; expired: boolean }>;
-  /** Products already announced as running out, with the day they first were. */
-  type RunOutNotified = Record<string, { since: string }>;
   // One check at a time, so a manual check during the hourly one can't announce things twice.
   let checking: Promise<unknown> = Promise.resolve();
 
@@ -424,39 +434,26 @@ export function createAutomation(deps: {
     },
 
     /**
-     * Starts the next of anything set to start the next by itself (see
-     * stock.startNext). Then publishes `stock.expiring` once when an item enters its warning window
-     * and `stock.expired` once on the day it expires; and `stock.running_out`
-     * once when something that lasts a set time once started comes within its
-     * warning window of running out (again only after it's been restocked).
-     * Safe to call as often as you like; the server calls it hourly.
+     * Takes out of stock what Larder takes out by itself (see stock.takeDue), then
+     * publishes `stock.expiring` once when an item enters its warning window and
+     * `stock.expired` once on the day it expires. Safe to call as often as you
+     * like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; taken: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number; runningOut: number; started: number }> {
-      const { started } = await stock.startNext();
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; taken: number }> {
+      const { taken } = await stock.takeDue();
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
-      const runOutNotified = (await ctx.storage.settings.get<RunOutNotified>('runOutNotified')) ?? {};
       const next: Notified = {};
-      const nextRunOut: RunOutNotified = {};
       let expiring = 0;
       let expired = 0;
-      let runningOut = 0;
       const world = await loadWorld(ctx);
       for (const p of world.products) {
         const s = summarise(world, p);
-        // Its run-out date moves as days pass with none in use, so it's announced once per spell in the window, not per date.
-        if (s.status.runningOut && s.runsOutOn) {
-          if (!runOutNotified[p.id]) {
-            ctx.publish('stock.running_out', { productId: p.id, name: p.name, runsOutOn: s.runsOutOn, daysToRunOut: s.daysToRunOut, inStock: s.inStock, expected: roundQty(s.expected + s.pending), unit: p.unit });
-            runningOut++;
-          }
-          nextRunOut[p.id] = runOutNotified[p.id] ?? { since: world.today };
-        }
         if (s.product.wish || !s.nextExpiry || !s.status.expiringSoon) continue;
         const prev = notified[p.id]?.expiresOn === s.nextExpiry ? notified[p.id]! : { expiresOn: s.nextExpiry, warned: false, expired: false };
         const days = s.daysToExpiry ?? daysBetween(world.today, s.nextExpiry);
@@ -474,8 +471,7 @@ export function createAutomation(deps: {
         next[p.id] = prev;
       }
       await ctx.storage.settings.set('expiryNotified', next);
-      await ctx.storage.settings.set('runOutNotified', nextRunOut);
-      return { expiring, expired, runningOut, started };
+      return { expiring, expired, taken };
     },
   };
 }

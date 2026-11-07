@@ -21,7 +21,10 @@ function itemsFor(world: World, shop: Shop | null): ShoppingItem[] {
     // Back up to the stock-up amount, or the minimum (records from before it existed have neither field set).
     const level = Math.max(product.minQuantity ?? 0, product.stockUpTo ?? 0);
     const short = level > 0 ? Math.ceil(roundQty(level - summary.inStock - summary.expected - summary.pending)) : 0;
-    out.push({ summary, quantity: Math.max(1, short), reason, anyShop: product.preferredShopIds.length === 0 });
+    const quantity = Math.max(1, short);
+    // Bought in whole packs: 15 tea bags short is 1 box of 20. Older records have no pack.
+    const packs = product.pack ? Math.ceil(roundQty(quantity / product.pack.holds)) : null;
+    out.push({ summary, quantity: packs !== null ? roundQty(packs * product.pack!.holds) : quantity, packs, reason, anyShop: product.preferredShopIds.length === 0 });
   }
   return out;
 }

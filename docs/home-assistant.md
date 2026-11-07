@@ -56,7 +56,7 @@ All on one **Larder** device. Each number comes with the items behind it as attr
 
 | Sensor | Number | Attributes |
 |---|---|---|
-| `sensor.larder_running_low` | Items below their minimum, or running out within their warning window if used one after another (deliveries on the way and pending orders count) | `items`: item, in_stock, expected, minimum, unit, and runs_out_on for things used one after another |
+| `sensor.larder_running_low` | Items below their minimum (deliveries on the way and pending orders count) | `items`: item, in_stock, expected, minimum, unit, and runs_out_on for things with a usage ("we use 1 a day") |
 | `sensor.larder_use_soon` | Items expiring soon, already expired, or due for renewal | `items`: item, expires_on, days, category, place |
 | `sensor.larder_out_of_place` | Things somewhere other than their usual place | `items`: item, usually, now |
 | `sensor.larder_shopping_list` | Everything to buy | `suggested_shop`, `shops` (how many each can supply), `no_shop` |
@@ -75,12 +75,12 @@ Every action can return Larder's answer, including a `message` for a notificatio
 
 | Action | Fields |
 |---|---|
-| `larder.add_stock` | item, quantity (1), place, expires_on, brand, price, shop, note. With a price or shop it's kept in the purchase history |
-| `larder.use_stock` | item, quantity (1), place, opened (one opened and still in use), note |
+| `larder.add_stock` | item, quantity (1), unit (its pack, e.g. box: 1 box of 20 tea bags adds 20), place, expires_on, brand, price, shop, note. With a price or shop it's kept in the purchase history |
+| `larder.use_stock` | item, quantity (1), unit, place, opened (one opened and still in use; for something Larder takes out by itself, a new one started now), note. For something Larder takes out by itself, a plain use is an extra one |
 | `larder.finish_item` | item: the open one is finished |
 | `larder.move_item` | item, to, quantity (all), permanent (false), from (a place, or "to sort") |
 | `larder.put_back` | item, from (only what's out of place there) |
-| `larder.add_expected` | item, quantity (1), source, reference, eta, price, place, pending |
+| `larder.add_expected` | item, quantity (1), unit, source, reference, eta, price, place, pending |
 | `larder.mark_arrived` | source, or item and quantity; due_by |
 | `larder.confirm_order` | source, or item: a pending order went ahead and is on its way |
 | `larder.cancel_order` | source, or item: a pending order didn't go ahead |
@@ -114,7 +114,6 @@ Larder's changes are fired in Home Assistant as `larder_<type>`:
 | `larder_stock_expiring` | An item has just come within its warning window (once per batch) | productId, name, expiresOn, daysToExpiry, category, place |
 | `larder_stock_expired` | An item expires today (once per batch) | same as above |
 | `larder_stock_arrived` | Something ordered arrived | items: productId, name, unit, quantity, source, reference, orderedOn, price |
-| `larder_stock_running_out` | Something used one after another (each lasts a set time once started) will run out within its warning window, counting what's on order (once, until it's restocked) | productId, name, runsOutOn, daysToRunOut, inStock, expected, unit |
 | `larder_shopping_purchased` | A shopping trip was ticked off | shopId, items |
 | `larder_nfc_scanned` | A tag was scanned | tagId, device, kind (product, place, unknown), id, name, path |
 | `larder_sharing_pending` | A shared link is waiting in Pending | id, name, url, site |
@@ -136,7 +135,7 @@ actions:
       message: "{{ trigger.event.data.name }} is running low ({{ trigger.event.data.inStock }} left)."
 ```
 
-Expiry is checked every hour, so `larder_stock_expiring` (and `larder_stock_running_out`) arrives within an hour of an item becoming due. The same check starts the next of anything set to use the next one automatically, which arrives as `larder_stock_changed` (kind `use`).
+Expiry is checked every hour, so `larder_stock_expiring` arrives within an hour of an item becoming due. The same check takes out of stock what Larder takes out by itself ("Take them out of stock for me"), which arrives as `larder_stock_changed` (kind `use`); when that takes something below its minimum, `larder_stock_low` follows as usual. (0.9.0 removed `larder_stock_running_out`: use `larder_stock_low`.)
 
 ## NFC tags
 

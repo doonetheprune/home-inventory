@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { IdentifyResult, LookupResult, Place, ProductSummary } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { qty, stockText } from '../format';
+import { plural, qty, stockText } from '../format';
 import { readBarcode, useBarcodeScanner } from '../components/useBarcodeScanner';
 import { grabFrame } from '../components/camera';
 import { usePhotoReader, type PhotoReading } from '../components/photoReader';
@@ -354,19 +354,22 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
   }
   const use = mode === 'use';
   const available = s.product.rechargeable ? (s.charged ?? 0) : s.inStock;
+  // A scanned barcode is on the box, so Add counts boxes (1 box = 80 tea bags); Use counts tea bags.
+  const pack = !use ? s.product.pack ?? null : null;
+  const added = pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, s.product.unit)})` : qty(n, s.product.unit);
   return (
     <div className="sheet-card">
       {header}
       <p className="small"><span className="pill p-ok">In Larder</span> <span className="muted">You have {stockText(s)}.{s.status.low ? ' Running low.' : ''}</span></p>
-      <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><b>{pack ? `How many ${plural(pack.name, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
       {!use && <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (use && available <= 0)} onClick={() => run(
-          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId })),
-          (x) => `${use ? (s.product.rechargeable ? 'Marked flat' : 'Used') : 'Added'} ${qty(n, s.product.unit)} · ${stockText(x)} now. Ready for the next scan.`,
+          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId, ...(pack ? { unit: pack.name } : {}) })),
+          (x) => `${use ? (s.product.rechargeable ? 'Marked flat' : 'Used') : 'Added'} ${use ? qty(n, s.product.unit) : added} · ${stockText(x)} now. Ready for the next scan.`,
         ).then((x) => x && onDone())}>
-          {use ? (s.product.rechargeable ? `Mark ${n} flat` : `Use ${qty(n, s.product.unit)}`) : `Add ${qty(n, s.product.unit)}`}
+          {use ? (s.product.rechargeable ? `Mark ${n} flat` : `Use ${qty(n, s.product.unit)}`) : `Add ${added}`}
         </button>
       </div>
     </div>

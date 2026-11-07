@@ -61,7 +61,7 @@ export default defineModule({
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }], evidence }`: `evidence` is how it was bought (`PurchaseEvidence`: receipt photo, source, order number, ordered on, bought on, note) or null |
 | `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
-| `stock.running_out` | `{ productId, name, runsOutOn, daysToRunOut, inStock, expected, unit }`, once when something that lasts a set time once started (`product.lastsDays`) will run out within its warning window, counting what's on order (checked hourly; again only after it's restocked) |
+| `product.recounted` | `{ productId, name, from, to, factor }`: the item is now counted in what's inside (`from` box, `to` tea bag, `factor` 20). Core has multiplied its stock, minimum, stock-up amount and usage; rescale your own quantities (×) and prices (÷) |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |
 | `<module>.*` | anything a module publishes, e.g. `batteries.low` |
@@ -124,7 +124,7 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | Module | What it does |
 |---|---|
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes (Open Food Facts also finds a photo for a brand added by name) |
-| `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till, and an item's measures (1 pack = 1 kg = 5 items), each with its own price |
+| `pricing` | Usual price per unit (shown per its pack or by weight too), "is this pack cheaper?", prices paid at the till, and the weight or volume of one |
 | `purchases` | Every purchase with its price, shop and evidence (the receipt's photo, or the online order), and what was spent by shop, item and month |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |

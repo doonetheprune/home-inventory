@@ -50,6 +50,20 @@ export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt
 export type ProductCreate = z.input<typeof ProductCreate>;
 export const ProductPatch = patchOf(ProductCreate);
 
+/**
+ * Count what's inside: what it was counted in becomes its pack, and every number is
+ * multiplied by how many one holds (2 boxes become 40 tea bags).
+ */
+export const Recount = z.object({
+  /** What to count now, e.g. "tea bag". */
+  unit: z.string().trim().min(1).max(20),
+  /** How many of those one of the old holds, e.g. 20. */
+  holds: z.number().gt(1).max(100000),
+  /** What one of the old is called, e.g. "box". Defaults to what it was counted in (needed when that was "each"). */
+  pack: z.string().trim().min(1).max(30).optional(),
+});
+export type Recount = z.input<typeof Recount>;
+
 export const VariantCreate = Variant.omit({ id: true, productId: true, createdAt: true });
 export const VariantPatch = patchOf(VariantCreate);
 
@@ -71,6 +85,8 @@ export const StockAdd = z.object({
   /** Rechargeables only. Defaults to charged. */
   charge: Charge.optional(),
   note: z.string().max(200).optional(),
+  /** What `quantity` is in: the item's own unit (default) or its pack's name ("box": 1 box = 20 tea bags). */
+  unit: z.string().max(30).optional(),
 });
 export type StockAdd = z.input<typeof StockAdd>;
 
@@ -80,8 +96,14 @@ export const StockUse = z.object({
   /** Only use stock from this place (usual or current). */
   placeId: Id.optional(),
   note: z.string().max(200).optional(),
-  /** Opened and still being used, not finished (the butter in the fridge): it's the open one from today. Things that last a set time are always started by using one. */
+  /**
+   * Opened or started now: with no usage, it's the open one from today (the butter in the fridge);
+   * when Larder takes them out, it starts a new period now (a sensor that came off early).
+   * Without Larder taking them out, using one with a usage always starts one.
+   */
   open: z.boolean().optional(),
+  /** What `quantity` is in: the item's own unit (default) or its pack's name. */
+  unit: z.string().max(30).optional(),
 });
 export type StockUse = z.input<typeof StockUse>;
 
@@ -124,6 +146,8 @@ export const StockExpect = z.object({
   placeId: Id.nullable().optional(),
   /** What the whole line cost, when the order says: kept so the purchase is recorded with its price when it arrives. */
   price: z.number().min(0).nullable().optional(),
+  /** What `quantity` is in: the item's own unit (default) or its pack's name. */
+  unit: z.string().max(30).optional(),
   /**
    * Not confirmed yet (a filled online basket before checkout): a pending order. Without it,
    * stock in a pending order from the same shop is confirmed first rather than added again.

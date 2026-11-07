@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { Product, Variant, type ProductDetail, type ProductSummary, type StockEntryView } from '../model';
 import { ProductCreate, ProductPatch, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { newId, unique } from '../util';
+import { newId, pluralWord, unique } from '../util';
+import { sameUnit, singular } from './packs';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
 
@@ -16,8 +17,11 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
   }
 
   function tidy(p: Product): Product {
+    // A pack is named in the singular ("boxes" is kept as "box"), as units are said "2 boxes".
+    const pack = p.pack ? { ...p.pack, name: singular(p.pack.name) } : (p.pack ?? null);
+    if (pack && sameUnit(pack.name, p.unit)) throw new ValidationError(`A ${pack.name} can't come in ${pluralWord(pack.name, 2)}. Count what's inside (tea bags, say) and say how many a ${pack.name} holds.`);
     const aliases = unique(p.aliases.map((a) => a.trim()).filter((a) => a && a.toLowerCase() !== p.name.trim().toLowerCase()));
-    return { ...p, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
+    return { ...p, pack, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
   }
 
   async function assertBarcodesFree(barcodes: string[], exceptVariantId?: string) {
@@ -36,6 +40,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     if (!cur) throw new NotFoundError('Product', id);
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
     const next = tidy(Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }));
+    // Switching on taking them out with nothing started counts from today.
+    if (next.usage?.auto && !cur.usage?.auto && !next.inUseSince) next.inUseSince = ctx.today();
     await assertRefs(next);
     await ctx.storage.products.put(next);
     ctx.publish('product.updated', { id, name: next.name });
@@ -105,6 +111,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       await assertRefs(data);
       const now = ctx.now();
       const product = tidy(Product.parse({ ...data, id: newId(), createdAt: now, updatedAt: now }));
+      if (product.usage?.auto && !product.inUseSince) product.inUseSince = ctx.today();
       if (product.rechargeable && product.unit === 'each') product.unit = 'battery';
       await ctx.storage.products.put(product);
       ctx.publish('product.created', { id: product.id, name: product.name });
@@ -147,6 +154,33 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       const all = (await ctx.storage.variants.list()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       for (const v of all) (out[v.productId] ??= []).push(v.name);
       return out;
+    },
+
+    /**
+     * Brings items saved by older versions up to date, through the Storage port (so every
+     * storage adapter is covered). Safe to run at every start: it only writes records that
+     * still have the old fields, or lack the new ones. 0.9.0: "Each one lasts N days"
+     * (`lastsDays`, `autoUse`) became a usage of 1 every N days; as low no longer means "runs
+     * out within the warning days", those items get a minimum that warns no later than before.
+     * A record the current schema can't read is written back as it is, never lost.
+     */
+    async upgradeStored(): Promise<number> {
+      const [all, categories, household] = await Promise.all([ctx.storage.products.list(), ctx.storage.categories.list(), ctx.household()]);
+      let changed = 0;
+      for (const raw of all as Array<Product & { lastsDays?: number | null; autoUse?: boolean }>) {
+        if (!('lastsDays' in raw) && !('autoUse' in raw) && 'pack' in raw && 'usage' in raw) continue;
+        const { lastsDays, autoUse, ...rest } = raw;
+        const next: Product = { ...rest, pack: rest.pack ?? null, usage: rest.usage ?? null, inUseSince: rest.inUseSince ?? null };
+        if (lastsDays && !rest.usage) {
+          next.usage = { amount: 1, everyDays: lastsDays, auto: !!autoUse };
+          const warn = categories.find((c) => c.id === rest.categoryId)?.warnDays ?? household.expiryWarningDays;
+          next.minQuantity = Math.max(rest.minQuantity ?? 0, Math.floor(warn / lastsDays) + 1);
+        }
+        const parsed = Product.safeParse(next);
+        await ctx.exclusive(() => ctx.storage.products.put(parsed.success ? parsed.data : next));
+        changed++;
+      }
+      return changed;
     },
 
     async setOnList(id: string, onShoppingList: boolean): Promise<Product> {

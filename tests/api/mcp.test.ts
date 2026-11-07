@@ -47,7 +47,7 @@ describe('MCP server', () => {
       'list_shops', 'add_shop', 'change_shop', 'remove_shop', 'list_places', 'add_place', 'add_storage_grid', 'change_place', 'remove_place',
       'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
       'correct_stock', 'deliveries', 'recent_changes', 'list_items', 'get_place', 'identify_code', 'bought',
-      'check_price', 'set_usual_price', 'convert_price', 'set_item_size', 'get_price', 'set_measure', 'remove_measure',
+      'check_price', 'set_usual_price', 'convert_price', 'set_item_size', 'get_price',
     ]);
     for (const t of tools) {
       expect(t.description!.length, t.name).toBeGreaterThan(30);
@@ -59,7 +59,7 @@ describe('MCP server', () => {
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
       'use_stock', 'finish_item', 'move_item', 'mark_arrived', 'cancel_order', 'remove_from_shopping_list', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
-      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size', 'set_measure', 'remove_measure',
+      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
     ]);
   });
 

@@ -11,7 +11,7 @@ add_stock:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1)"
+      description: "How many, in the item's own unit (default 1), or in `unit`"
       required: false
       default: 1
       selector:
@@ -58,6 +58,12 @@ add_stock:
       required: false
       selector:
         text: {}
+    unit:
+      name: "Unit"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      required: false
+      selector:
+        text: {}
     config_entry_id:
       name: "Larder"
       description: "Only needed when Home Assistant is linked to more than one Larder."
@@ -68,7 +74,7 @@ add_stock:
           integration: "larder"
 use_stock:
   name: "Use stock"
-  description: "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things that last a set time once started (a sensor, lenses), this starts a new one today."
+  description: "Take some of an item out of stock (soonest-expiring first). Rechargeables go flat instead. For things Larder takes out by itself (a tea bag a day), this is an extra one; to start a new one now (a sensor that came off early) set opened."
   fields:
     item:
       name: "Item"
@@ -78,7 +84,7 @@ use_stock:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1)"
+      description: "How many, in the item's own unit (default 1), or in `unit`"
       required: false
       default: 1
       selector:
@@ -94,13 +100,19 @@ use_stock:
         text: {}
     opened:
       name: "Opened"
-      description: "True if it was opened and is still being used, not finished (a new jar of coffee): it shows as open until finish_item"
+      description: "True if it was opened and is still being used (a new jar of coffee: it shows as open until finish_item), or, for something Larder takes out by itself, a new one started now"
       required: false
       selector:
         boolean: {}
     note:
       name: "Note"
       description: "Why, kept in its history, e.g. \"Thrown away: out of date\""
+      required: false
+      selector:
+        text: {}
+    unit:
+      name: "Unit"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
       required: false
       selector:
         text: {}
@@ -114,7 +126,7 @@ use_stock:
           integration: "larder"
 finish_item:
   name: "Finished the open one"
-  description: "The open one of an item is finished (the butter's gone), or one that lasts a set time came off early: none is open now."
+  description: "The open one of an item is finished (the butter's gone), or the one in use is stopped: none is open, and Larder stops taking them out until one is started again."
   fields:
     item:
       name: "Item"
@@ -212,7 +224,7 @@ add_expected:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1)"
+      description: "How many, in the item's own unit (default 1), or in `unit`"
       required: false
       default: 1
       selector:
@@ -238,6 +250,12 @@ add_expected:
       required: false
       selector:
         date: {}
+    unit:
+      name: "Unit"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      required: false
+      selector:
+        text: {}
     price:
       name: "Price"
       description: "What the order says the line costs, e.g. 4.50: kept in the purchase history when it arrives"
@@ -402,7 +420,7 @@ mark_charged:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1)"
+      description: "How many, in the item's own unit (default 1), or in `unit`"
       required: false
       default: 1
       selector:

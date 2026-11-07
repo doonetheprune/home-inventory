@@ -61,6 +61,8 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Bananas', categoryId: cats.Food, unit: 'bunch', shelfLifeDays: 5, minQuantity: 1, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen });
   await product({ name: 'Free-range eggs', aliases: ['eggs'], categoryId: cats.Food, unit: 'egg', shelfLifeDays: 21, minQuantity: 6, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen }, [{ quantity: 2 }]);
   await product({ name: 'Mature cheddar', aliases: ['cheese'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 30, minQuantity: 200, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: fridge }, [{ quantity: 100 }]);
+  // Counted in what's used one at a time, sold by the box, and taken out by Larder as it goes.
+  await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'tea bag', pack: { name: 'box', holds: 80 }, usage: { amount: 2, everyDays: 1, auto: true }, minQuantity: 28, defaultPlaceId: pantry }, [{ quantity: 100 }]);
   await product({ name: 'Oat milk', aliases: ['oatly'], categoryId: cats.Food, unit: 'carton', minQuantity: 3, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: pantry }, [{ quantity: 1 }]);
   await product({ name: 'Fish fingers', categoryId: cats.Food, unit: 'pack', minQuantity: 1, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: cf2 });
 
@@ -76,8 +78,8 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Kitchen roll', categoryId: cats.Household, unit: 'roll', minQuantity: 2, defaultPlaceId: u1 }, [{ quantity: 1 }]);
   await product({ name: 'Bin bags', categoryId: cats.Household, unit: 'bag', minQuantity: 10, defaultPlaceId: sink }, [{ quantity: 3 }]);
   await product({ name: 'Candles', aliases: ['tea lights'], categoryId: cats.Household, unit: 'candle', defaultPlaceId: drawer }, [{ quantity: 12 }]);
-  // Used one after another: the one in the jug was started 10 days ago, and the next starts by itself.
-  const filters = await product({ name: 'Water filter cartridges', aliases: ['water filter', 'brita'], categoryId: cats.Household, unit: 'cartridge', lastsDays: 28, autoUse: true, defaultPlaceId: sink }, [{ quantity: 2 }]);
+  // One every 4 weeks, taken out by Larder: the one in the jug was started 10 days ago.
+  const filters = await product({ name: 'Water filter cartridges', aliases: ['water filter', 'brita'], categoryId: cats.Household, unit: 'cartridge', usage: { amount: 1, everyDays: 28, auto: true }, minQuantity: 1, defaultPlaceId: sink }, [{ quantity: 2 }]);
   await core.products.update(filters.id, { inUseSince: addDays(today, -10) });
   const beansLoo = await product({ name: 'Head torch', aliases: ['headlamp'], categoryId: cats.Household, unit: 'each', defaultPlaceId: hallDrawer }, [{ quantity: 2 }]);
   void beansLoo;

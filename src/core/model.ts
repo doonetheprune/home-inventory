@@ -60,6 +60,27 @@ export const Link = z.object({
 });
 export type Link = z.infer<typeof Link>;
 
+/** How it's sold: a box of 20 (in the item's own unit). */
+export const Pack = z.object({
+  /** "box", "pack", "bag". */
+  name: z.string().trim().min(1).max(30),
+  /** How many of the item's own unit one holds: 20 tea bags. More than 1. */
+  holds: z.number().gt(1).max(100000),
+});
+export type Pack = z.infer<typeof Pack>;
+
+/**
+ * How fast it's used: `amount` of the item's own unit every `everyDays` days (1 tea bag
+ * every day, 1 sensor every 14 days, 2 rolls every 7). With `auto`, Larder takes them out
+ * of stock by itself, one period at a time.
+ */
+export const Usage = z.object({
+  amount: z.number().positive().max(100000),
+  everyDays: z.number().int().min(1).max(3650),
+  auto: z.boolean().default(false),
+});
+export type Usage = z.infer<typeof Usage>;
+
 export const Product = z.object({
   id: Id,
   name: z.string().min(1).max(120),
@@ -70,21 +91,15 @@ export const Product = z.object({
   unit: z.string().min(1).max(20).default('each'),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
+  /** Comes in: how it's sold, e.g. a box of 20. Stock is still counted in `unit`. */
+  pack: Pack.nullable().default(null),
+  /** How fast it's used, and whether Larder takes them out of stock by itself. */
+  usage: Usage.nullable().default(null),
   /**
-   * Things used one at a time, one after another (a glucose sensor, contact lenses, a water
-   * filter): how many days each one lasts once it's started. Larder works out when they run out.
-   */
-  lastsDays: z.number().int().min(1).max(3650).nullable().default(null),
-  /**
-   * When the one in use was started: for things that last a set time, using one sets it to
-   * today; for anything else, opening one (use with `open`) does, and Finished clears it.
+   * With a usage: the day the current period started (its amount is already out of stock).
+   * Without: the day one was opened (Use with `open`), until Finished.
    */
   inUseSince: IsoDate.nullable().default(null),
-  /**
-   * With `lastsDays`: when the one in use runs out, the next comes out of stock and starts by
-   * itself, the day the last one ran out (checked hourly). The first is still started with Use.
-   */
-  autoUse: z.boolean().default(false),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */
@@ -265,7 +280,7 @@ export const ProductStatus = z.object({
   expired: z.boolean(),
   outOfPlace: z.boolean(),
   hasExpected: z.boolean(),
-  /** Things that last a set time once started: they run out within the warning window, counting what's on order. Makes it low. */
+  /** Always false since 0.9.0: low means below the minimum. Kept for older clients until 1.0. */
   runningOut: z.boolean().default(false),
 });
 export type ProductStatus = z.infer<typeof ProductStatus>;
@@ -286,11 +301,11 @@ export const ProductSummary = z.object({
   nextExpiry: IsoDate.nullable(),
   /** Days from today until nextExpiry (negative when expired). */
   daysToExpiry: z.number().nullable(),
-  /** One is open or in use now: opened and not finished, or (things that last a set time) within its days. */
+  /** One is open or in use now: opened and not finished, or (with a usage) within its period. */
   inUse: z.boolean().default(false),
-  /** Things that last a set time once started: when the one in use needs replacing. Null when none is in use. */
+  /** With a usage: when the current period ends (the one in use needs replacing). Null when none is in use. */
   inUseUntil: IsoDate.nullable().default(null),
-  /** Things that last a set time once started: the day the one in use and every one in the house are used up. */
+  /** With a usage: the day the one in use and every one in the house are used up. */
   runsOutOn: IsoDate.nullable().default(null),
   /** Days from today until runsOutOn (0 when there's none left). */
   daysToRunOut: z.number().nullable().default(null),
@@ -357,6 +372,8 @@ export const ShoppingItem = z.object({
   /** Suggested amount to buy. */
   quantity: z.number(),
   reason: z.enum(['low', 'out', 'manual']),
+  /** With a pack: how many packs `quantity` is (it's rounded up to whole packs). */
+  packs: z.number().nullable().default(null),
   /** True when the product has no preferred shop and is here because the shop sells its category. */
   anyShop: z.boolean(),
 });

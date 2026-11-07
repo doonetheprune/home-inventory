@@ -38,5 +38,17 @@ export default defineModule({
     shopFeatures(ctx, services, shops);
     slotFeatures(ctx, services, shops);
     favouriteFeatures(ctx, services, favourites);
+
+    // An item now counted in what's inside (2 boxes became 40 tea bags): pack sizes, target prices
+    // and the on-offer amount follow, so a basket never buys 20 times too much.
+    ctx.on('product.recounted', async (event) => {
+      const { productId, factor } = event.data as { productId: string; factor: number };
+      const per = (n: number | null) => (n === null ? null : Math.round((n / factor) * 1_000_000) / 1_000_000);
+      await ctx.core.products.updateField<unknown>(productId, 'online-shopping', (cur) => {
+        const f = OnlineFields.parse(cur ?? {});
+        const shops = Object.fromEntries(Object.entries(f.shops).map(([id, r]) => [id, { ...r, targetPrice: per(r.targetPrice), listings: r.listings.map((l) => ({ ...l, packQuantity: l.packQuantity * factor })) }]));
+        return OnlineFields.parse({ ...f, shops, targetPrice: per(f.targetPrice), offerStockUpTo: f.offerStockUpTo === null ? null : f.offerStockUpTo * factor });
+      });
+    });
   },
 });

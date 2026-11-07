@@ -8,16 +8,39 @@
  */
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
-import { IsoDate, type Category, type Movement, type Place, type Shop } from '../model';
+import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
+import { usageText } from './packs';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { AmbiguousError, type Resolver } from './resolve';
 import type { createStockService } from './stock';
-import { amount, andList, daysBetween } from '../util';
+import { amount, andList, daysBetween, pluralWord } from '../util';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
+
+/** How fast it's used, for add_item and change_item: always in the item's own unit. */
+export const UsesInput = z.object({
+  amount: z.number().positive().max(100000).describe('How many of the item\'s own unit, e.g. 1 (tea bag) or 2 (rolls)'),
+  every_days: z.number().int().min(1).max(3650).describe('Every how many days: 1 for a day, 7 for a week, 14 for a sensor that lasts 14 days'),
+}).describe('How fast it\'s used, in what it\'s counted in: count the thing used one at a time (tea bags, not boxes)');
+export const ComesInInput = z.object({
+  name: z.string().min(1).max(30).describe('What it\'s sold in, e.g. "box"'),
+  holds: z.number().gt(1).max(100000).describe('How many of the item\'s own unit one holds, e.g. 20'),
+}).describe('How it\'s sold, e.g. a box of 20 tea bags');
+export const TakesOutInput = z.boolean().describe('True for Larder to take them out of stock by itself as they\'re used (from today, or from in_use_since)');
+
+/** Product fields from the tools' usage inputs; undefined leaves them as they are. */
+export function usageFields(cur: Pick<Product, 'usage'> | null, uses: z.infer<typeof UsesInput> | null | undefined, takesOut: boolean | undefined): Pick<Product, 'usage'> | Record<string, never> {
+  if (uses === null) return { usage: null };
+  if (uses) return { usage: { amount: uses.amount, everyDays: uses.every_days, auto: takesOut ?? cur?.usage?.auto ?? false } };
+  if (takesOut !== undefined) {
+    if (!cur?.usage) throw new ValidationError('Say how fast it\'s used (uses) before Larder can take them out.');
+    return { usage: { ...cur.usage, auto: takesOut } };
+  }
+  return {};
+}
 
 export interface ManageDeps {
   ctx: CoreContext;
@@ -263,7 +286,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_category', title: 'Change a category', destructive: true,
-    description: 'Rename a category, or change how many days before expiry (or running out, for things used one after another) its items are flagged.',
+    description: 'Rename a category, or change how many days before expiry its items are flagged.',
     input: z.object({
       category: z.string().min(1).max(60),
       name: z.string().min(1).max(60).optional().describe('New name'),
@@ -293,7 +316,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'change_item', title: 'Change an item', destructive: true,
-    description: 'Change anything about an item: name, category, unit, other names, when it counts as low, how many to stock up to, shelf life, how long each one lasts once started (when the one in use was started, and whether the next starts automatically), usual place, places it\'s no longer kept in, which shops to buy it from, notes, links, wish list or rechargeable. Only the fields given change.',
+    description: 'Change anything about an item: name, category, what it\'s counted in and what it comes in (with recount to turn 2 boxes into 40 tea bags), other names, when it counts as low, how many to stock up to, shelf life, how fast it\'s used and whether Larder takes them out by itself, usual place, places it\'s no longer kept in, which shops to buy it from, notes, links, wish list or rechargeable. Only the fields given change.',
     input: z.object({
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
@@ -303,9 +326,11 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       minimum: z.number().min(0).nullable().optional().describe('Running low below this many; null to never count as low'),
       stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
-      lasts_days: z.number().int().positive().max(3650).nullable().optional().describe('For things used one at a time, one after another (a glucose sensor, contact lenses): how many days each one lasts once started; null for none'),
-      in_use_since: IsoDate.nullable().optional().describe('When the one in use was started (YYYY-MM-DD); null if none is in use. use_stock sets it to today, so this is for a different day'),
-      auto_use: z.boolean().optional().describe('True to start the next one automatically (taking it out of stock) when the one in use runs out'),
+      comes_in: ComesInInput.nullable().optional(),
+      recount: z.boolean().optional().describe('With unit and comes_in, when what it was counted in is what it comes in: true multiplies the stock, orders, minimum, stock-up amount and usage by comes_in.holds (2 boxes become 40 tea bags). Without it, a new unit only renames'),
+      uses: UsesInput.nullable().optional(),
+      takes_out_automatically: TakesOutInput.optional(),
+      in_use_since: IsoDate.nullable().optional().describe('With uses: the day the current one was started, or Larder starts counting from (YYYY-MM-DD); without: the day one was opened. null for none'),
       usual_place: z.string().max(200).nullable().optional().describe('Where it usually lives; null for nowhere in particular. This doesn\'t move stock (use move_item)'),
       shops: z.array(z.string().max(80)).max(10).optional().describe('Every shop to buy it from (replaces the old list); [] for any shop that sells its category'),
       notes: z.string().max(5000).optional(),
@@ -328,13 +353,18 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         const here = (await products.get(p.id)).stockByPlace.filter((x) => leaving.some((l) => l.id === x.id) && x.quantity > 0);
         if (here.length) throw new ValidationError(`${p.name} still has stock in ${andList(here.map((x) => x.path))}. Move it (move_item, permanent) or use it up first.`);
       }
+      const recounting = !!i.recount;
+      if (recounting && (!i.unit || !i.comes_in)) throw new ValidationError('A recount needs the new unit and what it comes in (comes_in with how many one holds).');
+      if (recounting) await stock.recount(p.id, { unit: i.unit!, holds: i.comes_in!.holds, pack: i.comes_in!.name });
+      const cur = recounting ? (await products.get(p.id)).product : p;
       const next = await products.update(p.id, {
-        ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit ? { unit: i.unit } : {}),
+        ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit && !recounting ? { unit: i.unit } : {}),
+        ...(i.comes_in !== undefined && !recounting ? { pack: i.comes_in } : {}),
+        ...usageFields(cur, i.uses, i.takes_out_automatically),
         ...(i.aliases ? { aliases: i.aliases } : {}), ...(i.minimum !== undefined ? { minQuantity: i.minimum } : {}),
         ...(i.stock_up_to !== undefined ? { stockUpTo: i.stock_up_to } : {}),
         ...(i.shelf_life_days !== undefined ? { shelfLifeDays: i.shelf_life_days } : {}),
-        ...(i.lasts_days !== undefined ? { lastsDays: i.lasts_days } : {}), ...(i.in_use_since !== undefined ? { inUseSince: i.in_use_since } : {}),
-        ...(i.auto_use !== undefined ? { autoUse: i.auto_use } : {}),
+        ...(i.in_use_since !== undefined ? { inUseSince: i.in_use_since } : {}),
         ...(defaultPlaceId !== undefined ? { defaultPlaceId } : {}),
         ...(preferredShopIds ? { preferredShopIds } : {}), ...(i.notes !== undefined ? { notes: i.notes } : {}),
         ...(i.wish_list !== undefined ? { wish: i.wish_list } : {}), ...(i.rechargeable !== undefined ? { rechargeable: i.rechargeable } : {}),
@@ -348,12 +378,13 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (defaultPlaceId !== undefined) said.push(defaultPlaceId ? `usually lives in ${(await places.list()).find((x) => x.id === defaultPlaceId)?.path}` : 'no usual place');
       if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${amount(i.minimum, next.unit)}`);
       if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
-      if (i.lasts_days !== undefined) said.push(i.lasts_days === null ? 'no set time once started' : `each lasts ${i.lasts_days} day${i.lasts_days === 1 ? '' : 's'} once started`);
-      if (i.in_use_since !== undefined) said.push(i.in_use_since ? `the one in use was started on ${i.in_use_since}` : 'none in use');
+      if (recounting) said.push(`now counted in ${pluralWord(next.unit, 2)}, ${amount(d.inStock, next.unit)} in stock (1 ${i.comes_in!.name} = ${i.comes_in!.holds})`);
+      else if (i.comes_in !== undefined) said.push(i.comes_in ? `comes in ${pluralWord(i.comes_in.name, 2)} of ${i.comes_in.holds}` : 'no pack');
+      if (i.uses !== undefined || i.takes_out_automatically !== undefined) said.push(next.usage ? `uses ${usageText(next)}${next.usage.auto ? ', taken out of stock by Larder' : ''}` : 'no usage set');
+      if (i.in_use_since !== undefined) said.push(i.in_use_since ? `${next.usage ? 'the current one started on' : 'one open since'} ${i.in_use_since}` : 'none in use');
       if (leaving.length) said.push(`no longer kept in ${andList(leaving.map((l) => l.name))}`);
       if (i.links) said.push(i.links.length ? `${i.links.length} link${i.links.length === 1 ? '' : 's'}` : 'no links');
-      if (i.auto_use !== undefined) said.push(i.auto_use ? 'the next one starts automatically when one runs out' : 'each one is started with use_stock');
-      if (d.runsOutOn && (i.lasts_days || i.in_use_since !== undefined)) said.push(`enough until ${d.runsOutOn}${d.status.runningOut ? ', so it\'s low' : ''}`);
+      if (d.runsOutOn && (i.uses || i.in_use_since !== undefined || recounting)) said.push(`enough until ${d.runsOutOn}`);
       return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.`, data: { id: next.id, name: next.name } };
     },
   });

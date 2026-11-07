@@ -14,6 +14,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import { finders } from './assistant-manage';
 import { amount, andList } from '../util';
+import { inOwnUnit } from './packs';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
 
@@ -29,7 +30,7 @@ export interface BrowseDeps {
   line: (s: ProductSummary) => string;
 }
 
-const STATUSES = ['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_sort', 'to_tidy', 'open', 'running_out'] as const;
+const STATUSES = ['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_sort', 'to_tidy', 'open'] as const;
 
 export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
   const { products, shopping, places, lookup, resolve, line } = deps;
@@ -37,9 +38,9 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
 
   addTool({
     name: 'list_items', title: 'List items', readOnly: true,
-    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, open: opened and not finished, running_out: things used one after another that run out soon), by category, by place, or a mix.',
+    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, open: opened and not finished, or in use), by category, by place, or a mix.',
     input: z.object({
-      status: z.enum(STATUSES).default('all').describe('Which items: all (owned), low, expiring, out_of_place, expected, wish, in_stock, to_sort, to_tidy, open or running_out'),
+      status: z.enum(STATUSES).default('all').describe('Which items: all (owned), low, expiring, out_of_place, expected, wish, in_stock, to_sort, to_tidy or open'),
       category: z.string().max(60).optional().describe('Only this category, e.g. "Food"'),
       place: z.string().max(200).optional().describe('Only items with stock in this place (name or code)'),
       limit: z.number().int().min(1).max(200).default(50).describe('Most to list (default 50)'),
@@ -54,10 +55,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
         quantities = new Map(loose.map((x) => [x.summary.product.id, x.quantity]));
         list = loose.map((x) => x.summary).filter((s) => !categoryId || s.product.categoryId === categoryId);
       } else {
-        const base = status === 'open' ? 'all' : status === 'running_out' ? 'low' : status;
-        list = await products.list({ status: base, categoryId, placeId });
+        list = await products.list({ status: status === 'open' ? 'all' : status, categoryId, placeId });
         if (status === 'open') list = list.filter((s) => s.inUse);
-        if (status === 'running_out') list = list.filter((s) => s.status.runningOut);
       }
       if (!list.length) return { text: 'No items like that.', data: { items: [] } };
       const shown = list.slice(0, limit);
@@ -117,7 +116,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
       shop: z.string().max(80).optional().describe('Where they were bought, e.g. "Aldi"'),
       items: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder'),
-        quantity: z.number().positive().describe('How many, in the item\'s own unit'),
+        quantity: z.number().positive().describe('How many, in the item\'s own unit, or in unit'),
+        unit: z.string().max(30).optional().describe('What the quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
         price: z.number().min(0).optional().describe('What the line cost, e.g. 3.20'),
       })).min(1).max(100),
       date: IsoDate.optional().describe('When they were bought, if not today (YYYY-MM-DD)'),
@@ -125,7 +125,10 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
     }),
     async run({ shop, items, date, note }) {
       const s = shop ? await find.shop(shop) : null;
-      const resolved = await Promise.all(items.map(async (i) => ({ ...i, product: await resolve.product(i.item) })));
+      const resolved = await Promise.all(items.map(async (i) => {
+        const product = await resolve.product(i.item);
+        return { ...i, product, quantity: inOwnUnit(product, i.quantity, i.unit) };
+      }));
       const done = await shopping.purchase({
         shopId: s?.id ?? null,
         items: resolved.map((i) => ({ productId: i.product.id, quantity: i.quantity, ...(i.price !== undefined ? { price: i.price } : {}) })),

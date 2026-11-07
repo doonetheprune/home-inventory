@@ -154,7 +154,8 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
         listings: rules.listings.map((l) => ({ listingId: l.listingId, name: l.name || l.listingId, packQuantity: l.packQuantity })),
       };
       if (!isCandidate(c)) continue;
-      if (c.shelfLifeDays) c.dailyUse = dailyUse(await ctx.core.history.product(p.id, 500), ctx.core.today());
+      // How fast it's used, as the household said, or else as the history shows.
+      if (c.shelfLifeDays) c.dailyUse = p.usage ? p.usage.amount / p.usage.everyDays : dailyUse(await ctx.core.history.product(p.id, 500), ctx.core.today());
       out.push(c);
     }
     const list = await ctx.core.shopping.forShop(shop.id);
