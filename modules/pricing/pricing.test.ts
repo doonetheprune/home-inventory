@@ -129,6 +129,10 @@ describe('pricing module', () => {
     r = (await call(core, 'POST', '/check', { productId: tea.id, quantity: 40, price: 2.4 })) as ReturnType<typeof checkPrice>;
     expect(r.verdict).toBe('dearer');
     expect((await core.assistant.call('convert_price', { price: 4, per: 'box', to: 'tea bag', item: 'tea bags' })).text).toBe('£4.00 a box is £0.05 a tea bag.');
+    // A box weighs 250 g: one tea bag is 250 g ÷ 80.
+    expect((await core.assistant.call('set_item_size', { item: 'tea bags', amount: 250, unit: 'g', per: 'box' })).text).toBe('One tea bag of Tea bags is 3.125 g (a box of 80 is 250 g). Its prices can now be compared per 100 g and per kg.');
+    expect((await core.assistant.call('get_price', { item: 'tea bags' })).text).toContain('£4.00 a box, £1.60 per 100 g');
+    await expect(core.assistant.call('set_item_size', { item: 'tea bags', amount: 1, unit: 'kg', per: 'crate' })).rejects.toThrow('Tea bags is counted in tea bags and comes in boxes of 80, so give the size of one tea bag or one box.');
     await expect(call(core, 'POST', '/check', { productId: tea.id, quantity: 1, unit: 'crate', price: 3 })).rejects.toThrow('Larder doesn\'t know the unit "crate". Use tea bag, box, g, 100 g, kg, ml, 100 ml or litre.');
   });
 

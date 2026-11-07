@@ -94,7 +94,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `check_price` / `set_usual_price` | "Is 24 rolls for £8 cheaper than usual?" or "spinach is £4.40/kg here, is that good?", and making it the usual price. Both take the pack's unit (the item's own, g, kg, ml, l) (pricing module) |
 | `add_receipt` | Add a till receipt or online order the assistant has read to stock in one go, with the prices paid, by item names. Only items Larder has: if any line isn't one, nothing is added and it says which (ai module) |
 | `convert_price` | "£3.50 a kg, what's that per 100 g?" For an item counted in bags or tins, give the item (pricing module) |
-| `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
+| `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg; with `per: "box"`, the weight of the pack it comes in (a 250 g box of 80 tea bags is 3.125 g a tea bag) (pricing module) |
 | `get_price` | An item's usual price in every unit it can be shown in: its own, its pack, and by weight once `set_item_size` says how much one holds (pricing module) |
 | `purchase_history` / `spending` | What was bought, the price, the shop, and the receipt's photo or the order; what was spent by shop, item and month (purchase history module) |
 | `change_purchase` / `remove_purchase` | Correct a purchase in the history (how many in the item's unit or its pack), or take one out (purchase history module) |

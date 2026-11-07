@@ -19,7 +19,7 @@ Keeps each item's **usual price per unit** and checks whether a different pack i
 - **AI tools:**
   - `check_price` and `set_usual_price` take the pack's unit.
   - `convert_price` gives "£3.50 a kg is £0.35 per 100 g" (with an item, between its own unit and a weight).
-  - `set_item_size` records "1 bag = 200 g".
+  - `set_item_size` records "1 bag = 200 g", or, with `per` its pack, the pack's weight ("a 250 g box of 80": 3.125 g a tea bag).
   - `get_price` gives the usual price in every unit it can be shown in.
 - **Demo:** usual prices for toilet roll, baby spinach (with its 200 g size) and mature cheddar.
 - **UI:**

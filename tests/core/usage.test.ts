@@ -353,12 +353,18 @@ describe('Home Assistant and assistants', () => {
     expect(item).toContain('Uses 2 tea bags a day, taken out of stock by Larder. Enough until 2026-12-07 (in 40 days).');
     expect(item).toContain('Running low below 14 tea bags (a week\'s worth).');
     item = (await core.assistant.call('get_item', { item: 'glucose sensor' })).text;
-    expect(item).toContain('Uses 1 sensor every 2 weeks. One in use since 2026-10-28, until 2026-11-11 (in 14 days). Enough until 2026-12-09 (in 42 days).');
+    expect(item).toContain('Uses 1 sensor every 2 weeks. One in use since 2026-10-28, until 2026-11-11 (in 14 days), not counted in stock. Enough until 2026-12-09 (in 42 days).');
     expect((await core.assistant.call('search', { query: 'glucose' })).text).toContain('enough until 2026-12-09 (in 42 days)');
 
     const changed = await core.assistant.call('change_item', { item: 'glucose sensor', uses: { amount: 1, every_days: 10 }, takes_out_automatically: true, in_use_since: '2026-10-25' });
     expect(changed.text).toBe('Glucose sensor is updated: uses 1 sensor every 10 days, taken out of stock by Larder, the current one started on 2026-10-25, enough until 2026-11-24.');
     expect((await core.products.summary(sensor.id)).product.usage).toEqual({ amount: 1, everyDays: 10, auto: true });
+    // Set up before 0.9.0 with a shelf life standing in for how long one lasts: the answer says so.
+    const libre = await core.products.create({ name: 'Libre 3', unit: 'sensor', shelfLifeDays: 14 });
+    const told = await core.assistant.call('change_item', { item: 'libre 3', uses: { amount: 1, every_days: 14 } });
+    expect(told.text).toContain('It also has a shelf life of 14 days, so new stock gets an expiry date that far ahead; if that was meant as how long one lasts once started, clear it (shelf_life_days: null).');
+    expect((await core.assistant.call('change_item', { item: 'libre 3', uses: { amount: 1, every_days: 14 }, shelf_life_days: null })).text).not.toContain('shelf life');
+    expect((await core.products.summary(libre.id)).product.shelfLifeDays).toBeNull();
 
     await core.assistant.call('add_item', { name: 'Sleep tea', unit: 'box', uses: { amount: 1, every_days: 20 } });
     await core.automation.run('add_stock', { item: 'sleep tea', quantity: 2 });

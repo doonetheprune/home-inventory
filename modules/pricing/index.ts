@@ -5,7 +5,7 @@
  * £0.36 a roll, and "£3.50 a kg" against the usual £0.40 per 100 g.
  */
 import { z } from 'zod';
-import { Id, NotFoundError, ValidationError, defineModule, type CoreApi, type Product } from '@larder/core';
+import { Id, NotFoundError, ValidationError, defineModule, pluralWord, sameUnit, type CoreApi, type Product } from '@larder/core';
 import { ItemSize, choicesFor, defaultShow, isMeasure, packUnitsFor, perText, priceFactor, unitKey, unitName, whyNot } from './units';
 
 export { ItemSize } from './units';
@@ -301,18 +301,26 @@ export default defineModule({
 
     ctx.addTool({
       name: 'set_item_size', title: 'Say how much one item holds', destructive: true,
-      description: 'Record how much one of an item holds, e.g. a bag of baby spinach is 200 g, so its prices can be compared per kg or per 100 g. Not needed for things already counted by weight or volume.',
+      description: 'Record how much one of an item holds or weighs, e.g. a bag of baby spinach is 200 g, so its prices can be compared per kg or per 100 g. It\'s kept per one of what the item is counted in (one tea bag); for the weight of the pack it comes in (a 250 g box of 80 tea bags), give per: "box" and Larder works out one. Not needed for things already counted by weight or volume.',
       input: z.object({
         item: z.string().min(1).max(200).describe('The item, e.g. "baby spinach"'),
         amount: z.number().positive().describe('How much one holds, e.g. 200'),
         unit: z.enum(['g', 'kg', 'ml', 'l']).describe('g, kg, ml or l'),
+        per: z.string().max(30).optional().describe('What amount is for, if not one of what the item is counted in: the pack it comes in, e.g. "box"'),
       }),
-      async run({ item, amount, unit }) {
+      async run({ item, amount: given, unit, per }) {
         const product = await ctx.core.resolve.product(item);
         if (isMeasure(product.unit)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
+        const pack = product.pack ?? null;
+        const ofPack = !!per && !sameUnit(per, product.unit);
+        if (ofPack && !(pack && sameUnit(per!, pack.name))) {
+          throw new ValidationError(`${product.name} is counted in ${pluralWord(unitName(product.unit), 2)}${pack ? ` and comes in ${pluralWord(pack.name, 2)} of ${pack.holds}` : ''}, so give the size of one ${unitName(product.unit)}${pack ? ` or one ${pack.name}` : ''}.`);
+        }
+        const amount = ofPack ? Math.round((given / pack!.holds) * 1000) / 1000 : given;
         await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => withSize(PricingFields.parse(cur ?? {}), { amount, unit }));
         const by = unit === 'ml' || unit === 'l' ? 'per 100 ml and per litre' : 'per 100 g and per kg';
-        return { text: `One ${unitName(product.unit)} of ${product.name} is ${amount} ${unit}. Its prices can now be compared ${by}.`, data: { amount, unit } };
+        const whole = ofPack ? ` (a ${pack!.name} of ${pack!.holds} is ${given} ${unit})` : '';
+        return { text: `One ${unitName(product.unit)} of ${product.name} is ${amount} ${unit}${whole}. Its prices can now be compared ${by}.`, data: { amount, unit } };
       },
     });
 

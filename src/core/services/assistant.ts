@@ -106,7 +106,7 @@ function usageLine(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
   const u = p.usage!;
   const parts = [`Uses ${usageText(p)}${u.auto ? ', taken out of stock by Larder' : ''}.`];
-  if (s.inUseUntil && u.everyDays >= 2) parts.push(`One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}.`);
+  if (s.inUseUntil && u.everyDays >= 2) parts.push(`One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}, not counted in stock.`);
   else if (u.auto && !p.inUseSince) parts.push('None started yet, so nothing is taken out until one is (use_stock with opened, or change_item in_use_since).');
   if (s.runsOutOn) parts.push(s.inStock <= 0 && !s.inUseUntil ? 'None left.' : `Enough until ${when(ctx, s.runsOutOn)}.`);
   return parts.join(' ');

@@ -324,7 +324,7 @@ test('counts what is inside a box, how fast it is used, and takes it out of stoc
   await expect(page.getByRole('button', { name: 'Came off early: start the next one now' })).toBeVisible();
 
   // New tea bags: a box of 20, 1 a day, taken out by Larder.
-  const name = `Tea bags ${info.project.name}`;
+  const name = `PG Tips ${info.project.name}`;
   await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
   await page.getByLabel('Unit', { exact: true }).fill('tea bag');
   await page.getByRole('button', { name: 'Set what it comes in' }).click();

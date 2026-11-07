@@ -330,7 +330,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       recount: z.boolean().optional().describe('With unit and comes_in, when what it was counted in is what it comes in: true multiplies the stock, orders, minimum, stock-up amount and usage by comes_in.holds (2 boxes become 40 tea bags). Without it, a new unit only renames'),
       uses: UsesInput.nullable().optional(),
       takes_out_automatically: TakesOutInput.optional(),
-      in_use_since: IsoDate.nullable().optional().describe('With uses: the day the current one was started, or Larder starts counting from (YYYY-MM-DD); without: the day one was opened. null for none'),
+      in_use_since: IsoDate.nullable().optional().describe('With uses: the day the current one was started, or Larder starts counting from (YYYY-MM-DD); without: the day one was opened. null for none. The one in use isn\'t counted in stock: 3 in stock are 3 spares'),
       usual_place: z.string().max(200).nullable().optional().describe('Where it usually lives; null for nowhere in particular. This doesn\'t move stock (use move_item)'),
       shops: z.array(z.string().max(80)).max(10).optional().describe('Every shop to buy it from (replaces the old list); [] for any shop that sells its category'),
       notes: z.string().max(5000).optional(),
@@ -385,7 +385,11 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (leaving.length) said.push(`no longer kept in ${andList(leaving.map((l) => l.name))}`);
       if (i.links) said.push(i.links.length ? `${i.links.length} link${i.links.length === 1 ? '' : 's'}` : 'no links');
       if (d.runsOutOn && (i.uses || i.in_use_since !== undefined || recounting)) said.push(`enough until ${d.runsOutOn}`);
-      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.`, data: { id: next.id, name: next.name } };
+      // A shelf life set as "lasts 14 days" before there was a usage gives every new batch an expiry: say so.
+      const shelf = next.usage && next.shelfLifeDays && i.uses && i.shelf_life_days === undefined
+        ? ` It also has a shelf life of ${next.shelfLifeDays} days, so new stock gets an expiry date that far ahead; if that was meant as how long one lasts once started, clear it (shelf_life_days: null).`
+        : '';
+      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.${shelf}`, data: { id: next.id, name: next.name } };
     },
   });
 
