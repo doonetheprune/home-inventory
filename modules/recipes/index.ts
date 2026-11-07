@@ -886,7 +886,7 @@ export default defineModule({
       },
     });
     ctx.addTool({
-      name: 'propose_cooking', title: 'Propose taking ingredients out of stock',
+      name: 'propose_cooking', title: 'Propose taking ingredients out of stock', readOnly: true,
       description: 'After the person has cooked a saved recipe: work out what to take out of stock. Changes nothing. Uses the default preset unless they made another amount (a preset, what they had, servings or times). Show the list, ask them to confirm or adjust, then call confirm_cooking.',
       input: z.object({
         recipe: z.string().min(1).max(120),
@@ -899,7 +899,7 @@ export default defineModule({
       },
     });
     ctx.addTool({
-      name: 'confirm_cooking', title: 'Confirm taking ingredients out of stock', destructive: true,
+      name: 'confirm_cooking', title: 'Confirm taking ingredients out of stock',
       description: 'Apply a proposal from propose_cooking once the person agrees. Pass changes for anything they used a different amount of (quantity 0 to leave an item alone).',
       input: z.object({
         proposal: z.string().min(1).describe('The proposal id from propose_cooking'),

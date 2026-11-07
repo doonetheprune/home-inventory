@@ -74,6 +74,10 @@ describe('batteries module', () => {
     expect(list).toContain('- Front door sensor: 90%; takes no battery type linked yet');
     expect((await core.assistant.call('battery_devices', { device: 'tv remote' })).text).toBe('TV remote (Lounge): battery at 40%. TV remote needs 2 batteries. Swap in charged AA batteries from Hall drawer (4 charged).');
     expect((await core.assistant.call('batteries_replaced', { device: 'TV remote' })).text).toBe('TV remote: 2 batteries replaced. AA batteries: 2 charged, 2 flat.');
+    // Swapping batteries is everyday (like using stock), so assistants don't ask first; linking another type replaces one, so they do.
+    const tools = core.assistant.list();
+    expect(tools.find((t) => t.name === 'batteries_replaced')?.destructive).toBe(false);
+    expect(tools.find((t) => t.name === 'link_battery')?.destructive).toBe(true);
 
     const coin = await core.products.create({ name: 'CR2032 coin cells', unit: 'battery' });
     expect((await core.assistant.call('link_battery', { device: 'front door sensor', battery: 'CR2032' })).text).toBe('Front door sensor takes CR2032 coin cells.');
