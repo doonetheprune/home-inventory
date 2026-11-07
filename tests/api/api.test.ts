@@ -165,7 +165,7 @@ describe('API', () => {
     expect(patched).toMatchObject({ name: 'Milk', aliases: ['moo'], minQuantity: 2, notes: 'Semi-skimmed' });
   });
 
-  it('says when things that last a set time once started run out', async () => {
+  it('says when things used at a set rate run out, takes them out of stock, and counts what is inside', async () => {
     const { call } = await makeApp({ auth: 'none' });
     const today = (await call<Any>('GET', '/api/v1/home')).body.today as string;
     const plus = (days: number) => {
@@ -173,19 +173,26 @@ describe('API', () => {
       d.setUTCDate(d.getUTCDate() + days);
       return d.toISOString().slice(0, 10);
     };
-    const sensor = (await call<Any>('POST', '/api/v1/products', { name: 'Glucose sensor', unit: 'sensor', lastsDays: 14, autoUse: true })).body;
-    expect(sensor).toMatchObject({ lastsDays: 14, inUseSince: null, autoUse: true });
+    const sensor = (await call<Any>('POST', '/api/v1/products', { name: 'Glucose sensor', unit: 'sensor', usage: { amount: 1, everyDays: 14 } })).body;
+    expect(sensor).toMatchObject({ usage: { amount: 1, everyDays: 14, auto: false }, pack: null, inUseSince: null });
     await call('POST', '/api/v1/stock/add', { productId: sensor.id, quantity: 3 });
     const used = (await call<Any>('POST', '/api/v1/stock/use', { productId: sensor.id, quantity: 1 })).body;
-    expect(used).toMatchObject({ inStock: 2, inUseUntil: plus(14), runsOutOn: plus(42), daysToRunOut: 42, status: { low: false, runningOut: false } });
+    expect(used).toMatchObject({ inStock: 2, inUse: true, inUseUntil: plus(14), runsOutOn: plus(42), daysToRunOut: 42, status: { low: false, runningOut: false } });
     expect(used.product.inUseSince).toBe(today);
 
-    // The last one, started 10 days ago: 4 days to go, so it's low.
-    await call('POST', '/api/v1/stock/use', { productId: sensor.id, quantity: 2 });
-    expect((await call<Any>('PATCH', `/api/v1/products/${sensor.id}`, { inUseSince: plus(-10) })).body.inUseSince).toBe(plus(-10));
-    expect((await call<Any>('GET', `/api/v1/products/${sensor.id}`)).body).toMatchObject({ inUseUntil: plus(4), runsOutOn: plus(4), daysToRunOut: 4, status: { low: true, runningOut: true } });
-    expect((await call<Any[]>('GET', '/api/v1/products?status=low')).body.map((x) => x.product.name)).toEqual(['Glucose sensor']);
-    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, runningOut: 1, started: 0 });
+    // Larder takes them out from now on; the current one started 14 days ago, so the next is due.
+    await call('PATCH', `/api/v1/products/${sensor.id}`, { usage: { amount: 1, everyDays: 14, auto: true }, inUseSince: plus(-14) });
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, taken: 1 });
+    expect((await call<Any>('GET', `/api/v1/products/${sensor.id}`)).body).toMatchObject({ inStock: 1, inUseUntil: plus(14), product: { inUseSince: today } });
+
+    // Counted in boxes so far: counted in tea bags, 2 boxes are 40.
+    const tea = (await call<Any>('POST', '/api/v1/products', { name: 'Sleep tea', unit: 'box' })).body;
+    await call('POST', '/api/v1/stock/add', { productId: tea.id, quantity: 2 });
+    const recounted = (await call<Any>('POST', `/api/v1/products/${tea.id}/recount`, { unit: 'tea bag', holds: 20 })).body;
+    expect(recounted).toMatchObject({ inStock: 40, product: { unit: 'tea bag', pack: { name: 'box', holds: 20 } } });
+    expect((await call<Any>('POST', '/api/v1/stock/add', { productId: tea.id, quantity: 1, unit: 'box' })).body.inStock).toBe(60);
+    const wrong = await call<Any>('POST', '/api/v1/stock/use', { productId: tea.id, quantity: 1, unit: 'kg' });
+    expect([wrong.status, wrong.body.message]).toEqual([400, 'Sleep tea is counted in tea bags and comes in boxes of 20. Give how many tea bags or boxes.']);
   });
 
   it('builds a grid of places', async () => {

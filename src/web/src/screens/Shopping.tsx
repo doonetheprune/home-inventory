@@ -101,7 +101,7 @@ export function Shopping() {
                       <button type="button" className="check" aria-label={`Got ${i.summary.product.name}`} aria-pressed={!!t} onClick={() => toggle(i)}><Icon name="check" size="sm" /></button>
                       <ProductTile s={i.summary} />
                       <Link className="item-main" to={`/products/${i.summary.product.id}`}>
-                        <span className="item-name">{i.summary.product.name} <span className="muted" style={{ fontWeight: 500 }}>· {qty(t?.quantity ?? i.quantity, i.summary.product.unit)}</span></span>
+                        <span className="item-name">{i.summary.product.name} <span className="muted" style={{ fontWeight: 500 }}>· {i.packs !== null && i.summary.product.pack && (t?.quantity ?? i.quantity) === i.quantity ? `${qty(i.packs, i.summary.product.pack.name)} (${qty(i.quantity, i.summary.product.unit)})` : qty(t?.quantity ?? i.quantity, i.summary.product.unit)}</span></span>
                         <span className="item-meta">{reason(i)}</span>
                       </Link>
                       <span className="item-side">{i.anyShop && !anywhere ? <span className="pill p-plain">Any shop</span> : null}</span>

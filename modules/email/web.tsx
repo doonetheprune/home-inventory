@@ -315,7 +315,7 @@ function MatchSheet({ seen, n, onClose }: { seen: Seen; n: number; onClose: () =
   return (
     <Sheet title={`“${line.text}”`} onClose={onClose}>
       {!picked ? (
-        <ProductPicker onPick={(p) => setPicked(p)} placeholder="Which item is it?" />
+        <ProductPicker onPick={(p) => { setPicked(p); if (!line.quantity && p.product.pack) setQuantity((line.count || 1) * p.product.pack.holds); }} placeholder="Which item is it?" />
       ) : (
         <>
           <p className="small" style={{ margin: 0 }}><b>{picked.product.name}</b>. Larder remembers this for {seen.shopName}'s next emails.</p>

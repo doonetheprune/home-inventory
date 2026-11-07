@@ -7,7 +7,7 @@
  * remembered, so the next receipt from that shop matches without guessing.
  */
 import { z } from 'zod';
-import { LarderError, type ModuleContext, type Product } from '@larder/core';
+import { LarderError, pluralWord, type ModuleContext, type Product } from '@larder/core';
 import type { Source, Task } from './providers';
 
 /** What the AI read from the receipt. */
@@ -52,7 +52,7 @@ const GEMINI_RECEIPT = {
 };
 
 /** An item the household has, as the AI is shown it. */
-export interface Known { id: string; name: string; unit: string; aliases: string[]; brands: string[] }
+export interface Known { id: string; name: string; unit: string; aliases: string[]; brands: string[]; pack?: { name: string; holds: number } | null }
 
 /** How a shop named an item on an earlier receipt (`ai:receipt-names`). */
 export interface Learnt {
@@ -84,7 +84,8 @@ export function householdItems(known: Known[], learnt: Learnt[], shopName: (id: 
   const number = new Map(known.map((k, i) => [k.id, i + 1]));
   const items = known.map((k, i) => {
     const more = [k.aliases.length ? `also ${k.aliases.slice(0, 4).join(', ')}` : '', k.brands.length ? `brands ${k.brands.slice(0, 3).map((b) => b.slice(0, 60)).join('; ')}` : ''].filter(Boolean);
-    return `${i + 1}. ${k.name} (counted in ${k.unit}${more.length ? `; ${more.join('; ')}` : ''})`;
+    const pack = k.pack ? `, comes in ${pluralWord(k.pack.name, 2)} of ${k.pack.holds}` : '';
+    return `${i + 1}. ${k.name} (counted in ${k.unit}${pack}${more.length ? `; ${more.join('; ')}` : ''})`;
   });
   const before = learnt
     .filter((l) => number.has(l.productId))
@@ -202,10 +203,16 @@ export function itemMemory(ctx: ModuleContext) {
     /** The household's items (not the wish list), with brand names, and what was matched before for them. */
     async load(): Promise<{ known: Known[]; learnt: Learnt[] }> {
       const [items, brands] = await Promise.all([ctx.core.products.list(), ctx.core.products.brandNames()]);
-      const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => ({ id: p.id, name: p.name, unit: p.unit, aliases: p.aliases, brands: brands[p.id] ?? [] }));
+      const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => ({ id: p.id, name: p.name, unit: p.unit, aliases: p.aliases, brands: brands[p.id] ?? [], pack: p.pack ?? null }));
       const ids = new Set(known.map((k) => k.id));
       const learnt = (await this.learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);
       return { known, learnt };
+    },
+    /** The item is now counted in what's inside (a box became 80 tea bags): "1 box" on a receipt is 80 now. */
+    async recounted(productId: string, factor: number): Promise<void> {
+      for (const { id, data } of await names.list()) {
+        if (data.productId === productId) await names.put(id, { ...data, each: tidyNum(data.each * factor) });
+      }
     },
     async remember(shopId: string | null, text: string, productId: string, each: number): Promise<void> {
       const said = saidAs(text);
@@ -330,7 +337,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('The date on the receipt (YYYY-MM-DD), kept with the purchase history'),
       lines: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder, e.g. "baked beans"'),
-        quantity: z.number().positive().describe('How much of the item\'s own unit, e.g. 18 for two 9-roll packs of toilet roll counted in rolls'),
+        quantity: z.number().positive().describe('How much of the item\'s own unit, e.g. 18 for two 9-roll packs of toilet roll counted in rolls, or 80 for a box of 80 tea bags (get_item says what an item comes in)'),
         price: z.number().min(0).optional().describe('What was paid for the line, e.g. 3.25'),
         text: z.string().max(200).optional().describe('The line as printed, e.g. "ANDREX CLASSIC 9PK"'),
         count: z.number().positive().optional().describe('How many were bought on the line, e.g. 2 for "2 @ £3.25". Default 1'),

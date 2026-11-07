@@ -61,7 +61,7 @@ export default defineModule({
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }], evidence }`: `evidence` is how it was bought (`PurchaseEvidence`: receipt photo, source, order number, ordered on, bought on, note) or null |
 | `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
-| `stock.running_out` | `{ productId, name, runsOutOn, daysToRunOut, inStock, expected, unit }`, once when something that lasts a set time once started (`product.lastsDays`) will run out within its warning window, counting what's on order (checked hourly; again only after it's restocked) |
+| `product.recounted` | `{ productId, name, from, to, factor }`: the item is now counted in what's inside (`from` box, `to` tea bag, `factor` 20). Core has multiplied its stock, minimum, stock-up amount and usage; rescale your own quantities (×) and prices (÷), as pricing, purchases, online shopping, recipes and the AI module's learnt receipt names do |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |
 | `<module>.*` | anything a module publishes, e.g. `batteries.low` |
@@ -86,7 +86,7 @@ export default defineWebModule({
   addActions: [{ path: '/photo', title: 'Add by photo', subtitle: 'Snap the pack', icon: 'camera', useShown: () => true }],
   settingsPanels: [MySettings],  // a section in Settings: ({ admin }) => JSX
   wishListPanels: [Waiting],     // at the top of the Wish list: () => JSX
-  photoReader: { status, read }, // lets the scanner name things from a photo (the ai module)
+  photoReader: { status, read, describe? }, // lets the scanner name things from a photo, or a barcode found online (the ai module)
   offline: true,                 // still shown in a saved copy (see ctx.addOfflinePaths)
 });
 ```
@@ -96,7 +96,7 @@ export default defineWebModule({
 - A page with `section: 'wishlist'` is linked right after the Wish list, in the sidebar and in More.
 - `settingsPanels` are sections in Settings, after Modules, while the module is on. `admin` says whether this person may change settings; make the routes behind them `admin: true` too.
 - `useAddItem()` opens the Add item page filled in for the person to check and save: `addItem({ name, aliases, categoryId, unit, shelfLifeDays, preferredShopIds, brand, barcode, photo, source, note })`. On saving, `photo` (a `Blob`) becomes the item's photo, and `brand` and `barcode` its first brand. The draft stays on the phone until then. `photoFileId` uses a photo already in Larder's files instead (a shared page's picture); `links`, `notes` and `defaultPlaceId` fill in more of the form; `onSaved(productId)` runs once the item is made (e.g. to take it out of Pending).
-- `photoReader` lets the scanner name things from a photo of the pack: `status()` says whether it's set up and who reads (`{ ready, by: 'Claude' }`); `read(photo)` answers a `PhotoReading` (name, brand, unit, categoryId, shelfLifeDays, aliases, shop, by, notes, and the smaller `photo` it sent, to keep). The scanner shows **Take photo** in Add mode while one is ready; `usePhotoReader()` gets it from any page. The ai module offers one.
+- `photoReader` lets the scanner name things from a photo of the pack: `status()` says whether it's set up and who reads (`{ ready, by: 'Claude' }`); `read(photo)` answers a `PhotoReading` (name, brand, unit, pack, categoryId, shelfLifeDays, aliases, shop, by, notes, and the smaller `photo` it sent, to keep). `describe(found)`, when offered and `status()` says `barcodes: true`, answers the same from what an online database found for a barcode; the scanner then asks it before showing a new barcode's card. The scanner shows **Take photo** in Add mode while one is ready; `usePhotoReader()` gets it from any page. The ai module offers one.
 - `offline: true` keeps the module's pages and panels while a saved copy is open (no connection). Without it they're hidden then. Set it only when everything they read is saved with `ctx.addOfflinePaths`, or they hide themselves when a read fails (a read that isn't in the copy fails with a 404, `not_saved`). Changes always fail in a copy (`read_only`), with a message saying so.
 - `readBarcode(photo)` reads a product barcode from a photo on the phone (null if there isn't one).
 - `useCamera(videoRef, active)` shows the back camera in a `<video>` (`state`: off, starting, on, error, with a message to show); `grabFrame(video)` takes what it sees as a JPEG; `rotatePhoto(photo)` turns a photo a quarter turn.
@@ -124,7 +124,7 @@ Put `*.test.ts` next to the module. `makeCore({ modules: [myModule] })` from `te
 | Module | What it does |
 |---|---|
 | `lookup-openfoodfacts`, `lookup-openbeautyfacts`, `lookup-openproductsfacts` | Name, brand and photo for unknown barcodes (Open Food Facts also finds a photo for a brand added by name) |
-| `pricing` | Usual price per unit, "is this pack cheaper?", prices paid at the till, and an item's measures (1 pack = 1 kg = 5 items), each with its own price |
+| `pricing` | Usual price per unit (shown per its pack or by weight too), "is this pack cheaper?", prices paid at the till, and the weight or volume of one |
 | `purchases` | Every purchase with its price, shop and evidence (the receipt's photo, or the online order), and what was spent by shop, item and month |
 | `batteries` | Links battery products to Home Assistant devices; says swap, charge or buy when one is low |
 | `scenarios` | Lists for situations (Power cut, Christmas): every item, how many and where, printable |

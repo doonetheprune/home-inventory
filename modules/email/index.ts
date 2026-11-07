@@ -575,15 +575,17 @@ export default defineModule({
       input: z.object({
         email: EmailRef, line: LineNo,
         item: z.string().min(1).max(200).describe('The item in Larder'),
-        quantity: z.number().positive().optional().describe('How much of the item\'s own unit the line is, e.g. 18 for two 9-roll packs (default: the line\'s count)'),
+        quantity: z.number().positive().optional().describe('How much of the item\'s own unit the line is, e.g. 18 for two 9-roll packs, or 80 for a box of 80 tea bags (default: the line\'s count, in packs for an item that comes in them)'),
       }),
       async run({ email, line: n, item, quantity }) {
         const seen = await findEmail(email);
         const l = seen.lines[n - 1];
         if (!l) throw new ValidationError(`That email has ${seen.lines.length} line${seen.lines.length === 1 ? '' : 's'}.`);
         const product = await ctx.core.resolve.product(item);
-        await matchLine(seen.id, n - 1, product.id, quantity ?? l.count);
-        return { text: `"${l.text}" is ${product.name}${l.status === 'coming' ? `: ${amount(quantity ?? l.count, product.unit)} on the way from ${seen.shopName}` : ''}. Larder will know it next time.`, data: { email: seen.id, line: n, item: product.name } };
+        // An item bought in packs: the line's count is packs (2 boxes of 80 tea bags are 160).
+        const much = quantity ?? l.count * (product.pack?.holds ?? 1);
+        await matchLine(seen.id, n - 1, product.id, much);
+        return { text: `"${l.text}" is ${product.name}${l.status === 'coming' ? `: ${amount(much, product.unit)} on the way from ${seen.shopName}` : ''}. Larder will know it next time.`, data: { email: seen.id, line: n, item: product.name } };
       },
     });
 

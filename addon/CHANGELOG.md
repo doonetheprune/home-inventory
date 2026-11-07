@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.0
+
+One way to say how fast things go, for tea bags, sensors and everything else. It replaces 0.8.2's **Each one lasts** and pricing's **measures**, so read **Changed or gone** below.
+
+- **Counted in, Comes in:** count the single thing you use (a tea bag, a roll, a sensor), and say what it **comes in** on the item's Edit page: "a box of 20". Adding 1 box adds 20 tea bags, the item shows "37 tea bags · about 2 boxes", and the shopping list buys whole boxes ("1 box (20 tea bags)"). The scanner's Add, search's + and the quick Add buttons add a box; Use takes one tea bag. Assistants and Home Assistant can say "2 boxes" too (adding, using, moving, ordering, arriving, correcting a count or a purchase), the shopping list they get says "1 box (80 tea bags)", and reading a receipt or order email knows a box of 80 is 80 tea bags.
+- **We use:** "We use 1 tea bag every 1 day", or "1 sensor every 2 weeks". It's always in what the item's counted in, so "1 box a day" can't be said by mistake, and the form says what that means: "A box of 20 lasts 20 days." The item says "Enough until 14 Dec", and Running low below shows how long the minimum lasts ("a week's worth").
+- **Take them out of stock for me:** switch it on and Larder takes them out by itself each day or period (checked hourly, catching up if Larder was off), so you don't press Use. Use is then only for an extra one. When none are left it stops, and the item is out and on the list; it starts again the day more are added. **Counting from** on Edit says which day it counts from (today when it's switched on). With none started, the next Use starts one and Larder carries on from there.
+- **Sensors:** "We use 1 every 14 days" with Larder taking them out shows "One in use until 20 Nov". If one comes off early, **Came off early: start the next one now** takes the next out today. Without Larder taking them out, Use starts one, as before.
+- **Counting what's inside:** if something's been counted in boxes, change **Counted in** to tea bags and set **Comes in** a box of 20, then Save: Larder offers "Count them as 40 tea bags", which multiplies the stock, deliveries, minimum, stock-up amount and usage, and the usual price, prices paid, purchase history, online shop packs, recipe amounts and the names learnt from receipts follow. **Keep the numbers, just rename** is the other choice.
+- **Barcodes go through your AI too:** with an AI key set up, a barcode Larder doesn't know but Open Food Facts does is read by your AI (Settings → AI → **Read barcode results with AI**, on unless you switch it off). It works out the name, type, how long it keeps, what it's counted in and what it comes in, so scanning a box of PG Tips makes "PG Tips tea bags", counted in tea bags, in boxes of 80, and **Add 1 box (80 tea bags)** adds 80. A fraction of a penny a scan. If the AI can't answer, you get what Open Food Facts said, as before.
+- **Add by photo counts what's inside** in the same way: a photo of a box of tea bags makes an item counted in tea bags that comes in boxes, not one counted in boxes.
+- The example household has breakfast tea in boxes of 80, two tea bags a day, taken out by Larder.
+
+**Changed or gone**
+
+- **Each one lasts N days** is now **We use 1 every N days**, and **Use the next one automatically** is **Take them out of stock for me**. Your items are changed over when 0.9.0 first starts; nothing to re-enter.
+- **Low means below Running low below, only.** Things used one after another used to be low when they'd run out within the warning days. Those items now get a minimum that warns at least as early (a 14-day sensor: low below 1; 30-day contact lenses in Medicine: low below 2). Check those minimums on the items' Edit pages.
+- **Home Assistant's `larder_stock_running_out` event is gone.** An automation using it should use `larder_stock_low` instead. **Running low** no longer says "Runs out Fri 18 Dec"; the item page still says when it runs out.
+- **Measures are gone from the price card.** "1 pack = 5 items" is now the item's **Comes in** (count the items, comes in packs of 5); Larder's log names each item that had one. A price kept for a measure becomes the usual price if the item had none (£1.20 an item, 5 to a pack, is £6 a pack); otherwise the usual price stays and the measure's own price goes. The weight of one ("1 bag = 200 g") stays. The assistant tools `set_measure` and `remove_measure` are gone (use `change_item` with `comes_in`, and `set_item_size`), as is `list_items` with `running_out`.
+- When Larder takes something out by itself, a Use from Home Assistant, an assistant, the scanner or search is an extra one; to start a new one now, say it's opened (`opened: true`).
+- The API's `POST /automation/check-expiry` answers `{ expiring, expired, taken }`.
+- Going back to 0.8.2 after starting 0.9.0 loses those items' "Each one lasts".
+
+**What to re-enter**
+
+- Anything counted in boxes or packs that you use one at a time (tea bags, capsules, nappies): change **Counted in** to what's inside, set **Comes in**, and choose **Count them as…**. Then set **We use** and, if you like, **Take them out of stock for me**.
+- Anything that had measures on its price card: set **Comes in** for "1 pack = 5 items" (with the recount), and a usual price again if you had one per measure.
+
 ## 0.8.2
 
 - **Things used one after another:** for a glucose sensor, contact lenses or a water filter, set **Each one lasts** on the item (e.g. 14 days). Using one starts it, and the item says how long the one in use has left and when the rest run out: "One in use until 20 Nov. With 3 more, enough until 1 Jan." The day the one in use was started can be changed on Edit.

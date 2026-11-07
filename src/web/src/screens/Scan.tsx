@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type { IdentifyResult, LookupResult, Place, ProductSummary } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { qty, stockText } from '../format';
+import { plural, qty, stockText } from '../format';
 import { readBarcode, useBarcodeScanner } from '../components/useBarcodeScanner';
 import { grabFrame } from '../components/camera';
 import { usePhotoReader, type PhotoReading } from '../components/photoReader';
@@ -18,9 +18,9 @@ const MODE_CHIP: Record<Mode, [string, string]> = {
 
 /** A barcode just scanned that nothing knew, kept while the AI reads the pack. */
 interface Kept { code: string; external: LookupResult | null; suggestions: ProductSummary[] }
-interface AiDraft { photo: Blob; reading: PhotoReading; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
-/** What's being looked up: a barcode, or a photo the AI is reading. */
-type Looking = false | 'code' | 'photo';
+interface AiDraft { photo: Blob | null; reading: PhotoReading; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
+/** What's being looked up: a barcode, a barcode found online that the AI is reading, or a photo the AI is reading. */
+type Looking = false | 'code' | 'barcode' | 'photo';
 
 export function Scan() {
   const [params, setParams] = useSearchParams();
@@ -50,6 +50,8 @@ export function Scan() {
   const upload = useRef<HTMLInputElement>(null);
   const { run } = useAction();
   const reader = usePhotoReader();
+  const readerRef = useRef(reader);
+  readerRef.current = reader;
   const moving = mode === 'move' || mode === 'putaway';
   /**
    * While a card is open the camera holds still, so a second read (or a misread
@@ -79,6 +81,19 @@ export function Scan() {
         if (mode === 'add') setTarget({ id: r.place.id, label: r.place.code ?? r.place.name });
       }
       if (r.kind === 'product' && (mode === 'move' || mode === 'putaway')) setPending(r.product);
+      // Found online, with Read barcode results with AI on: the AI works out the rest (counted in tea bags, a box of 80).
+      const describe = readerRef.current?.describe;
+      if (r.kind === 'external' && describe) {
+        setLooking('barcode');
+        try {
+          const reading = await describe(r.result);
+          setResult(null);
+          setAiDraft({ photo: null, reading, code: r.code, external: r.result, suggestions: r.suggestions });
+          return;
+        } catch (err) {
+          toast({ text: `${err instanceof ApiError ? err.message : "The AI couldn't read it."} Here's what the barcode database says.`, error: true });
+        }
+      }
       setResult(r);
     } catch (err) {
       toast({ text: err instanceof ApiError ? err.message : 'That code could not be looked up.', error: true });
@@ -196,6 +211,7 @@ export function Scan() {
 
   // What the camera's doing, on the chip at the top of it.
   const [chipIcon, chipText]: [string, string] = looking === 'photo' ? ['sparkle', 'Reading the photo…']
+    : looking === 'barcode' ? ['sparkle', 'Working it out…']
     : looking && camera ? ['clock', 'Looking it up…']
     : holding && camera ? ['clock', 'Paused: finish this one first']
     : [MODE_CHIP[mode][0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]];
@@ -249,6 +265,12 @@ export function Scan() {
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
         <div className={`section ${looking || result || pending || aiDraft ? 'scan-result' : ''}`}>
           {looking === 'code' && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
+          {looking === 'barcode' && (
+            <div className="sheet-card">
+              <div className="row" style={{ gap: 10 }}><div className="spinner" /><b>Found it online. {by ?? 'The AI'} is working out the details…</b></div>
+              <span className="small muted">What it’s counted in, what it comes in, its type and how long it keeps. This takes a few seconds.</span>
+            </div>
+          )}
           {looking === 'photo' && (
             <div className="sheet-card">
               <div className="match">
@@ -261,7 +283,7 @@ export function Scan() {
             </div>
           )}
           {!looking && aiDraft && (
-            <NewItemCard key={aiDraft.code ?? 'photo'} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} photo={aiDraft.photo}
+            <NewItemCard key={aiDraft.code ?? 'photo'} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} photo={aiDraft.photo ?? undefined}
               mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
           )}
           {!looking && pending && !result && (
@@ -354,19 +376,22 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
   }
   const use = mode === 'use';
   const available = s.product.rechargeable ? (s.charged ?? 0) : s.inStock;
+  // A scanned barcode is on the box, so Add counts boxes (1 box = 80 tea bags); Use counts tea bags.
+  const pack = !use ? s.product.pack ?? null : null;
+  const added = pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, s.product.unit)})` : qty(n, s.product.unit);
   return (
     <div className="sheet-card">
       {header}
       <p className="small"><span className="pill p-ok">In Larder</span> <span className="muted">You have {stockText(s)}.{s.status.low ? ' Running low.' : ''}</span></p>
-      <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><b>{pack ? `How many ${plural(pack.name, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
       {!use && <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (use && available <= 0)} onClick={() => run(
-          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId })),
-          (x) => `${use ? (s.product.rechargeable ? 'Marked flat' : 'Used') : 'Added'} ${qty(n, s.product.unit)} · ${stockText(x)} now. Ready for the next scan.`,
+          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId, ...(pack ? { unit: pack.name } : {}) })),
+          (x) => `${use ? (s.product.rechargeable ? 'Marked flat' : 'Used') : 'Added'} ${use ? qty(n, s.product.unit) : added} · ${stockText(x)} now. Ready for the next scan.`,
         ).then((x) => x && onDone())}>
-          {use ? (s.product.rechargeable ? `Mark ${n} flat` : `Use ${qty(n, s.product.unit)}`) : `Add ${qty(n, s.product.unit)}`}
+          {use ? (s.product.rechargeable ? `Mark ${n} flat` : `Use ${qty(n, s.product.unit)}`) : `Add ${added}`}
         </button>
       </div>
     </div>
@@ -451,6 +476,8 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const brand = reading?.brand ?? (external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : null);
   const adding = mode === 'add';
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
+  // A barcode is on the pack, so Add counts packs: the item's own, or the one the AI worked out for a new item.
+  const pack = into ? into.product.pack ?? null : reading?.pack ?? null;
 
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
@@ -462,7 +489,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   async function save() {
     const fields = {
       name: name.trim(),
-      ...(reading ? { categoryId: reading.categoryId, unit: reading.unit, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
+      ...(reading ? { categoryId: reading.categoryId, unit: reading.unit, pack: reading.pack ?? null, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
       preferredShopIds: shopId ? [shopId] : [],
     };
     const res = await run(async () => {
@@ -488,9 +515,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
         if (!item.product.photoFileIds.length) await api.products.update(productId, { photoFileIds: [id] });
         if (variantId && !item.variants.find((v) => v.id === variantId)?.photoFileId) await api.products.updateVariant(variantId, { photoFileId: id });
       }
-      const after = adding ? await api.stock.add({ productId, quantity: n, placeId }) : null;
+      const after = adding ? await api.stock.add({ productId, quantity: n, placeId, ...(pack ? { unit: pack.name } : {}) }) : null;
       return { identified, after, productId };
-    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
+    }, (x) => (adding && x.after ? `Added ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, x.after.product.unit)})` : qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
     if (!res) return;
     if (adding || !res.identified) onDone();
     else onIdentified(res.identified);
@@ -511,11 +538,12 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
         <span className="muted">
           {reading ? (
             <>
-              Read from the photo by {reading.by}
+              {photo ? `Read from the photo by ${reading.by}` : `Found in ${external ? PROVIDER_NAMES[external.provider] ?? external.provider : 'a barcode database'}, worked out by ${reading.by}`}
               {reading.sources?.length ? <>, looked up on {reading.sources.map((x, i, all) => (
                 <Fragment key={x.url}>{i ? (i === all.length - 1 ? ' and ' : ', ') : ''}<a href={x.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{x.name}</a></Fragment>
               ))}</> : null}
               .{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}
+              {choice === 'new' && (reading.unit !== 'each' || reading.pack) && <> Counted in {plural(reading.unit, 2)}{reading.pack ? `, comes in ${plural(reading.pack.name, 2)} of ${reading.pack.holds}` : ''}: change it later on the item’s Edit page.</>}
             </>
           ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
             <>
@@ -551,14 +579,14 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
       )}
       {adding && (
         <>
-          <div className="row" style={{ justifyContent: 'space-between' }}><b>How many?</b><Stepper value={n} onChange={setN} min={0.1} max={99999} label="quantity" /></div>
+          <div className="row" style={{ justifyContent: 'space-between' }}><b>{pack ? `How many ${plural(pack.name, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={99999} label="quantity" /></div>
           <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />
         </>
       )}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (choice === 'new' && !name.trim())} onClick={() => void save()}>
-          {adding ? (into ? `Add ${n} to ${into.product.name}` : `Add ${n}`) : 'Save and continue'}
+          {adding ? `Add ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, into ? into.product.unit : reading?.unit ?? 'each')})` : n}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
         </button>
       </div>
     </div>

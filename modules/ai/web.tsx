@@ -6,18 +6,19 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  api, defineWebModule, grabFrame, Header, Icon, money, plural, Sheet, shortDate, Stepper, Switch, useAction, useCamera, useNavigate, useQuery, useShops, type PhotoReader,
+  api, defineWebModule, grabFrame, Header, Icon, money, plural, Sheet, shortDate, Stepper, Switch, useAction, useCamera, useNavigate, useQuery, useShops, type PhotoReader, type PhotoReading,
 } from '@larder/web-sdk';
 
 type ProviderId = 'claude' | 'gemini';
 interface ProviderStatus { enabled: boolean; keySet: boolean; keyHint: string | null; keyFrom: 'app' | 'env' | null; model: string | null }
-interface Status { ready: boolean; order: ProviderId[]; first: ProviderId | null; search: boolean; claude: ProviderStatus; gemini: ProviderStatus }
+interface Status { ready: boolean; order: ProviderId[]; first: ProviderId | null; search: boolean; barcodes: boolean; claude: ProviderStatus; gemini: ProviderStatus }
 interface Identified {
   readable: boolean;
   name: string;
   kind: string | null;
   brand: string | null;
   unit: string;
+  pack: { name: string; holds: number } | null;
   categoryId: string | null;
   shelfLifeDays: number | null;
   aliases: string[];
@@ -77,17 +78,24 @@ function base64(blob: Blob): Promise<string> {
 const photoReader: PhotoReader = {
   async status() {
     const s = await call<Status>('GET', '/');
-    return { ready: s.ready, by: s.first ? NAMES[s.first] : null };
+    return { ready: s.ready, by: s.first ? NAMES[s.first] : null, barcodes: s.barcodes };
   },
   async read(photo) {
     const small = await shrink(photo);
-    const r = await call<Identified>('POST', '/identify', { image: await base64(small) });
-    return {
-      readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, unit: r.unit, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
-      by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message), photo: small,
-    };
+    return { ...reading(await call<Identified>('POST', '/identify', { image: await base64(small) })), photo: small };
+  },
+  async describe(found) {
+    return reading(await call<Identified>('POST', '/describe', { barcode: found.barcode, name: found.name, brand: found.brand, quantityText: found.quantityText, categories: found.categories }));
   },
 };
+
+/** What the AI said, as the scanner takes it. */
+function reading(r: Identified): PhotoReading {
+  return {
+    readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, unit: r.unit, pack: r.pack ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
+    by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message),
+  };
+}
 
 /** Add by photo (from Home) is the scanner with the camera on: Take photo is under it. */
 function AddByPhoto() {
@@ -175,7 +183,7 @@ function ReceiptCamera({ onPhoto, onUpload, onRetry }: { onPhoto: (photo: Blob) 
 }
 
 /** Which of the household's items a receipt line is, or none. */
-function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef | null) => void; onClose: () => void }) {
+function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef | null, holds: number) => void; onClose: () => void }) {
   const items = useQuery({ queryKey: ['ai', 'receipt-items'], queryFn: () => api.products.list() }).data ?? [];
   const [q, setQ] = useState('');
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -186,7 +194,7 @@ function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef |
       <input className="input" autoFocus placeholder="Search your items" aria-label="Search your items" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="list" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
         {shown.map((s) => (
-          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit })}>
+          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit }, s.product.pack?.holds ?? 1)}>
             <span className="item-main">
               <span className="item-name">{s.product.name}</span>
               <span className="item-meta">{s.product.aliases.length ? `Also ${s.product.aliases.join(', ')} · ` : ''}counted in {s.product.unit}</span>
@@ -195,7 +203,7 @@ function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef |
         ))}
         {!shown.length && <div className="item"><span className="small muted">{items.length ? 'Nothing matches. Things not in Larder are left out.' : 'Loading…'}</span></div>}
       </div>
-      {row.item && <button type="button" className="btn block ghost" onClick={() => onPick(null)}>Not in Larder: leave it out</button>}
+      {row.item && <button type="button" className="btn block ghost" onClick={() => onPick(null, 1)}>Not in Larder: leave it out</button>}
     </Sheet>
   );
 }
@@ -374,10 +382,10 @@ function ReceiptPage() {
         <PickItem
           row={rows.find((r) => r.key === picking)!}
           onClose={() => setPicking(null)}
-          onPick={(item) => {
+          onPick={(item, holds) => {
             const row = rows.find((r) => r.key === picking)!;
-            // Another item counted in something else: start from how many the receipt says.
-            const quantity = item && row.item?.unit === item.unit ? row.quantity : row.count;
+            // Another item counted in something else: start from how many the receipt says (in boxes, for one that comes in them).
+            const quantity = item && row.item?.unit === item.unit ? row.quantity : row.count * holds;
             change(row.key, item ? { item, quantity, match: 'picked', keep: true } : { item: null, quantity: row.count, match: 'none', keep: false });
             setPicking(null);
           }}
@@ -444,15 +452,23 @@ function ProviderSettings({ id, s, status, position, admin }: { id: ProviderId; 
   );
 }
 
-/** Whether Add by photo may look a pack up on the web when the photo isn't enough. */
+/** Whether barcodes found online go to the AI too, and whether the AI may look a pack up on the web. */
 function SearchSetting({ s, admin }: { s: Status; admin: boolean }) {
   const { run, busy } = useAction();
   return (
     <div className="list">
       <div className="toggle">
         <span className="grow">
+          <b>Read barcode results with AI</b><br />
+          <span className="small muted">When a barcode is found online, the AI reads what was found and works out what to call it, its type, how long it keeps, what it's counted in (a tea bag) and what it comes in (a box of 80), as it does from a photo. A fraction of a penny a scan. Off: the new item starts with what the barcode database says.</span>
+        </span>
+        <Switch checked={s.barcodes} label="Read barcode results with AI" disabled={!admin || busy}
+          onChange={(v) => void run(() => call<Status>('PUT', '/settings', { barcodes: v }), v ? 'Barcodes found online go to the AI too' : 'Barcodes found online no longer go to the AI')} />
+      </div>
+      <div className="toggle">
+        <span className="grow">
           <b>Look things up online</b><br />
-          <span className="small muted">When the photo doesn't show exactly which product it is or its size, the AI searches the web for it (Claude and Gemini each charge about a penny a search, at most two a photo). Off: it only goes on the photo.</span>
+          <span className="small muted">When the photo (or a barcode's result) doesn't show exactly which product it is or its size, the AI searches the web for it (Claude and Gemini each charge about a penny a search, at most two a photo). Off: it only goes on what it's given.</span>
         </span>
         <Switch checked={s.search} label="Look things up online" disabled={!admin || busy}
           onChange={(v) => void run(() => call<Status>('PUT', '/settings', { search: v }), v ? 'The AI looks things up online when the photo isn’t enough' : 'The AI only goes on the photo now')} />

@@ -19,6 +19,8 @@ const BEANS: Reading = {
   title: 'Tesco Baked Beans in Tomato Sauce',
   size: '4 x 400 g',
   unit: 'tin',
+  pack: 'Pack',
+  pack_holds: 4,
   category: 'food',
   shelf_life_days: 730,
   shop: 'Tesco',
@@ -87,7 +89,7 @@ describe('AI module: settings', () => {
   it('starts with nothing set up', async () => {
     const core = await makeCore({ modules: [ai] });
     expect(await call(core, 'GET', '/')).toEqual({
-      ready: false, order: ['claude', 'gemini'], first: null, search: true,
+      ready: false, order: ['claude', 'gemini'], first: null, search: true, barcodes: true,
       claude: { enabled: true, keySet: false, keyHint: null, keyFrom: null, model: null },
       gemini: { enabled: true, keySet: false, keyHint: null, keyFrom: null, model: null },
     });
@@ -209,6 +211,7 @@ describe('AI module: Claude', () => {
       kind: null,
       brand: 'Tesco Baked Beans in Tomato Sauce 4 x 400 g',
       unit: 'tin',
+      pack: { name: 'pack', holds: 4 },
       categoryId: food.id,
       shelfLifeDays: 730,
       aliases: ['beans'],
@@ -329,9 +332,60 @@ describe('AI module: Gemini', () => {
   });
 });
 
+describe('AI module: barcodes found online', () => {
+  const PG: Reading = {
+    readable: true, name: 'PG Tips tea bags', kind: 'Black tea', title: 'PG Tips Original', size: '80 tea bags 232 g', unit: 'tea bag', pack: 'Boxes', pack_holds: 80,
+    category: 'Food', shelf_life_days: 540, shop: null, other_names: ['tea bags'],
+  };
+  const FOUND = { barcode: '8720608023402', name: 'PG tips original 80 pyramid tea bags', brand: 'PG Tips', quantityText: '232 g', categories: ['Beverages', 'Teas', 'Black teas'] };
+
+  it('works out what a barcode is from what was found: counted in tea bags, comes in a box of 80', async () => {
+    const net = internet({ reading: PG });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
+    const out = await call(core, 'POST', '/describe', { body: FOUND });
+    expect(out).toMatchObject({ name: 'PG Tips tea bags', unit: 'tea bag', pack: { name: 'box', holds: 80 }, brand: 'PG Tips Original 80 tea bags 232 g', shelfLifeDays: 540, provider: 'claude' });
+
+    // What was found goes as text, before the request; no photo.
+    const msg = net.sent.find((r) => r.url.endsWith('/v1/messages'))!;
+    const content = (msg.body!.messages as Array<{ content: Array<Record<string, unknown>> }>)[0]!.content;
+    expect(content[0]).toEqual({ type: 'text', text: 'Barcode: 8720608023402\nName: PG tips original 80 pyramid tea bags\nBrand: PG Tips\nQuantity: 232 g\nCategories: Beverages, Teas, Black teas' });
+    const prompt = String(content[1]!.text);
+    expect(prompt).toContain('an online product database says the above about it');
+    expect(prompt).toContain('a box of tea bags is counted in tea bags');
+    expect(prompt).toContain('You can search the web, at most 2 times, for the barcode or the product');
+  });
+
+  it('can be switched off, and leaves out a pack that holds one or is what it is counted in', async () => {
+    let reading: Reading = { ...PG, unit: 'box', pack: 'box', pack_holds: 80 };
+    const net = internet({ claude: () => ({ id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'end_turn', stop_sequence: null, content: [{ type: 'text', text: JSON.stringify(reading) }], usage: { input_tokens: 1, output_tokens: 1 } }) });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await expect(call(core, 'POST', '/describe', { body: FOUND })).rejects.toThrow('Switch on Claude or Gemini in Settings → AI, with an API key, to read barcode results.');
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
+    expect(await call(core, 'POST', '/describe', { body: FOUND })).toMatchObject({ unit: 'box', pack: null });
+    reading = { ...PG, pack_holds: 1 };
+    expect(await call(core, 'POST', '/describe', { body: FOUND })).toMatchObject({ unit: 'tea bag', pack: null });
+
+    expect(await call(core, 'PUT', '/settings', { body: { barcodes: false } })).toMatchObject({ barcodes: false });
+    await expect(call(core, 'POST', '/describe', { body: FOUND })).rejects.toThrow('Read barcode results with AI is off in Settings → AI.');
+  });
+
+  it('counts what is inside a box when reading a photo too', async () => {
+    const net = internet();
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
+    await call(core, 'POST', '/identify', { body: { image: JPEG } });
+    const msg = net.sent.find((r) => r.url.endsWith('/v1/messages'))!;
+    const prompt = String((msg.body!.messages as Array<{ content: Array<{ text?: string }> }>)[0]!.content[1]!.text);
+    expect(prompt).toContain('This is a photo of something being put away at home.');
+    expect(prompt).toContain("Never a box, multipack or case of separate things: count what's inside it");
+    expect(prompt).toContain('- pack_holds: how many of unit one pack holds');
+  });
+});
+
 describe('AI module: looking it up online', () => {
   const SLEEP: Reading = {
-    readable: true, name: 'Twinings Sleep tea bags', kind: 'Herbal tea', title: 'Twinings Sleep', size: '20 tea bags', unit: 'box',
+    readable: true, name: 'Twinings Sleep tea bags', kind: 'Herbal tea', title: 'Twinings Sleep', size: '20 tea bags', unit: 'tea bag', pack: 'box', pack_holds: 20,
     category: 'food', shelf_life_days: 540, shop: null, other_names: ['sleep tea'],
   };
   const TWININGS = 'https://www.twinings.co.uk/products/sleep';
@@ -371,7 +425,8 @@ describe('AI module: looking it up online', () => {
       name: 'Twinings Sleep tea bags',
       kind: 'Herbal tea',
       brand: 'Twinings Sleep 20 tea bags',
-      unit: 'box',
+      unit: 'tea bag',
+      pack: { name: 'box', holds: 20 },
       aliases: ['Herbal tea', 'sleep tea'],
       shop: null,
       sources: [{ name: 'twinings.co.uk', url: TWININGS }],

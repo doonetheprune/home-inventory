@@ -52,13 +52,75 @@ export function expiryText(date: string, days: number | null, renewal = false): 
   return shortDate(date);
 }
 
-/** "today", "tomorrow", "Fri 30 Oct", "15 Nov": when something that lasts a set time once started runs out. */
+/** "today", "tomorrow", "Fri 30 Oct", "15 Nov": when something with a usage runs out. */
 export function dayText(date: string, days: number | null): string {
   if (days === null) return shortDate(date);
   if (days <= 0) return 'today';
   if (days === 1) return 'tomorrow';
   if (days < 7) return dayDate(date);
   return shortDate(date);
+}
+
+/** "Tea bags" and "tea bag" are the same unit, as are "boxes" and "box". */
+export function sameUnit(a: string, b: string): boolean {
+  const one = (w: string) => {
+    const x = w.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (x.length > 4 && x.endsWith('ies')) return `${x.slice(0, -3)}y`;
+    if (/(x|ch|sh|ss)es$/.test(x)) return x.slice(0, -2);
+    return x.length > 3 && x.endsWith('s') && !x.endsWith('ss') ? x.slice(0, -1) : x;
+  };
+  return one(a) === one(b);
+}
+
+interface Usage { amount: number; everyDays: number; auto?: boolean }
+interface Pack { name: string; holds: number }
+
+/** "a day", "a week", "every 2 weeks", "every 14 days". */
+export const everyText = (days: number) => (days === 1 ? 'a day' : days === 7 ? 'a week' : days % 7 === 0 ? `every ${days / 7} weeks` : `every ${days} days`);
+
+/** "1 tea bag a day", "2 rolls a week", "1 every 14 days". */
+export const usageText = (unit: string, u: Usage) => `${qty(u.amount, unit)} ${everyText(u.everyDays)}`;
+
+/** "a day", "a week", "3 weeks", "about 10 days". */
+function daysText(days: number): string {
+  const d = Math.round(days);
+  if (d < 1) return 'less than a day';
+  if (d === 1) return 'a day';
+  if (d === 7) return 'a week';
+  if (d % 7 === 0) return `${d / 7} weeks`;
+  return `${Math.abs(days - d) > 0.05 ? 'about ' : ''}${d} days`;
+}
+
+/** What a usage means, said back so a slip shows: "A box of 80 lasts 40 days." */
+export function usageSentence({ unit, pack, usage }: { unit: string; pack: Pack | null; usage: Usage }): string {
+  const lasts = (n: number) => daysText((n * usage.everyDays) / usage.amount);
+  if (pack) return `A ${pack.name} of ${pack.holds} lasts ${lasts(pack.holds)}.`;
+  return usage.amount <= 1 ? `One lasts ${lasts(1)}.` : `That's ${usageText(unit, usage)}.`;
+}
+
+/** "a week's worth", "about 10 days' worth". */
+export function worthText(days: number): string {
+  const d = Math.round(days);
+  if (d < 1) return "less than a day's worth";
+  if (d === 1) return "a day's worth";
+  if (d === 7) return "a week's worth";
+  if (d % 7 === 0) return `${d / 7} weeks' worth`;
+  return `about ${d} days' worth`;
+}
+
+/** "about 1¼ boxes", "2 boxes": stock as packs, or null without a pack. */
+export function packsText(pack: Pack | null | undefined, quantity: number): string | null {
+  if (!pack || quantity <= 0) return null;
+  const n = quantity / pack.holds;
+  const quarter = Math.round(n * 4) / 4;
+  const whole = Math.abs(n - Math.round(n)) < 1e-9;
+  return `${whole ? '' : 'about '}${num(whole ? Math.round(n) : quarter || 0.25)} ${plural(pack.name, whole ? Math.round(n) : Math.max(quarter, 2))}`;
+}
+
+/** One of what it's bought in, for the quick Add buttons: its pack if it has one ("1 box (80 tea bags)"). */
+export function oneBought(p: { unit: string; pack?: Pack | null }): { quantity: number; unit?: string; text: string } {
+  const pack = p.pack ?? null;
+  return pack ? { quantity: 1, unit: pack.name, text: `1 ${pack.name} (${qty(pack.holds, p.unit)})` } : { quantity: 1, text: '1' };
 }
 
 export function ago(iso: string, now = Date.now()): string {
@@ -81,11 +143,10 @@ export function statusPills(s: ProductSummary): Array<{ kind: PillKind; text: st
   if (s.product.wish) out.push({ kind: 'wish', text: 'Wish list' });
   if (s.status.expired) out.push({ kind: 'low', text: renewal ? 'Renewal overdue' : 'Expired' });
   else if (s.status.expiringSoon && s.nextExpiry) out.push({ kind: 'soon', text: expiryText(s.nextExpiry, s.daysToExpiry, renewal) });
-  // Something that lasts a set time once started says when it runs out (the one in use may still have days left);
-  // with none left but one marked open, it's the last one open, not out.
+  // With none left but one open (or in use), it's the last one, not out.
   if (s.status.low) {
     const none = s.inStock + s.expected + s.pending <= 0;
-    out.push({ kind: 'low', text: s.status.runningOut && s.runsOutOn && (s.daysToRunOut ?? 0) > 0 ? `Runs out ${dayText(s.runsOutOn, s.daysToRunOut)}` : none && s.inUse ? 'Last one open' : none ? 'Out' : 'Low' });
+    out.push({ kind: 'low', text: none && s.inUse ? (s.product.usage ? 'Last one in use' : 'Last one open') : none ? 'Out' : 'Low' });
   }
   if (s.status.outOfPlace && s.nowIn[0]) out.push({ kind: 'away', text: `Now in ${s.nowIn[0].name}` });
   if (s.status.hasExpected) out.push({ kind: 'coming', text: `+${num(s.expected)} on the way` });

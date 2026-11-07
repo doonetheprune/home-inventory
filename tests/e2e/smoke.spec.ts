@@ -316,43 +316,60 @@ async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
 }
 
-test('works out when things used one after another run out', async ({ page }, info) => {
+test('counts what is inside a box, how fast it is used, and takes it out of stock', async ({ page }, info) => {
   await signIn(page);
-  // The example water filters: one in the jug since 10 days ago, and 2 more, 28 days each, the next starting by itself.
+  // The example water filters: one in the jug since 10 days ago; Larder takes the next out every 4 weeks.
   await page.goto(`/#/products/${await productId(page, 'Water filter cartridges')}`);
-  await expect(page.getByText(/One in use until \d+ \w+, then the next starts automatically\. With 2 more cartridges, enough until/)).toBeVisible();
-  await expect(page.getByText('28 days once started, the next starts automatically')).toBeVisible();
+  await expect(page.getByText(/Uses 1 cartridge every 4 weeks, taken out by Larder\. One in use until \d+ \w+\. Enough until/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Came off early: start the next one now' })).toBeVisible();
 
-  // 3 new ones that last 2 weeks each, none started yet.
-  const name = `Glucose sensor ${info.project.name}`;
+  // New tea bags: a box of 20, 1 a day, taken out by Larder.
+  const name = `PG Tips ${info.project.name}`;
   await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
-  await page.getByRole('button', { name: 'More quantity' }).click();
-  await page.getByRole('button', { name: 'More quantity' }).click();
-  await page.getByRole('button', { name: 'Set how long each one lasts' }).click();
-  await expect(page.getByLabel('days each one lasts', { exact: true })).toHaveValue('14');
+  await page.getByLabel('Unit', { exact: true }).fill('tea bag');
+  await page.getByRole('button', { name: 'Set what it comes in' }).click();
+  await expect(page.getByLabel('What it comes in')).toHaveValue('box');
+  await page.getByRole('button', { name: "Set how fast it's used" }).click();
+  await expect(page.getByText('A box of 20 lasts 20 days.')).toBeVisible();
+  await page.getByRole('switch', { name: 'Take them out of stock for me' }).click();
+  await expect(page.locator('.numfield', { hasText: 'How many boxes now' })).toBeVisible();
   await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
-  await expect(page.getByText(/None in use\. Starting one today, there's enough until/)).toBeVisible();
+  await expect(page.getByText(/Uses 1 tea bag a day, taken out by Larder\. Enough until/)).toBeVisible();
+  await expect(page.getByText('tea bags · 1 box')).toBeVisible();
 
-  // Using one starts it.
-  await page.getByRole('button', { name: 'Use', exact: true }).click();
-  await page.getByRole('button', { name: /^Use 1/ }).click();
-  await expect(page.locator('.toast')).toContainText('2 left, enough until');
-  await expect(page.getByText(/One in use until \d+ \w+\. With 2 more, enough until/)).toBeVisible();
+  // Use is an extra one; Add counts boxes.
+  await page.locator('.dock').getByRole('button', { name: 'Use' }).click();
+  await expect(page.getByText('Larder already takes out 1 tea bag a day by itself, so this is an extra one.')).toBeVisible();
+  await page.getByRole('button', { name: 'Use 1 tea bag extra' }).click();
+  await expect(page.locator('.toast')).toContainText('Used an extra 1 · 19 tea bags left');
+  await page.locator('.dock').getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: 'Add 1 box (20 tea bags)' }).click();
+  await expect(page.locator('.toast')).toContainText('Added 1 box (20 tea bags)');
+  await expect(page.getByText('tea bags · about 2 boxes')).toBeVisible();
 
-  // If each only lasted a day, they'd run out within the week: low, saying when.
+  // Counted in boxes so far: say what's inside, and the 2 boxes become 40 tea bags.
+  const sleep = `Sleep tea ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(sleep)}`);
+  await page.getByLabel('Unit', { exact: true }).fill('box');
+  await page.getByRole('button', { name: "Set how fast it's used" }).click();
+  await expect(page.getByText(/Counting boxes\? If you use what's inside one at a time, count those/)).toBeVisible();
+  await page.getByRole('button', { name: 'More quantity' }).click();
+  await page.getByRole('button', { name: `Add ${sleep.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: sleep })).toBeVisible();
   await page.locator('a[aria-label="Edit"]').click();
-  await expect(page.getByLabel('The one in use started')).not.toHaveValue('');
-  await page.getByLabel('days each one lasts', { exact: true }).fill('1');
-  await page.getByLabel('days each one lasts', { exact: true }).blur();
-  await page.getByRole('switch', { name: 'Use the next one automatically' }).click();
+  await page.getByLabel('Unit', { exact: true }).fill('tea bag');
+  await page.getByRole('button', { name: 'Set what it comes in' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
-  await expect(page.locator('.pill', { hasText: /^Runs out / })).toBeVisible();
-  await expect(page.getByText('1 day once started, the next starts automatically')).toBeVisible();
+  await expect(page.getByText('You have 2 boxes. Count them in tea bags now?')).toBeVisible();
+  await page.getByRole('button', { name: 'Count them as 40 tea bags' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: sleep })).toBeVisible();
+  await expect(page.getByText('tea bags · 2 boxes')).toBeVisible();
+  // 1 box a day was set before: that is 20 tea bags a day.
+  await expect(page.getByText(/Uses 20 tea bags a day\./)).toBeVisible();
 });
 
-test('marks one open, keeps what was paid, and records an item\'s measures', async ({ page }, info) => {
+test('marks one open, and keeps what was paid', async ({ page }, info) => {
   await signIn(page);
   const name = `Butter ${info.project.name}`;
   await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
@@ -379,13 +396,6 @@ test('marks one open, keeps what was paid, and records an item\'s measures', asy
   await expect(page.locator('.pill', { hasText: 'Last one open' })).toBeVisible();
   await page.getByRole('button', { name: 'Finished the open one' }).click();
   await expect(page.locator('.pill', { hasText: /^Out$/ })).toBeVisible();
-
-  // A measure on the price card: one is 250 g.
-  await page.locator('.label', { hasText: 'Measures' }).getByRole('button', { name: 'Add' }).click();
-  await page.getByLabel('How many', { exact: true }).fill('250');
-  await page.getByLabel('Measure unit').fill('g');
-  await page.getByRole('button', { name: 'Save measure' }).click();
-  await expect(page.getByText('One = 250 g')).toBeVisible();
 
   // Purchases: what was spent, and every purchase.
   await page.goto('/#/m/purchases/');
@@ -585,6 +595,44 @@ test('Add from receipt matches lines to items, leaves the rest out, and adds wha
     return ids.map((id) => all.find((s) => s.product.id === id)!.inStock);
   }, [rice, tea, coffee]);
   expect(stock).toEqual([1, 2, 1]);
+});
+
+test('a barcode found online goes to the AI, which works out it comes in a box of 80 tea bags', async ({ page }, info) => {
+  await signIn(page);
+  const code = `5000${info.project.name === 'phone' ? '1' : '2'}08023402`;
+  const name = `PG Tips tea bags ${info.project.name}`;
+  const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
+  await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', search: true, barcodes: true, claude: set, gemini: set } }));
+  // Open Food Facts knows it (stood in for here); the AI is asked about what it found.
+  const found = { provider: 'openfoodfacts', barcode: code, name: 'PG tips original 80 pyramid tea bags', brand: 'PG Tips', quantityText: '232 g', imageUrl: null, categories: ['Teas'] };
+  await page.route(`**/api/v1/identify?code=${code}`, (r) => r.fulfill({ json: { kind: 'external', code, result: found, suggestions: [] } }));
+  const asked: unknown[] = [];
+  await page.route('**/api/v1/modules/ai/describe', (r) => {
+    asked.push(r.request().postDataJSON());
+    return r.fulfill({ json: { readable: true, name, kind: 'Black tea', brand: 'PG Tips Original 80 tea bags', unit: 'tea bag', pack: { name: 'box', holds: 80 }, categoryId: null, shelfLifeDays: 540, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [] } });
+  });
+  await page.goto('/#/scan');
+  await page.getByLabel('Barcode or code').fill(code);
+  await page.getByLabel('Barcode or code').press('Enter');
+  const card = page.locator('.sheet-card');
+  await expect(card.getByText('Found in Open Food Facts, worked out by Claude. Check the name. Counted in tea bags, comes in boxes of 80')).toBeVisible();
+  expect(asked).toEqual([{ barcode: code, name: found.name, brand: 'PG Tips', quantityText: '232 g', categories: ['Teas'] }]);
+  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  await card.getByRole('button', { name: 'Add 1 box (80 tea bags)' }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 box (80 tea bags) · ${name}`);
+  const item = await page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { name: string; unit: string; pack: unknown; shelfLifeDays: number }; inStock: number }>).find((s) => s.product.name === n)!, name);
+  expect([item.product.unit, item.product.pack, item.product.shelfLifeDays, item.inStock]).toEqual(['tea bag', { name: 'box', holds: 80 }, 540, 80]);
+
+  // The AI can't (out of credit): what the barcode database says is still there to add.
+  const other = `${code}9`;
+  await page.route(`**/api/v1/identify?code=${other}`, (r) => r.fulfill({ json: { kind: 'external', code: other, result: { ...found, barcode: other }, suggestions: [] } }));
+  await page.unroute('**/api/v1/modules/ai/describe');
+  await page.route('**/api/v1/modules/ai/describe', (r) => r.fulfill({ status: 402, json: { error: 'ai_failed', message: 'Claude is out of credit.' } }));
+  await page.getByLabel('Barcode or code').fill(other);
+  await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.locator('.toast')).toContainText("Claude is out of credit. Here's what the barcode database says.");
+  await expect(card.getByText('Not in Larder yet. Found in Open Food Facts.')).toBeVisible();
+  await expect(card.getByLabel('Call it')).toHaveValue(found.name);
 });
 
 test('a barcode nothing knows can be read with AI, and is remembered', async ({ page }, info) => {
