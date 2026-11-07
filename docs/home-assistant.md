@@ -78,17 +78,17 @@ Every action can return Larder's answer, including a `message` for a notificatio
 | `larder.add_stock` | item, quantity (1), unit (its pack, e.g. box: 1 box of 20 tea bags adds 20), place, expires_on, brand, price, shop, note. With a price or shop it's kept in the purchase history |
 | `larder.use_stock` | item, quantity (1, or the usual amount when it starts one: 2 lenses), unit, place, opened (one opened and still in use; for something Larder takes out by itself, a new one started now), note. For something Larder takes out by itself, a plain use is an extra one, unless none is started: then it starts one |
 | `larder.finish_item` | item: the open one is finished |
-| `larder.move_item` | item, to, quantity (all), permanent (false), from (a place, or "to sort") |
+| `larder.move_item` | item, to, quantity (all), unit, permanent (false), from (a place, or "to sort") |
 | `larder.put_back` | item, from (only what's out of place there) |
 | `larder.add_expected` | item, quantity (1), unit, source, reference, eta, price, place, pending |
-| `larder.mark_arrived` | source, or item and quantity; due_by |
+| `larder.mark_arrived` | source, or item and quantity (with unit); due_by |
 | `larder.confirm_order` | source, or item: a pending order went ahead and is on its way |
 | `larder.cancel_order` | source, or item: a pending order didn't go ahead |
 | `larder.add_to_shopping_list` / `larder.remove_from_shopping_list` | item |
 | `larder.mark_charged` | item, quantity (1) |
 | `larder.renew` | item |
 | `larder.find_item` | item |
-| `larder.shopping_list_for` | shop |
+| `larder.shopping_list_for` | shop. Each item says how many, and `packs` and `pack` for things bought in whole packs |
 | `larder.batteries_replaced` | device (battery linking module) |
 
 ```yaml

@@ -234,7 +234,8 @@ export function createAutomation(deps: {
     id: 'move_item', name: 'Move item', description: 'Move an item to another place: for now (out of place) or for good (its usual place changes).',
     input: z.object({
       item: Item, to: z.string().min(1).max(200).describe('The place it\'s going to: a name or code'),
-      quantity: z.number().positive().optional().describe('How many (default all of it)'),
+      quantity: z.number().positive().optional().describe('How many (default all of it), in the item\'s own unit or in `unit`'),
+      unit: Unit,
       permanent: z.boolean().default(false).describe('True if this is its new usual place'),
       from: z.string().max(200).optional().describe('Only move stock from this place, or "to sort" for stock with no place yet (put away for good)'),
     }),
@@ -243,7 +244,7 @@ export function createAutomation(deps: {
       const place = await resolve.place(i.to);
       const toSort = !!i.from && /^(to sort|no place|unsorted|nowhere)$/i.test(i.from.trim());
       const fromPlaceId = !i.from ? undefined : toSort ? null : (await resolve.place(i.from)).id;
-      const s = await stock.move({ productId: p.id, toPlaceId: place.id, quantity: i.quantity, mode: i.permanent || toSort ? 'permanent' : 'temporary', ...(fromPlaceId !== undefined ? { fromPlaceId } : {}) });
+      const s = await stock.move({ productId: p.id, toPlaceId: place.id, quantity: i.quantity === undefined ? undefined : inOwnUnit(p, i.quantity, i.unit), mode: i.permanent || toSort ? 'permanent' : 'temporary', ...(fromPlaceId !== undefined ? { fromPlaceId } : {}) });
       return { message: `${p.name} moved to ${place.name}${i.permanent || toSort ? ' for good' : ''}.`, ...itemInfo(s) };
     },
   });
@@ -322,13 +323,16 @@ export function createAutomation(deps: {
     input: z.object({
       source: z.string().max(80).optional().describe('The delivery, e.g. "Tesco delivery"'),
       item: Item.optional().describe('Or one item that arrived'),
-      quantity: z.number().positive().optional().describe('How many of the item arrived (default all expected)'),
+      quantity: z.number().positive().optional().describe('How many of the item arrived (default all expected), in its own unit or in `unit`'),
+      unit: Unit,
       due_by: IsoDate.optional().describe('With a source: only what was due by this day (YYYY-MM-DD), so a later order from the same shop stays on its way'),
     }),
     async run(i) {
       if (!i.source && !i.item) throw new LarderError('Say which delivery (source) or which item arrived.', 400, 'invalid');
-      const productId = i.item ? (await resolve.product(i.item)).id : undefined;
-      const r = await stock.arrive({ source: i.source, productId, quantity: i.quantity, ...(i.due_by ? { dueBy: i.due_by } : {}) });
+      const product = i.item ? await resolve.product(i.item) : null;
+      const productId = product?.id;
+      const quantity = i.quantity === undefined ? undefined : product ? inOwnUnit(product, i.quantity, i.unit) : i.quantity;
+      const r = await stock.arrive({ source: i.source, productId, quantity, ...(i.due_by ? { dueBy: i.due_by } : {}) });
       const names = r.products.map((s) => s.product.name);
       const left = r.pendingLeft ? ` ${r.pendingLeft} more from that order ${r.pendingLeft === 1 ? 'was' : 'were'} never confirmed and ${r.pendingLeft === 1 ? 'is' : 'are'} still pending: confirm or remove ${r.pendingLeft === 1 ? 'it' : 'them'}.` : '';
       return { message: `Arrived: ${names.join(', ')}.${left}`, arrived: r.arrived, pending_left: r.pendingLeft, items: r.products.map(itemInfo) };
@@ -386,7 +390,7 @@ export function createAutomation(deps: {
     async run(i) {
       const shop = await resolve.shop(i.shop);
       const list = await shopping.forShop(shop.id);
-      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, category: g.category?.name ?? null })));
+      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, packs: it.packs ?? null, pack: it.summary.product.pack?.name ?? null, category: g.category?.name ?? null })));
       return { message: items.length ? `${items.length} thing${items.length === 1 ? '' : 's'} to get at ${shop.name}: ${items.map((x) => x.item).join(', ')}.` : `Nothing to get at ${shop.name}.`, shop: shop.name, items };
     },
   });

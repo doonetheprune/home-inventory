@@ -148,9 +148,14 @@
           "description": "The place it's going to: a name or code"
         },
         "quantity": {
-          "description": "How many (default all of it)",
+          "description": "How many (default all of it), in the item's own unit or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         },
         "permanent": {
           "default": false,
@@ -325,9 +330,14 @@
           "maxLength": 200
         },
         "quantity": {
-          "description": "How many of the item arrived (default all expected)",
+          "description": "How many of the item arrived (default all expected), in its own unit or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "unit": {
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "type": "string",
+          "maxLength": 30
         },
         "due_by": {
           "description": "With a source: only what was due by this day (YYYY-MM-DD), so a later order from the same shop stays on its way",

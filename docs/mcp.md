@@ -74,18 +74,18 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `change_item` | Change anything about an item afterwards: name, category, unit, what it comes in (with `recount` to turn 2 boxes into 40 tea bags), other names, minimum, shelf life, how fast it's used, whether Larder takes them out of stock by itself, and when the current one started, usual place, places it's no longer kept in, shops to buy it from, notes, links, wish list, rechargeable |
 | `remove_item` | Remove an item with all its stock |
 | `add_brand` / `remove_brand` | A brand or pack of an item, with its barcode or a shop's product code |
-| `correct_stock` | Fix one batch: how many there really are, its expiry date, or remove it |
+| `correct_stock` | Fix one batch: how many there really are (in the item's unit or its pack), its expiry date, or remove it |
 | `add_stock` / `use_stock` | Add or take away stock (soonest-expiring first; rechargeables go flat). Adding takes a brand, and a price and shop to keep it in the purchase history; using takes a note, and `opened` for one that's opened and still in use (the butter in the fridge), or, for something Larder takes out by itself, a new one started now; otherwise a use is an extra one. Both take `unit` for amounts in the item's pack ("2 boxes") |
 | `finish_item` | The open one is finished (or the one in use stopped: Larder stops taking them out until one is started) |
 | `bought` | Several things bought at once, with their prices and the shop: added to stock and kept in the purchase history |
-| `move_item` | Move something for now (out of place) or for good, optionally only from one place, or from To sort (stock with no place yet) |
+| `move_item` | Move something for now (out of place) or for good, all of it or some (in the item's unit or its pack: "1 box"), optionally only from one place, or from To sort (stock with no place yet) |
 | `add_expected` | Record an order that hasn't arrived (it counts towards stock), with its price, where it goes, and whether it's still a pending order. Takes shop codes from order emails. Something in a pending order from the same shop is confirmed instead of added again |
-| `mark_arrived` | A delivery (or part of one, or only what was due by a day) arrived |
+| `mark_arrived` | A delivery (or part of one, in the item's unit or its pack, or only what was due by a day) arrived |
 | `confirm_order` / `cancel_order` | A pending order (e.g. a filled online basket) went ahead and is on its way, or didn't and is removed |
 | `add_to_shopping_list` / `remove_from_shopping_list` | Put something on the list that isn't low, or take it off again |
 | `put_back` | Something out of place is back where it lives (all of it, or only from one place) |
 | `mark_charged` / `renew` | Rechargeables charged; a renewal (insurance, MOT) renewed |
-| `shopping_list` | What to buy at a shop, which shop to go to, or (`shop: "none"`) what no shop sells |
+| `shopping_list` | What to buy at a shop (in whole packs for things that come in them: "Tea bags ×1 box (80 tea bags)"), which shop to go to, or (`shop: "none"`) what no shop sells |
 | `expiring` | What to use soon, and renewals coming up |
 | `deliveries` / `recent_changes` | Orders on the way and pending orders; what changed in stock lately (all, or one item) |
 | `list_shops` / `add_shop` / `change_shop` / `remove_shop` | Shops and what they sell. Common UK shops (Tesco, Aldi, Screwfix…) come with what they usually sell |
@@ -97,7 +97,7 @@ Everything you can do in the app, as plainly described tools, apart from account
 | `set_item_size` | "A bag of spinach is 200 g", so its prices can be compared per 100 g or per kg (pricing module) |
 | `get_price` | An item's usual price in every unit it can be shown in: its own, its pack, and by weight once `set_item_size` says how much one holds (pricing module) |
 | `purchase_history` / `spending` | What was bought, the price, the shop, and the receipt's photo or the order; what was spent by shop, item and month (purchase history module) |
-| `change_purchase` / `remove_purchase` | Correct a purchase in the history, or take one out (purchase history module) |
+| `change_purchase` / `remove_purchase` | Correct a purchase in the history (how many in the item's unit or its pack), or take one out (purchase history module) |
 | `battery_devices` / `batteries_replaced` / `link_battery` | Devices with batteries and what to do about a low one; new batteries went in; which battery a device takes (battery linking module) |
 | `check_order_emails` / `order_emails` / `match_order_line` / `skip_order_line` | Order emails: check now, what was read, and the lines waiting to be matched to an item or left out (order emails module) |
 | `link_listing` / `unlink_listing` / `set_buying_rules` | An online shop's packs for an item, which pack to always buy and how many one gives, and offers (online shopping module) |

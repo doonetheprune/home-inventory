@@ -371,6 +371,36 @@ describe('Home Assistant and assistants', () => {
     const stopped = await core.assistant.call('change_item', { item: 'sleep tea', uses: null });
     expect(stopped.text).toBe('Sleep tea is updated: no usage set.');
   });
+
+  it('take amounts in boxes everywhere, and buy whole boxes', async () => {
+    const core = await makeCore();
+    const aldi = await core.shops.create({ name: 'Aldi' });
+    const shed = await core.places.create({ name: 'Shed' });
+    const bags = await core.products.create({ ...tea, pack: { name: 'box', holds: 80 }, usage: { amount: 2, everyDays: 1, auto: true }, minQuantity: 30, preferredShopIds: [aldi.id] });
+    await core.automation.run('add_stock', { item: 'tea bags', quantity: 2, unit: 'box' });
+
+    const data = (await core.assistant.call('get_item', { item: 'tea bags' })).data as Record<string, unknown>;
+    expect(data).toMatchObject({ in_stock: 160, comes_in: { name: 'box', holds: 80 }, uses: { amount: 2, every_days: 1, taken_out_by_larder: true }, in_use_since: '2026-10-28', runs_out_on: '2027-01-17' });
+
+    // A box goes to the shed; a count says 1 box and 10 loose are really left in the house.
+    await core.automation.run('move_item', { item: 'tea bags', to: 'shed', quantity: 1, unit: 'box', permanent: false });
+    expect((await core.products.get(bags.id)).entries.filter((e) => e.currentPlaceId === shed.id).reduce((n, e) => n + e.quantity, 0)).toBe(80);
+    const fixed = await core.assistant.call('correct_stock', { item: 'tea bags', place: 'shed', quantity: 0.5, unit: 'box' });
+    expect(fixed.text).toBe('Tea bags: corrected. 120 tea bags in stock.');
+
+    // Below the minimum: the list buys whole boxes.
+    await core.assistant.call('correct_stock', { item: 'tea bags', place: 'shed', remove: true });
+    await core.automation.run('use_stock', { item: 'tea bags', quantity: 60 });
+    const list = await core.assistant.call('shopping_list', { shop: 'aldi' });
+    expect(list.text).toContain('Tea bags ×1 box (80 tea bags)');
+    expect((list.data as { items: unknown[] }).items[0]).toMatchObject({ item: 'Tea bags', quantity: 80, packs: 1, pack: 'box' });
+
+    // Ordered: 2 boxes, then 1 box arrives.
+    await core.automation.run('add_expected', { item: 'tea bags', quantity: 2, unit: 'box', source: 'Aldi' });
+    const arrived = await core.automation.run('mark_arrived', { item: 'tea bags', quantity: 1, unit: 'box' });
+    expect(arrived.items).toMatchObject([{ in_stock: 100 }]);
+    expect((await core.products.summary(bags.id)).expected).toBe(80);
+  });
 });
 
 describe('opened, not finished', () => {

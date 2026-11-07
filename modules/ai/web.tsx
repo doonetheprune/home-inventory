@@ -175,7 +175,7 @@ function ReceiptCamera({ onPhoto, onUpload, onRetry }: { onPhoto: (photo: Blob) 
 }
 
 /** Which of the household's items a receipt line is, or none. */
-function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef | null) => void; onClose: () => void }) {
+function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef | null, holds: number) => void; onClose: () => void }) {
   const items = useQuery({ queryKey: ['ai', 'receipt-items'], queryFn: () => api.products.list() }).data ?? [];
   const [q, setQ] = useState('');
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -186,7 +186,7 @@ function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef |
       <input className="input" autoFocus placeholder="Search your items" aria-label="Search your items" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="list" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
         {shown.map((s) => (
-          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit })}>
+          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit }, s.product.pack?.holds ?? 1)}>
             <span className="item-main">
               <span className="item-name">{s.product.name}</span>
               <span className="item-meta">{s.product.aliases.length ? `Also ${s.product.aliases.join(', ')} · ` : ''}counted in {s.product.unit}</span>
@@ -195,7 +195,7 @@ function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef |
         ))}
         {!shown.length && <div className="item"><span className="small muted">{items.length ? 'Nothing matches. Things not in Larder are left out.' : 'Loading…'}</span></div>}
       </div>
-      {row.item && <button type="button" className="btn block ghost" onClick={() => onPick(null)}>Not in Larder: leave it out</button>}
+      {row.item && <button type="button" className="btn block ghost" onClick={() => onPick(null, 1)}>Not in Larder: leave it out</button>}
     </Sheet>
   );
 }
@@ -374,10 +374,10 @@ function ReceiptPage() {
         <PickItem
           row={rows.find((r) => r.key === picking)!}
           onClose={() => setPicking(null)}
-          onPick={(item) => {
+          onPick={(item, holds) => {
             const row = rows.find((r) => r.key === picking)!;
-            // Another item counted in something else: start from how many the receipt says.
-            const quantity = item && row.item?.unit === item.unit ? row.quantity : row.count;
+            // Another item counted in something else: start from how many the receipt says (in boxes, for one that comes in them).
+            const quantity = item && row.item?.unit === item.unit ? row.quantity : row.count * holds;
             change(row.key, item ? { item, quantity, match: 'picked', keep: true } : { item: null, quantity: row.count, match: 'none', keep: false });
             setPicking(null);
           }}

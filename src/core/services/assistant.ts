@@ -210,6 +210,9 @@ export function createAssistant(deps: {
           places: (d.stockByPlace ?? []).map((x) => ({ place: x.path, quantity: x.quantity })),
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
+          comes_in: p.pack ? { name: p.pack.name, holds: p.pack.holds } : null,
+          uses: p.usage ? { amount: p.usage.amount, every_days: p.usage.everyDays, taken_out_by_larder: p.usage.auto } : null,
+          in_use_since: p.inUseSince ?? null, in_use_until: d.inUseUntil, runs_out_on: d.runsOutOn,
         },
       };
     },
@@ -329,9 +332,14 @@ export function createAssistant(deps: {
       }
       const found = await resolve.shop(shop);
       const list = await shopping.forShop(found.id);
-      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, in_stock: it.summary.inStock, category: g.category?.name ?? 'Other' })));
+      // Things bought in packs are bought in whole packs: "Tea bags ×1 box (80 tea bags)".
+      const howMany = (it: (typeof list.groups)[number]['items'][number]) => {
+        const p = it.summary.product;
+        return p.pack && it.packs ? `${amount(it.packs, p.pack.name)} (${amount(it.quantity, p.unit)})` : amount(it.quantity, p.unit);
+      };
+      const items = list.groups.flatMap((g) => g.items.map((it) => ({ item: it.summary.product.name, quantity: it.quantity, unit: it.summary.product.unit, packs: it.packs ?? null, pack: it.summary.product.pack?.name ?? null, in_stock: it.summary.inStock, category: g.category?.name ?? 'Other' })));
       if (!items.length) return { text: `Nothing to get at ${found.name}.`, data: { shop: found.name, items } };
-      const text = [`At ${found.name} (${items.length}):`, ...list.groups.map((g) => `${g.category?.name ?? 'Other'}: ${g.items.map((it) => `${it.summary.product.name} ×${amount(it.quantity, it.summary.product.unit)}`).join(', ')}`)].join('\n');
+      const text = [`At ${found.name} (${items.length}):`, ...list.groups.map((g) => `${g.category?.name ?? 'Other'}: ${g.items.map((it) => `${it.summary.product.name} ×${howMany(it)}`).join(', ')}`)].join('\n');
       return { text, data: { shop: found.name, items } };
     },
   });

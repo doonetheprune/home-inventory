@@ -93,6 +93,9 @@ describe('purchase history', () => {
     await core.stock.recount(tea.id, { unit: 'tea bag', holds: 20 });
     await settle();
     expect((await history(core, tea.id)).map((r) => [r.quantity, r.unit, r.price])).toEqual([[40, 'tea bag', 6]]);
+    // Corrected in boxes: it was 3.
+    await core.assistant.call('change_purchase', { item: 'sleep tea', quantity: 3, unit: 'boxes' });
+    expect((await history(core, tea.id)).map((r) => r.quantity)).toEqual([60]);
   });
 
   it('answers assistants', async () => {

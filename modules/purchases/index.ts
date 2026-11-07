@@ -6,7 +6,7 @@
  * or added with a price on an item's page. Kept for reports on spending.
  */
 import { z } from 'zod';
-import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amount, defineModule, localDate, newId, type ModuleContext, type Shop } from '@larder/core';
+import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amount, defineModule, inOwnUnit, localDate, newId, type ModuleContext, type Shop } from '@larder/core';
 
 export const PurchaseRecord = z.object({
   id: z.string(),
@@ -338,12 +338,14 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
       item: Item,
       on: DateInput.describe('The day it was bought, if not the latest (YYYY-MM-DD)'),
       price: z.number().min(0).nullable().optional().describe('What the line cost, e.g. 3.2; null if not known'),
-      quantity: z.number().positive().optional().describe('How many were bought, in the item\'s own unit'),
+      quantity: z.number().positive().optional().describe('How many were bought, in the item\'s own unit or in unit'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
       shop: z.string().max(80).nullable().optional().describe('The shop; null for none'),
       note: z.string().max(200).optional(),
     }),
-    async run({ item, on, price, quantity, shop, note }) {
+    async run({ item, on, price, quantity: given, unit, shop, note }) {
       const r = await pick(item, on);
+      const quantity = given === undefined ? undefined : inOwnUnit(await ctx.core.resolve.product(item), given, unit);
       const shopId = shop === undefined ? undefined : shop === null ? null : (await ctx.core.resolve.shop(shop)).id;
       const next = await change(r.id, { price, quantity, shopId, ...(note !== undefined ? { evidence: { note } } : {}) });
       return { text: `Changed: ${line(next, true)}.`, data: next };

@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
 import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
-import { usageText } from './packs';
+import { inOwnUnit, usageText } from './packs';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
@@ -443,7 +443,8 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       item: Item,
       place: z.string().max(200).optional().describe('Which batch: the place it\'s in'),
       expires_on: z.string().max(10).optional().describe('Which batch: its current expiry date (YYYY-MM-DD)'),
-      quantity: z.number().min(0).optional().describe('How many there really are in that batch'),
+      quantity: z.number().min(0).optional().describe('How many there really are in that batch, in the item\'s own unit or in unit'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
       new_expiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullable().optional().describe('Its real expiry date (YYYY-MM-DD); null for none'),
       remove: z.boolean().optional().describe('True to remove the batch altogether'),
     }),
@@ -459,6 +460,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (!chosen.length) throw new LarderError(`None of ${p.name}'s batches match. It has: ${batches.map(describe).join('; ')}.`, 404, 'not_found');
       if (chosen.length > 1) throw new AmbiguousError(`${p.name} has ${chosen.length} batches. Say which by place or expiry date.`, chosen.map(describe));
       const entry = chosen[0]!;
+      if (i.quantity !== undefined) i.quantity = inOwnUnit(p, i.quantity, i.unit);
       const s = i.remove || i.quantity === 0
         ? await stock.removeEntry(entry.id)
         : await stock.updateEntry(entry.id, { ...(i.quantity !== undefined ? { quantity: i.quantity } : {}), ...(i.new_expiry !== undefined ? { expiresOn: i.new_expiry } : {}) });
