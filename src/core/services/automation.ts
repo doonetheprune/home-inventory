@@ -230,10 +230,12 @@ export function createAutomation(deps: {
       // Starting one takes its usual amount unless told otherwise (or what's left, if less); one used a little
       // at a time (1 tea bag a day of a box, 4 g a day of a jar) starts a whole one.
       const starts = !!p.usage && !p.usage.unit && (!!i.opened || startsOne(p));
-      const quantity = i.quantity !== undefined ? roundQty(toBoughtIn(units, p, i.quantity, i.unit))
+      // A unit on its own is one of it: "a tea bag".
+      const given = i.quantity ?? (i.unit ? 1 : undefined);
+      const quantity = given !== undefined ? roundQty(toBoughtIn(units, p, given, i.unit))
         : starts ? await (async () => { const left = (await products.summary(p.id)).inStock; return left > 0 ? Math.min(p.usage!.amount, left) : p.usage!.amount; })() : 1;
       const s = await stock.use({ productId: p.id, quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
-      const n = said(units, p, quantity, i.quantity, i.unit);
+      const n = said(units, p, quantity, given, i.unit);
       const uses = usageText(units, p);
       // Used a little at a time without Larder taking it out, a use is just a use.
       const what = !p.usage || (p.usage.unit && !p.usage.auto) ? `${i.opened ? 'opened' : 'used'} ${n}`

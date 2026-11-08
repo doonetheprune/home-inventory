@@ -13,9 +13,8 @@ import type { createProductService } from './products';
 import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import { finders } from './assistant-manage';
-import { amount, andList } from '../util';
-import { inOwnUnit } from './packs';
-import type { Units } from './units';
+import { andList, roundQty } from '../util';
+import { amountText, exactText, toBoughtIn, type Units } from './units';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
 
@@ -39,7 +38,7 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
 
   addTool({
     name: 'list_items', title: 'List items', readOnly: true,
-    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, open: opened and not finished, or in use), by category, by place, or a mix.',
+    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, or flagged for the owner to look at, with why; open: opened and not finished, or in use), by category, by place, or a mix.',
     input: z.object({
       status: z.enum(STATUSES).default('all').describe('Which items: all (owned), low, expiring, out_of_place, expected, wish, in_stock, to_sort, to_tidy or open'),
       category: z.string().max(60).optional().describe('Only this category, e.g. "Food"'),
@@ -62,8 +61,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
       if (!list.length) return { text: 'No items like that.', data: { items: [] } };
       const units = await deps.ctx.units();
       const shown = list.slice(0, limit);
-      const text = shown.map((s) => `- ${line(units, s)}${quantities ? ` (${amount(quantities.get(s.product.id) ?? 0, s.product.unit)} with no place)` : ''}`).join('\n') + (list.length > shown.length ? `\n…and ${list.length - shown.length} more.` : '');
-      return { text, data: { count: list.length, items: shown.map((s) => ({ id: s.product.id, item: s.product.name, in_stock: s.inStock, unit: s.product.unit, low: s.status.low, next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, open: s.inUse })) } };
+      const text = shown.map((s) => `- ${line(units, s)}${quantities ? ` (${amountText(units, quantities.get(s.product.id) ?? 0, s.product.unit)} with no place)` : ''}${s.product.needsCheck ? `. To tidy: ${s.product.needsCheck}` : ''}`).join('\n') + (list.length > shown.length ? `\n…and ${list.length - shown.length} more.` : '');
+      return { text, data: { count: list.length, items: shown.map((s) => ({ id: s.product.id, item: s.product.name, in_stock: s.inStock, unit: s.product.unit, low: s.status.low, next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, open: s.inUse, needs_check: s.product.needsCheck ?? null })) } };
     },
   });
 
@@ -73,7 +72,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
     input: z.object({ place: z.string().min(1).max(200).describe('The place, by name or code, e.g. "garage racking" or "G2-4"') }),
     async run({ place }) {
       const p = await find.place(place);
-      const c = await places.contents(p.id);
+      const [c, units] = await Promise.all([places.contents(p.id), deps.ctx.units()]);
+      const amount = (n: number, unit: string) => amountText(units, n, unit);
       const lines = [`${c.path}${c.place.code ? ` (${c.place.code})` : ''}`];
       if (c.place.notes) lines.push(`Notes: ${c.place.notes}`);
       if (c.items.length) {
@@ -118,8 +118,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
       shop: z.string().max(80).optional().describe('Where they were bought, e.g. "Aldi"'),
       items: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder'),
-        quantity: z.number().positive().describe('How many, in the item\'s own unit, or in unit'),
-        unit: z.string().max(30).optional().describe('What the quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
+        quantity: z.number().positive().describe('How many, in what the item is bought in, or in unit'),
+        unit: z.string().max(30).optional().describe('What the quantity is in, if not what the item is bought in: what one contains ("tea bag"), or g, kg, ml, L or pints once it has a Weight'),
         price: z.number().min(0).optional().describe('What the line cost, e.g. 3.20'),
       })).min(1).max(100),
       date: IsoDate.optional().describe('When they were bought, if not today (YYYY-MM-DD)'),
@@ -127,16 +127,17 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
     }),
     async run({ shop, items, date, note }) {
       const s = shop ? await find.shop(shop) : null;
+      const units = await deps.ctx.units();
       const resolved = await Promise.all(items.map(async (i) => {
         const product = await resolve.product(i.item);
-        return { ...i, product, quantity: inOwnUnit(product, i.quantity, i.unit) };
+        return { ...i, product, quantity: roundQty(toBoughtIn(units, product, i.quantity, i.unit)) };
       }));
       const done = await shopping.purchase({
         shopId: s?.id ?? null,
         items: resolved.map((i) => ({ productId: i.product.id, quantity: i.quantity, ...(i.price !== undefined ? { price: i.price } : {}) })),
         ...(date || note ? { evidence: { boughtOn: date ?? null, note: note ?? null } } : {}),
       });
-      const what = resolved.map((i) => `${i.product.name} (${amount(i.quantity, i.product.unit)}${i.price !== undefined ? `, ${i.price.toFixed(2)}` : ''})`);
+      const what = resolved.map((i) => `${i.product.name} (${exactText(units, i.product, i.quantity)}${i.price !== undefined ? `, ${i.price.toFixed(2)}` : ''})`);
       return { text: `Added to stock${s ? ` from ${s.name}` : ''}: ${andList(what)}.`, data: { shop: s?.name ?? null, items: done.map((x) => ({ item: x.product.name, in_stock: x.inStock, unit: x.product.unit, low: x.status.low })) } };
     },
   });

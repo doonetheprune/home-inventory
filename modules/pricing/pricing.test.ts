@@ -96,7 +96,7 @@ describe('pricing module', () => {
     expect((await core.assistant.call('convert_price', { price: 3.5, per: 'kg', to: '100 g' })).text).toBe('£3.50 a kg is £0.35 per 100 g.');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg' })).rejects.toThrow('Say which item');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).rejects.toThrow("Larder doesn't know how much is in one bag of Baby spinach");
-    expect((await core.assistant.call('set_item_size', { item: 'baby spinach', amount: 200, unit: 'g' })).text).toBe('One bag of Baby spinach is 200 g. How fast it\'s used can now be said in g, and its prices compared by weight.');
+    expect((await core.assistant.call('change_item', { item: 'baby spinach', contains: { amount: 200, unit: 'g' } })).text).toContain('Baby spinach is updated: each bag contains 200 g.');
     expect((await core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).text).toBe('£1.10 a bag is £5.50 a kg.');
     // A usual price per 100 g, then a pack per kg at the shop.
     expect((await core.assistant.call('set_usual_price', { item: 'baby spinach', quantity: 100, unit: 'g', price: 0.6 })).text).toBe('The usual price for Baby spinach is now £1.20 a bag.');
@@ -130,9 +130,8 @@ describe('pricing module', () => {
     expect(r.verdict).toBe('dearer');
     expect((await core.assistant.call('convert_price', { price: 4, per: 'box', to: 'tea bag', item: 'tea bags' })).text).toBe('£4.00 a box is £0.05 a tea bag.');
     // A box weighs 250 g: one tea bag is 250 g ÷ 80.
-    expect((await core.assistant.call('set_item_size', { item: 'tea bags', amount: 250, unit: 'g', per: 'box' })).text).toBe('One tea bag of Tea bags is 3.125 g (a box of 80 is 250 g). How fast it\'s used can now be said in g, and its prices compared by weight.');
+    await core.products.update(tea.id, { weight: { amount: 3.125, unit: 'g' } });
     expect((await core.assistant.call('get_price', { item: 'tea bags' })).text).toContain('£4.00 a box, £1.60 per 100 g');
-    await expect(core.assistant.call('set_item_size', { item: 'tea bags', amount: 1, unit: 'kg', per: 'crate' })).rejects.toThrow('Tea bags is counted in tea bags and comes in boxes of 80, so give the size of one tea bag or one box.');
     await expect(call(core, 'POST', '/check', { productId: tea.id, quantity: 1, unit: 'crate', price: 3 })).rejects.toThrow('Larder doesn\'t know the unit "crate". Use tea bag, box, g, 100 g, kg, ml, 100 ml or litre.');
   });
 

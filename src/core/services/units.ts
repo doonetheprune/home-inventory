@@ -358,6 +358,33 @@ export function stockText(units: Units, item: Pick<UnitItem, 'unit'>, n: number,
   return `about ${Number.isInteger(q) ? num(q) : quarters(q)}${word ? ` ${word}` : ''}`;
 }
 
+/** What part of one is best said in: what one contains when that's a count, else what it's used in or its Weight's g or ml. Null when there's none. */
+function insideUnit(units: Units, item: UnitItem): string | null {
+  if (isLoose(units, item)) return null;
+  const c = item.contents ?? null;
+  if (c && isCount(units, c.unit)) return c.unit;
+  const u = item.usage?.unit ?? null;
+  if (u && canConvert(units, item, u)) return u;
+  return item.weight ? item.weight.unit : null;
+}
+
+/**
+ * An amount of what it's bought in, exactly, with what's inside when it's part of one:
+ * "0.35 box (7 tea bags)", "2 boxes", "0.75 jar (300 g)". For assistants, which need the exact amount.
+ */
+export function exactText(units: Units, item: UnitItem, n: number): string {
+  const inside = Math.abs(n - Math.round(n)) < 0.001 ? null : insideUnit(units, item);
+  const said = amountText(units, n, item.unit);
+  return inside ? `${said} (${amountText(units, roundQty(fromBoughtIn(units, item, n, inside)), inside)})` : said;
+}
+
+/** Stock as stockText says it, with the exact amount inside when part of one is left: "about 4 boxes (79 tea bags)", "about ¾ jar (300 g)", "3.8 boxes". */
+export function stockWithInside(units: Units, item: UnitItem, n: number): string {
+  if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001) return stockText(units, item, n);
+  const inside = insideUnit(units, item);
+  return inside ? `${stockText(units, item, n)} (${amountText(units, roundQty(fromBoughtIn(units, item, n, inside)), inside)})` : amountText(units, n, item.unit);
+}
+
 /** "Bought in boxes", "Bought one at a time", "Bought loose, by weight (g)". */
 export function boughtInText(units: Units, item: Pick<UnitItem, 'unit'>): string {
   const u = units.find(item.unit);

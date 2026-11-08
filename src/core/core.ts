@@ -79,12 +79,13 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const resolve = createResolver(ctx, search, lookup);
   const automation = createAutomation({ ctx, products, stock, shopping, resolve });
   const places = createPlaceService(ctx);
+  const units = createUnitService(ctx);
 
   const core: CoreApi = {
     categories,
     shops,
     places,
-    units: createUnitService(ctx),
+    units,
     products,
     stock,
     shopping,
@@ -94,7 +95,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     resolve,
     automation,
     nfc: createNfcService(ctx, products),
-    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, lookup, automation, resolve }),
+    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, lookup, units, automation, resolve }),
     settings: {
       get: () => ctx.household(),
       async update(patch) {
