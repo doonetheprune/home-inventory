@@ -5,7 +5,7 @@
  * £0.36 a roll, and "£3.50 a kg" against the usual £0.40 per 100 g.
  */
 import { z } from 'zod';
-import { Id, NotFoundError, ValidationError, defineModule, pluralWord, sameUnit, type CoreApi, type Product } from '@larder/core';
+import { Id, NotFoundError, ValidationError, defineModule, type CoreApi, type Product } from '@larder/core';
 import { ItemSize, choicesFor, defaultShow, isMeasure, packUnitsFor, perText, priceFactor, unitKey, unitName, whyNot } from './units';
 
 export { ItemSize } from './units';
@@ -18,7 +18,7 @@ export const PricingFields = z.object({
   /** What the usual price came from, e.g. "Andrex 9 pack, £3.25 at Tesco". */
   basedOn: z.string().max(200).default(''),
   updatedAt: z.string().nullable().default(null),
-  /** How much one of the product's unit holds (1 bag = 200 g), so prices can be per kg or per 100 g. */
+  /** Moved to the item (`product.size`) in 0.10.0, which reads it from here until it's moved when the module starts. */
   itemSize: ItemSize.nullable().default(null),
   /** The unit the price card shows prices per, e.g. "100g". */
   showPer: z.string().max(20).nullable().default(null),
@@ -84,21 +84,19 @@ function pricing(product: Product): PricingFields {
   return PricingFields.parse(product.fields.pricing ?? {});
 }
 
-/** Fields with a new size (what one of the item weighs or holds). */
-function withSize(p: PricingFields, size: ItemSize | null): PricingFields {
-  return PricingFields.parse({ ...p, itemSize: size });
-}
+/** What one of the item weighs or holds (1 bag = 200 g): the item's own, or one this module kept before 0.10.0. */
+const sizeOf = (product: Product): ItemSize | null => product.size ?? pricing(product).itemSize;
 
 /** Price per `from` as a price per `to`, or a ValidationError saying why it can't be. */
 function convert(value: number, from: string, to: string, product: Product): number {
-  const f = priceFactor(from, to, product.unit, pricing(product).itemSize, product.pack ?? null);
+  const f = priceFactor(from, to, product.unit, sizeOf(product), product.pack ?? null);
   if (f === null) throw new ValidationError(whyNot(from, to, product));
   return value * f;
 }
 
 export function priceView(product: Product, currency: string): PriceView {
   const p = pricing(product);
-  const size = p.itemSize;
+  const size = sizeOf(product);
   // Older records have no pack.
   const pack = product.pack ?? null;
   const stored = p.priceUnit ?? product.unit;
@@ -175,7 +173,7 @@ export default defineModule({
      */
     async function setUsual(product: Product, unitPrice: number, unit?: string, basedOn?: string): Promise<PricingFields> {
       const given = unit ?? product.unit;
-      const f = priceFactor(given, product.unit, product.unit, pricing(product).itemSize, product.pack ?? null);
+      const f = priceFactor(given, product.unit, product.unit, sizeOf(product), product.pack ?? null);
       if (f === null && !isMeasure(given)) throw new ValidationError(whyNot(given, product.unit, product));
       const value = f === null ? unitPrice : unitPrice * f;
       const priceUnit = f === null ? unitKey(given) : product.unit;
@@ -210,11 +208,11 @@ export default defineModule({
         const b = body as { productId: string; showPer?: string | null; itemSize?: ItemSize | null };
         const product = await getProduct(ctx.core, b.productId);
         if (b.itemSize && isMeasure(product.unit)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
-        const updated = await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => {
-          const p = PricingFields.parse(cur ?? {});
-          const sized = b.itemSize !== undefined ? withSize(p, b.itemSize) : p;
-          return PricingFields.parse({ ...sized, ...(b.showPer !== undefined ? { showPer: b.showPer && unitKey(b.showPer) } : {}) });
-        });
+        // The size is the item's (it says how fast it's used by weight too); the shown unit is this card's.
+        if (b.itemSize !== undefined) await ctx.core.products.update(product.id, { size: b.itemSize });
+        const updated = b.showPer !== undefined
+          ? await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), showPer: b.showPer && unitKey(b.showPer) }))
+          : await getProduct(ctx.core, product.id);
         return priceView(updated, await currency());
       },
     });
@@ -292,35 +290,10 @@ export default defineModule({
         const itemUnit = product?.unit ?? 'each';
         if (!product && !(isMeasure(per) && isMeasure(to))) throw new ValidationError(`Say which item, so Larder knows how much one ${isMeasure(per) ? to : per} holds.`);
         const pack = product?.pack ?? null;
-        const f = priceFactor(per, to, itemUnit, product ? pricing(product).itemSize : null, pack);
+        const f = priceFactor(per, to, itemUnit, product ? sizeOf(product) : null, pack);
         if (f === null) throw new ValidationError(whyNot(per, to, product ?? { name: 'that item', unit: 'each' }));
         const out = value * f;
         return { text: `${price(value, cur)} ${perText(per, itemUnit, pack)} is ${price(out, cur)} ${perText(to, itemUnit, pack)}.`, data: { price: out, per: unitKey(to) } };
-      },
-    });
-
-    ctx.addTool({
-      name: 'set_item_size', title: 'Say how much one item holds', destructive: true,
-      description: 'Record how much one of an item holds or weighs, e.g. a bag of baby spinach is 200 g, so its prices can be compared per kg or per 100 g. It\'s kept per one of what the item is counted in (one tea bag); for the weight of the pack it comes in (a 250 g box of 80 tea bags), give per: "box" and Larder works out one. Not needed for things already counted by weight or volume.',
-      input: z.object({
-        item: z.string().min(1).max(200).describe('The item, e.g. "baby spinach"'),
-        amount: z.number().positive().describe('How much one holds, e.g. 200'),
-        unit: z.enum(['g', 'kg', 'ml', 'l']).describe('g, kg, ml or l'),
-        per: z.string().max(30).optional().describe('What amount is for, if not one of what the item is counted in: the pack it comes in, e.g. "box"'),
-      }),
-      async run({ item, amount: given, unit, per }) {
-        const product = await ctx.core.resolve.product(item);
-        if (isMeasure(product.unit)) throw new ValidationError(`${product.name} is already counted in ${product.unit}, so it doesn't need a size.`);
-        const pack = product.pack ?? null;
-        const ofPack = !!per && !sameUnit(per, product.unit);
-        if (ofPack && !(pack && sameUnit(per!, pack.name))) {
-          throw new ValidationError(`${product.name} is counted in ${pluralWord(unitName(product.unit), 2)}${pack ? ` and comes in ${pluralWord(pack.name, 2)} of ${pack.holds}` : ''}, so give the size of one ${unitName(product.unit)}${pack ? ` or one ${pack.name}` : ''}.`);
-        }
-        const amount = ofPack ? Math.round((given / pack!.holds) * 1000) / 1000 : given;
-        await ctx.core.products.updateField<unknown>(product.id, 'pricing', (cur) => withSize(PricingFields.parse(cur ?? {}), { amount, unit }));
-        const by = unit === 'ml' || unit === 'l' ? 'per 100 ml and per litre' : 'per 100 g and per kg';
-        const whole = ofPack ? ` (a ${pack!.name} of ${pack!.holds} is ${given} ${unit})` : '';
-        return { text: `One ${unitName(product.unit)} of ${product.name} is ${amount} ${unit}${whole}. Its prices can now be compared ${by}.`, data: { amount, unit } };
       },
     });
 
@@ -349,7 +322,6 @@ export default defineModule({
         return PricingFields.parse({
           ...p,
           ...(perOld && p.usualUnitPrice !== null ? { usualUnitPrice: Math.round((p.usualUnitPrice / factor) * 1_000_000) / 1_000_000, priceUnit: null } : {}),
-          ...(p.itemSize ? { itemSize: { ...p.itemSize, amount: Math.round((p.itemSize.amount / factor) * 1000) / 1000 } } : {}),
         });
       }).catch(() => undefined);
       for (const { id, data } of await prices.list()) {
@@ -357,6 +329,17 @@ export default defineModule({
         await prices.put(id, { ...data, quantity: data.quantity * factor, unitPrice: data.unitPrice / factor });
       }
     });
+
+    // 0.10.0: what one weighs moved to the item, so how fast it's used can be said by weight too.
+    // The move clears this module's copy, so it happens once.
+    void (async () => {
+      for (const s of await ctx.core.products.list({ status: 'all' }).catch(() => [])) {
+        const kept = pricing(s.product).itemSize;
+        if (!kept) continue;
+        if (!s.product.size && !isMeasure(s.product.unit)) await ctx.core.products.update(s.product.id, { size: kept }).catch(() => undefined);
+        await ctx.core.products.updateField<unknown>(s.product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), itemSize: null })).catch(() => undefined);
+      }
+    })();
 
     // 0.9.0: measures moved out of pricing. A weight or volume is already its size; "1 pack = 5 items" is
     // now "counted in items, comes in packs of 5", which needs a recount the owner chooses, so it's dropped.
@@ -406,7 +389,7 @@ export default defineModule({
       return id ? ctx.core.products.updateField<unknown>(id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), ...fields, updatedAt: ctx.core.now() })) : null;
     };
     await set('Toilet roll', { usualUnitPrice: 0.3611, basedOn: 'Andrex 9 rolls for £3.25 at Tesco' });
-    await set('Baby spinach', { usualUnitPrice: 1.1, basedOn: '200 g bag for £1.10 at Aldi', itemSize: { amount: 200, unit: 'g' } });
+    await set('Baby spinach', { usualUnitPrice: 1.1, basedOn: '200 g bag for £1.10 at Aldi' });
     await set('Mature cheddar', { usualUnitPrice: 0.0095, basedOn: '400 g for £3.80 at Aldi' });
   },
 });

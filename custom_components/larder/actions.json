@@ -50,7 +50,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -95,7 +95,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -153,7 +153,7 @@
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -238,7 +238,7 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -335,7 +335,7 @@
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)",
+          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },

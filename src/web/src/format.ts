@@ -25,10 +25,11 @@ export function qty(n: number, unit: string): string {
   return `${num(n)} ${plural(unit, n)}`;
 }
 
-/** Stock as shown in lists: "6 charged · 4 flat" for rechargeables. */
+/** Stock as shown in lists: "6 charged · 4 flat" for rechargeables, "0.75 jar · 300 g" for something used by weight. */
 export function stockText(s: ProductSummary): string {
   if (s.product.rechargeable && s.charged !== null && s.flat !== null) return s.flat ? `${num(s.charged)} charged · ${num(s.flat)} flat` : `${qty(s.charged, s.product.unit)}`;
-  return qty(s.inStock, s.product.unit);
+  const byWeight = measureQty(s.product.unit, s.product.size, s.product.usage, s.inStock);
+  return `${qty(s.inStock, s.product.unit)}${byWeight ? ` · ${byWeight}` : ''}`;
 }
 
 const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -72,14 +73,54 @@ export function sameUnit(a: string, b: string): boolean {
   return one(a) === one(b);
 }
 
-interface Usage { amount: number; everyDays: number; auto?: boolean }
+interface Usage { amount: number; everyDays: number; auto?: boolean; unit?: Measure | null }
 interface Pack { name: string; holds: number }
+export type Measure = 'g' | 'kg' | 'ml' | 'l';
+export interface Size { amount: number; unit: Measure }
+
+const SCALE: Record<Measure, { dim: 'mass' | 'volume'; base: number }> = {
+  g: { dim: 'mass', base: 1 }, kg: { dim: 'mass', base: 1000 }, ml: { dim: 'volume', base: 1 }, l: { dim: 'volume', base: 1000 },
+};
+/** "g", "L" → the measure; null for anything else (a jar). */
+export const measureOf = (unit: string): Measure | null => {
+  const k = unit.trim().toLowerCase();
+  return k in SCALE ? (k as Measure) : null;
+};
+/** A measure as it's written: litres as "L". */
+export const measureName = (m: Measure) => (m === 'l' ? 'L' : m);
+/** The measures a size in `m` can be said in: g and kg, or ml and L. */
+export const measuresLike = (m: Measure): Measure[] => (SCALE[m].dim === 'mass' ? ['g', 'kg'] : ['ml', 'l']);
+
+/** How much of `m` one of the item's unit is (400 for a 400 g jar, in g), or null when it can't be told. */
+export function perOne(unit: string, size: Size | null | undefined, m: Measure): number | null {
+  const own = measureOf(unit);
+  if (own) return SCALE[own].dim === SCALE[m].dim ? SCALE[own].base / SCALE[m].base : null;
+  if (!size) return null;
+  return SCALE[size.unit].dim === SCALE[m].dim ? (size.amount * SCALE[size.unit].base) / SCALE[m].base : null;
+}
+
+/** The usage in the item's own unit: 4 g a day of a 400 g jar is 0.01 jar a day. */
+export function ownUsage(unit: string, size: Size | null | undefined, u: Usage): Usage | null {
+  if (!u.unit) return u;
+  const per = perOne(unit, size, u.unit);
+  return per ? { ...u, amount: u.amount / per, unit: null } : null;
+}
+
+/** "1 jar = 400 g", or null. */
+export const weighsText = (unit: string, size: Size | null | undefined) => (size && !measureOf(unit) ? `1 ${unit === 'each' ? 'item' : unit} = ${num(size.amount)} ${measureName(size.unit)}` : null);
+
+/** "300 g": stock by weight, for something used by weight. Null otherwise. */
+export function measureQty(unit: string, size: Size | null | undefined, u: Usage | null | undefined, quantity: number): string | null {
+  if (!u?.unit || measureOf(unit)) return null;
+  const per = perOne(unit, size, u.unit);
+  return per ? `${num(Math.round(quantity * per * 10) / 10)} ${measureName(u.unit)}` : null;
+}
 
 /** "a day", "a week", "every 2 weeks", "every 14 days". */
 export const everyText = (days: number) => (days === 1 ? 'a day' : days === 7 ? 'a week' : days % 7 === 0 ? `every ${days / 7} weeks` : `every ${days} days`);
 
-/** "1 tea bag a day", "2 rolls a week", "1 every 14 days". */
-export const usageText = (unit: string, u: Usage) => `${qty(u.amount, unit)} ${everyText(u.everyDays)}`;
+/** "1 tea bag a day", "2 rolls a week", "4 g a day", "1 every 14 days". */
+export const usageText = (unit: string, u: Usage) => `${u.unit ? `${num(u.amount)} ${measureName(u.unit)}` : qty(u.amount, unit)} ${everyText(u.everyDays)}`;
 
 /** "a day", "a week", "3 weeks", "about 10 days". */
 function daysText(days: number): string {
@@ -91,11 +132,14 @@ function daysText(days: number): string {
   return `${Math.abs(days - d) > 0.05 ? 'about ' : ''}${d} days`;
 }
 
-/** What a usage means, said back so a slip shows: "A box of 80 lasts 40 days." */
-export function usageSentence({ unit, pack, usage }: { unit: string; pack: Pack | null; usage: Usage }): string {
-  const lasts = (n: number) => daysText((n * usage.everyDays) / usage.amount);
+/** What a usage means, said back so a slip shows: "A box of 80 lasts 40 days.", "A 400 g jar lasts 100 days." */
+export function usageSentence({ unit, pack, size, usage }: { unit: string; pack: Pack | null; size?: Size | null; usage: Usage }): string {
+  const own = ownUsage(unit, size, usage);
+  if (!own) return `Say what one ${unit === 'each' ? 'weighs' : `${unit} weighs`} first.`;
+  const lasts = (n: number) => daysText((n * own.everyDays) / own.amount);
   if (pack) return `A ${pack.name} of ${pack.holds} lasts ${lasts(pack.holds)}.`;
-  return usage.amount <= 1 ? `One lasts ${lasts(1)}.` : `That's ${usageText(unit, usage)}.`;
+  if (usage.unit && size && !measureOf(unit)) return `A ${num(size.amount)} ${measureName(size.unit)} ${unit === 'each' ? 'one' : unit} lasts ${lasts(1)}.`;
+  return usage.amount <= 1 && !usage.unit ? `One lasts ${lasts(1)}.` : `That's ${usageText(unit, usage)}.`;
 }
 
 /** "a week's worth", "about 10 days' worth". */

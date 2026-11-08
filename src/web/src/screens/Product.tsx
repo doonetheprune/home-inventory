@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { ProductDetail, ProductSummary, StockEntryView } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { ago, dayText, expiryText, longDate, num, packsText, plural, qty, shortDate, stockText, usageText, worthText } from '../format';
+import { ago, dayText, expiryText, longDate, measureQty, num, ownUsage, packsText, plural, qty, shortDate, stockText, usageSentence, usageText, weighsText, worthText } from '../format';
 import { useEnabledWebModules } from '../modules';
 import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, Switch, useAction, useIsDesktop, usePlaces, useShops } from '../ui';
 import { NfcTags } from '../components/NfcTags';
@@ -34,7 +34,9 @@ export function ProductPage() {
   const renewal = p.category?.name === 'Renewals';
   const unit = p.product.unit;
   // Larder takes these out, one lasting days: the one in use can be swapped early.
-  const startNext = !!p.product.usage?.auto && p.inUse && p.product.usage.everyDays >= 2;
+  const startNext = !!p.product.usage?.auto && p.inUse && p.product.usage.everyDays >= 2 && !p.product.usage.unit;
+  // In the item's own unit (4 g a day of a 400 g jar is 0.01 jar a day), for how long the minimum lasts.
+  const own = p.product.usage ? ownUsage(p.product.unit, p.product.size, p.product.usage) : null;
 
   async function uploadPhoto(file: File) {
     await run(async () => {
@@ -84,7 +86,7 @@ export function ProductPage() {
               <div className="big-qty">
                 {renewal ? (
                   p.daysToExpiry !== null ? <><b>{Math.max(0, p.daysToExpiry)}</b><span className="muted">{p.daysToExpiry < 0 ? 'days: renewal is overdue' : `day${p.daysToExpiry === 1 ? '' : 's'} until it renews`}</span></> : <><b>—</b><span className="muted">No renewal date yet</span></>
-                ) : p.product.rechargeable ? <><b>{num(p.charged ?? 0)}</b><span className="muted">charged · {num(p.flat ?? 0)} flat</span></> : <><b>{num(p.inStock)}</b><span className="muted">{qty(p.inStock, unit).replace(/^[\d.,¼½¾⅓⅔]+\s?/, '') || 'in the house'}{packsText(p.product.pack, p.inStock) ? ` · ${packsText(p.product.pack, p.inStock)}` : ''}</span></>}
+                ) : p.product.rechargeable ? <><b>{num(p.charged ?? 0)}</b><span className="muted">charged · {num(p.flat ?? 0)} flat</span></> : <><b>{num(p.inStock)}</b><span className="muted">{qty(p.inStock, unit).replace(/^[\d.,¼½¾⅓⅔]+\s?/, '') || 'in the house'}{packsText(p.product.pack, p.inStock) ? ` · ${packsText(p.product.pack, p.inStock)}` : ''}{measureQty(unit, p.product.size, p.product.usage, p.inStock) ? ` · ${measureQty(unit, p.product.size, p.product.usage, p.inStock)}` : ''}</span></>}
               </div>
               <StatusPills s={p} />
             </div>
@@ -94,14 +96,14 @@ export function ProductPage() {
             <div className="small muted">
               {p.product.usage ? <><UsageLine p={p} />{' '}</> : null}
               {p.inUse && !p.product.usage && p.product.inUseSince ? <>One open since {shortDate(p.product.inUseSince)}{p.inStock + p.expected + p.pending <= 0 ? ', the last one' : ''}. </> : null}
-              {min > 0 ? <>Low below {qty(min, unit)}{p.product.usage ? ` (${worthText((min * p.product.usage.everyDays) / p.product.usage.amount)})` : ''}. </> : null}
+              {min > 0 ? <>Low below {qty(min, unit)}{own ? ` (${worthText((min * own.everyDays) / own.amount)})` : ''}. </> : null}
               {p.expected + p.pending > 0 ? <>With {qty(p.expected + p.pending, unit)} {p.pending ? (p.expected ? `on order (${num(p.pending)} not confirmed)` : 'in a pending order') : 'on the way'} you'll have {num(p.inStock + p.expected + p.pending)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
               {p.nextExpiry ? <> {renewal ? 'Renews' : 'Next to expire'}: {longDate(p.nextExpiry)}.</> : null}
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
             <div className="btnrow">
               {startNext && <button type="button" className="btn small" disabled={busy || p.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: Math.min(p.product.usage!.amount, p.inStock), open: true }), (r) => `Started a new one · ${stockText(r)} left`)}><Icon name="undo" size="sm" />Came off early: start the next one now</button>}
-              {p.inUse && !startNext && (!p.product.usage || p.product.usage.everyDays >= 2) && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.usage ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.usage ? 'Finished early' : 'Finished the open one'}</button>}
+              {p.inUse && !startNext && (!p.product.usage || (p.product.usage.everyDays >= 2 && !p.product.usage.unit)) && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.usage ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.usage ? 'Finished early' : 'Finished the open one'}</button>}
               {p.product.rechargeable && (p.flat ?? 0) > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.charge({ productId: p.product.id, quantity: p.flat ?? 0 }), 'All charged')}><Icon name="zap" size="sm" />Charged {num(p.flat ?? 0)}</button>}
               {!renewal && (
                 <>
@@ -155,6 +157,7 @@ export function ProductPage() {
                 <dt>Counted in</dt><dd>{unit}</dd>
                 <dt>{renewal ? 'Renews every' : 'Shelf life'}</dt><dd>{p.product.shelfLifeDays ? `${p.product.shelfLifeDays} days` : <span className="muted">None</span>}</dd>
                 {p.product.pack ? <><dt>Comes in</dt><dd>{plural(p.product.pack.name, 2)} of {num(p.product.pack.holds)}</dd></> : null}
+                {weighsText(unit, p.product.size) ? <><dt>Weighs</dt><dd>{weighsText(unit, p.product.size)}</dd></> : null}
                 {p.product.usage ? <><dt>We use</dt><dd>{usageText(unit, p.product.usage)}{p.product.usage.auto ? ', taken out by Larder' : ''}</dd></> : null}
                 <dt>Low below</dt><dd>{p.product.minQuantity ?? <span className="muted">Not set</span>}</dd>
                 {p.product.stockUpTo != null && <><dt>Stock up to</dt><dd>{p.product.stockUpTo}</dd></>}
@@ -209,23 +212,30 @@ function UsageLine({ p }: { p: ProductDetail }) {
   return (
     <>
       Uses {usageText(p.product.unit, u)}{u.auto ? ', taken out by Larder' : ''}.{' '}
-      {p.inUseUntil && u.everyDays >= 2 ? <>One in use until {shortDate(p.inUseUntil)}{none ? ', and none left after it' : ''}. </> : null}
+      {/* Used by weight: how long one lasts ("A 400 g jar lasts 100 days."), and no "one in use" apart from the stock. */}
+      {u.unit ? <>{usageSentence({ unit: p.product.unit, pack: p.product.pack ?? null, size: p.product.size, usage: u })}{' '}</> : null}
+      {p.inUseUntil && u.everyDays >= 2 && !u.unit ? <>One in use until {shortDate(p.inUseUntil)}{none ? ', and none left after it' : ''}. </> : null}
       {u.auto && !p.product.inUseSince ? <>None in use: the next Use starts one, and Larder takes them out from then. </> : null}
-      {until && !(none && p.inUseUntil && u.everyDays >= 2) ? (none && !p.inUseUntil ? <>None left. </> : <>Enough until {until}. </>) : null}
+      {until && !(none && p.inUseUntil && u.everyDays >= 2 && !u.unit) ? (none && !p.inUseUntil ? <>None left. </> : <>Enough until {until}. </>) : null}
     </>
   );
 }
 
 /**
  * Whether a plain Use starts one: with a usage Larder doesn't take out, always; with one it does,
- * only when none is started (otherwise it's an extra).
+ * only when none is started (otherwise it's an extra). Something used by weight isn't started one
+ * at a time, so a Use is just a use, unless Larder has stopped taking it out.
  */
-const startsOne = (p: ProductDetail) => !!p.product.usage && (!p.product.usage.auto || !p.product.inUseSince);
+function startsOne(p: ProductDetail): boolean {
+  const u = p.product.usage;
+  if (u?.unit) return u.auto && !p.product.inUseSince;
+  return !!u && (!u.auto || !p.product.inUseSince);
+}
 
 /** What a Use did, in a toast: Larder's own takes make a plain Use an extra. */
 function usedText(p: ProductDetail, r: ProductSummary, n: number, open: boolean): string {
   const u = p.product.usage;
-  const what = p.product.rechargeable ? 'Marked flat' : !u ? (open ? 'Opened' : 'Used') : startsOne(p) ? 'Started' : open ? 'Started a new one:' : 'Used an extra';
+  const what = p.product.rechargeable ? 'Marked flat' : !u || (u.unit && !u.auto) ? (open ? 'Opened' : 'Used') : startsOne(p) ? 'Started' : open ? 'Started a new one:' : 'Used an extra';
   return `${what} ${num(n)} · ${stockText(r)} left${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`;
 }
 
@@ -376,11 +386,12 @@ function UseSheet({ p, onClose }: { p: ProductDetail; onClose: () => void }) {
   // using one starts it, and starting one takes its usual amount (2 lenses).
   const usage = p.product.usage ?? null;
   const starts = startsOne(p);
-  const [n, setN] = useState(Math.min(starts ? usage!.amount : 1, available));
+  // Starting one used by weight takes a whole one (its usual amount is grams).
+  const [n, setN] = useState(Math.min(starts && !usage!.unit ? usage!.amount : 1, available));
   const [from, setFrom] = useState<string>('');
   const [open, setOpen] = useState(false);
   const extra = !!usage?.auto && !starts;
-  const canOpen = !p.product.rechargeable && (!usage || (extra && usage.everyDays >= 2));
+  const canOpen = !p.product.rechargeable && (!usage || (extra && usage.everyDays >= 2 && !usage.unit));
   const placesWithStock = [...new Map(p.entries.filter((e) => e.status === 'in_stock').map((e) => [e.currentPlace?.id ?? e.place?.id ?? '', e.currentPlace ?? e.place])).values()].filter((x) => !!x);
   return (
     <Sheet title={p.product.rechargeable ? 'Mark as flat' : `Use ${p.product.name.toLowerCase()}`} onClose={onClose}>

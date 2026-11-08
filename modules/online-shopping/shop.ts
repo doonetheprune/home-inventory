@@ -5,7 +5,7 @@
  * so its progress and summary can be asked for (shop_status, the app).
  */
 import { z } from 'zod';
-import { LarderError, NotFoundError, amount, andList, newId, type ModuleContext, type Product, type Shop } from '@larder/core';
+import { LarderError, NotFoundError, amount, andList, newId, ownUsage, type ModuleContext, type Product, type Shop } from '@larder/core';
 import { BasketAddResult, ProviderError, STOPPING } from './client';
 import type { QuoteLine } from './contract';
 import { matchFavourite, type Favourites } from './favourites';
@@ -155,7 +155,8 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
       };
       if (!isCandidate(c)) continue;
       // How fast it's used, as the household said, or else as the history shows.
-      if (c.shelfLifeDays) c.dailyUse = p.usage ? p.usage.amount / p.usage.everyDays : dailyUse(await ctx.core.history.product(p.id, 500), ctx.core.today());
+      const usage = ownUsage(p);
+      if (c.shelfLifeDays) c.dailyUse = usage ? usage.amount / usage.everyDays : dailyUse(await ctx.core.history.product(p.id, 500), ctx.core.today());
       out.push(c);
     }
     const list = await ctx.core.shopping.forShop(shop.id);

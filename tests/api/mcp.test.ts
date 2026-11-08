@@ -45,9 +45,9 @@ describe('MCP server', () => {
       'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'finish_item', 'move_item', 'add_expected', 'mark_arrived', 'confirm_order', 'cancel_order', 'add_to_shopping_list',
       'remove_from_shopping_list', 'put_back', 'mark_charged', 'renew', 'shopping_list', 'expiring',
       'list_shops', 'add_shop', 'change_shop', 'remove_shop', 'list_places', 'add_place', 'add_storage_grid', 'change_place', 'remove_place',
-      'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
+      'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'set_item_size', 'remove_item', 'add_brand', 'remove_brand',
       'correct_stock', 'deliveries', 'recent_changes', 'list_items', 'get_place', 'identify_code', 'bought',
-      'check_price', 'set_usual_price', 'convert_price', 'set_item_size', 'get_price',
+      'check_price', 'set_usual_price', 'convert_price', 'get_price',
     ]);
     for (const t of tools) {
       expect(t.description!.length, t.name).toBeGreaterThan(30);
@@ -60,7 +60,7 @@ describe('MCP server', () => {
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
       'cancel_order', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
-      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
+      'change_category', 'remove_category', 'change_item', 'set_item_size', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price',
     ]);
     for (const name of ['use_stock', 'finish_item', 'move_item', 'mark_arrived', 'remove_from_shopping_list']) {
       const hints = tools.find((t) => t.name === name)?.annotations;

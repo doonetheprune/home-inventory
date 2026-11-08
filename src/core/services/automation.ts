@@ -18,7 +18,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
 import { loadWorld, needsBuying, placesText, summarise } from './world';
-import { inOwnUnit, startsOne, usageText } from './packs';
+import { inOwnUnit, measureText, startsOne, usageText } from './packs';
 import { amount, daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
@@ -80,7 +80,7 @@ const LIST_LIMIT = 25;
 
 const Item = z.string().min(1).max(200).describe('The item: its name or alias ("loo roll"), barcode, or id');
 const Quantity = z.number().positive().default(1).describe('How many, in the item\'s own unit (default 1), or in `unit`');
-const Unit = z.string().max(30).optional().describe('What the quantity is in, if not the item\'s own unit: its pack, e.g. "box" (1 box = 20 tea bags)');
+const Unit = z.string().max(30).optional().describe('What the quantity is in, if not the item\'s own unit: its pack, e.g. "box" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)');
 
 export function createAutomation(deps: {
   ctx: CoreContext;
@@ -208,13 +208,16 @@ export function createAutomation(deps: {
     async run(i) {
       const p = await resolve.product(i.item);
       const placeId = i.place ? (await resolve.place(i.place)).id : undefined;
-      // Starting one takes its usual amount unless told otherwise (or what's left, if less).
-      const starts = !!p.usage && (!!i.opened || startsOne(p));
+      // Starting one takes its usual amount unless told otherwise (or what's left, if less); one used by
+      // weight (4 g a day of a jar) starts a whole one.
+      const starts = !!p.usage && !p.usage.unit && (!!i.opened || startsOne(p));
       const quantity = i.quantity !== undefined ? inOwnUnit(p, i.quantity, i.unit)
         : starts ? await (async () => { const left = (await products.summary(p.id)).inStock; return left > 0 ? Math.min(p.usage!.amount, left) : p.usage!.amount; })() : 1;
       const s = await stock.use({ productId: p.id, quantity, placeId, open: i.opened, ...(i.note ? { note: i.note } : {}) });
-      const n = amount(quantity, p.unit);
-      const what = !p.usage ? `${i.opened ? 'opened' : 'used'} ${n}`
+      const grams = measureText(p, quantity);
+      const n = `${amount(quantity, p.unit)}${grams ? ` (${grams})` : ''}`;
+      // Used by weight without Larder taking it out, a use is just a use.
+      const what = !p.usage || (p.usage.unit && !p.usage.auto) ? `${i.opened ? 'opened' : 'used'} ${n}`
         : startsOne(p) ? `started ${n}${p.usage.auto ? `, and Larder takes them out from here (${usageText(p)})` : ''}`
           : i.opened ? `started a new one now (${n})` : `used ${n} extra (Larder also takes out ${usageText(p)})`;
       const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';

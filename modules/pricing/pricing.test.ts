@@ -96,7 +96,7 @@ describe('pricing module', () => {
     expect((await core.assistant.call('convert_price', { price: 3.5, per: 'kg', to: '100 g' })).text).toBe('£3.50 a kg is £0.35 per 100 g.');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg' })).rejects.toThrow('Say which item');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).rejects.toThrow("Larder doesn't know how much is in one bag of Baby spinach");
-    expect((await core.assistant.call('set_item_size', { item: 'baby spinach', amount: 200, unit: 'g' })).text).toBe('One bag of Baby spinach is 200 g. Its prices can now be compared per 100 g and per kg.');
+    expect((await core.assistant.call('set_item_size', { item: 'baby spinach', amount: 200, unit: 'g' })).text).toBe('One bag of Baby spinach is 200 g. How fast it\'s used can now be said in g, and its prices compared by weight.');
     expect((await core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).text).toBe('£1.10 a bag is £5.50 a kg.');
     // A usual price per 100 g, then a pack per kg at the shop.
     expect((await core.assistant.call('set_usual_price', { item: 'baby spinach', quantity: 100, unit: 'g', price: 0.6 })).text).toBe('The usual price for Baby spinach is now £1.20 a bag.');
@@ -130,7 +130,7 @@ describe('pricing module', () => {
     expect(r.verdict).toBe('dearer');
     expect((await core.assistant.call('convert_price', { price: 4, per: 'box', to: 'tea bag', item: 'tea bags' })).text).toBe('£4.00 a box is £0.05 a tea bag.');
     // A box weighs 250 g: one tea bag is 250 g ÷ 80.
-    expect((await core.assistant.call('set_item_size', { item: 'tea bags', amount: 250, unit: 'g', per: 'box' })).text).toBe('One tea bag of Tea bags is 3.125 g (a box of 80 is 250 g). Its prices can now be compared per 100 g and per kg.');
+    expect((await core.assistant.call('set_item_size', { item: 'tea bags', amount: 250, unit: 'g', per: 'box' })).text).toBe('One tea bag of Tea bags is 3.125 g (a box of 80 is 250 g). How fast it\'s used can now be said in g, and its prices compared by weight.');
     expect((await core.assistant.call('get_price', { item: 'tea bags' })).text).toContain('£4.00 a box, £1.60 per 100 g');
     await expect(core.assistant.call('set_item_size', { item: 'tea bags', amount: 1, unit: 'kg', per: 'crate' })).rejects.toThrow('Tea bags is counted in tea bags and comes in boxes of 80, so give the size of one tea bag or one box.');
     await expect(call(core, 'POST', '/check', { productId: tea.id, quantity: 1, unit: 'crate', price: 3 })).rejects.toThrow('Larder doesn\'t know the unit "crate". Use tea bag, box, g, 100 g, kg, ml, 100 ml or litre.');
@@ -138,19 +138,20 @@ describe('pricing module', () => {
 
   it('rescales its prices when what is inside a box is counted', async () => {
     const core = await makeCore({ modules: [pricing] });
-    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', fields: { pricing: { itemSize: { amount: 200, unit: 'g' } } } });
+    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', size: { amount: 200, unit: 'g' } });
     await core.shopping.purchase({ items: [{ productId: sleep.id, quantity: 2, price: 6 }] });
     await new Promise((r) => setTimeout(r, 10));
     await core.stock.recount(sleep.id, { unit: 'tea bag', holds: 20 });
     await new Promise((r) => setTimeout(r, 10));
-    const p = (await core.products.summary(sleep.id)).product.fields.pricing as { usualUnitPrice: number; itemSize: unknown };
-    expect([p.usualUnitPrice, p.itemSize]).toEqual([0.15, { amount: 10, unit: 'g' }]);
+    // The core divides what one weighs; the module divides its prices.
+    const after = (await core.products.summary(sleep.id)).product;
+    expect([(after.fields.pricing as { usualUnitPrice: number }).usualUnitPrice, after.size]).toEqual([0.15, { amount: 10, unit: 'g' }]);
     const history = (await call(core, 'GET', '/history/:productId', undefined, { productId: sleep.id })) as Array<{ quantity: number; unitPrice: number }>;
     expect(history.map((h) => [h.quantity, h.unitPrice])).toEqual([[40, 0.15]]);
     expect((await core.assistant.call('get_price', { item: 'sleep tea' })).text).toContain('£0.15 a tea bag');
   });
 
-  it('drops measures saved by 0.8, keeping the weight', async () => {
+  it('drops measures saved by 0.8, and moves the weight to the item', async () => {
     const storage = (await import('../../src/adapters/storage-memory')).createMemoryStorage();
     const old = await makeCore({ storage });
     const chicken = await old.products.create({ name: 'Chicken breasts', unit: 'pack', fields: { pricing: { usualUnitPrice: 6, itemSize: { amount: 1, unit: 'kg' }, measures: [{ unit: 'items', amount: 5, price: null }, { unit: 'kg', amount: 1, price: 5.5 }] } } });
@@ -161,8 +162,10 @@ describe('pricing module', () => {
     await new Promise((r) => setTimeout(r, 10));
     const fields = async (id: string) => (await core.products.summary(id)).product.fields.pricing as Record<string, unknown>;
     const p = await fields(chicken.id);
-    expect(p).toMatchObject({ usualUnitPrice: 6, itemSize: { amount: 1, unit: 'kg' } });
+    expect(p).toMatchObject({ usualUnitPrice: 6, itemSize: null });
     expect('measures' in p).toBe(false);
+    // 0.10.0: what one weighs is the item's, so how fast it's used can be said by weight too.
+    expect((await core.products.summary(chicken.id)).product.size).toEqual({ amount: 1, unit: 'kg' });
     expect(await fields(eggs.id)).toMatchObject({ usualUnitPrice: 1.8, priceUnit: null });
     expect(await fields(flour.id)).toMatchObject({ usualUnitPrice: 0.8, priceUnit: 'kg' });
     expect((await core.assistant.call('get_price', { item: 'flour' })).text).toContain('£1.20 a bag');

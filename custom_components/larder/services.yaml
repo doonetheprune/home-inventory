@@ -60,7 +60,7 @@ add_stock:
         text: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -111,7 +111,7 @@ use_stock:
         text: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -168,7 +168,7 @@ move_item:
           step: "any"
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -257,7 +257,7 @@ add_expected:
         date: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -365,7 +365,7 @@ mark_arrived:
           step: "any"
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
