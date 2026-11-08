@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.2
+
+Assistants keep the boxes. Asked to say how many tea bags are in a box, an assistant counted them as 80 tea bags but didn't say Larder still shows 4 boxes, so when you asked for boxes back it undid it and wrote "20 tea bags per box" in the notes.
+
+- **Assistants are told how packs work** when they connect: count what's inside, say what it comes in, and Larder still shows the boxes, takes amounts in boxes and buys whole boxes. So "keep it in boxes, but there are 20 in one" is a pack, not a note.
+- **Changing what something comes in says the boxes are kept** ("80 tea bags in stock (4 boxes of 20)"), and when there's no usage yet the assistant is prompted to ask how many you use a day or week, and whether Larder should take them out for you.
+- **"Counted in boxes, 20 to a box"** gets an answer that says how to do it (count the tea bags, comes in a box of 20, recount), instead of a bare refusal.
+- **Renaming what something is counted in says what the numbers now read as** ("80 boxes in stock"), so a slip shows straight away.
+- **Item lists show packs too:** "Twinings Sleep Tea: 80 tea bags (4 boxes)" in search and list results, as on the item itself.
+
 ## 0.9.1
 
 Assistants ask less. The Claude app asks before every use of a tool marked as destructive, which made voice chat stop at nearly everything.

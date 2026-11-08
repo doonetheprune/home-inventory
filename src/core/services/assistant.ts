@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addBrowseTools } from './assistant-browse';
-import { addManageTools, ComesInInput, finders, TakesOutInput, UsesInput, usageFields } from './assistant-manage';
+import { addManageTools, assertPackFits, ComesInInput, finders, TakesOutInput, UsesInput, usageFields } from './assistant-manage';
 import { daysFor, packsText, usageText, worthText } from './packs';
 import { placesText } from './world';
 import type { Automation } from './automation';
@@ -71,8 +71,10 @@ export const ASSISTANT_INSTRUCTIONS = [
   'Refer to items, places and shops by name as people say them ("loo roll", "garage racking", "aldi"); ids, barcodes and place codes like "G2-4" work too.',
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Quantities are in each item\'s own unit (tins, rolls, kg). Items have a usual place; "out of place" means it is somewhere else for now.',
+  'An item is counted in the single thing that gets used (a tea bag, a roll, a sensor) and can come in a pack (comes_in: a box of 20). Larder still shows the boxes ("80 tea bags (4 boxes)"), stock tools take amounts in boxes (unit: "box") and the shopping list buys whole boxes, so someone who wants to keep counting boxes and say how many are in one wants a pack, not a note. For something counted in boxes so far, that is change_item with unit (what\'s inside), comes_in and recount: true.',
+  'How fast something is used (uses: 1 tea bag a day) tells Larder when it runs out; with takes_out_automatically, Larder takes them out of stock by itself.',
   'Before adding something new with add_item, search for it: it may already exist under another name.',
-  'Anything about an item can be changed later with change_item (its shop, usual place, minimum, category, name).',
+  'Anything about an item can be changed later with change_item (its name, category, shop, usual place, minimum, what it comes in and how fast it is used).',
   'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
   'Low stock counts deliveries on the way and pending orders (ordered, not confirmed). Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
@@ -90,7 +92,8 @@ function when(ctx: CoreContext, date: string | null): string {
 function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
   if (p.wish) return `${p.name}: on the wish list (none yet)${p.notes ? `. ${p.notes.slice(0, 120)}` : ''}`;
-  const parts = [`${p.name}: ${amount(s.inStock, p.unit)}`];
+  const packs = packsText(p, s.inStock);
+  const parts = [`${p.name}: ${amount(s.inStock, p.unit)}${packs ? ` (${packs})` : ''}`];
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${amount(s.expected, p.unit)} on the way`);
   if (s.pending) parts.push(`${amount(s.pending, p.unit)} in a pending order`);
@@ -241,7 +244,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. For something used one at a time out of a pack (tea bags, dishwasher tablets), count what\'s inside (unit: "tea bag") and give comes_in (a box of 20): Larder still shows how many boxes. Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -271,6 +274,7 @@ export function createAssistant(deps: {
       const categoryId = i.category ? (await find.category(i.category)).id : null;
       const place = i.usual_place ? await find.place(i.usual_place) : null;
       if (i.shop_code && !i.shop) throw new ValidationError('A shop code needs the shop it belongs to.');
+      assertPackFits(i.name.trim(), i.unit || 'each', i.comes_in ?? null);
       // Check the barcode before creating anything (a shop included), so a clash doesn't leave a half-made item.
       const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
       if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
@@ -297,7 +301,8 @@ export function createAssistant(deps: {
       const photoOf = match && (!match.brand || match.name.toLowerCase().includes(match.brand.toLowerCase()) ? match.name : `${match.brand} ${match.name}`);
       const photo = photoFileId ? ` with a photo of ${photoOf}` : '';
       const shopNote = shop?.made ? ` Added ${shop.name} to the shops.` : '';
-      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${shopNote} It has no stock yet${i.wish_list ? '' : ': use add_stock to say how many'}.`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
+      const inPacks = p.pack ? `, in ${p.unit === 'each' ? 'ones' : pluralWord(p.unit, 2)} or in ${pluralWord(p.pack.name, 2)} (unit: "${p.pack.name}")` : '';
+      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${shopNote} It has no stock yet${i.wish_list ? '' : `: use add_stock to say how many${inPacks}`}.`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
     },
   });
 

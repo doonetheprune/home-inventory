@@ -4,7 +4,7 @@
  * stock by itself, counting what's inside a box, and opened-not-finished.
  */
 import { describe, expect, it } from 'vitest';
-import type { Product } from '@larder/core';
+import { ASSISTANT_INSTRUCTIONS, type Product } from '@larder/core';
 import { createMemoryStorage } from '../../src/adapters/storage-memory';
 import { makeCore, category } from '../helpers';
 
@@ -370,12 +370,41 @@ describe('Home Assistant and assistants', () => {
     await core.automation.run('add_stock', { item: 'sleep tea', quantity: 2 });
     await expect(core.assistant.call('change_item', { item: 'sleep tea', unit: 'tea bag', recount: true })).rejects.toThrow('A recount needs the new unit and what it comes in');
     const recounted = await core.assistant.call('change_item', { item: 'sleep tea', unit: 'tea bags', comes_in: { name: 'box', holds: 20 }, recount: true });
-    expect(recounted.text).toBe('Sleep tea is updated: now counted in tea bags, 40 tea bags in stock (1 box = 20), enough until 2026-12-07.');
+    expect(recounted.text).toBe('Sleep tea is updated: now counted in tea bags, 40 tea bags in stock (2 boxes of 20), enough until 2026-12-07. Larder still shows how many boxes there are, add_stock, use_stock and add_expected take amounts in boxes (unit: "box"), and the shopping list buys whole boxes.');
     expect((await core.products.list()).find((x) => x.product.name === 'Sleep tea')?.product.usage).toEqual({ amount: 20, everyDays: 20, auto: false });
     const comesIn = await core.assistant.call('change_item', { item: 'sleep tea', comes_in: { name: 'tin', holds: 40 } });
-    expect(comesIn.text).toBe('Sleep tea is updated: comes in tins of 40.');
+    expect(comesIn.text).toBe('Sleep tea is updated: comes in tins of 40 (1 tin in stock). Larder still shows how many tins there are, add_stock, use_stock and add_expected take amounts in tins (unit: "tin"), and the shopping list buys whole tins.');
     const stopped = await core.assistant.call('change_item', { item: 'sleep tea', uses: null });
     expect(stopped.text).toBe('Sleep tea is updated: no usage set.');
+  });
+
+  it('keep the boxes when an assistant counts what is inside, and ask how fast they go', async () => {
+    // What went wrong in the owner's chat: told "now 80 tea bags", they asked for boxes back and got a note.
+    const core = await makeCore();
+    const added = await core.assistant.call('add_item', { name: 'Twinings Sleep Tea', unit: 'box' });
+    expect(added.text).toBe('Added Twinings Sleep Tea. It has no stock yet: use add_stock to say how many.');
+    await core.automation.run('add_stock', { item: 'twinings sleep tea', quantity: 4 });
+    // "Counted in boxes, 20 to a box" can't be: the answer says what to do instead.
+    await expect(core.assistant.call('change_item', { item: 'twinings sleep tea', comes_in: { name: 'boxes', holds: 20 } })).rejects.toThrow(
+      'Twinings Sleep Tea can\'t be counted in boxes and come in boxes. Count what\'s inside instead (unit: "tea bag", say), with comes_in a box of 20, and recount: true to turn the boxes counted so far into what\'s inside. Larder still shows how many boxes there are, and takes amounts in boxes (unit: "box").');
+
+    const recounted = await core.assistant.call('change_item', { item: 'twinings sleep tea', unit: 'tea bag', comes_in: { name: 'box', holds: 20 }, recount: true });
+    expect(recounted.text).toBe('Twinings Sleep Tea is updated: now counted in tea bags, 80 tea bags in stock (4 boxes of 20). Larder still shows how many boxes there are, add_stock, use_stock and add_expected take amounts in boxes (unit: "box"), and the shopping list buys whole boxes. No usage is set: ask how many tea bags get used a day or a week (uses), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
+    expect((await core.assistant.call('list_items', {})).text).toBe('- Twinings Sleep Tea: 80 tea bags (4 boxes)');
+    // Asked for boxes again: it's already boxes, so the answer says so rather than renaming 80 tea bags to 80 boxes.
+    await expect(core.assistant.call('change_item', { item: 'twinings sleep tea', unit: 'box' })).rejects.toThrow('Larder still shows how many boxes there are');
+
+    const used = await core.assistant.call('change_item', { item: 'twinings sleep tea', uses: { amount: 1, every_days: 1 }, takes_out_automatically: true });
+    expect(used.text).toBe('Twinings Sleep Tea is updated: uses 1 tea bag a day, taken out of stock by Larder, enough until 2027-01-17.');
+    // Taking the pack off and renaming does it, but says what the numbers now read as.
+    expect((await core.assistant.call('change_item', { item: 'twinings sleep tea', unit: 'box', comes_in: null, uses: null })).text)
+      .toBe('Twinings Sleep Tea is updated: counted in boxes (the numbers stay as they were: 80 boxes in stock), no pack, no usage set.');
+
+    const bags = await core.assistant.call('add_item', { name: 'Dishwasher tablets', unit: 'tablet', comes_in: { name: 'pack', holds: 30 } });
+    expect(bags.text).toBe('Added Dishwasher tablets. It has no stock yet: use add_stock to say how many, in tablets or in packs (unit: "pack").');
+    await expect(core.assistant.call('add_item', { name: 'Kitchen roll', unit: 'pack', comes_in: { name: 'pack', holds: 4 } })).rejects.toThrow(
+      'Kitchen roll can\'t be counted in packs and come in packs. Count what\'s inside instead (unit: "tea bag", say), with comes_in a pack of 4. Larder still shows how many packs there are, and takes amounts in packs (unit: "pack").');
+    expect(ASSISTANT_INSTRUCTIONS).toContain('wants a pack, not a note');
   });
 
   it('take amounts in boxes everywhere, and buy whole boxes', async () => {
