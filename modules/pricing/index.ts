@@ -326,7 +326,7 @@ export default defineModule({
       }).catch(() => undefined);
       for (const { id, data } of await prices.list()) {
         if (data.productId !== productId) continue;
-        await prices.put(id, { ...data, quantity: data.quantity * factor, unitPrice: data.unitPrice / factor });
+        await prices.put(id, { ...data, quantity: Math.round(data.quantity * factor * 1000) / 1000, unitPrice: Math.round((data.unitPrice / factor) * 1_000_000) / 1_000_000 });
       }
     });
 

@@ -1,10 +1,11 @@
 /** Categories, shops and places: the things stock is organised by. */
 import { z } from 'zod';
-import { Category, Place, Shop, type PlaceContents, type PlaceNodeT, type PlaceRef, type PlaceToSort } from '../model';
-import { CategoryCreate, CategoryPatch, GridCreate, PlaceCreate, PlacePatch, ShopCreate, ShopPatch } from '../inputs';
-import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { byName, newId, pluralWord, roundQty } from '../util';
-import type { CoreContext } from './context';
+import { Category, Place, Shop, type PlaceContents, type PlaceNodeT, type PlaceRef, type PlaceToSort, type Unit } from '../model';
+import { CategoryCreate, CategoryPatch, GridCreate, PlaceCreate, PlacePatch, ShopCreate, ShopPatch, UnitCreate } from '../inputs';
+import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
+import { andList, byName, newId, roundQty } from '../util';
+import { HOUSEHOLD_UNITS, type CoreContext } from './context';
+import { newUnit, pluralOf, type HouseholdUnit } from './units';
 import { loadWorld, placePath, placeRef, summarise } from './world';
 
 export const DEFAULT_CATEGORIES: Array<Omit<Category, 'id'>> = [
@@ -320,7 +321,7 @@ export function createPlaceService(ctx: CoreContext) {
       const now = ctx.now();
       const container = Place.parse({
         id: newId(), name: g.name, parentId: g.parentId, code: null,
-        notes: `${g.rows} ${pluralWord(g.rowLabel.toLowerCase(), g.rows)}, ${g.columns} ${pluralWord(g.columnLabel.toLowerCase(), g.columns)} each. Codes ${codes[0]} to ${codes[codes.length - 1]}.`,
+        notes: `${g.rows} ${pluralOf(g.rowLabel.toLowerCase(), g.rows)}, ${g.columns} ${pluralOf(g.columnLabel.toLowerCase(), g.columns)} each. Codes ${codes[0]} to ${codes[codes.length - 1]}.`,
         createdAt: now, updatedAt: now,
       });
       const places: Place[] = [];
@@ -339,6 +340,42 @@ export function createPlaceService(ctx: CoreContext) {
       for (const p of places) await ctx.storage.places.put(p);
       changed(container.id);
       return { container, places };
+    },
+  };
+}
+
+/** The unit list: Larder's own units, and count words the household adds (Settings → Units). */
+export function createUnitService(ctx: CoreContext) {
+  const saved = async () => (await ctx.storage.settings.get<HouseholdUnit[]>(HOUSEHOLD_UNITS)) ?? [];
+  return {
+    /** Every unit: Larder's own, then the household's. */
+    list: () => ctx.units(),
+
+    /** Adds a count word ("sleeve", "sleeves"). One Larder already has, by either word or a common spelling, is refused. */
+    add(input: UnitCreate): Promise<Unit> {
+      return ctx.exclusive(async () => {
+        const u = newUnit(await ctx.units(), UnitCreate.parse(input));
+        await ctx.storage.settings.set(HOUSEHOLD_UNITS, [...(await saved()), u]);
+        ctx.publish('units.changed', { added: u.one });
+        return (await ctx.units()).find(u.one)!;
+      });
+    },
+
+    /** Removes one of the household's words, once no item is bought in it, contains it or is used in it. */
+    remove(key: string): Promise<void> {
+      return ctx.exclusive(async () => {
+        const units = await ctx.units();
+        const u = units.find(key);
+        if (!u) throw new LarderError(`Larder doesn't have the unit "${key.trim()}".`, 404, 'not_found');
+        if (u.builtIn) throw new ValidationError(`"${u.one}" is one of Larder's own units, so it can't be removed.`);
+        const using = (await ctx.storage.products.list()).filter((p) => [p.unit, p.contents?.unit, p.usage?.unit].some((w) => w && units.find(w)?.key === u.key));
+        if (using.length) {
+          const names = using.slice(0, 5).map((p) => p.name);
+          throw new ConflictError(`${andList(using.length > 5 ? [...names, `${using.length - 5} more`] : names)} ${using.length === 1 ? 'uses' : 'use'} "${u.one}". Change ${using.length === 1 ? 'it' : 'them'} first.`);
+        }
+        await ctx.storage.settings.set(HOUSEHOLD_UNITS, (await saved()).filter((x) => units.find(x.one)?.key !== u.key));
+        ctx.publish('units.changed', { removed: u.one });
+      });
     },
   };
 }

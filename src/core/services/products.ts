@@ -4,7 +4,7 @@ import { Product, StockEntry, Variant, type Movement, type ProductDetail, type P
 import { ProductCreate, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
 import { addDays, newId, roundQty, unique } from '../util';
-import { measurePerOne, sameUnit, singular } from './packs';
+import { sameUnit, singular } from './packs';
 import { amountText, asWeight, canConvert, isCount, isLoose, pluralOf, toBoughtIn, unitKeyOf, unitOf, weightText, type UnitAmount, type Units } from './units';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
@@ -78,6 +78,9 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     for (const id of p.keptInPlaceIds) if (!(await ctx.storage.places.get(id))) throw new NotFoundError('Place', id);
   }
 
+  /** Until the assistant tools, modules and app give Weight, a size they give is the Weight too (the field goes with the last of them). */
+  const bridged = <T extends ProductUpdate>(p: T): T => (p.size !== undefined && p.weight == null ? { ...p, weight: p.size } : p);
+
   /** A Weight as given (g, kg, ml, L or pints), as it's kept: in g or ml. */
   function weightIn(units: Units, w: UnitAmount | null | undefined): Product['weight'] | undefined {
     if (!w) return w;
@@ -142,9 +145,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     if (next.usage?.unit) {
       const k = unitOf(units, next.usage.unit).key;
       next.usage = { ...next.usage, unit: k === next.unit ? null : k };
-      // #36's size still stands in for a weight until the core reads Weight (docs/plans/units.md, step 3).
-      const sized = !!next.size && !!measurePerOne(next, k);
-      if (next.usage.unit && !canConvert(units, next, k) && !sized) {
+      if (next.usage.unit && !canConvert(units, next, k)) {
         try {
           toBoughtIn(units, next, 1, k);
         } catch (err) {
@@ -182,7 +183,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     const cur = await ctx.storage.products.get(id);
     if (!cur) throw new NotFoundError('Product', id);
     const units = await ctx.units();
-    const patch = { ...raw, ...(raw.weight !== undefined ? { weight: weightIn(units, raw.weight) } : {}) };
+    const given = bridged(raw);
+    const patch = { ...given, ...(given.weight !== undefined ? { weight: weightIn(units, given.weight) } : {}) };
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
     const next = tidy(checkUnits(units, Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }), patch, Product.parse(cur)));
     if (patch.inUseSince === undefined) {
@@ -263,7 +265,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
 
     async create(input: z.input<typeof ProductCreate>): Promise<Product> {
       const units = await ctx.units();
-      const parsed = ProductCreate.parse(input);
+      const parsed = bridged(ProductCreate.parse(input));
       const data = { ...parsed, weight: weightIn(units, parsed.weight) ?? null };
       await assertRefs(data);
       const now = ctx.now();

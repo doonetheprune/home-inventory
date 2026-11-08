@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makeCore } from '../../tests/helpers';
+import { createMemoryStorage } from '../../src/adapters/storage-memory';
+import { makeCore, saveAs092 } from '../../tests/helpers';
 import pricing from '../pricing/index';
 import ai from './index';
 import { householdItems, type ReceiptReading } from './receipts';
@@ -45,7 +46,8 @@ const line = (l: Partial<ReceiptReading['lines'][number]> & { text: string }): R
 /** A household with beans, milk and toilet roll (listed to the AI in that order), and Tesco. */
 async function household(answer: () => ReceiptReading) {
   const net = internet(answer);
-  const core = await makeCore({ modules: [ai, pricing], fetch: net.fetch });
+  const storage = createMemoryStorage();
+  const core = await makeCore({ modules: [ai, pricing], fetch: net.fetch, storage });
   await call(core, 'PUT', '/settings', { claude: { apiKey: 'sk-ant-test-0000-wxyz', model: 'claude-haiku-5-5' } });
   const beans = await core.products.create({ name: 'Baked beans', unit: 'tin', aliases: ['beans'] });
   const milk = await core.products.create({ name: 'Semi-skimmed milk', unit: 'bottle' });
@@ -53,7 +55,7 @@ async function household(answer: () => ReceiptReading) {
   await core.products.addVariant(loo.id, { name: 'Andrex Classic Clean 9 rolls' });
   await core.products.create({ name: 'Garden gnome', wish: true });
   const tesco = await core.shops.addPreset('Tesco');
-  return { core, net, beans, milk, loo, tesco };
+  return { core, net, beans, milk, loo, tesco, storage };
 }
 
 const TESCO: ReceiptReading = {
@@ -109,7 +111,7 @@ describe('AI module: receipts', () => {
 
   it('adds what was kept in one go, records the prices paid, and learns the shop\'s names for next time', async () => {
     let answer = TESCO;
-    const { core, net, beans, milk, loo, tesco } = await household(() => answer);
+    const { core, net, beans, milk, loo, tesco, storage } = await household(() => answer);
     const r = await call<{ receiptKey: string }>(core, 'POST', '/receipt', { image: JPEG });
     const out = await call(core, 'POST', '/receipt/add', {
       shopId: tesco.id,
@@ -142,11 +144,12 @@ describe('AI module: receipts', () => {
     expect(again.addedBefore).toBeNull();
     expect(net.prompts()[1]).toContain('"ANDREX CLASSIC 9PK" at Tesco is item 3, 9 roll for each one bought');
 
-    // Counted in sheets from now on (a roll holds 200): what Tesco's names were learnt as follows.
-    await core.stock.recount(loo.id, { unit: 'sheet', holds: 200 });
+    // Saved by 0.9.2 as counted in rolls, in packs of 9: the upgrade buys it in packs, so what Tesco's names were learnt as follows.
+    await saveAs092(storage, (await core.products.summary(loo.id)).product, { unit: 'roll', pack: { name: 'pack', holds: 9 } });
+    const upgraded = await makeCore({ modules: [ai, pricing], fetch: net.fetch, storage });
     await new Promise((res) => setTimeout(res, 10));
-    const recounted = await call<{ lines: Array<{ item: { id: string } | null; quantity: number; match: string }> }>(core, 'POST', '/receipt', { image: JPEG });
-    expect(recounted.lines[0]).toMatchObject({ item: { id: loo.id }, quantity: 5400, match: 'learnt' });
+    const recounted = await call<{ lines: Array<{ item: { id: string } | null; quantity: number; match: string }> }>(upgraded, 'POST', '/receipt', { image: JPEG });
+    expect(recounted.lines[0]).toMatchObject({ item: { id: loo.id }, quantity: 3, match: 'learnt' });
   });
 
   it('says when the same receipt was added before', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeCore } from '../../tests/helpers';
+import { makeCore, saveAs092 } from '../../tests/helpers';
 import pricing, { checkPrice, type PriceView } from './index';
 import { priceFactor, unitKey } from './units';
 
@@ -136,19 +136,23 @@ describe('pricing module', () => {
     await expect(call(core, 'POST', '/check', { productId: tea.id, quantity: 1, unit: 'crate', price: 3 })).rejects.toThrow('Larder doesn\'t know the unit "crate". Use tea bag, box, g, 100 g, kg, ml, 100 ml or litre.');
   });
 
-  it('rescales its prices when what is inside a box is counted', async () => {
-    const core = await makeCore({ modules: [pricing] });
-    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', size: { amount: 200, unit: 'g' } });
-    await core.shopping.purchase({ items: [{ productId: sleep.id, quantity: 2, price: 6 }] });
+  it('rescales its prices and moves its weight when the upgrade turns a pack round', async () => {
+    const storage = (await import('../../src/adapters/storage-memory')).createMemoryStorage();
+    const before = await makeCore({ modules: [pricing], storage });
+    const sleep = await before.products.create({ name: 'Sleep tea', unit: 'tea bag' });
+    await before.shopping.purchase({ items: [{ productId: sleep.id, quantity: 40, price: 6 }] });
     await new Promise((r) => setTimeout(r, 10));
-    await core.stock.recount(sleep.id, { unit: 'tea bag', holds: 20 });
+    // 0.9.2: counted in tea bags, in boxes of 20, and the price card knew a tea bag weighs 1.5 g.
+    const p = (await before.products.summary(sleep.id)).product;
+    await saveAs092(storage, { ...p, fields: { pricing: { ...(p.fields.pricing as object), itemSize: { amount: 1.5, unit: 'g' } } } }, { unit: 'tea bag', pack: { name: 'box', holds: 20 } });
+    const core = await makeCore({ modules: [pricing], storage });
     await new Promise((r) => setTimeout(r, 10));
-    // The core divides what one weighs; the module divides its prices.
+    // The weight moved to the item before the upgrade, so it's a box's now; the module's prices are per box.
     const after = (await core.products.summary(sleep.id)).product;
-    expect([(after.fields.pricing as { usualUnitPrice: number }).usualUnitPrice, after.size]).toEqual([0.15, { amount: 10, unit: 'g' }]);
+    expect([after.unit, after.weight, (after.fields.pricing as { usualUnitPrice: number; itemSize: unknown }).usualUnitPrice, (after.fields.pricing as { itemSize: unknown }).itemSize]).toEqual(['box', { amount: 30, unit: 'g' }, 3, null]);
     const history = (await call(core, 'GET', '/history/:productId', undefined, { productId: sleep.id })) as Array<{ quantity: number; unitPrice: number }>;
-    expect(history.map((h) => [h.quantity, h.unitPrice])).toEqual([[40, 0.15]]);
-    expect((await core.assistant.call('get_price', { item: 'sleep tea' })).text).toContain('£0.15 a tea bag');
+    expect(history.map((h) => [h.quantity, h.unitPrice])).toEqual([[2, 3]]);
+    expect((await core.assistant.call('get_price', { item: 'sleep tea' })).text).toContain('£3.00 a box');
   });
 
   it('drops measures saved by 0.8, and moves the weight to the item', async () => {

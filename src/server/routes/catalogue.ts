@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Category, CategoryCreate, CategoryPatch, GridCreate, Place, PlaceContents, PlaceCreate, PlaceNode, PlacePatch, PlaceRef, PlaceToSort, Shop, ShopCreate, ShopPatch,
+  Category, CategoryCreate, CategoryPatch, GridCreate, Place, PlaceContents, PlaceCreate, PlaceNode, PlacePatch, PlaceRef, PlaceToSort, Shop, ShopCreate, ShopPatch, Unit, UnitCreate,
   type CoreApi,
 } from '@larder/core';
 import type { ZodApp } from '../app';
@@ -15,6 +15,21 @@ export function registerCatalogueRoutes(app: ZodApp, { core }: { core: CoreApi }
     app.patch('/categories/:id', { schema: { tags, summary: 'Change a category', params: IdParams, body: CategoryPatch, response: { 200: Category } } }, (r) => core.categories.update(r.params.id, r.body));
     app.delete('/categories/:id', { schema: { tags, summary: 'Remove an unused category', params: IdParams, response: { 200: Ok } } }, async (r) => {
       await core.categories.remove(r.params.id);
+      return { ok: true as const };
+    });
+  }
+
+  /* Units */
+  {
+    const tags = ['Units'];
+    app.get('/units', { schema: { tags, summary: 'The unit list: Larder\'s own units, then the household\'s words', response: { 200: z.array(Unit) } } }, async () => [...(await core.units.list()).all]);
+    app.post('/units', {
+      schema: { tags, summary: 'Add a count word to the unit list', description: 'Its singular and plural, e.g. "sleeve" and "sleeves". A word Larder already has is refused.', body: UnitCreate, response: { 200: Unit } },
+    }, (r) => core.units.add(r.body));
+    app.delete('/units/:key', {
+      schema: { tags, summary: 'Remove one of the household\'s words, once no item is bought in it, contains it or is used in it', params: z.object({ key: z.string().min(1).max(30) }), response: { 200: Ok } },
+    }, async (r) => {
+      await core.units.remove(r.params.key);
       return { ok: true as const };
     });
   }

@@ -6,7 +6,7 @@
  * The server, tests and modules all use the object this returns.
  */
 import { HouseholdSettings, createContext, type CoreDeps } from './services/context';
-import { createCategoryService, createPlaceService, createShopService } from './services/catalogue';
+import { createCategoryService, createPlaceService, createShopService, createUnitService } from './services/catalogue';
 import { createHomeService } from './services/home';
 import { createLookupService } from './services/lookup';
 import { createProductService } from './services/products';
@@ -26,6 +26,8 @@ export interface CoreApi {
   categories: ReturnType<typeof createCategoryService>;
   shops: ReturnType<typeof createShopService>;
   places: ReturnType<typeof createPlaceService>;
+  /** The unit list: Larder's own units and the household's words, for the converter (`toBoughtIn`) and the text helpers. */
+  units: ReturnType<typeof createUnitService>;
   products: ReturnType<typeof createProductService>;
   stock: ReturnType<typeof createStockService>;
   shopping: ReturnType<typeof createShoppingService>;
@@ -82,6 +84,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     categories,
     shops,
     places,
+    units: createUnitService(ctx),
     products,
     stock,
     shopping,

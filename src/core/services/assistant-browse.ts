@@ -15,6 +15,7 @@ import type { createShoppingService } from './shopping';
 import { finders } from './assistant-manage';
 import { amount, andList } from '../util';
 import { inOwnUnit } from './packs';
+import type { Units } from './units';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
 
@@ -27,7 +28,7 @@ export interface BrowseDeps {
   lookup: ReturnType<typeof createLookupService>;
   resolve: Resolver;
   /** One item in a line, as search and get_item say it. */
-  line: (s: ProductSummary) => string;
+  line: (units: Units, s: ProductSummary) => string;
 }
 
 const STATUSES = ['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_sort', 'to_tidy', 'open'] as const;
@@ -59,8 +60,9 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
         if (status === 'open') list = list.filter((s) => s.inUse);
       }
       if (!list.length) return { text: 'No items like that.', data: { items: [] } };
+      const units = await deps.ctx.units();
       const shown = list.slice(0, limit);
-      const text = shown.map((s) => `- ${line(s)}${quantities ? ` (${amount(quantities.get(s.product.id) ?? 0, s.product.unit)} with no place)` : ''}`).join('\n') + (list.length > shown.length ? `\n…and ${list.length - shown.length} more.` : '');
+      const text = shown.map((s) => `- ${line(units, s)}${quantities ? ` (${amount(quantities.get(s.product.id) ?? 0, s.product.unit)} with no place)` : ''}`).join('\n') + (list.length > shown.length ? `\n…and ${list.length - shown.length} more.` : '');
       return { text, data: { count: list.length, items: shown.map((s) => ({ id: s.product.id, item: s.product.name, in_stock: s.inStock, unit: s.product.unit, low: s.status.low, next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, open: s.inUse })) } };
     },
   });
@@ -97,8 +99,8 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
     description: 'Look up a barcode, a Larder label\'s code, a place code or a shop code: the item or place it belongs to, or, for a barcode Larder doesn\'t know, what the online product databases say it is (offer to add it with add_item and its barcode).',
     input: z.object({ code: z.string().min(1).max(200).describe('The code, e.g. "5029053038889" or "G2-4"') }),
     async run({ code }) {
-      const r = await lookup.identify(code);
-      if (r.kind === 'product') return { text: `${code} is ${r.product.product.name}${r.variant ? ` (${r.variant.name})` : ''}. ${line(r.product)}.`, data: { kind: 'item', item: r.product.product.name, id: r.product.product.id, brand: r.variant?.name ?? null } };
+      const [r, units] = await Promise.all([lookup.identify(code), deps.ctx.units()]);
+      if (r.kind === 'product') return { text: `${code} is ${r.product.product.name}${r.variant ? ` (${r.variant.name})` : ''}. ${line(units, r.product)}.`, data: { kind: 'item', item: r.product.product.name, id: r.product.product.id, brand: r.variant?.name ?? null } };
       if (r.kind === 'place') return { text: `${code} is the place ${r.path}.`, data: { kind: 'place', place: r.path, id: r.place.id } };
       if (r.kind === 'external') {
         const what = [r.result.brand, r.result.name].filter(Boolean).join(' ') || 'something';

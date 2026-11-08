@@ -165,7 +165,7 @@ describe('API', () => {
     expect(patched).toMatchObject({ name: 'Milk', aliases: ['moo'], minQuantity: 2, notes: 'Semi-skimmed' });
   });
 
-  it('says when things used at a set rate run out, takes them out of stock, and counts what is inside', async () => {
+  it('says when things used at a set rate run out, takes them out of stock, and takes amounts in what one contains', async () => {
     const { call } = await makeApp({ auth: 'none' });
     const today = (await call<Any>('GET', '/api/v1/home')).body.today as string;
     const plus = (days: number) => {
@@ -174,7 +174,7 @@ describe('API', () => {
       return d.toISOString().slice(0, 10);
     };
     const sensor = (await call<Any>('POST', '/api/v1/products', { name: 'Glucose sensor', unit: 'sensor', usage: { amount: 1, everyDays: 14 } })).body;
-    expect(sensor).toMatchObject({ usage: { amount: 1, everyDays: 14, auto: false }, pack: null, inUseSince: null });
+    expect(sensor).toMatchObject({ unit: 'sensor', contents: null, weight: null, needsCheck: null, usage: { amount: 1, everyDays: 14, auto: false, unit: null }, inUseSince: null });
     await call('POST', '/api/v1/stock/add', { productId: sensor.id, quantity: 3 });
     const used = (await call<Any>('POST', '/api/v1/stock/use', { productId: sensor.id, quantity: 1 })).body;
     expect(used).toMatchObject({ inStock: 2, inUse: true, inUseUntil: plus(14), runsOutOn: plus(42), daysToRunOut: 42, status: { low: false, runningOut: false } });
@@ -185,14 +185,36 @@ describe('API', () => {
     expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, taken: 1 });
     expect((await call<Any>('GET', `/api/v1/products/${sensor.id}`)).body).toMatchObject({ inStock: 1, inUseUntil: plus(14), product: { inUseSince: today } });
 
-    // Counted in boxes so far: counted in tea bags, 2 boxes are 40.
-    const tea = (await call<Any>('POST', '/api/v1/products', { name: 'Sleep tea', unit: 'box' })).body;
+    // Bought in boxes, each containing 20 tea bags: amounts can be in either; counting again is gone.
+    const tea = (await call<Any>('POST', '/api/v1/products', { name: 'Sleep tea', unit: 'boxes', contents: { amount: 20, unit: 'tea bags' } })).body;
+    expect(tea).toMatchObject({ unit: 'box', contents: { amount: 20, unit: 'tea bag' }, weight: null });
     await call('POST', '/api/v1/stock/add', { productId: tea.id, quantity: 2 });
-    const recounted = (await call<Any>('POST', `/api/v1/products/${tea.id}/recount`, { unit: 'tea bag', holds: 20 })).body;
-    expect(recounted).toMatchObject({ inStock: 40, product: { unit: 'tea bag', pack: { name: 'box', holds: 20 } } });
-    expect((await call<Any>('POST', '/api/v1/stock/add', { productId: tea.id, quantity: 1, unit: 'box' })).body.inStock).toBe(60);
+    expect((await call<Any>('POST', '/api/v1/stock/use', { productId: tea.id, quantity: 5, unit: 'tea bags' })).body.inStock).toBe(1.75);
     const wrong = await call<Any>('POST', '/api/v1/stock/use', { productId: tea.id, quantity: 1, unit: 'kg' });
-    expect([wrong.status, wrong.body.message]).toEqual([400, 'Sleep tea is counted in tea bags and comes in boxes of 20. Give how many tea bags or boxes.']);
+    expect([wrong.status, wrong.body.message]).toEqual([400, "Larder doesn't know what one box of Sleep tea weighs, so it can't work in kg. Give how many boxes or tea bags. Or give it a Weight first."]);
+    expect((await call<Any>('POST', `/api/v1/products/${tea.id}/recount`, { unit: 'tea bag', holds: 20 })).status).toBe(404);
+    // A Weight in kg is kept in g; one alongside a Contains amount is refused.
+    const jar = (await call<Any>('POST', '/api/v1/products', { name: 'Decaf coffee', unit: 'jar', contents: { amount: 0.4, unit: 'kg' } })).body;
+    expect(jar.weight).toEqual({ amount: 400, unit: 'g' });
+    expect((await call<Any>('PATCH', `/api/v1/products/${jar.id}`, { weight: { amount: 200, unit: 'g' } })).status).toBe(400);
+  });
+
+  it('keeps the unit list, with the household\'s own words', async () => {
+    const { call } = await makeApp({ auth: 'none' });
+    const list = (await call<Any[]>('GET', '/api/v1/units')).body;
+    expect(list.find((u) => u.key === 'tea bag')).toEqual({ key: 'tea bag', one: 'tea bag', many: 'tea bags', kind: 'count', factor: null, builtIn: true });
+    expect(list.find((u) => u.key === 'pint')).toMatchObject({ kind: 'volume', factor: 568.261 });
+    const added = await call<Any>('POST', '/api/v1/units', { one: 'sleeve', many: 'sleeves' });
+    expect([added.status, added.body]).toEqual([200, { key: 'sleeve', one: 'sleeve', many: 'sleeves', kind: 'count', factor: null, builtIn: false }]);
+    expect((await call<Any>('POST', '/api/v1/units', { one: 'Box', many: 'Boxes' })).body.message).toBe('Larder already has "box".');
+    const cups = (await call<Any>('POST', '/api/v1/products', { name: 'Paper cups', unit: 'sleeves' })).body;
+    expect(cups.unit).toBe('sleeve');
+    const used = await call<Any>('DELETE', '/api/v1/units/sleeve');
+    expect([used.status, used.body.message]).toEqual([409, 'Paper cups uses "sleeve". Change it first.']);
+    expect((await call<Any>('DELETE', '/api/v1/units/box')).body.message).toBe('"box" is one of Larder\'s own units, so it can\'t be removed.');
+    await call('PATCH', `/api/v1/products/${cups.id}`, { unit: 'pack' });
+    expect((await call<Any>('DELETE', '/api/v1/units/sleeve')).status).toBe(200);
+    expect((await call<Any[]>('GET', '/api/v1/units')).body.some((u) => u.key === 'sleeve')).toBe(false);
   });
 
   it('builds a grid of places', async () => {

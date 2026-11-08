@@ -77,7 +77,7 @@ export const Unit = z.object({
   factor: z.number().nullable(),
   /** False for words the household added (Settings → Units). */
   builtIn: z.boolean(),
-});
+}).meta({ id: 'Unit' });
 export type Unit = z.infer<typeof Unit>;
 
 /** How it's sold: a box of 20 (in the item's own unit). */
@@ -429,10 +429,10 @@ export type PlaceToSort = z.infer<typeof PlaceToSort>;
 
 export const ShoppingItem = z.object({
   summary: ProductSummary,
-  /** Suggested amount to buy. */
+  /** Suggested amount to buy, in whole ones of what it's bought in. */
   quantity: z.number(),
   reason: z.enum(['low', 'out', 'manual']),
-  /** With a pack: how many packs `quantity` is (it's rounded up to whole packs). */
+  /** Always null since 0.10.0: `quantity` is already in whole ones of what it's bought in. Kept for older clients until 1.0. */
   packs: z.number().nullable().default(null),
   /** True when the product has no preferred shop and is here because the shop sells its category. */
   anyShop: z.boolean(),

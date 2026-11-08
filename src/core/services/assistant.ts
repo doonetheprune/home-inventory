@@ -16,6 +16,7 @@ import { addBrowseTools } from './assistant-browse';
 import { addManageTools, assertPackFits, ComesInInput, finders, TakesOutInput, UsesInput, usageFields, WeighsInput } from './assistant-manage';
 import { daysFor, isMeasure, measureText, oneLastsText, packsText, sizeText, usageText, worthText } from './packs';
 import { placesText } from './world';
+import type { Units } from './units';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
@@ -90,7 +91,7 @@ function when(ctx: CoreContext, date: string | null): string {
   return `${date} (${rel})`;
 }
 
-function summaryLine(ctx: CoreContext, s: ProductSummary): string {
+function summaryLine(ctx: CoreContext, units: Units, s: ProductSummary): string {
   const p = s.product;
   if (p.wish) return `${p.name}: on the wish list (none yet)${p.notes ? `. ${p.notes.slice(0, 120)}` : ''}`;
   const also = [packsText(p, s.inStock), measureText(p, s.inStock)].filter(Boolean);
@@ -98,7 +99,7 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${amount(s.expected, p.unit)} on the way`);
   if (s.pending) parts.push(`${amount(s.pending, p.unit)} in a pending order`);
-  const where = placesText(s);
+  const where = placesText(units, s);
   if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
   if (s.inUse && !p.usage && p.inUseSince) parts.push(`one open since ${p.inUseSince}`);
@@ -122,14 +123,14 @@ function usageLine(ctx: CoreContext, s: ProductSummary): string {
   return parts.join(' ');
 }
 
-function detailText(ctx: CoreContext, d: ProductDetail): string {
+function detailText(ctx: CoreContext, units: Units, d: ProductDetail): string {
   const p = d.product;
   const lines = [`${p.name}${d.category ? ` (${d.category.name})` : ''}`];
   if (p.wish) lines.push('On the wish list: the house has none yet.');
   else lines.push(`In stock: ${amount(d.inStock, p.unit)}${[packsText(p, d.inStock), measureText(p, d.inStock)].some(Boolean) ? ` (${[packsText(p, d.inStock), measureText(p, d.inStock)].filter(Boolean).join(', ')})` : ''}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
   if (p.pack) lines.push(`Comes in ${pluralWord(p.pack.name, 2)} of ${p.pack.holds}.`);
   if (sizeText(p)) lines.push(`Weighs: ${sizeText(p)}.`);
-  const where = placesText(d);
+  const where = placesText(units, d);
   if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
   if (here.length) {
@@ -197,12 +198,12 @@ export function createAssistant(deps: {
     description: 'Find items, places and shops by any words: names, nicknames, brands, notes or place names. Typos are fine. Use this first when you are not sure what something is called in Larder.',
     input: z.object({ query: z.string().min(1).max(200).describe('What to look for, e.g. "batteries" or "garage"') }),
     async run({ query }) {
-      const sections = await search.query(query);
+      const [sections, units] = await Promise.all([search.query(query), ctx.units()]);
       if (!sections.length) return { text: `Nothing in Larder matches "${query}".`, data: { sections: [] } };
-      const world = sections.map((s) => `${s.title}:\n${s.results.map((r) => `- ${r.product ? summaryLine(ctx, r.product) : `${r.title}${r.subtitle ? ` (${r.subtitle})` : ''}`}`).join('\n')}`);
+      const world = sections.map((s) => `${s.title}:\n${s.results.map((r) => `- ${r.product ? summaryLine(ctx, units, r.product) : `${r.title}${r.subtitle ? ` (${r.subtitle})` : ''}`}`).join('\n')}`);
       return {
         text: world.join('\n'),
-        data: { sections: sections.map((s) => ({ section: s.title, results: s.results.map((r) => ({ type: r.type, id: r.id, name: r.title, detail: r.product ? summaryLine(ctx, r.product) : r.subtitle })) })) },
+        data: { sections: sections.map((s) => ({ section: s.title, results: s.results.map((r) => ({ type: r.type, id: r.id, name: r.title, detail: r.product ? summaryLine(ctx, units, r.product) : r.subtitle })) })) },
       };
     },
   });
@@ -213,9 +214,9 @@ export function createAssistant(deps: {
     input: z.object({ item: Item }),
     async run({ item }) {
       const p = await resolve.product(item);
-      const d = await products.get(p.id);
+      const [d, units] = await Promise.all([products.get(p.id), ctx.units()]);
       return {
-        text: detailText(ctx, d),
+        text: detailText(ctx, units, d),
         data: {
           id: p.id, name: p.name, category: d.category?.name ?? null, unit: p.unit, in_stock: d.inStock, expected: d.expected, low: d.status.low, minimum: p.minQuantity, stock_up_to: p.stockUpTo ?? null,
           places: (d.stockByPlace ?? []).map((x) => ({ place: x.path, quantity: x.quantity })),
@@ -376,7 +377,7 @@ export function createAssistant(deps: {
   });
 
   addManageTools(addTool, deps);
-  addBrowseTools(addTool, { ...deps, line: (s) => summaryLine(ctx, s) });
+  addBrowseTools(addTool, { ...deps, line: (units, s) => summaryLine(ctx, units, s) });
 
   return {
     addTool,

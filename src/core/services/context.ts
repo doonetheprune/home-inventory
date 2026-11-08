@@ -3,7 +3,7 @@ import type { Clock, EventBus, FileStore, HomeAssistantPort, SearchIndex, Storag
 import { isoNow, localDate } from '../util';
 import { unitList, type HouseholdUnit, type Units } from './units';
 
-/** Where the household's own unit words are kept (`ctx.storage.settings`), beside `instanceId`. */
+/** Where the household's own unit words are kept (`ctx.storage.settings`), beside `instanceId`, so the port and the household settings don't change. */
 export const HOUSEHOLD_UNITS = 'units';
 
 export const HouseholdSettings = z.object({

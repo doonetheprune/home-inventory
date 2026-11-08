@@ -16,7 +16,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1), or in `unit`",
+          "description": "How many, in what the item is bought in (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -50,7 +50,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -76,7 +76,7 @@
           "description": "The item: its name or alias (\"loo roll\"), barcode, or id"
         },
         "quantity": {
-          "description": "How many, in the item's own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)",
+          "description": "How many, in what the item is bought in, or in `unit`. Default 1 (a whole one), or, when this starts a new one of something with a usage, its usual amount (2 lenses)",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -95,7 +95,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -148,12 +148,12 @@
           "description": "The place it's going to: a name or code"
         },
         "quantity": {
-          "description": "How many (default all of it), in the item's own unit or in `unit`",
+          "description": "How many (default all of it), in what the item is bought in or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -217,7 +217,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1), or in `unit`",
+          "description": "How many, in what the item is bought in (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -238,7 +238,7 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -330,12 +330,12 @@
           "maxLength": 200
         },
         "quantity": {
-          "description": "How many of the item arrived (default all expected), in its own unit or in `unit`",
+          "description": "How many of the item arrived (default all expected), in what it's bought in or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags), or g, kg, ml or l for something whose weight Larder knows (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -406,7 +406,7 @@
         },
         "quantity": {
           "default": 1,
-          "description": "How many, in the item's own unit (default 1), or in `unit`",
+          "description": "How many, in what the item is bought in (default 1), or in `unit`",
           "type": "number",
           "exclusiveMinimum": 0
         }

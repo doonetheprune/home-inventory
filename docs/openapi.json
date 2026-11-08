@@ -19,6 +19,47 @@
       }
     },
     "schemas": {
+      "UnitInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/UnitInput",
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "one": {
+            "type": "string"
+          },
+          "many": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "count",
+              "weight",
+              "volume"
+            ]
+          },
+          "factor": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "builtIn": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "one",
+          "many",
+          "kind",
+          "factor",
+          "builtIn"
+        ]
+      },
       "SensorInfoInput": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/SensorInfoInput",
@@ -4744,6 +4785,48 @@
             "maxLength": 60
           }
         }
+      },
+      "Unit": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/Unit",
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "one": {
+            "type": "string"
+          },
+          "many": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "count",
+              "weight",
+              "volume"
+            ]
+          },
+          "factor": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "builtIn": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "one",
+          "many",
+          "kind",
+          "factor",
+          "builtIn"
+        ],
+        "additionalProperties": false
       },
       "SensorInfo": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -10695,6 +10778,118 @@
         }
       }
     },
+    "/api/v1/units": {
+      "get": {
+        "summary": "The unit list: Larder's own units, then the household's words",
+        "tags": [
+          "Units"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Unit"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a count word to the unit list",
+        "tags": [
+          "Units"
+        ],
+        "description": "Its singular and plural, e.g. \"sleeve\" and \"sleeves\". A word Larder already has is refused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "one": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 30
+                  },
+                  "many": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 30
+                  }
+                },
+                "required": [
+                  "one",
+                  "many"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unit"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/units/{key}": {
+      "delete": {
+        "summary": "Remove one of the household's words, once no item is bought in it, contains it or is used in it",
+        "tags": [
+          "Units"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/shops": {
       "get": {
         "summary": "List shops",
@@ -12822,70 +13017,6 @@
         "tags": [
           "Stock"
         ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProductSummary"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/products/{id}/recount": {
-      "post": {
-        "summary": "Count what's inside: what it was counted in becomes its pack, and the numbers are multiplied (2 boxes become 40 tea bags)",
-        "tags": [
-          "Stock"
-        ],
-        "description": "Stock in every status, orders' prices, the minimum, the stock-up amount and the usage are rescaled. Modules get `product.recounted`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "unit": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 20
-                  },
-                  "holds": {
-                    "type": "number",
-                    "exclusiveMinimum": 1,
-                    "maximum": 100000
-                  },
-                  "pack": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 30
-                  }
-                },
-                "required": [
-                  "unit",
-                  "holds"
-                ]
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "schema": {

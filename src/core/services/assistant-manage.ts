@@ -346,7 +346,6 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
       comes_in: ComesInInput.nullable().optional(),
       weighs: WeighsInput.nullable().optional(),
-      recount: z.boolean().optional().describe('With unit and comes_in, when what it was counted in is what it comes in: true multiplies the stock, orders, minimum, stock-up amount and usage by comes_in.holds (2 boxes become 40 tea bags). Without it, a new unit only renames'),
       uses: UsesInput.nullable().optional(),
       takes_out_automatically: TakesOutInput.optional(),
       in_use_since: IsoDate.nullable().optional().describe('With uses: the day the current one was started, or Larder starts counting from (YYYY-MM-DD); without: the day one was opened. null for none. The one in use isn\'t counted in stock: 3 in stock are 3 spares'),
@@ -372,11 +371,9 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         const here = (await products.get(p.id)).stockByPlace.filter((x) => leaving.some((l) => l.id === x.id) && x.quantity > 0);
         if (here.length) throw new ValidationError(`${p.name} still has stock in ${andList(here.map((x) => x.path))}. Move it (move_item, permanent) or use it up first.`);
       }
-      const recounting = !!i.recount;
-      if (recounting && (!i.unit || !i.comes_in)) throw new ValidationError('A recount needs the new unit and what it comes in (comes_in with how many one holds).');
+      const recounting = false;
       assertPackFits(p.name, i.unit ?? p.unit, i.comes_in !== undefined ? i.comes_in : p.pack, p.unit);
       if (i.weighs && isMeasure(i.unit ?? p.unit)) throw new ValidationError(`${p.name} is counted in ${i.unit ?? p.unit}, so it doesn't need a weight: say how fast it's used in ${i.unit ?? p.unit}.`);
-      if (recounting) await stock.recount(p.id, { unit: i.unit!, holds: i.comes_in!.holds, pack: i.comes_in!.name });
       const cur = recounting ? (await products.get(p.id)).product : p;
       const next = await products.update(p.id, {
         ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit && !recounting ? { unit: i.unit } : {}),

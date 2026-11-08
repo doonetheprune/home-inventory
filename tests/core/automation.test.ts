@@ -84,7 +84,7 @@ describe('automation sensors and actions', () => {
     const ids = core.automation.sensors().map((s) => s.id);
     expect(ids).toEqual(['low_stock', 'expiring_soon', 'out_of_place', 'shopping_list', 'pending_orders', 'deliveries']);
     const state = await core.automation.read();
-    expect(state.low_stock).toMatchObject({ state: 1, attributes: { items: [{ item: 'Kitchen roll', in_stock: 0, minimum: 2, unit: 'roll' }] } });
+    expect(state.low_stock).toMatchObject({ state: 1, attributes: { items: [{ item: 'Kitchen roll', in_stock: 0, minimum: 2, unit: 'rolls' }] } });
     expect(state.shopping_list).toMatchObject({ state: 1, attributes: { suggested_shop: 'Aldi', shops: { Aldi: 1 } } });
     expect(state.out_of_place?.state).toBe(0);
   });
