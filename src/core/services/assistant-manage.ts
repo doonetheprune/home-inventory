@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
 import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
-import { inOwnUnit, usageText } from './packs';
+import { inOwnUnit, packsText, sameUnit, singular, usageText } from './packs';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
 import type { CoreContext } from './context';
@@ -28,8 +28,21 @@ export const UsesInput = z.object({
 export const ComesInInput = z.object({
   name: z.string().min(1).max(30).describe('What it\'s sold in, e.g. "box"'),
   holds: z.number().gt(1).max(100000).describe('How many of the item\'s own unit one holds, e.g. 20'),
-}).describe('How it\'s sold, e.g. a box of 20 tea bags');
+}).describe('How it\'s sold, e.g. a box of 20 tea bags. Larder still shows how many boxes there are, and takes amounts in boxes');
 export const TakesOutInput = z.boolean().describe('True for Larder to take them out of stock by itself as they\'re used (from today, or from in_use_since)');
+
+/**
+ * Counted in boxes and coming in boxes of 20 can't be: say how to keep the boxes and still say
+ * how many are in one, so the assistant doesn't settle for a note. `countedSoFar` is the unit of
+ * an item that already has stock, which can be counted again in what's inside.
+ */
+export function assertPackFits(name: string, unit: string, pack: { name: string; holds: number } | null, countedSoFar?: string) {
+  if (!pack || !sameUnit(pack.name, unit)) return;
+  const box = singular(pack.name);
+  const boxes = pluralWord(box, 2);
+  const recount = countedSoFar && sameUnit(countedSoFar, box) ? `, and recount: true to turn the ${boxes} counted so far into what's inside` : '';
+  throw new ValidationError(`${name} can't be counted in ${boxes} and come in ${boxes}. Count what's inside instead (unit: "tea bag", say), with comes_in a ${box} of ${pack.holds}${recount}. Larder still shows how many ${boxes} there are, and takes amounts in ${boxes} (unit: "${box}").`);
+}
 
 /** Product fields from the tools' usage inputs; undefined leaves them as they are. */
 export function usageFields(cur: Pick<Product, 'usage'> | null, uses: z.infer<typeof UsesInput> | null | undefined, takesOut: boolean | undefined): Pick<Product, 'usage'> | Record<string, never> {
@@ -321,7 +334,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
       category: z.string().max(60).nullable().optional().describe('One of the household\'s categories; null for none'),
-      unit: z.string().min(1).max(20).optional().describe('What it\'s counted in, e.g. roll, tin, kg'),
+      unit: z.string().min(1).max(20).optional().describe('What it\'s counted in: the single thing that gets used, e.g. tea bag, roll, tin, kg. On its own it only renames (the numbers stay)'),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Every other name people use (replaces the old list)'),
       minimum: z.number().min(0).nullable().optional().describe('Running low below this many; null to never count as low'),
       stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
@@ -355,6 +368,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       }
       const recounting = !!i.recount;
       if (recounting && (!i.unit || !i.comes_in)) throw new ValidationError('A recount needs the new unit and what it comes in (comes_in with how many one holds).');
+      assertPackFits(p.name, i.unit ?? p.unit, i.comes_in !== undefined ? i.comes_in : p.pack, p.unit);
       if (recounting) await stock.recount(p.id, { unit: i.unit!, holds: i.comes_in!.holds, pack: i.comes_in!.name });
       const cur = recounting ? (await products.get(p.id)).product : p;
       const next = await products.update(p.id, {
@@ -378,8 +392,11 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (defaultPlaceId !== undefined) said.push(defaultPlaceId ? `usually lives in ${(await places.list()).find((x) => x.id === defaultPlaceId)?.path}` : 'no usual place');
       if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${amount(i.minimum, next.unit)}`);
       if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
-      if (recounting) said.push(`now counted in ${pluralWord(next.unit, 2)}, ${amount(d.inStock, next.unit)} in stock (1 ${i.comes_in!.name} = ${i.comes_in!.holds})`);
-      else if (i.comes_in !== undefined) said.push(i.comes_in ? `comes in ${pluralWord(i.comes_in.name, 2)} of ${i.comes_in.holds}` : 'no pack');
+      const packs = packsText(next, d.inStock);
+      if (recounting) said.push(`now counted in ${pluralWord(next.unit, 2)}, ${amount(d.inStock, next.unit)} in stock (${packs ? `${packs} of ${next.pack!.holds}` : `1 ${next.pack!.name} = ${next.pack!.holds}`})`);
+      // Only renamed: say what the numbers now read as, so "80 boxes" from 80 tea bags shows.
+      else if (i.unit && !sameUnit(i.unit, p.unit)) said.push(`counted in ${pluralWord(next.unit, 2)}${d.inStock > 0 ? ` (the numbers stay as they were: ${amount(d.inStock, next.unit)} in stock)` : ''}`);
+      if (!recounting && i.comes_in !== undefined) said.push(i.comes_in ? `comes in ${pluralWord(next.pack!.name, 2)} of ${next.pack!.holds}${packs ? ` (${packs} in stock)` : ''}` : 'no pack');
       if (i.uses !== undefined || i.takes_out_automatically !== undefined) said.push(next.usage ? `uses ${usageText(next)}${next.usage.auto ? ', taken out of stock by Larder' : ''}` : 'no usage set');
       if (i.in_use_since !== undefined) said.push(i.in_use_since ? `${next.usage ? 'the current one started on' : 'one open since'} ${i.in_use_since}` : 'none in use');
       if (leaving.length) said.push(`no longer kept in ${andList(leaving.map((l) => l.name))}`);
@@ -389,7 +406,14 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       const shelf = next.usage && next.shelfLifeDays && i.uses && i.shelf_life_days === undefined
         ? ` It also has a shelf life of ${next.shelfLifeDays} days, so new stock gets an expiry date that far ahead; if that was meant as how long one lasts once started, clear it (shelf_life_days: null).`
         : '';
-      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.${shelf}`, data: { id: next.id, name: next.name } };
+      // Given a pack: the boxes aren't lost, and how fast they go is the natural next question.
+      const packed = next.pack && (recounting || i.comes_in) ? next.pack : null;
+      const boxes = packed ? pluralWord(packed.name, 2) : '';
+      const kept = packed ? ` Larder still shows how many ${boxes} there are, add_stock, use_stock and add_expected take amounts in ${boxes} (unit: "${packed.name}"), and the shopping list buys whole ${boxes}.` : '';
+      const ask = packed && !next.usage && i.uses === undefined && !next.rechargeable
+        ? ` No usage is set: ask how many ${next.unit === 'each' ? 'of them' : pluralWord(next.unit, 2)} get used a day or a week (uses), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).`
+        : '';
+      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.${shelf}${kept}${ask}`, data: { id: next.id, name: next.name } };
     },
   });
 
