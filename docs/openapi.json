@@ -2829,6 +2829,37 @@
               }
             ]
           },
+          "size": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "ml",
+                      "l"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "usage": {
             "default": null,
             "anyOf": [
@@ -2848,6 +2879,23 @@
                   "auto": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "unit": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "g",
+                          "kg",
+                          "ml",
+                          "l"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -7590,6 +7638,38 @@
               }
             ]
           },
+          "size": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "ml",
+                      "l"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "usage": {
             "default": null,
             "anyOf": [
@@ -7609,12 +7689,30 @@
                   "auto": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "unit": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "g",
+                          "kg",
+                          "ml",
+                          "l"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
                   "amount",
                   "everyDays",
-                  "auto"
+                  "auto",
+                  "unit"
                 ],
                 "additionalProperties": false
               },
@@ -7764,6 +7862,7 @@
           "unit",
           "shelfLifeDays",
           "pack",
+          "size",
           "usage",
           "inUseSince",
           "minQuantity",
@@ -11364,6 +11463,37 @@
                       }
                     ]
                   },
+                  "size": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "g",
+                              "kg",
+                              "ml",
+                              "l"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "usage": {
                     "default": null,
                     "anyOf": [
@@ -11383,6 +11513,23 @@
                           "auto": {
                             "default": false,
                             "type": "boolean"
+                          },
+                          "unit": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "g",
+                                  "kg",
+                                  "ml",
+                                  "l"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -11652,6 +11799,36 @@
                       }
                     ]
                   },
+                  "size": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "g",
+                              "kg",
+                              "ml",
+                              "l"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "usage": {
                     "anyOf": [
                       {
@@ -11670,6 +11847,23 @@
                           "auto": {
                             "default": false,
                             "type": "boolean"
+                          },
+                          "unit": {
+                            "default": null,
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "g",
+                                  "kg",
+                                  "ml",
+                                  "l"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -13627,6 +13821,37 @@
                           }
                         ]
                       },
+                      "size": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1000000
+                              },
+                              "unit": {
+                                "type": "string",
+                                "enum": [
+                                  "g",
+                                  "kg",
+                                  "ml",
+                                  "l"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "amount",
+                              "unit"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "usage": {
                         "default": null,
                         "anyOf": [
@@ -13646,6 +13871,23 @@
                               "auto": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "unit": {
+                                "default": null,
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "g",
+                                      "kg",
+                                      "ml",
+                                      "l"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               }
                             },
                             "required": [

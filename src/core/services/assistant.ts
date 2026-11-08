@@ -13,8 +13,8 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addBrowseTools } from './assistant-browse';
-import { addManageTools, assertPackFits, ComesInInput, finders, TakesOutInput, UsesInput, usageFields } from './assistant-manage';
-import { daysFor, packsText, usageText, worthText } from './packs';
+import { addManageTools, assertPackFits, ComesInInput, finders, TakesOutInput, UsesInput, usageFields, WeighsInput } from './assistant-manage';
+import { daysFor, isMeasure, measureText, oneLastsText, packsText, sizeText, usageText, worthText } from './packs';
 import { placesText } from './world';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
@@ -72,9 +72,10 @@ export const ASSISTANT_INSTRUCTIONS = [
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Quantities are in each item\'s own unit (tins, rolls, kg). Items have a usual place; "out of place" means it is somewhere else for now.',
   'An item is counted in the single thing that gets used (a tea bag, a roll, a sensor) and can come in a pack (comes_in: a box of 20). Larder still shows the boxes ("80 tea bags (4 boxes)"), stock tools take amounts in boxes (unit: "box") and the shopping list buys whole boxes, so someone who wants to keep counting boxes and say how many are in one wants a pack, not a note. For something counted in boxes so far, that is change_item with unit (what\'s inside), comes_in and recount: true.',
+  'An item can also say what one weighs or holds (weighs: 1 jar = 400 g). Then how fast it\'s used can be said the way the person says it, by weight (uses: 4 g a day, unit "g"), and Larder works out how long a jar lasts.',
   'How fast something is used (uses: 1 tea bag a day) tells Larder when it runs out; with takes_out_automatically, Larder takes them out of stock by itself.',
   'Before adding something new with add_item, search for it: it may already exist under another name.',
-  'Anything about an item can be changed later with change_item (its name, category, shop, usual place, minimum, what it comes in and how fast it is used).',
+  'Anything about an item can be changed later with change_item (its name, category, shop, usual place, minimum, what it comes in, what one weighs and how fast it is used).',
   'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
   'Low stock counts deliveries on the way and pending orders (ordered, not confirmed). Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
@@ -92,8 +93,8 @@ function when(ctx: CoreContext, date: string | null): string {
 function summaryLine(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
   if (p.wish) return `${p.name}: on the wish list (none yet)${p.notes ? `. ${p.notes.slice(0, 120)}` : ''}`;
-  const packs = packsText(p, s.inStock);
-  const parts = [`${p.name}: ${amount(s.inStock, p.unit)}${packs ? ` (${packs})` : ''}`];
+  const also = [packsText(p, s.inStock), measureText(p, s.inStock)].filter(Boolean);
+  const parts = [`${p.name}: ${amount(s.inStock, p.unit)}${also.length ? ` (${also.join(', ')})` : ''}`];
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${amount(s.expected, p.unit)} on the way`);
   if (s.pending) parts.push(`${amount(s.pending, p.unit)} in a pending order`);
@@ -112,8 +113,10 @@ function summaryLine(ctx: CoreContext, s: ProductSummary): string {
 function usageLine(ctx: CoreContext, s: ProductSummary): string {
   const p = s.product;
   const u = p.usage!;
-  const parts = [`Uses ${usageText(p)}${u.auto ? ', taken out of stock by Larder' : ''}.`];
-  if (s.inUseUntil && u.everyDays >= 2) parts.push(`One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}, not counted in stock.`);
+  const lasts = oneLastsText(p);
+  const parts = [`Uses ${usageText(p)}${lasts ? ` (${lasts})` : ''}${u.auto ? `, taken out of stock by Larder${u.unit ? ' a little at a time' : ''}` : ''}.`];
+  // Used by weight, a little goes each day: there's no "one in use" apart from the stock.
+  if (s.inUseUntil && u.everyDays >= 2 && !u.unit) parts.push(`One in use since ${p.inUseSince}, until ${when(ctx, s.inUseUntil)}, not counted in stock.`);
   else if (u.auto && !p.inUseSince) parts.push('None started yet, so nothing is taken out until one is (use_stock with opened, or change_item in_use_since).');
   if (s.runsOutOn) parts.push(s.inStock <= 0 && !s.inUseUntil ? 'None left.' : `Enough until ${when(ctx, s.runsOutOn)}.`);
   return parts.join(' ');
@@ -123,8 +126,9 @@ function detailText(ctx: CoreContext, d: ProductDetail): string {
   const p = d.product;
   const lines = [`${p.name}${d.category ? ` (${d.category.name})` : ''}`];
   if (p.wish) lines.push('On the wish list: the house has none yet.');
-  else lines.push(`In stock: ${amount(d.inStock, p.unit)}${packsText(p, d.inStock) ? ` (${packsText(p, d.inStock)})` : ''}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
+  else lines.push(`In stock: ${amount(d.inStock, p.unit)}${[packsText(p, d.inStock), measureText(p, d.inStock)].some(Boolean) ? ` (${[packsText(p, d.inStock), measureText(p, d.inStock)].filter(Boolean).join(', ')})` : ''}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${amount(d.expected, p.unit)} on the way` : ''}.`);
   if (p.pack) lines.push(`Comes in ${pluralWord(p.pack.name, 2)} of ${p.pack.holds}.`);
+  if (sizeText(p)) lines.push(`Weighs: ${sizeText(p)}.`);
   const where = placesText(d);
   if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
@@ -205,7 +209,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'get_item', title: 'Look up an item', readOnly: true,
-    description: 'Everything about one item: how many, how many in each place it\'s kept in (including places that have run out), where each batch is, expiry dates, deliveries on the way, when it counts as low, which shops sell it, and notes (e.g. policy details for a renewal).',
+    description: 'Everything about one item: how many, how many in each place it\'s kept in (including places that have run out), where each batch is, expiry dates, deliveries on the way, when it counts as low, what it comes in and what one weighs, how fast it\'s used and when it runs out, which shops sell it, and notes (e.g. policy details for a renewal).',
     input: z.object({ item: Item }),
     async run({ item }) {
       const p = await resolve.product(item);
@@ -218,7 +222,8 @@ export function createAssistant(deps: {
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
           comes_in: p.pack ? { name: p.pack.name, holds: p.pack.holds } : null,
-          uses: p.usage ? { amount: p.usage.amount, every_days: p.usage.everyDays, taken_out_by_larder: p.usage.auto } : null,
+          weighs: p.size ? { amount: p.size.amount, unit: p.size.unit } : null,
+          uses: p.usage ? { amount: p.usage.amount, every_days: p.usage.everyDays, ...(p.usage.unit ? { unit: p.usage.unit } : {}), taken_out_by_larder: p.usage.auto } : null,
           in_use_since: p.inUseSince ?? null, in_use_until: d.inUseUntil, runs_out_on: d.runsOutOn,
         },
       };
@@ -254,6 +259,7 @@ export function createAssistant(deps: {
       stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       comes_in: ComesInInput.optional(),
+      weighs: WeighsInput.optional(),
       uses: UsesInput.optional(),
       takes_out_automatically: TakesOutInput.optional(),
       usual_place: z.string().max(200).optional().describe('Where it usually lives: a place name or code'),
@@ -275,13 +281,14 @@ export function createAssistant(deps: {
       const place = i.usual_place ? await find.place(i.usual_place) : null;
       if (i.shop_code && !i.shop) throw new ValidationError('A shop code needs the shop it belongs to.');
       assertPackFits(i.name.trim(), i.unit || 'each', i.comes_in ?? null);
+      if (i.weighs && isMeasure(i.unit || 'each')) throw new ValidationError(`${i.name.trim()} is counted in ${i.unit}, so it doesn't need a weight: say how fast it's used in ${i.unit}.`);
       // Check the barcode before creating anything (a shop included), so a clash doesn't leave a half-made item.
       const owner = i.barcode ? await ctx.storage.variants.findByBarcode(i.barcode) : null;
       if (owner) throw new ConflictError(`Barcode ${i.barcode} already belongs to ${(await ctx.storage.products.get(owner.productId))?.name ?? 'another item'}.`);
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.unit ? { unit: i.unit } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
-        shelfLifeDays: i.shelf_life_days ?? null, pack: i.comes_in ?? null, ...usageFields(null, i.uses, i.uses ? i.takes_out_automatically : undefined), defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        shelfLifeDays: i.shelf_life_days ?? null, pack: i.comes_in ?? null, size: i.weighs ?? null, ...usageFields(null, i.uses, i.uses ? i.takes_out_automatically : undefined), defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
         rechargeable: i.rechargeable ?? false, notes: i.notes ?? '', links: (i.links ?? []).map((url) => ({ url, title: '' })),
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.

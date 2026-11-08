@@ -369,6 +369,33 @@ test('counts what is inside a box, how fast it is used, and takes it out of stoc
   await expect(page.getByText(/Uses 20 tea bags a day\./)).toBeVisible();
 });
 
+test('says what a jar weighs, and how much of it is used a day in grams', async ({ page }, info) => {
+  await signIn(page);
+  // The example decaf: 200 g jars, 4 g a day, taken out by Larder a little at a time.
+  await page.goto(`/#/products/${await productId(page, 'Decaf coffee')}`);
+  await expect(page.getByText(/Uses 4 g a day, taken out by Larder\. A 200 g jar lasts 50 days\. Enough until/)).toBeVisible();
+
+  // The owner's jar: 400 g, "four grams a day".
+  const name = `Decaf ${info.project.name}`;
+  await page.goto(`/#/add?name=${encodeURIComponent(name)}`);
+  await page.getByLabel('Unit', { exact: true }).fill('jar');
+  await page.getByRole('button', { name: 'Set what one weighs' }).click();
+  await page.getByLabel('What one weighs or holds').fill('400');
+  await page.getByRole('button', { name: "Set how fast it's used" }).click();
+  await expect(page.getByText('One lasts a day.')).toBeVisible();
+  // Saying it in grams keeps what it meant (a jar a day is 400 g), then it's set to 4.
+  await page.getByLabel('Used in').selectOption('g');
+  await expect(page.getByLabel('how much in g', { exact: true })).toHaveValue('400');
+  await page.getByLabel('how much in g', { exact: true }).fill('4');
+  await page.getByLabel('how much in g', { exact: true }).blur();
+  await expect(page.getByText('A 400 g jar lasts 100 days.')).toBeVisible();
+  await page.getByRole('button', { name: `Add ${name.toLowerCase()}`, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  await expect(page.getByText(/Uses 4 g a day\. A 400 g jar lasts 100 days\. Enough until/)).toBeVisible();
+  await expect(page.getByText('jar · 400 g')).toBeVisible();
+  await expect(page.getByText('1 jar = 400 g')).toBeVisible();
+});
+
 test('marks one open, and keeps what was paid', async ({ page }, info) => {
   await signIn(page);
   const name = `Butter ${info.project.name}`;

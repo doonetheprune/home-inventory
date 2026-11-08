@@ -281,7 +281,7 @@ describe('counting what is inside', () => {
     await core.stock.expect({ productId: sleep.id, quantity: 1, source: 'Tesco', price: 3 });
 
     let s = await core.stock.recount(sleep.id, { unit: 'tea bag', holds: 20 });
-    expect([s.product.unit, s.product.pack, s.inStock, s.expected, s.product.minQuantity, s.product.stockUpTo, s.product.usage]).toEqual(['tea bag', { name: 'box', holds: 20 }, 40, 20, 20, 60, { amount: 20, everyDays: 20, auto: false }]);
+    expect([s.product.unit, s.product.pack, s.inStock, s.expected, s.product.minQuantity, s.product.stockUpTo, s.product.usage]).toEqual(['tea bag', { name: 'box', holds: 20 }, 40, 20, 20, 60, { amount: 20, everyDays: 20, auto: false, unit: null }]);
     const detail = await core.products.get(sleep.id);
     expect(detail.entries.find((e) => e.status === 'expected')?.expected?.unitPrice).toBe(0.15);
     expect(detail.history[0]).toMatchObject({ kind: 'adjust', quantity: 0, note: 'Now counted in tea bags (1 box = 20)' });
@@ -318,10 +318,10 @@ describe('items saved by older versions', () => {
     const core = await makeCore({ storage });
     const sensor = await core.products.summary(made.id);
     // Warned 7 days ahead before: 1 left (14 days) kept it from low, so the minimum stays 1.
-    expect([sensor.product.usage, sensor.product.minQuantity, sensor.product.inUseSince, sensor.inUseUntil]).toEqual([{ amount: 1, everyDays: 14, auto: true }, 1, '2026-10-20', '2026-11-03']);
+    expect([sensor.product.usage, sensor.product.minQuantity, sensor.product.inUseSince, sensor.inUseUntil]).toEqual([{ amount: 1, everyDays: 14, auto: true, unit: null }, 1, '2026-10-20', '2026-11-03']);
     // Medicine warns 30 days ahead: one 30-day pair left was low, so it's low below 2.
     const lenses = await core.products.summary(lens.id);
-    expect([lenses.product.usage, lenses.product.minQuantity]).toEqual([{ amount: 1, everyDays: 30, auto: false }, 2]);
+    expect([lenses.product.usage, lenses.product.minQuantity]).toEqual([{ amount: 1, everyDays: 30, auto: false, unit: null }, 2]);
     const stored = await storage.products.get(made.id);
     expect(stored && ('lastsDays' in stored || 'autoUse' in stored)).toBe(false);
     // Older records with no pack or usage at all read as none.
@@ -358,7 +358,7 @@ describe('Home Assistant and assistants', () => {
 
     const changed = await core.assistant.call('change_item', { item: 'glucose sensor', uses: { amount: 1, every_days: 10 }, takes_out_automatically: true, in_use_since: '2026-10-25' });
     expect(changed.text).toBe('Glucose sensor is updated: uses 1 sensor every 10 days, taken out of stock by Larder, the current one started on 2026-10-25, enough until 2026-11-24.');
-    expect((await core.products.summary(sensor.id)).product.usage).toEqual({ amount: 1, everyDays: 10, auto: true });
+    expect((await core.products.summary(sensor.id)).product.usage).toEqual({ amount: 1, everyDays: 10, auto: true, unit: null });
     // Set up before 0.9.0 with a shelf life standing in for how long one lasts: the answer says so.
     const libre = await core.products.create({ name: 'Libre 3', unit: 'sensor', shelfLifeDays: 14 });
     const told = await core.assistant.call('change_item', { item: 'libre 3', uses: { amount: 1, every_days: 14 } });
@@ -371,7 +371,7 @@ describe('Home Assistant and assistants', () => {
     await expect(core.assistant.call('change_item', { item: 'sleep tea', unit: 'tea bag', recount: true })).rejects.toThrow('A recount needs the new unit and what it comes in');
     const recounted = await core.assistant.call('change_item', { item: 'sleep tea', unit: 'tea bags', comes_in: { name: 'box', holds: 20 }, recount: true });
     expect(recounted.text).toBe('Sleep tea is updated: now counted in tea bags, 40 tea bags in stock (2 boxes of 20), enough until 2026-12-07. Larder still shows how many boxes there are, add_stock, use_stock and add_expected take amounts in boxes (unit: "box"), and the shopping list buys whole boxes.');
-    expect((await core.products.list()).find((x) => x.product.name === 'Sleep tea')?.product.usage).toEqual({ amount: 20, everyDays: 20, auto: false });
+    expect((await core.products.list()).find((x) => x.product.name === 'Sleep tea')?.product.usage).toEqual({ amount: 20, everyDays: 20, auto: false, unit: null });
     const comesIn = await core.assistant.call('change_item', { item: 'sleep tea', comes_in: { name: 'tin', holds: 40 } });
     expect(comesIn.text).toBe('Sleep tea is updated: comes in tins of 40 (1 tin in stock). Larder still shows how many tins there are, add_stock, use_stock and add_expected take amounts in tins (unit: "tin"), and the shopping list buys whole tins.');
     const stopped = await core.assistant.call('change_item', { item: 'sleep tea', uses: null });
@@ -480,5 +480,86 @@ describe('opened, not finished', () => {
     expect((await core.assistant.call('search', { query: 'coffee' })).text).toContain('one open since 2026-10-28');
     const done = await core.assistant.call('finish_item', { item: 'ground coffee' });
     expect(done.text).toBe('Ground coffee: the open one is finished. 0 bags left, running low.');
+  });
+});
+
+describe('used by weight', () => {
+  it('say what one weighs, and how fast it goes in grams, as the owner put it', async () => {
+    // The owner's chat: a 400 g jar of decaf, "can you set it as four grams a day?"
+    const core = await makeCore();
+    await core.assistant.call('add_item', { name: 'Decaf coffee', unit: 'jar' });
+    await core.automation.run('add_stock', { item: 'decaf coffee', quantity: 1 });
+    // Said in jars first (all an assistant could do before): the weight brings the grams up.
+    await core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 1, every_days: 100 } });
+    expect((await core.assistant.call('set_item_size', { item: 'decaf coffee', amount: 400, unit: 'g' })).text).toBe(
+      'One jar of Decaf coffee is 400 g. How fast it\'s used can now be said in g, and its prices compared by weight. It\'s used 1 jar every 100 days, which is 4 g a day; if that\'s how the person says it, change_item can keep it that way (uses with unit: "g").');
+    const changed = await core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 4, every_days: 1, unit: 'g' } });
+    expect(changed.text).toBe('Decaf coffee is updated: uses 4 g a day (a 400 g jar lasts 100 days), enough until 2027-02-05.');
+
+    const item = (await core.assistant.call('get_item', { item: 'decaf coffee' }));
+    expect(item.text).toContain('In stock: 1 jar (400 g).');
+    expect(item.text).toContain('Weighs: 1 jar = 400 g.');
+    expect(item.text).toContain('Uses 4 g a day (a 400 g jar lasts 100 days). Enough until 2027-02-05 (in 100 days).');
+    expect(item.data).toMatchObject({ weighs: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g', taken_out_by_larder: false }, runs_out_on: '2027-02-05' });
+
+    // Stock can be used by weight too; a plain use is a whole jar.
+    await core.automation.run('add_stock', { item: 'decaf coffee', quantity: 1 });
+    expect((await core.automation.run('use_stock', { item: 'decaf coffee', quantity: 100, unit: 'g' })).message).toBe('Decaf coffee: used 0.25 jar (100 g). 1.75 jars left, enough until 2027-04-21.');
+    expect((await core.automation.run('use_stock', { item: 'decaf coffee' })).message).toBe('Decaf coffee: used 1 jar (400 g). 0.75 jar left, enough until 2027-01-11.');
+  });
+
+  it('need the weight first, in the same kind of measure, and keep it while used by weight', async () => {
+    const core = await makeCore();
+    await core.assistant.call('add_item', { name: 'Decaf coffee', unit: 'jar' });
+    await expect(core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 4, every_days: 1, unit: 'g' } })).rejects.toThrow(
+      'Say how much 1 jar of Decaf coffee weighs or holds (1 jar = 400 g, say) before saying how much is used in g.');
+    // Both at once is fine.
+    expect((await core.assistant.call('change_item', { item: 'decaf coffee', weighs: { amount: 200, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' } })).text)
+      .toBe('Decaf coffee is updated: 1 jar = 200 g, uses 4 g a day (a 200 g jar lasts 50 days).');
+    await expect(core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 10, every_days: 1, unit: 'ml' } })).rejects.toThrow(
+      '1 jar of Decaf coffee is 200 g, so say how much is used in g or kg, or in jars.');
+    await expect(core.assistant.call('change_item', { item: 'decaf coffee', weighs: null })).rejects.toThrow('Say how much 1 jar of Decaf coffee weighs or holds');
+    // Something counted by weight needs no weight, and takes a usage in its own measure or a bigger one.
+    await core.assistant.call('add_item', { name: 'Cheddar', unit: 'g' });
+    await expect(core.assistant.call('change_item', { item: 'cheddar', weighs: { amount: 1, unit: 'kg' } })).rejects.toThrow("Cheddar is counted in g, so it doesn't need a weight");
+    expect((await core.assistant.call('change_item', { item: 'cheddar', uses: { amount: 0.25, every_days: 7, unit: 'kg' } })).text).toBe('Cheddar is updated: uses 0.25 kg a week.');
+    await expect(core.assistant.call('change_item', { item: 'cheddar', uses: { amount: 1, every_days: 7, unit: 'l' } })).rejects.toThrow('Cheddar is counted in g, so say how much is used in g or kg.');
+    await expect(core.assistant.call('add_item', { name: 'Milk', unit: 'ml', weighs: { amount: 1, unit: 'l' } })).rejects.toThrow("Milk is counted in ml, so it doesn't need a weight");
+  });
+
+  it('take a little out every day, in amounts that round cleanly', async () => {
+    const core = await makeCore();
+    const coffee = await core.products.create({ name: 'Decaf coffee', unit: 'jar', size: { amount: 400, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' } });
+    await core.stock.add({ productId: coffee.id, quantity: 1 });
+    core.clock.set('2026-10-29T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    let s = await core.products.summary(coffee.id);
+    expect(s.inStock).toBe(0.99);
+    expect((await core.assistant.call('list_items', {})).text).toBe('- Decaf coffee: 0.99 jar (396 g), uses 4 g a day (taken out by Larder), enough until 2027-02-06 (in 100 days)');
+    core.clock.set('2026-11-07T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    expect((await core.products.summary(coffee.id)).inStock).toBe(0.9);
+
+    // 5 g a day is 0.0125 of a jar, which would round to 0.013: it waits a day and takes 0.025.
+    const tea = await core.products.create({ name: 'Loose leaf tea', unit: 'bag', size: { amount: 400, unit: 'g' }, usage: { amount: 5, everyDays: 1, auto: true, unit: 'g' } });
+    await core.stock.add({ productId: tea.id, quantity: 1 });
+    core.clock.set('2026-11-08T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    expect((await core.products.summary(tea.id)).inStock).toBe(1);
+    core.clock.set('2026-11-09T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    expect((await core.products.summary(tea.id)).inStock).toBe(0.975);
+    core.clock.set('2026-12-17T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    s = await core.products.summary(tea.id);
+    expect([s.inStock, s.product.inUseSince]).toEqual([0.5, '2026-12-17']);
+  });
+
+  it('counting what is inside keeps a usage by weight, and divides what one weighs', async () => {
+    const core = await makeCore();
+    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', size: { amount: 30, unit: 'g' }, usage: { amount: 1.5, everyDays: 1, unit: 'g' } });
+    await core.stock.add({ productId: sleep.id, quantity: 2 });
+    const s = await core.stock.recount(sleep.id, { unit: 'tea bag', holds: 20 });
+    expect([s.inStock, s.product.size, s.product.usage, s.runsOutOn]).toEqual([40, { amount: 1.5, unit: 'g' }, { amount: 1.5, everyDays: 1, auto: false, unit: 'g' }, '2026-12-07']);
   });
 });

@@ -6,6 +6,7 @@
 import type { Category, Place, PlaceRef, Product, ProductSummary, Shop, StockEntry } from '../model';
 import type { CoreContext } from './context';
 import { addDays, amount, andList, daysBetween, roundQty } from '../util';
+import { ownUsage } from './packs';
 
 export interface World {
   products: Product[];
@@ -77,8 +78,8 @@ export function placeRef(world: Pick<World, 'placeById'>, id: string | null): Pl
  * else, and for wish list items.
  */
 function runOut(world: World, product: Product, inStock: number): { inUseUntil: string | null; runsOutOn: string } | null {
-  // Older records have no usage.
-  const usage = product.usage ?? null;
+  // In the item's own unit (4 g a day of a 400 g jar is 0.01 jar a day); older records have no usage.
+  const usage = ownUsage(product);
   if (!usage || product.wish) return null;
   const ends = product.inUseSince ? addDays(product.inUseSince, usage.everyDays) : null;
   const inUseUntil = ends && ends > world.today ? ends : null;

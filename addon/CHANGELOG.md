@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+Say what a jar weighs, and how much you use in grams. Asked to set a 400 g jar of decaf to "four grams a day", an assistant could only say "1 jar every 100 days", because how fast something's used had to be in what it's counted in, and the weight was only on the price card.
+
+- **Weighs:** an item counted in jars, bags or bottles can say what one weighs or holds, on its Edit page ("1 jar = 400 g"). It's the item's own now, so the item page shows it and assistants know it. The price card uses the same weight, and any weight already on a price card is moved to its item when 0.10.0 first starts.
+- **We use, by weight:** once an item has a weight, **We use** can be said in g or kg (ml or L for something that holds a volume): "We use 4 g a day". Switching between jars and grams keeps what it means (a jar a day is 400 g a day). The item says "Uses 4 g a day. A 400 g jar lasts 100 days. Enough until 16 Feb", and its stock shows by weight too ("1 jar · 400 g").
+- **Taken out a little every day:** with **Take them out of stock for me**, Larder takes 4 g out each day ("0.99 jar · 396 g"). When the daily amount doesn't round cleanly to thousandths of a jar, it waits a day or two so it stays accurate.
+- **A Use is just a use** for something used by weight: it takes a whole jar (a finished one), and doesn't start a period like a sensor.
+- **Assistants:** `add_item` and `change_item` take `weighs` and a `unit` on `uses` ("4 g a day"), `get_item` says what one weighs and how long one lasts, `use_stock` and the other stock tools take grams ("used 100 g"), and `set_item_size` mentions the grams a day when the usage was in jars. They're told about weights when they connect.
+- The example household has decaf coffee in 200 g jars, 4 g a day, taken out by Larder.
+
 ## 0.9.2
 
 Assistants keep the boxes. Asked to say how many tea bags are in a box, an assistant counted them as 80 tea bags but didn't say Larder still shows 4 boxes, so when you asked for boxes back it undid it and wrote "20 tea bags per box" in the notes.

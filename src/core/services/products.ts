@@ -1,12 +1,15 @@
 /** Products (generic items like "milk") and their variants (brands, packs, barcodes). */
 import { z } from 'zod';
 import { Product, Variant, type ProductDetail, type ProductSummary, type StockEntryView } from '../model';
-import { ProductCreate, ProductPatch, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
+import { ProductCreate, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { addDays, newId, pluralWord, unique } from '../util';
-import { sameUnit, singular } from './packs';
+import { addDays, amount, newId, pluralWord, unique } from '../util';
+import { isMeasure, measureOf, measurePerOne, sameUnit, singular } from './packs';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
+
+/** A change to a product: any of its fields, as given (defaults inside a usage are filled in). */
+type ProductUpdate = Partial<z.input<typeof ProductCreate>>;
 
 export function createProductService(ctx: CoreContext, validateFields: (fields: Record<string, unknown>) => Record<string, unknown>) {
   async function assertRefs(p: Pick<Product, 'categoryId' | 'preferredShopIds' | 'defaultPlaceId' | 'keptInPlaceIds'>) {
@@ -20,8 +23,21 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     // A pack is named in the singular ("boxes" is kept as "box"), as units are said "2 boxes".
     const pack = p.pack ? { ...p.pack, name: singular(p.pack.name) } : (p.pack ?? null);
     if (pack && sameUnit(pack.name, p.unit)) throw new ValidationError(`A ${pack.name} can't come in ${pluralWord(pack.name, 2)}. Count what's inside (tea bags, say) and say how many a ${pack.name} holds.`);
+    // Something counted in g or ml is its own weight; a size only says what one jar or bag is.
+    const size = p.size && !isMeasure(p.unit) ? p.size : null;
+    // A usage said in what it's counted in needs no unit; one said by weight needs to know what one weighs.
+    let usage = p.usage ?? null;
+    if (usage?.unit && sameUnit(usage.unit, measureOf(p.unit) ?? '')) usage = { ...usage, unit: null };
+    if (usage?.unit && !measurePerOne({ unit: p.unit, size }, usage.unit)) {
+      const one = p.unit === 'each' ? 'item' : p.unit;
+      const by = (m: string) => (m === 'g' || m === 'kg' ? 'g or kg' : 'ml or L');
+      const own = measureOf(p.unit);
+      if (own) throw new ValidationError(`${p.name} is counted in ${p.unit}, so say how much is used in ${by(own)}.`);
+      if (size) throw new ValidationError(`1 ${one} of ${p.name} is ${amount(size.amount, size.unit)}, so say how much is used in ${by(size.unit)}, or in ${pluralWord(one, 2)}.`);
+      throw new ValidationError(`Say how much 1 ${one} of ${p.name} weighs or holds (1 ${one} = 400 g, say) before saying how much is used in ${usage.unit === 'l' ? 'L' : usage.unit}.`);
+    }
     const aliases = unique(p.aliases.map((a) => a.trim()).filter((a) => a && a.toLowerCase() !== p.name.trim().toLowerCase()));
-    return { ...p, pack, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
+    return { ...p, pack, size, usage, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
   }
 
   async function assertBarcodesFree(barcodes: string[], exceptVariantId?: string) {
@@ -35,7 +51,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
   }
 
   // Reads the product and writes it back, so callers run it in the write queue (ctx.exclusive).
-  async function updateNow(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
+  async function updateNow(id: string, patch: ProductUpdate): Promise<Product> {
     const cur = await ctx.storage.products.get(id);
     if (!cur) throw new NotFoundError('Product', id);
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
@@ -126,7 +142,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       return product;
     },
 
-    async update(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
+    async update(id: string, patch: ProductUpdate): Promise<Product> {
       return ctx.exclusive(() => updateNow(id, patch));
     },
 
@@ -178,9 +194,9 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       for (const raw of all as Array<Product & { lastsDays?: number | null; autoUse?: boolean }>) {
         if (!('lastsDays' in raw) && !('autoUse' in raw) && 'pack' in raw && 'usage' in raw) continue;
         const { lastsDays, autoUse, ...rest } = raw;
-        const next: Product = { ...rest, pack: rest.pack ?? null, usage: rest.usage ?? null, inUseSince: rest.inUseSince ?? null };
+        const next: Product = { ...rest, pack: rest.pack ?? null, size: rest.size ?? null, usage: rest.usage ?? null, inUseSince: rest.inUseSince ?? null };
         if (lastsDays && !rest.usage) {
-          next.usage = { amount: 1, everyDays: lastsDays, auto: !!autoUse };
+          next.usage = { amount: 1, everyDays: lastsDays, auto: !!autoUse, unit: null };
           const warn = categories.find((c) => c.id === rest.categoryId)?.warnDays ?? household.expiryWarningDays;
           next.minQuantity = Math.max(rest.minQuantity ?? 0, Math.floor(warn / lastsDays) + 1);
         }

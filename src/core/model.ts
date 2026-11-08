@@ -69,15 +69,29 @@ export const Pack = z.object({
 });
 export type Pack = z.infer<typeof Pack>;
 
+/** A weight or volume: g, kg, ml or l. */
+export const Measure = z.enum(['g', 'kg', 'ml', 'l']);
+export type Measure = z.infer<typeof Measure>;
+
+/** How much one of what an item is counted in weighs or holds: a jar of coffee is 400 g. */
+export const Size = z.object({
+  amount: z.number().positive().max(1_000_000),
+  unit: Measure,
+});
+export type Size = z.infer<typeof Size>;
+
 /**
- * How fast it's used: `amount` of the item's own unit every `everyDays` days (1 tea bag
- * every day, 1 sensor every 14 days, 2 rolls every 7). With `auto`, Larder takes them out
- * of stock by itself, one period at a time.
+ * How fast it's used: `amount` every `everyDays` days (1 tea bag every day, 1 sensor every
+ * 14 days, 2 rolls every 7), in the item's own unit, or in `unit` when it's said by weight or
+ * volume (4 g a day of coffee counted in jars, which needs the item's size). With `auto`,
+ * Larder takes them out of stock by itself, one period at a time.
  */
 export const Usage = z.object({
   amount: z.number().positive().max(100000),
   everyDays: z.number().int().min(1).max(3650),
   auto: z.boolean().default(false),
+  /** What `amount` is in when it isn't the item's own unit: g, kg, ml or l. */
+  unit: Measure.nullable().default(null),
 });
 export type Usage = z.infer<typeof Usage>;
 
@@ -93,6 +107,8 @@ export const Product = z.object({
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
   /** Comes in: how it's sold, e.g. a box of 20. Stock is still counted in `unit`. */
   pack: Pack.nullable().default(null),
+  /** Weighs or holds: how much one of `unit` is (1 jar = 400 g). None for things counted by weight or volume. */
+  size: Size.nullable().default(null),
   /** How fast it's used, and whether Larder takes them out of stock by itself. */
   usage: Usage.nullable().default(null),
   /**

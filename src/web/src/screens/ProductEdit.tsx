@@ -51,8 +51,14 @@ export function ProductEdit() {
   function saveRecounted(r: { packName: string; holds: number }) {
     const f = form!;
     const times = (now: number | null, before: number | null) => (now !== null && now === before ? Math.round(now * r.holds * 1000) / 1000 : now);
-    const sameUsage = f.usageAmount === initial!.usageAmount && f.usageEvery === initial!.usageEvery && f.usagePer === initial!.usagePer;
-    const scaled: ProductFormValue = { ...f, minQuantity: times(f.minQuantity, initial!.minQuantity), stockUpTo: times(f.stockUpTo, initial!.stockUpTo), usageAmount: sameUsage ? times(f.usageAmount, initial!.usageAmount) : f.usageAmount };
+    const sameUsage = f.usageAmount === initial!.usageAmount && f.usageEvery === initial!.usageEvery && f.usagePer === initial!.usagePer && f.usageUnit === initial!.usageUnit;
+    // A usage by weight (4 g a day) stays as it is; what one weighs is now what one tea bag weighs.
+    const sameSize = f.sizeAmount === initial!.sizeAmount && f.sizeUnit === initial!.sizeUnit;
+    const scaled: ProductFormValue = {
+      ...f, minQuantity: times(f.minQuantity, initial!.minQuantity), stockUpTo: times(f.stockUpTo, initial!.stockUpTo),
+      usageAmount: sameUsage && !f.usageUnit ? times(f.usageAmount, initial!.usageAmount) : f.usageAmount,
+      sizeAmount: sameSize && f.sizeAmount ? Math.round((f.sizeAmount / r.holds) * 1000) / 1000 : f.sizeAmount,
+    };
     return run(async () => {
       await api.stock.recount(id, { unit: f.unit.trim(), holds: r.holds, pack: r.packName });
       try {

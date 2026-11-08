@@ -19,4 +19,4 @@ export { ASSISTANT_INSTRUCTIONS, type AssistantTool, type ToolInfo, type ToolRes
 export { DEFAULT_CATEGORIES, SHOP_PRESETS } from './services/catalogue';
 export { addDays, amount, andList, daysBetween, localDate, newId, pluralWord, publicWebAddress, roundQty } from './util';
 export { photoType } from './photos';
-export { inOwnUnit, oneOf, packsText, sameUnit, singular } from './services/packs';
+export { inOwnUnit, measurePerOne, oneOf, ownUsage, packsText, sameUnit, singular } from './services/packs';

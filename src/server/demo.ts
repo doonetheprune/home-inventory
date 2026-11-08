@@ -53,7 +53,7 @@ export async function seedDemo(core: CoreApi): Promise<number> {
     return created;
   };
 
-  await product({ name: 'Baby spinach', aliases: ['spinach', 'salad'], categoryId: cats.Food, unit: 'bag', shelfLifeDays: 5, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: today }]);
+  await product({ name: 'Baby spinach', aliases: ['spinach', 'salad'], categoryId: cats.Food, unit: 'bag', size: { amount: 200, unit: 'g' }, shelfLifeDays: 5, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: today }]);
   await product({ name: 'Chicken thighs', aliases: ['chicken'], categoryId: cats.Food, unit: 'kg', shelfLifeDays: 4, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: addDays(today, 1) }]);
   await product({ name: 'Semi-skimmed milk', aliases: ['milk'], categoryId: cats.Food, unit: 'bottle', shelfLifeDays: 7, minQuantity: 1, defaultPlaceId: fridge, preferredShopIds: [shopIds.Aldi!] }, [{ quantity: 2, expiresOn: addDays(today, 2) }]);
   await product({ name: 'Baked beans', aliases: ['beans', 'beanz'], categoryId: cats.Food, unit: 'tin', shelfLifeDays: 730, minQuantity: 4, defaultPlaceId: pantry }, [{ quantity: 6 }]);
@@ -63,6 +63,8 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Mature cheddar', aliases: ['cheese'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 30, minQuantity: 200, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: fridge }, [{ quantity: 100 }]);
   // Counted in what's used one at a time, sold by the box, and taken out by Larder as it goes.
   await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'tea bag', pack: { name: 'box', holds: 80 }, usage: { amount: 2, everyDays: 1, auto: true }, minQuantity: 28, defaultPlaceId: pantry }, [{ quantity: 100 }]);
+  // Bought in jars and used by weight: Larder takes 4 g out each day.
+  await product({ name: 'Decaf coffee', aliases: ['instant coffee'], categoryId: cats.Food, unit: 'jar', size: { amount: 200, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' }, minQuantity: 1, defaultPlaceId: pantry }, [{ quantity: 2 }]);
   await product({ name: 'Oat milk', aliases: ['oatly'], categoryId: cats.Food, unit: 'carton', minQuantity: 3, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: pantry }, [{ quantity: 1 }]);
   await product({ name: 'Fish fingers', categoryId: cats.Food, unit: 'pack', minQuantity: 1, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: cf2 });
 

@@ -11,7 +11,7 @@ import * as In from '../inputs';
 import type { Recount, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
 import { addDays, localDate, newId, pluralWord, roundQty } from '../util';
-import { inOwnUnit, oneOf, sameUnit, singular, startsOne } from './packs';
+import { inOwnUnit, oneOf, ownUsage, periodsPerTake, sameUnit, singular, startsOne } from './packs';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
@@ -574,21 +574,23 @@ export function createStockService(ctx: CoreContext) {
       const changes: Change[] = [];
       let taken = 0;
       for (const product of world.products) {
-        const usage = product.usage ?? null;
+        // In the item's own unit; a little at a time for something used by weight (0.01 jar a day).
+        const usage = ownUsage(product);
         if (!usage?.auto || !product.inUseSince || product.wish || product.rechargeable || isRenewal(world, product)) continue;
+        const k = periodsPerTake(usage.amount);
         const t = txn(world, product.id);
         const work = t.original.map((e) => ({ ...e }));
         const movements: Movement[] = [];
         let since = product.inUseSince;
         // Bounded, so a tiny amount after years off can't run away.
         for (let i = 0; i < 4000; i++) {
-          const next = addDays(since, usage.everyDays);
+          const next = addDays(since, usage.everyDays * k);
           if (next > world.today) break;
           const left = work.filter((e) => e.status === 'in_stock' && e.quantity > 0);
           const available = roundQty(left.reduce((n, e) => n + e.quantity, 0));
           if (available <= EPS) break;
           const added = left.map((e) => localDate(new Date(e.addedAt), timeZone)).sort()[0]!;
-          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(usage.amount, available), note: 'Taken by Larder' }));
+          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(roundQty(usage.amount * k), available), note: 'Taken by Larder' }));
           since = added > next ? added : next;
           taken++;
         }
@@ -620,7 +622,10 @@ export function createStockService(ctx: CoreContext) {
       }));
       const update: Partial<Product> = {
         unit: input.unit, pack: { name: packName, holds: f }, minQuantity: times(p.minQuantity), stockUpTo: times(p.stockUpTo ?? null),
-        usage: p.usage ? { ...p.usage, amount: roundQty(p.usage.amount * f) } : null,
+        // A usage by weight stays as it is (4 g a day); one in what it was counted in is multiplied. What one
+        // weighs is divided: a 30 g box of 20 is 1.5 g a tea bag.
+        usage: p.usage ? { ...p.usage, amount: p.usage.unit ? p.usage.amount : roundQty(p.usage.amount * f) } : null,
+        size: p.size ? { ...p.size, amount: Math.round((p.size.amount / f) * 1000) / 1000 } : null,
       };
       const s = await commit(t, work, [movement(p, 'adjust', 0, { note: `Now counted in ${pluralWord(input.unit, 2)} (1 ${packName} = ${f})` })], 'adjust', update);
       ctx.publish('product.recounted', { productId, name: p.name, from: p.unit, to: input.unit, factor: f });
