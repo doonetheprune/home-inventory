@@ -60,6 +60,26 @@ export const Link = z.object({
 });
 export type Link = z.infer<typeof Link>;
 
+/** A count (bag, tea bag), a weight (g, kg) or a volume (ml, L, pint). */
+export const UnitKind = z.enum(['count', 'weight', 'volume']);
+export type UnitKind = z.infer<typeof UnitKind>;
+
+/** A unit on Larder's list (src/core/services/units.ts), built in or added by the household. */
+export const Unit = z.object({
+  /** How it's stored on items: the singular in lower case, e.g. "tea bag", "l". */
+  key: z.string(),
+  /** One of it, as shown: "tea bag", "L". */
+  one: z.string(),
+  /** Several: "tea bags", "L". */
+  many: z.string(),
+  kind: UnitKind,
+  /** For a weight or volume, how many g or ml one is (kg: 1000, pint: 568.261). Null for a count. */
+  factor: z.number().nullable(),
+  /** False for words the household added (Settings → Units). */
+  builtIn: z.boolean(),
+});
+export type Unit = z.infer<typeof Unit>;
+
 /** How it's sold: a box of 20 (in the item's own unit). */
 export const Pack = z.object({
   /** "box", "pack", "bag". */
