@@ -51,7 +51,7 @@ export function measureOf(unit: string): Measure | null {
 export const isMeasure = (unit: string) => measureOf(unit) !== null;
 
 /** A measure as it's written: litres as "L" (1.5 L), the rest as they are. */
-const written = (m: Measure) => (m === 'l' ? 'L' : m);
+const written = (m: string) => (m === 'l' ? 'L' : m);
 
 /** "g or kg", "ml or l": what an item's weight or volume can be given in, or null when Larder can't tell. */
 function measuresFor(product: Pick<Item, 'unit' | 'size'>): string | null {

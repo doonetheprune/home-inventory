@@ -100,18 +100,33 @@ export const Size = z.object({
 });
 export type Size = z.infer<typeof Size>;
 
+/** An amount in a unit from the list (src/core/services/units.ts): what one contains, 20 tea bags or 1 kg. */
+export const UnitAmount = z.object({
+  amount: z.number().positive().max(1_000_000),
+  /** A key from the unit list, e.g. "tea bag", "kg", "pint". */
+  unit: z.string().trim().min(1).max(30),
+});
+export type UnitAmount = z.infer<typeof UnitAmount>;
+
+/** How much one weighs, in grams, or holds, in millilitres for liquids. Always g or ml: 1 kg is kept as 1000 g. */
+export const Weight = z.object({
+  amount: z.number().positive().max(100_000_000),
+  unit: z.enum(['g', 'ml']),
+});
+export type Weight = z.infer<typeof Weight>;
+
 /**
- * How fast it's used: `amount` every `everyDays` days (1 tea bag every day, 1 sensor every
- * 14 days, 2 rolls every 7), in the item's own unit, or in `unit` when it's said by weight or
- * volume (4 g a day of coffee counted in jars, which needs the item's size). With `auto`,
- * Larder takes them out of stock by itself, one period at a time.
+ * How fast it's used: `amount` every `everyDays` days (1 tea bag a day, 1 sensor every 14 days,
+ * 4 g a day), kept as it was said. In what it's bought in, in what one contains when that's a
+ * count, or in a weight or volume once it has a Weight. With `auto`, Larder takes them out of
+ * stock by itself, a little at a time.
  */
 export const Usage = z.object({
   amount: z.number().positive().max(100000),
   everyDays: z.number().int().min(1).max(3650),
   auto: z.boolean().default(false),
-  /** What `amount` is in when it isn't the item's own unit: g, kg, ml or l. */
-  unit: Measure.nullable().default(null),
+  /** What `amount` is in, a key from the unit list; null for what it's bought in. */
+  unit: z.string().trim().min(1).max(30).nullable().default(null),
 });
 export type Usage = z.infer<typeof Usage>;
 
@@ -121,13 +136,20 @@ export const Product = z.object({
   /** Other names people use: "loo roll", "bog roll". Used by search and voice. */
   aliases: z.array(z.string().min(1).max(80)).default([]),
   categoryId: Id.nullable().default(null),
-  /** What stock is counted in: "roll", "tin", "L", "kg", "each". */
-  unit: z.string().min(1).max(20).default('each'),
+  /**
+   * Bought in: what you buy and count it in, a key from the unit list (box, jar, roll, each), or g
+   * or ml for things bought loose. Stock, minimums, stock-up amounts, orders and history are in this.
+   */
+  unit: z.string().min(1).max(30).default('each'),
+  /** Contains: what one holds, as printed on the pack. A count (20 tea bags) or an amount (1 kg, 4 pints). */
+  contents: UnitAmount.nullable().default(null),
+  /** Weight: what one weighs (or holds), in g or ml. From Contains when that's an amount; the only thing used for sums in g or ml. */
+  weight: Weight.nullable().default(null),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
-  /** Comes in: how it's sold, e.g. a box of 20. Stock is still counted in `unit`. */
+  /** Deprecated: turned into Bought in and Contains by the 0.10.0 upgrade. Removed once nothing reads it (docs/plans/units.md). */
   pack: Pack.nullable().default(null),
-  /** Weighs or holds: how much one of `unit` is (1 jar = 400 g). None for things counted by weight or volume. */
+  /** Deprecated: became `weight` in 0.10.0. Removed once nothing reads it (docs/plans/units.md). */
   size: Size.nullable().default(null),
   /** How fast it's used, and whether Larder takes them out of stock by itself. */
   usage: Usage.nullable().default(null),
@@ -163,6 +185,8 @@ export const Product = z.object({
   /** Linked Home Assistant device ids (used from Phase 2). */
   haDeviceIds: z.array(z.string().max(200)).default([]),
   fields: ModuleFields.default({}),
+  /** Why the owner should look at it: set by an upgrade (an old unit not on the list, a pack turned round). Cleared by saving it from Edit, or "Looks right". */
+  needsCheck: z.string().max(300).nullable().default(null),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

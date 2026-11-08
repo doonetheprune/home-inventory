@@ -2787,7 +2787,63 @@
             "default": "each",
             "type": "string",
             "minLength": 1,
-            "maxLength": 20
+            "maxLength": 30
+          },
+          "contents": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 30
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weight": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "ml"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "shelfLifeDays": {
             "default": null,
@@ -2885,12 +2941,8 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "enum": [
-                          "g",
-                          "kg",
-                          "ml",
-                          "l"
-                        ]
+                        "minLength": 1,
+                        "maxLength": 30
                       },
                       {
                         "type": "null"
@@ -3031,6 +3083,18 @@
               "type": "string"
             },
             "additionalProperties": {}
+          },
+          "needsCheck": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -7595,7 +7659,65 @@
             "default": "each",
             "type": "string",
             "minLength": 1,
-            "maxLength": 20
+            "maxLength": 30
+          },
+          "contents": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 30
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weight": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "ml"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "shelfLifeDays": {
             "default": null,
@@ -7695,12 +7817,8 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "enum": [
-                          "g",
-                          "kg",
-                          "ml",
-                          "l"
-                        ]
+                        "minLength": 1,
+                        "maxLength": 30
                       },
                       {
                         "type": "null"
@@ -7845,6 +7963,18 @@
             },
             "additionalProperties": {}
           },
+          "needsCheck": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "minLength": 10
@@ -7860,6 +7990,8 @@
           "aliases",
           "categoryId",
           "unit",
+          "contents",
+          "weight",
           "shelfLifeDays",
           "pack",
           "size",
@@ -7879,6 +8011,7 @@
           "nfcTags",
           "haDeviceIds",
           "fields",
+          "needsCheck",
           "createdAt",
           "updatedAt"
         ],
@@ -11421,7 +11554,61 @@
                     "default": "each",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 20
+                    "maxLength": 30
+                  },
+                  "contents": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 30
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "weight": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 30
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "shelfLifeDays": {
                     "default": null,
@@ -11519,12 +11706,8 @@
                             "anyOf": [
                               {
                                 "type": "string",
-                                "enum": [
-                                  "g",
-                                  "kg",
-                                  "ml",
-                                  "l"
-                                ]
+                                "minLength": 1,
+                                "maxLength": 30
                               },
                               {
                                 "type": "null"
@@ -11665,6 +11848,18 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "needsCheck": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -11759,7 +11954,59 @@
                   "unit": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 20
+                    "maxLength": 30
+                  },
+                  "contents": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 30
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "weight": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 30
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "shelfLifeDays": {
                     "anyOf": [
@@ -11853,12 +12100,8 @@
                             "anyOf": [
                               {
                                 "type": "string",
-                                "enum": [
-                                  "g",
-                                  "kg",
-                                  "ml",
-                                  "l"
-                                ]
+                                "minLength": 1,
+                                "maxLength": 30
                               },
                               {
                                 "type": "null"
@@ -11984,6 +12227,17 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "needsCheck": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -13779,7 +14033,61 @@
                         "default": "each",
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 20
+                        "maxLength": 30
+                      },
+                      "contents": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1000000
+                              },
+                              "unit": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 30
+                              }
+                            },
+                            "required": [
+                              "amount",
+                              "unit"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "weight": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1000000
+                              },
+                              "unit": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 30
+                              }
+                            },
+                            "required": [
+                              "amount",
+                              "unit"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "shelfLifeDays": {
                         "default": null,
@@ -13877,12 +14185,8 @@
                                 "anyOf": [
                                   {
                                     "type": "string",
-                                    "enum": [
-                                      "g",
-                                      "kg",
-                                      "ml",
-                                      "l"
-                                    ]
+                                    "minLength": 1,
+                                    "maxLength": 30
                                   },
                                   {
                                     "type": "null"
@@ -14023,6 +14327,18 @@
                           "type": "string"
                         },
                         "additionalProperties": {}
+                      },
+                      "needsCheck": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 300
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [

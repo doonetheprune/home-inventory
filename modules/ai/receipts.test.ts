@@ -48,7 +48,7 @@ async function household(answer: () => ReceiptReading) {
   const core = await makeCore({ modules: [ai, pricing], fetch: net.fetch });
   await call(core, 'PUT', '/settings', { claude: { apiKey: 'sk-ant-test-0000-wxyz', model: 'claude-haiku-5-5' } });
   const beans = await core.products.create({ name: 'Baked beans', unit: 'tin', aliases: ['beans'] });
-  const milk = await core.products.create({ name: 'Semi-skimmed milk', unit: 'pint' });
+  const milk = await core.products.create({ name: 'Semi-skimmed milk', unit: 'bottle' });
   const loo = await core.products.create({ name: 'Toilet roll', unit: 'roll', aliases: ['loo roll'] });
   await core.products.addVariant(loo.id, { name: 'Andrex Classic Clean 9 rolls' });
   await core.products.create({ name: 'Garden gnome', wish: true });
@@ -82,7 +82,7 @@ describe('AI module: receipts', () => {
       lines: [
         { text: 'HNZ BKD BNZ 4X415G', count: 1, price: 3.5, item: { id: beans.id, name: 'Baked beans', unit: 'tin' }, quantity: 4, match: 'sure' },
         { text: 'ANDREX CLASSIC 9PK', count: 2, price: 6.5, item: { id: loo.id, name: 'Toilet roll', unit: 'roll' }, quantity: 18, match: 'sure' },
-        { text: 'TESCO SEMI SKMD 4PT', count: 1, price: 1.6, item: { id: milk.id, name: 'Semi-skimmed milk', unit: 'pint' }, quantity: 4, match: 'guess' },
+        { text: 'TESCO SEMI SKMD 4PT', count: 1, price: 1.6, item: { id: milk.id, name: 'Semi-skimmed milk', unit: 'bottle' }, quantity: 4, match: 'guess' },
         { text: 'TESCO GARLIC BREAD', count: 1, price: 1, item: null, quantity: 1, match: 'none' },
         // An item number that isn't on the list is no match, not a crash.
         { text: 'MYSTERY LINE', count: 1, price: null, item: null, quantity: 1, match: 'none' },
@@ -97,7 +97,7 @@ describe('AI module: receipts', () => {
     // The AI is shown the household's items with their other names and brands, numbered; not the wish list.
     const prompt = net.prompts()[0]!;
     expect(prompt).toContain('1. Baked beans (counted in tin; also beans)');
-    expect(prompt).toContain('2. Semi-skimmed milk (counted in pint)');
+    expect(prompt).toContain('2. Semi-skimmed milk (counted in bottle)');
     expect(prompt).toContain('3. Toilet roll (counted in roll; also loo roll; brands Andrex Classic Clean 9 rolls)');
     expect(prompt).not.toContain('Garden gnome');
     expect(prompt).toContain('never pick the nearest one just to have one');

@@ -170,12 +170,12 @@ describe('MCP server', () => {
   });
 
   it('changes anything about an item after it was added', async () => {
-    await client.callTool({ name: 'add_item', arguments: { name: 'Porridge oats', category: 'Food', unit: 'kg' } });
+    await client.callTool({ name: 'add_item', arguments: { name: 'Porridge oats', category: 'Food', unit: 'bag' } });
     // "porridge oats", as "oats" could be the oat drink too.
     let r: Any = await client.callTool({ name: 'change_item', arguments: { item: 'porridge oats', minimum: 2, shops: ['aldi', 'tesco'] } });
-    expect(text(r)).toBe('Porridge oats is updated: bought from Aldi and Tesco, low below 2 kg.');
+    expect(text(r)).toBe('Porridge oats is updated: bought from Aldi and Tesco, low below 2 bags.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'porridge oats' } });
-    expect(text(r)).toContain('Running low below 2 kg: it is low now.');
+    expect(text(r)).toContain('Running low below 2 bags: it is low now.');
     r = await client.callTool({ name: 'add_place', arguments: { name: 'Pantry', code: 'P1' } });
     expect(text(r)).toBe('Added Pantry (code P1).');
     r = await client.callTool({ name: 'add_place', arguments: { name: 'Top shelf', inside: 'pantry' } });
@@ -183,9 +183,9 @@ describe('MCP server', () => {
     r = await client.callTool({ name: 'change_item', arguments: { item: 'porridge oats', usual_place: 'top shelf', shops: [], minimum: null, aliases: ['oats'], name: 'Oats' } });
     expect(text(r)).toBe('Oats is updated: from any shop that sells it, usually lives in Pantry › Top shelf, never counts as low.');
     r = await client.callTool({ name: 'add_stock', arguments: { item: 'oats', quantity: 1 } });
-    expect(text(r)).toContain('Oats: added 1 kg');
+    expect(text(r)).toContain('Oats: added 1 bag');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'oats' } });
-    expect(text(r)).toContain('- 1 kg in Pantry › Top shelf');
+    expect(text(r)).toContain('- 1 bag in Pantry › Top shelf');
     r = await client.callTool({ name: 'change_item', arguments: { item: 'oats', name: 'Toilet roll' } });
     expect(text(r)).toBe('There\'s already an item called Toilet roll.');
   });
@@ -226,20 +226,20 @@ describe('MCP server', () => {
 
     await client.callTool({ name: 'add_stock', arguments: { item: 'oats', quantity: 2, place: 'R1-1', expires_on: '2027-03-01' } });
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', quantity: 3 } });
-    expect(text(r)).toBe('Oats has 2 batches. Say which by place or expiry date. Candidates: 2 kg in Pantry › Racking › Shelf 1, box 1, expires 2027-03-01; 1 kg in Pantry › High shelf.');
+    expect(text(r)).toBe('Oats has 2 batches. Say which by place or expiry date. Candidates: 2 bags in Pantry › Racking › Shelf 1, box 1, expires 2027-03-01; 1 bag in Pantry › High shelf.');
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', place: 'r1-1', quantity: 3, new_expiry: '2027-04-01' } });
-    expect(text(r)).toBe('Oats: corrected. 4 kg in stock.');
+    expect(text(r)).toBe('Oats: corrected. 4 bags in stock.');
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', expires_on: '2027-04-01', remove: true } });
-    expect(text(r)).toBe('Oats: removed the batch of 3 kg in Pantry › Racking › Shelf 1, box 1, expires 2027-04-01. 1 kg in stock.');
+    expect(text(r)).toBe('Oats: removed the batch of 3 bags in Pantry › Racking › Shelf 1, box 1, expires 2027-04-01. 1 bag in stock.');
     r = await client.callTool({ name: 'recent_changes', arguments: { item: 'oats', limit: 3 } });
-    expect(text(r)).toMatch(/Oats removed 3 kg[\s\S]*Oats corrected by \+1 kg/);
+    expect(text(r)).toMatch(/Oats removed 3 bags[\s\S]*Oats corrected by \+1 bag/);
 
     r = await client.callTool({ name: 'remove_from_shopping_list', arguments: { item: 'chopped tomatoes' } });
     expect(text(r)).toContain('Chopped tomatoes is off the shopping list');
     r = await client.callTool({ name: 'deliveries', arguments: {} });
     expect(text(r)).toBe('Nothing is on the way.');
     r = await client.callTool({ name: 'remove_item', arguments: { item: 'oats' } });
-    expect(text(r)).toBe('Removed Oats and its 1 kg in stock.');
+    expect(text(r)).toBe('Removed Oats and its 1 bag in stock.');
     r = await client.callTool({ name: 'remove_shop', arguments: { shop: 'tesco' } });
     expect(text(r)).toBe('Removed Tesco.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'cling film' } });

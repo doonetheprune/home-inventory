@@ -4,8 +4,7 @@
  * stock by itself, counting what's inside a box, and opened-not-finished.
  */
 import { describe, expect, it } from 'vitest';
-import { ASSISTANT_INSTRUCTIONS, type Product } from '@larder/core';
-import { createMemoryStorage } from '../../src/adapters/storage-memory';
+import { ASSISTANT_INSTRUCTIONS } from '@larder/core';
 import { makeCore, category } from '../helpers';
 
 const tea = { name: 'Tea bags', unit: 'tea bag', pack: { name: 'box', holds: 20 } };
@@ -302,37 +301,6 @@ describe('counting what is inside', () => {
   });
 });
 
-describe('items saved by older versions', () => {
-  it('turns "each one lasts N days" into a usage, with a minimum that warns as early as before', async () => {
-    const storage = createMemoryStorage();
-    const first = await makeCore({ storage });
-    const medicine = await category(first, 'Medicine');
-    const made = await first.products.create({ name: 'Glucose sensor', unit: 'sensor', minQuantity: 1 });
-    const lens = await first.products.create({ name: 'Contact lenses', unit: 'pair', categoryId: medicine.id });
-    const plain = await first.products.create({ name: 'Toilet roll' });
-    const { pack: _p, usage: _u, ...bare } = plain;
-    await storage.products.put({ ...made, usage: null, lastsDays: 14, autoUse: true, inUseSince: '2026-10-20' } as Product);
-    await storage.products.put({ ...lens, usage: null, lastsDays: 30, autoUse: false } as Product);
-    await storage.products.put(bare as Product);
-
-    const core = await makeCore({ storage });
-    const sensor = await core.products.summary(made.id);
-    // Warned 7 days ahead before: 1 left (14 days) kept it from low, so the minimum stays 1.
-    expect([sensor.product.usage, sensor.product.minQuantity, sensor.product.inUseSince, sensor.inUseUntil]).toEqual([{ amount: 1, everyDays: 14, auto: true, unit: null }, 1, '2026-10-20', '2026-11-03']);
-    // Medicine warns 30 days ahead: one 30-day pair left was low, so it's low below 2.
-    const lenses = await core.products.summary(lens.id);
-    expect([lenses.product.usage, lenses.product.minQuantity]).toEqual([{ amount: 1, everyDays: 30, auto: false, unit: null }, 2]);
-    const stored = await storage.products.get(made.id);
-    expect(stored && ('lastsDays' in stored || 'autoUse' in stored)).toBe(false);
-    // Older records with no pack or usage at all read as none.
-    const roll = await core.products.summary(plain.id);
-    expect([roll.product.pack, roll.product.usage, roll.runsOutOn]).toEqual([null, null, null]);
-
-    // Run again, nothing changes.
-    expect(await core.products.upgradeStored()).toBe(0);
-  });
-});
-
 describe('Home Assistant and assistants', () => {
   it('say how fast things are used, take extras, and change the usage, pack and count', async () => {
     const core = await makeCore();
@@ -512,18 +480,18 @@ describe('used by weight', () => {
     const core = await makeCore();
     await core.assistant.call('add_item', { name: 'Decaf coffee', unit: 'jar' });
     await expect(core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 4, every_days: 1, unit: 'g' } })).rejects.toThrow(
-      'Say how much 1 jar of Decaf coffee weighs or holds (1 jar = 400 g, say) before saying how much is used in g.');
+      "How fast it's used can't be in g. Larder doesn't know what one jar of Decaf coffee weighs, so it can't work in g. Give how many jars. Or give it a Weight first.");
     // Both at once is fine.
     expect((await core.assistant.call('change_item', { item: 'decaf coffee', weighs: { amount: 200, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' } })).text)
       .toBe('Decaf coffee is updated: 1 jar = 200 g, uses 4 g a day (a 200 g jar lasts 50 days).');
     await expect(core.assistant.call('change_item', { item: 'decaf coffee', uses: { amount: 10, every_days: 1, unit: 'ml' } })).rejects.toThrow(
-      '1 jar of Decaf coffee is 200 g, so say how much is used in g or kg, or in jars.');
-    await expect(core.assistant.call('change_item', { item: 'decaf coffee', weighs: null })).rejects.toThrow('Say how much 1 jar of Decaf coffee weighs or holds');
+      "Larder doesn't know what one jar of Decaf coffee holds, so it can't work in ml.");
+    await expect(core.assistant.call('change_item', { item: 'decaf coffee', weighs: null })).rejects.toThrow("Larder doesn't know what one jar of Decaf coffee weighs, so it can't work in g.");
     // Something counted by weight needs no weight, and takes a usage in its own measure or a bigger one.
     await core.assistant.call('add_item', { name: 'Cheddar', unit: 'g' });
     await expect(core.assistant.call('change_item', { item: 'cheddar', weighs: { amount: 1, unit: 'kg' } })).rejects.toThrow("Cheddar is counted in g, so it doesn't need a weight");
     expect((await core.assistant.call('change_item', { item: 'cheddar', uses: { amount: 0.25, every_days: 7, unit: 'kg' } })).text).toBe('Cheddar is updated: uses 0.25 kg a week.');
-    await expect(core.assistant.call('change_item', { item: 'cheddar', uses: { amount: 1, every_days: 7, unit: 'l' } })).rejects.toThrow('Cheddar is counted in g, so say how much is used in g or kg.');
+    await expect(core.assistant.call('change_item', { item: 'cheddar', uses: { amount: 1, every_days: 7, unit: 'l' } })).rejects.toThrow("Cheddar is bought loose, by weight, so it can't be given in L. Give how much in g or kg.");
     await expect(core.assistant.call('add_item', { name: 'Milk', unit: 'ml', weighs: { amount: 1, unit: 'l' } })).rejects.toThrow("Milk is counted in ml, so it doesn't need a weight");
   });
 

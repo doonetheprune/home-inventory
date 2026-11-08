@@ -108,6 +108,13 @@ export interface StockChanges {
   movements?: Movement[];
   /** Products touched by this change (e.g. to clear a wish flag). */
   products?: Product[];
+  /**
+   * An item now counted in another unit (the 0.10.0 upgrade turns 80 tea bags into 4 boxes):
+   * the quantity of every movement already in its history is multiplied by `factor` (and kept
+   * to thousandths), so history is in what it's bought in, like its stock. Done before this
+   * batch's `movements` are added.
+   */
+  rescale?: Array<{ productId: string; factor: number }>;
 }
 
 export interface Storage {

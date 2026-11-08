@@ -89,13 +89,13 @@ const everyDays = (v: ProductFormValue) => Math.max(1, Math.round(v.usageEvery))
 const CONTAINERS = new Set(['box', 'pack', 'packet', 'case', 'multipack', 'tray', 'bundle', 'crate']);
 
 /** The form's fields for an item's pack, size and usage. */
-export function usageForm(p: { pack?: { name: string; holds: number } | null; size?: { amount: number; unit: Measure } | null; usage?: { amount: number; everyDays: number; auto: boolean; unit?: Measure | null } | null; inUseSince: string | null }): Pick<ProductFormValue, 'packName' | 'packHolds' | 'sizeAmount' | 'sizeUnit' | 'usageAmount' | 'usageUnit' | 'usageEvery' | 'usagePer' | 'takeOut' | 'inUseSince'> {
+export function usageForm(p: { pack?: { name: string; holds: number } | null; size?: { amount: number; unit: Measure } | null; usage?: { amount: number; everyDays: number; auto: boolean; unit?: string | null } | null; inUseSince: string | null }): Pick<ProductFormValue, 'packName' | 'packHolds' | 'sizeAmount' | 'sizeUnit' | 'usageAmount' | 'usageUnit' | 'usageEvery' | 'usagePer' | 'takeOut' | 'inUseSince'> {
   const u = p.usage ?? null;
   const weeks = !!u && u.everyDays % 7 === 0;
   return {
     packName: p.pack?.name ?? '', packHolds: p.pack?.holds ?? 20,
     sizeAmount: p.size?.amount ?? null, sizeUnit: p.size?.unit ?? 'g',
-    usageAmount: u?.amount ?? null, usageUnit: u?.unit ?? '', usageEvery: u ? (weeks ? u.everyDays / 7 : u.everyDays) : 1, usagePer: weeks ? 'week' : 'day',
+    usageAmount: u?.amount ?? null, usageUnit: (u?.unit ?? '') as Measure | '', usageEvery: u ? (weeks ? u.everyDays / 7 : u.everyDays) : 1, usagePer: weeks ? 'week' : 'day',
     takeOut: u?.auto ?? false, inUseSince: u ? (p.inUseSince ?? '') : '',
   };
 }

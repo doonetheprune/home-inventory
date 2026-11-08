@@ -73,7 +73,7 @@ export function sameUnit(a: string, b: string): boolean {
   return one(a) === one(b);
 }
 
-interface Usage { amount: number; everyDays: number; auto?: boolean; unit?: Measure | null }
+interface Usage { amount: number; everyDays: number; auto?: boolean; unit?: string | null }
 interface Pack { name: string; holds: number }
 export type Measure = 'g' | 'kg' | 'ml' | 'l';
 export interface Size { amount: number; unit: Measure }
@@ -102,7 +102,7 @@ export function perOne(unit: string, size: Size | null | undefined, m: Measure):
 /** The usage in the item's own unit: 4 g a day of a 400 g jar is 0.01 jar a day. */
 export function ownUsage(unit: string, size: Size | null | undefined, u: Usage): Usage | null {
   if (!u.unit) return u;
-  const per = perOne(unit, size, u.unit);
+  const per = perOne(unit, size, u.unit as Measure);
   return per ? { ...u, amount: u.amount / per, unit: null } : null;
 }
 
@@ -112,15 +112,15 @@ export const weighsText = (unit: string, size: Size | null | undefined) => (size
 /** "300 g": stock by weight, for something used by weight. Null otherwise. */
 export function measureQty(unit: string, size: Size | null | undefined, u: Usage | null | undefined, quantity: number): string | null {
   if (!u?.unit || measureOf(unit)) return null;
-  const per = perOne(unit, size, u.unit);
-  return per ? `${num(Math.round(quantity * per * 10) / 10)} ${measureName(u.unit)}` : null;
+  const per = perOne(unit, size, u.unit as Measure);
+  return per ? `${num(Math.round(quantity * per * 10) / 10)} ${measureName(u.unit as Measure)}` : null;
 }
 
 /** "a day", "a week", "every 2 weeks", "every 14 days". */
 export const everyText = (days: number) => (days === 1 ? 'a day' : days === 7 ? 'a week' : days % 7 === 0 ? `every ${days / 7} weeks` : `every ${days} days`);
 
 /** "1 tea bag a day", "2 rolls a week", "4 g a day", "1 every 14 days". */
-export const usageText = (unit: string, u: Usage) => `${u.unit ? `${num(u.amount)} ${measureName(u.unit)}` : qty(u.amount, unit)} ${everyText(u.everyDays)}`;
+export const usageText = (unit: string, u: Usage) => `${u.unit ? `${num(u.amount)} ${measureName(u.unit as Measure)}` : qty(u.amount, unit)} ${everyText(u.everyDays)}`;
 
 /** "a day", "a week", "3 weeks", "about 10 days". */
 function daysText(days: number): string {

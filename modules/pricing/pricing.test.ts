@@ -165,7 +165,7 @@ describe('pricing module', () => {
     expect(p).toMatchObject({ usualUnitPrice: 6, itemSize: null });
     expect('measures' in p).toBe(false);
     // 0.10.0: what one weighs is the item's, so how fast it's used can be said by weight too.
-    expect((await core.products.summary(chicken.id)).product.size).toEqual({ amount: 1, unit: 'kg' });
+    expect((await core.products.summary(chicken.id)).product.weight).toEqual({ amount: 1000, unit: 'g' });
     expect(await fields(eggs.id)).toMatchObject({ usualUnitPrice: 1.8, priceUnit: null });
     expect(await fields(flour.id)).toMatchObject({ usualUnitPrice: 0.8, priceUnit: 'kg' });
     expect((await core.assistant.call('get_price', { item: 'flour' })).text).toContain('£1.20 a bag');

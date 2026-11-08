@@ -123,7 +123,8 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   await ctx.household();
   await core.instanceId();
   await categories.ensureDefaults();
-  await products.upgradeStored();
+  // After the modules start, so they hear `product.recounted` and rescale their own numbers.
   await modules.start(core);
+  await products.upgradeStored();
   return core;
 }

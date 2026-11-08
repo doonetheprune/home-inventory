@@ -3,7 +3,7 @@
  * against these, so they also document the API.
  */
 import { z } from 'zod';
-import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, PurchaseEvidence, Shop, Variant } from './model';
+import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, PurchaseEvidence, Shop, UnitAmount, Variant } from './model';
 
 /**
  * A partial version of an object schema for PATCH requests, with defaults
@@ -46,7 +46,10 @@ export const GridCreate = z.object({
 });
 export type GridCreate = z.input<typeof GridCreate>;
 
-export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt: true });
+export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  /** What one weighs or holds: g, kg, ml, L or pints. Kept in g or ml (1 kg as 1000 g). Worked out from Contains when that's an amount. */
+  weight: UnitAmount.nullable().default(null),
+});
 export type ProductCreate = z.input<typeof ProductCreate>;
 export const ProductPatch = patchOf(ProductCreate);
 

@@ -85,7 +85,7 @@ function pricing(product: Product): PricingFields {
 }
 
 /** What one of the item weighs or holds (1 bag = 200 g): the item's own, or one this module kept before 0.10.0. */
-const sizeOf = (product: Product): ItemSize | null => product.size ?? pricing(product).itemSize;
+const sizeOf = (product: Product): ItemSize | null => product.weight ?? product.size ?? pricing(product).itemSize;
 
 /** Price per `from` as a price per `to`, or a ValidationError saying why it can't be. */
 function convert(value: number, from: string, to: string, product: Product): number {
@@ -162,7 +162,7 @@ export default defineModule({
   description: 'Keeps the usual price per unit for each item (per item, per 100 g, per kg…) and checks whether a different pack is better value.',
   version: '1.1.0',
   productFields: PricingFields,
-  setup(ctx) {
+  async setup(ctx) {
     const prices = ctx.collection<PriceRecord>('prices');
     const currency = async () => (await ctx.core.settings.get()).currency;
 
@@ -330,21 +330,10 @@ export default defineModule({
       }
     });
 
-    // 0.10.0: what one weighs moved to the item, so how fast it's used can be said by weight too.
-    // The move clears this module's copy, so it happens once.
-    void (async () => {
-      for (const s of await ctx.core.products.list({ status: 'all' }).catch(() => [])) {
-        const kept = pricing(s.product).itemSize;
-        if (!kept) continue;
-        if (!s.product.size && !isMeasure(s.product.unit)) await ctx.core.products.update(s.product.id, { size: kept }).catch(() => undefined);
-        await ctx.core.products.updateField<unknown>(s.product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), itemSize: null })).catch(() => undefined);
-      }
-    })();
-
     // 0.9.0: measures moved out of pricing. A weight or volume is already its size; "1 pack = 5 items" is
     // now "counted in items, comes in packs of 5", which needs a recount the owner chooses, so it's dropped.
     // A price kept for a measure becomes the usual price when there isn't one.
-    void (async () => {
+    await (async () => {
       type Old = { unit: string; amount: number; price?: number | null };
       for (const s of await ctx.core.products.list({ status: 'all' }).catch(() => [])) {
         const raw = s.product.fields.pricing as { measures?: Old[] } | undefined;
@@ -361,6 +350,18 @@ export default defineModule({
             ? { ...p, usualUnitPrice: priced.price!, priceUnit: unitKey(priced.unit) }
             : { ...p, usualUnitPrice: Math.round(priced.price! * priced.amount * 1_000_000) / 1_000_000, priceUnit: null };
         }).catch(() => undefined);
+      }
+    })();
+
+    // 0.10.0: what one weighs moved to the item, so how fast it's used can be said by weight too.
+    // The move clears this module's copy, so it happens once. It finishes before the core's upgrade
+    // (which runs once the modules have started), so a pack turned round there turns this weight too.
+    await (async () => {
+      for (const s of await ctx.core.products.list({ status: 'all' }).catch(() => [])) {
+        const kept = pricing(s.product).itemSize;
+        if (!kept) continue;
+        if (!s.product.size && !isMeasure(s.product.unit)) await ctx.core.products.update(s.product.id, { size: kept }).catch(() => undefined);
+        await ctx.core.products.updateField<unknown>(s.product.id, 'pricing', (cur) => PricingFields.parse({ ...PricingFields.parse(cur ?? {}), itemSize: null })).catch(() => undefined);
       }
     })();
 

@@ -212,9 +212,9 @@ describe('recipes module', () => {
 async function pancakes() {
   const core = await makeCore({ modules: [recipes] });
   const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'egg' });
-  const milk = await core.products.create({ name: 'Milk', unit: 'l' });
+  const milk = await core.products.create({ name: 'Milk', unit: 'ml' });
   await core.stock.add({ productId: eggs.id, quantity: 6 });
-  await core.stock.add({ productId: milk.id, quantity: 2 });
+  await core.stock.add({ productId: milk.id, quantity: 2000 });
   const saved = await core.assistant.call('save_recipe', {
     title: 'Pancakes', serves: 2, method: 'Whisk, rest, fry.',
     ingredients: [
@@ -299,12 +299,12 @@ describe('recipes by ratio, and presets', () => {
     const { core, ids } = await pancakes();
     await core.assistant.call('save_recipe_preset', { recipe: 'pancakes', name: 'Family', times: 2, default: true });
     const p = await core.assistant.call('propose_cooking', { recipe: 'pancakes' });
-    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 0.6 l (of 2 l)\nNot taken: plain flour, salt.');
+    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 600 ml (of 2000 ml)\nNot taken: plain flour, salt.');
     const fewer = await core.assistant.call('propose_cooking', { recipe: 'pancakes', have: [{ ingredient: 'eggs', amount: 2 }] });
-    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 0.2 l (of 2 l)');
+    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 200 ml (of 2000 ml)');
     await core.assistant.call('confirm_cooking', { proposal: /Proposal id: (\S+)\./.exec(fewer.text)![1]! });
     expect((await core.products.summary(ids.eggs)).inStock).toBe(4);
-    expect((await core.products.summary(ids.milk)).inStock).toBe(1.8);
+    expect((await core.products.summary(ids.milk)).inStock).toBe(1800);
     // Twice the recipe needs 6 eggs, and there are 4 now.
     expect((await core.assistant.call('list_recipes', {})).text).toBe('- Pancakes: missing Free-range eggs (presets: Family)');
   });
@@ -349,15 +349,15 @@ describe('recipes by ratio, and presets', () => {
   it('reads recipes saved before ratios and presets, and scales them by their stock quantities', async () => {
     const storage = createMemoryStorage();
     const core = await makeCore({ modules: [recipes], storage });
-    const chicken = await core.products.create({ name: 'Chicken thighs', unit: 'kg' });
-    await core.stock.add({ productId: chicken.id, quantity: 2 });
+    const chicken = await core.products.create({ name: 'Chicken thighs', unit: 'g' });
+    await core.stock.add({ productId: chicken.id, quantity: 2000 });
     const now = '2026-10-01T09:00:00.000Z';
     await storage.documents('recipes:recipes').put('old', {
-      id: 'old', title: 'Roast chicken', serves: 4, ingredients: [{ name: 'chicken thighs', productId: chicken.id, quantity: 1, amount: '8', optional: false }],
+      id: 'old', title: 'Roast chicken', serves: 4, ingredients: [{ name: 'chicken thighs', productId: chicken.id, quantity: 1000, amount: '8', optional: false }],
       method: 'Roast.', notes: '', source: '', createdAt: now, updatedAt: now, lastCookedAt: null, timesCooked: 0,
     });
     const v = (await core.assistant.call('get_recipe', { recipe: 'roast chicken', have: [{ ingredient: 'chicken', amount: 500, unit: 'g' }] })).data as unknown as RecipeView;
-    expect([v.presets, v.defaultPreset, v.scale.times, v.ingredients[0]!.shown]).toEqual([[], null, 0.5, '0.5 kg']);
+    expect([v.presets, v.defaultPreset, v.scale.times, v.ingredients[0]!.shown]).toEqual([[], null, 0.5, '500 g']);
     await core.assistant.call('save_recipe_preset', { recipe: 'roast chicken', name: 'Two of us', servings: 2 });
     expect((await call(core, 'GET', '/:id', undefined, { id: 'old' }) as RecipeView).presets).toEqual([{ name: 'Two of us', times: 0.5 }]);
   });

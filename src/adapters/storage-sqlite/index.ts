@@ -172,6 +172,8 @@ export function createSqliteStorage(options: SqliteStorageOptions): Storage {
   const appendMovement = db.prepare('INSERT INTO movements (id, product_id, at, data) VALUES (?, ?, ?, ?)');
   const movementsByProduct = db.prepare('SELECT data FROM movements WHERE product_id = ? ORDER BY seq DESC LIMIT ?');
   const movementsRecent = db.prepare('SELECT data FROM movements ORDER BY seq DESC LIMIT ?');
+  const movementsToRescale = db.prepare('SELECT seq, data FROM movements WHERE product_id = ?');
+  const rewriteMovement = db.prepare('UPDATE movements SET data = ? WHERE seq = ?');
   const getLookup = db.prepare('SELECT data FROM lookups WHERE barcode = ?');
   const putLookup = db.prepare('INSERT INTO lookups (barcode, data) VALUES (?, ?) ON CONFLICT(barcode) DO UPDATE SET data = excluded.data');
   const getSession = db.prepare('SELECT data FROM sessions WHERE id = ?');
@@ -261,6 +263,12 @@ export function createSqliteStorage(options: SqliteStorageOptions): Storage {
       try {
         for (const e of changes.put ?? []) stock.putSync(e);
         for (const id of changes.remove ?? []) stock.removeSync(id);
+        for (const r of changes.rescale ?? []) {
+          for (const row of movementsToRescale.all(r.productId) as Row[]) {
+            const m = JSON.parse(row.data as string) as Movement;
+            rewriteMovement.run(JSON.stringify({ ...m, quantity: Math.round(m.quantity * r.factor * 1000) / 1000 }), row.seq as number);
+          }
+        }
         insertMovements(changes.movements ?? []);
         for (const p of changes.products ?? []) products.putSync(p);
         db.exec('COMMIT');
