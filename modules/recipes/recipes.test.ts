@@ -366,6 +366,25 @@ describe('recipes by ratio, and presets', () => {
     ]);
   });
 
+  it('takes chicken thighs counted or weighed from an item with a count and a Weight, but only weighed from one bought loose', async () => {
+    const core = await makeCore({ modules: [recipes] });
+    await core.units.add({ one: 'thigh', many: 'thighs' });
+    // Bought one at a time, 125 g each; bought in packs containing 8, weighing 1 kg; bought loose, in g.
+    const single = await core.products.create({ name: 'Chicken thighs', unit: 'thigh', weight: { amount: 125, unit: 'g' } });
+    const packs = await core.products.create({ name: 'Thigh fillets', unit: 'pack', contents: { amount: 8, unit: 'thigh' }, weight: { amount: 1, unit: 'kg' } });
+    const loose = await core.products.create({ name: 'Diced chicken', unit: 'g' });
+    for (const [id, n] of [[single.id, 8], [packs.id, 2], [loose.id, 1000]] as const) await core.stock.add({ productId: id, quantity: n });
+    for (const [title, item] of [['Traybake', 'chicken thighs'], ['Curry', 'thigh fillets'], ['Pie', 'diced chicken']]) {
+      await core.assistant.call('save_recipe', { title: `${title} by count`, method: 'Cook.', ingredients: [{ name: 'chicken thighs', item, ratio: 4 }] });
+      await core.assistant.call('save_recipe', { title: `${title} by weight`, method: 'Cook.', ingredients: [{ name: 'chicken', item, ratio: 500, ratio_unit: 'g' }] });
+    }
+    const need = async (recipe: string) => ((await core.assistant.call('get_recipe', { recipe })).data as unknown as RecipeView).ingredients[0]!.need;
+    expect([await need('traybake by count'), await need('traybake by weight')]).toEqual([4, 4]);
+    expect([await need('curry by count'), await need('curry by weight')]).toEqual([0.5, 0.5]);
+    // 4 thighs of chicken bought by weight can't be worked out; 500 g can.
+    expect([await need('pie by count'), await need('pie by weight')]).toEqual([null, 500]);
+  });
+
   it('follows an item the upgrade turns round: what cooking takes of it is in boxes now', async () => {
     const storage = createMemoryStorage();
     const before = await makeCore({ modules: [recipes], storage });
