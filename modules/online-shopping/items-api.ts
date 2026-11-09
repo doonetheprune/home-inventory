@@ -27,7 +27,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
   async function linkText(productId: string, listing: Listing, shopId: string, favourite: boolean, shopSet: boolean): Promise<string> {
     const item = await items.product(productId);
     const shop = await providers.shopName(shopId);
-    return `${listing.name} at ${shop} is linked to ${item.name} (${packText(listing, item.unit)}${listing.guessed ? ': check this' : ''})${favourite ? ` and added to your ${shop} favourites` : ''}.${shopSetText(shopSet, shop)}`;
+    return `${listing.name} at ${shop} is linked to ${item.name} (${packText(await ctx.core.units.list(), listing, item.unit)}${listing.guessed ? ': check this' : ''})${favourite ? ` and added to your ${shop} favourites` : ''}.${shopSetText(shopSet, shop)}`;
   }
 
   /* ---------------------------------- Routes --------------------------------- */
@@ -66,7 +66,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
 
   ctx.addRoute({
     method: 'PUT', path: '/items/:productId/shops/:shopId', summary: 'Set an item\'s pack rule and target price at one shop',
-    description: 'packRule: fixed (always one listing, fixedListingId or the first) or cheapest (the cheapest mix of listings that covers what\'s needed). targetPrice is per one of the item\'s unit and overrides the item\'s own (null to use it).',
+    description: 'packRule: fixed (always one listing, fixedListingId or the first) or cheapest (the cheapest mix of listings that covers what\'s needed). targetPrice is per one of what the item is bought in and overrides the item\'s own (null to use it).',
     params: z.object({ productId: Id, shopId: Id }),
     body: z.object({ packRule: PackRule.optional(), fixedListingId: z.string().nullable().optional(), targetPrice: z.number().min(0).nullable().optional() }),
     response: OnlineFields,
@@ -77,7 +77,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
 
   ctx.addRoute({
     method: 'PUT', path: '/items/:productId/rules', summary: 'Set an item\'s target price and on-offer stock-up amount',
-    description: 'targetPrice is per one of the item\'s unit: at or below it counts as on offer, and the order tops up to offerStockUpTo. The normal stock-up amount is the item\'s own stockUpTo.',
+    description: 'targetPrice is per one of what the item is bought in: at or below it counts as on offer, and the order tops up to offerStockUpTo. The normal stock-up amount is the item\'s own stockUpTo.',
     params: z.object({ productId: Id }),
     body: z.object({ offerStockUpTo: z.number().min(0).nullable().optional(), targetPrice: z.number().min(0).nullable().optional() }),
     response: OnlineFields,
@@ -105,7 +105,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
       const { provider, shop: sh } = await providers.resolve(shop);
       const p = await (await s.ready(provider)).product(id_or_link.trim());
       const owner = (await items.linked()).get(`${sh.id}:${p.listing_id}`);
-      const text = [productLine(p, await s.currency(), sh.name === 'Tesco' ? 'Clubcard' : 'loyalty card'), p.link, ...(p.image_urls[0] ? [`Picture: ${p.image_urls[0]}`] : []), owner ? `Linked to ${owner.name}.` : 'Not linked to an item yet (link_listing).'].join('\n');
+      const text = [productLine(await ctx.core.units.list(), p, await s.currency(), sh.name === 'Tesco' ? 'Clubcard' : 'loyalty card'), p.link, ...(p.image_urls[0] ? [`Picture: ${p.image_urls[0]}`] : []), owner ? `Linked to ${owner.name}.` : 'Not linked to an item yet (link_listing).'].join('\n');
       return { text, data: { product: p, linked_to: owner?.name ?? null } };
     },
   });
@@ -118,7 +118,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
       id_or_link: z.string().min(1).max(2000).describe('The shop\'s product code or link'),
       shop: Shop,
       add_to_favourites: z.boolean().optional().describe('Also add it to the shop\'s favourites'),
-      pack_quantity: z.number().positive().optional().describe('How many of the item one pack gives (e.g. 9 for 9 rolls), when it isn\'t clear from the pack size'),
+      pack_quantity: z.number().positive().optional().describe('How many of what the item is bought in one pack gives (e.g. 9 for 9 rolls), when it isn\'t clear from the pack size'),
     }),
     async run({ item, id_or_link, shop, add_to_favourites, pack_quantity }) {
       const product = await ctx.core.resolve.product(item);
@@ -126,7 +126,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
       const p = await fetchProduct(sh.id, id_or_link, !!add_to_favourites);
       const { listing, shopSet } = await items.link(product.id, sh.id, p, { packQuantity: pack_quantity });
       const text = await linkText(product.id, listing, sh.id, !!add_to_favourites, shopSet);
-      return { text: listing.guessed ? `${text} Ask how many ${product.unit} one pack holds if that's wrong, and say it with pack_quantity.` : text, data: { item: product.name, listing } };
+      return { text: listing.guessed ? `${text} Ask how many ${(await ctx.core.units.list()).find(product.unit)?.many ?? product.unit} one pack holds if that's wrong, and say it with pack_quantity.` : text, data: { item: product.name, listing } };
     },
   });
 
@@ -157,21 +157,21 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
 
   ctx.addTool({
     name: 'set_buying_rules', title: 'Set an item\'s online buying rules', destructive: true,
-    description: 'For online shops: the target price per one of the item\'s unit (at or below it counts as on offer), how many to stock up to when on offer, and whether to always buy one pack or the cheapest mix. The normal stock-up amount and minimum are set with change_item. Only the fields given change.',
+    description: 'For online shops: the target price per one of what the item is bought in (at or below it counts as on offer), how many to stock up to when on offer, and whether to always buy one pack or the cheapest mix. The normal stock-up amount and minimum are set with change_item. Only the fields given change.',
     input: z.object({
       item: z.string().min(1).max(200).describe('The Larder item'),
-      target_price: z.number().min(0).nullable().optional().describe('Price per one of the item\'s unit, e.g. 0.25 for 25p a roll; null for none'),
+      target_price: z.number().min(0).nullable().optional().describe('Price per one of what the item is bought in, e.g. 0.25 for 25p a roll; null for none'),
       offer_stock_up_to: z.number().min(0).nullable().optional().describe('How many to have after buying when it\'s on offer, e.g. 36; null for the normal amount'),
       shop: Shop,
       pack_rule: PackRule.optional().describe('At that shop: "fixed" always buys one pack (fixed_listing, or the first linked), "cheapest" the cheapest mix of packs'),
       fixed_listing: z.string().max(300).optional().describe('With pack_rule "fixed": which linked pack to always buy, by its name or the shop\'s code'),
       shop_target_price: z.number().min(0).nullable().optional().describe('A different target price at that shop only; null to use the item\'s'),
       listing: z.string().max(300).optional().describe('With pack_quantity: the linked pack, by its name or the shop\'s code'),
-      pack_quantity: z.number().positive().optional().describe('How many of the item one pack of `listing` gives, e.g. 9 for 9 rolls'),
+      pack_quantity: z.number().positive().optional().describe('How many of what the item is bought in one pack of `listing` gives, e.g. 9 for 9 rolls'),
     }),
     async run(i) {
       const product = await ctx.core.resolve.product(i.item);
-      const cur = await s.currency();
+      const [cur, units] = await Promise.all([s.currency(), ctx.core.units.list()]);
       const said: string[] = [];
       if (i.listing !== undefined || i.pack_quantity !== undefined || i.fixed_listing !== undefined) {
         const { shop: sh } = await providers.resolve(i.shop);
@@ -179,7 +179,7 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
           if (!i.listing) throw new ValidationError('Say which pack (listing) the pack quantity is for.');
           const l = await listingOf(product.id, sh.id, i.listing);
           await items.setPack(product.id, sh.id, l.listingId, i.pack_quantity);
-          said.push(`one pack of ${l.name || l.listingId} is ${qty(i.pack_quantity, product.unit)}`);
+          said.push(`one pack of ${l.name || l.listingId} is ${qty(units, i.pack_quantity, product.unit)}`);
         }
         if (i.fixed_listing !== undefined) {
           const l = await listingOf(product.id, sh.id, i.fixed_listing);
@@ -189,14 +189,14 @@ export function itemFeatures(ctx: ModuleContext, s: Services) {
       }
       if (i.target_price !== undefined || i.offer_stock_up_to !== undefined) {
         await items.setRules(product.id, { ...(i.target_price !== undefined ? { targetPrice: i.target_price } : {}), ...(i.offer_stock_up_to !== undefined ? { offerStockUpTo: i.offer_stock_up_to } : {}) });
-        if (i.target_price !== undefined) said.push(i.target_price === null ? 'no target price' : `on offer at ${perUnit(i.target_price, product.unit, cur)} or less`);
-        if (i.offer_stock_up_to !== undefined) said.push(i.offer_stock_up_to === null ? 'no extra when on offer' : `stock up to ${qty(i.offer_stock_up_to, product.unit)} when on offer`);
+        if (i.target_price !== undefined) said.push(i.target_price === null ? 'no target price' : `on offer at ${perUnit(units, i.target_price, product.unit, cur)} or less`);
+        if (i.offer_stock_up_to !== undefined) said.push(i.offer_stock_up_to === null ? 'no extra when on offer' : `stock up to ${qty(units, i.offer_stock_up_to, product.unit)} when on offer`);
       }
       if (i.pack_rule !== undefined || i.shop_target_price !== undefined) {
         const { shop: sh } = await providers.resolve(i.shop);
         await items.setShopRules(product.id, sh.id, { ...(i.pack_rule ? { packRule: i.pack_rule } : {}), ...(i.shop_target_price !== undefined ? { targetPrice: i.shop_target_price } : {}) });
         if (i.pack_rule) said.push(i.pack_rule === 'fixed' ? `always the same pack at ${sh.name}` : `the cheapest mix of packs at ${sh.name}`);
-        if (i.shop_target_price !== undefined) said.push(i.shop_target_price === null ? `the usual target price at ${sh.name}` : `on offer at ${sh.name} at ${perUnit(i.shop_target_price, product.unit, cur)} or less`);
+        if (i.shop_target_price !== undefined) said.push(i.shop_target_price === null ? `the usual target price at ${sh.name}` : `on offer at ${sh.name} at ${perUnit(units, i.shop_target_price, product.unit, cur)} or less`);
       }
       if (!said.length) throw new ValidationError('Say what to change: target_price, offer_stock_up_to, pack_rule, fixed_listing, shop_target_price or pack_quantity.');
       const fields = fieldsOf(await items.product(product.id));

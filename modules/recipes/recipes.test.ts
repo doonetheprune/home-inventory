@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '../../src/adapters/storage-memory';
-import { makeCore } from '../../tests/helpers';
+import { makeCore, saveAs092 } from '../../tests/helpers';
 import scenarios from '../scenarios';
 import recipes, { type Proposal, type RecipeView } from './index';
 
@@ -299,9 +299,9 @@ describe('recipes by ratio, and presets', () => {
     const { core, ids } = await pancakes();
     await core.assistant.call('save_recipe_preset', { recipe: 'pancakes', name: 'Family', times: 2, default: true });
     const p = await core.assistant.call('propose_cooking', { recipe: 'pancakes' });
-    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 600 ml (of 2000 ml)\nNot taken: plain flour, salt.');
+    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 600 ml (of 2 L)\nNot taken: plain flour, salt.');
     const fewer = await core.assistant.call('propose_cooking', { recipe: 'pancakes', have: [{ ingredient: 'eggs', amount: 2 }] });
-    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 200 ml (of 2000 ml)');
+    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 200 ml (of 2 L)');
     await core.assistant.call('confirm_cooking', { proposal: /Proposal id: (\S+)\./.exec(fewer.text)![1]! });
     expect((await core.products.summary(ids.eggs)).inStock).toBe(4);
     expect((await core.products.summary(ids.milk)).inStock).toBe(1800);
@@ -344,6 +344,38 @@ describe('recipes by ratio, and presets', () => {
     await core.assistant.call('save_recipe', { recipe: 'chilli', serves: 6 });
     expect(((await core.assistant.call('get_recipe', { recipe: 'chilli' })).data as unknown as RecipeView).ingredients).toHaveLength(2);
     await expect(core.assistant.call('save_recipe', { title: 'Soup' })).rejects.toThrow('Give the method (the steps) for a new recipe.');
+  });
+
+  it('takes a recipe\'s ml of milk from bottles through their Weight, and says why when there is none', async () => {
+    const core = await makeCore({ modules: [recipes] });
+    // Bought in bottles containing 4 pints: a Weight of 2273 ml, so 500 ml is 0.22 bottle.
+    const milk = await core.products.create({ name: 'Whole milk', aliases: ['milk'], unit: 'bottle', contents: { amount: 4, unit: 'pints' } });
+    const oat = await core.products.create({ name: 'Oat milk', unit: 'carton' });
+    const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'box', contents: { amount: 6, unit: 'eggs' } });
+    for (const id of [milk.id, oat.id, eggs.id]) await core.stock.add({ productId: id, quantity: 2 });
+    await core.assistant.call('save_recipe', {
+      title: 'Custard', method: 'Whisk and heat.',
+      ingredients: [{ name: 'milk', item: 'whole milk', ratio: 500, ratio_unit: 'ml' }, { name: 'oat milk', item: 'oat milk', ratio: 100, ratio_unit: 'ml' }, { name: 'eggs', item: 'eggs', ratio: 3 }],
+    });
+    const p = await core.assistant.call('propose_cooking', { recipe: 'custard' });
+    expect(p.text).toContain('- Whole milk: 0.22 bottle (of 2 bottles)\n- Free-range eggs: 0.5 box (of 2 boxes)\nNot taken: oat milk.\n'
+      + '- oat milk: Larder doesn\'t know what one carton of Oat milk holds, so it can\'t work in ml. Give how many cartons. Or give it a Weight first.');
+    const v = (await core.assistant.call('get_recipe', { recipe: 'custard' })).data as unknown as RecipeView;
+    expect(v.ingredients.map((i) => [i.name, i.need, i.why])).toEqual([
+      ['milk', 0.22, null], ['oat milk', null, 'Larder doesn\'t know what one carton of Oat milk holds, so it can\'t work in ml. Give how many cartons. Or give it a Weight first.'], ['eggs', 0.5, null],
+    ]);
+  });
+
+  it('follows an item the upgrade turns round: what cooking takes of it is in boxes now', async () => {
+    const storage = createMemoryStorage();
+    const before = await makeCore({ modules: [recipes], storage });
+    const tea = await before.products.create({ name: 'Tea bags', unit: 'tea bag' });
+    await before.assistant.call('save_recipe', { title: 'Iced tea', method: 'Brew, chill.', ingredients: [{ name: 'tea bags', item: 'tea bags', quantity: 4 }] });
+    await saveAs092(storage, (await before.products.summary(tea.id)).product, { unit: 'tea bag', pack: { name: 'box', holds: 80 } });
+    const core = await makeCore({ modules: [recipes], storage });
+    await new Promise((r) => setTimeout(r, 10));
+    const v = (await core.assistant.call('get_recipe', { recipe: 'iced tea' })).data as unknown as RecipeView;
+    expect(v.ingredients.map((i) => [i.quantity, i.unit, i.need])).toEqual([[0.05, 'box', 0.05]]);
   });
 
   it('reads recipes saved before ratios and presets, and scales them by their stock quantities', async () => {

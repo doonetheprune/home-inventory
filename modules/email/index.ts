@@ -17,7 +17,7 @@
  * which passes the sign-in on to /gmail/callback.
  */
 import { z } from 'zod';
-import { amount, andList, defineModule, LarderError, newId, ValidationError } from '@larder/core';
+import { amountText, andList, defineModule, LarderError, newId, ValidationError } from '@larder/core';
 import type { OrderEmailReading, OrderReader } from '../_shared/order-email';
 import { authorizeUrl, CALLBACK_PATH, gmail, GmailSignedOut, SCOPE, type Client, type Message } from './gmail';
 import { DEFAULT_TIMING, nextCheck, Timing, watches, type DeliveryWindow } from './schedule';
@@ -575,17 +575,17 @@ export default defineModule({
       input: z.object({
         email: EmailRef, line: LineNo,
         item: z.string().min(1).max(200).describe('The item in Larder'),
-        quantity: z.number().positive().optional().describe('How much of the item\'s own unit the line is, e.g. 18 for two 9-roll packs, or 80 for a box of 80 tea bags (default: the line\'s count, in packs for an item that comes in them)'),
+        quantity: z.number().positive().optional().describe('How much of what the item is bought in the line is, e.g. 18 for two 9-roll packs of an item bought in rolls (default: the line\'s count)'),
       }),
       async run({ email, line: n, item, quantity }) {
         const seen = await findEmail(email);
         const l = seen.lines[n - 1];
         if (!l) throw new ValidationError(`That email has ${seen.lines.length} line${seen.lines.length === 1 ? '' : 's'}.`);
         const product = await ctx.core.resolve.product(item);
-        // An item bought in packs: the line's count is packs (2 boxes of 80 tea bags are 160).
-        const much = quantity ?? l.count * (product.pack?.holds ?? 1);
+        // The line's count is in what it's bought in: 2 boxes of tea bags bought in boxes are 2.
+        const much = quantity ?? l.count;
         await matchLine(seen.id, n - 1, product.id, much);
-        return { text: `"${l.text}" is ${product.name}${l.status === 'coming' ? `: ${amount(much, product.unit)} on the way from ${seen.shopName}` : ''}. Larder will know it next time.`, data: { email: seen.id, line: n, item: product.name } };
+        return { text: `"${l.text}" is ${product.name}${l.status === 'coming' ? `: ${amountText(await ctx.core.units.list(), much, product.unit)} on the way from ${seen.shopName}` : ''}. Larder will know it next time.`, data: { email: seen.id, line: n, item: product.name } };
       },
     });
 

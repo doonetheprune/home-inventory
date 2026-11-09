@@ -6,7 +6,7 @@
  * or added with a price on an item's page. Kept for reports on spending.
  */
 import { z } from 'zod';
-import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amount, defineModule, inOwnUnit, localDate, newId, type ModuleContext, type Shop } from '@larder/core';
+import { Id, IsoDate, NotFoundError, PurchaseEvidence, ValidationError, amountText, defineModule, localDate, newId, roundQty, toBoughtIn, type ModuleContext, type Shop, type Units } from '@larder/core';
 
 export const PurchaseRecord = z.object({
   id: z.string(),
@@ -106,8 +106,9 @@ export function report(records: PurchaseRecord[], f: Filter, currency: string): 
 }
 
 /** "6 Nov 2026: 2 packs, £3.20 at Aldi (receipt photo)" */
-export function line(r: PurchaseRecord, withName = false): string {
-  const what = withName ? `${amount(r.quantity, r.unit)}${r.unit === 'each' ? ' ×' : ' of'} ${r.name}` : amount(r.quantity, r.unit);
+export function line(units: Units, r: PurchaseRecord, withName = false): string {
+  const amount = (n: number, unit: string) => amountText(units, n, unit);
+  const what = withName ? `${amount(r.quantity, r.unit)}${units.find(r.unit)?.key === 'each' ? ' ×' : ' of'} ${r.name}` : amount(r.quantity, r.unit);
   const where = r.shop ? ` at ${r.shop}` : r.how === 'order' && r.evidence.source ? ` from ${r.evidence.source}` : '';
   const proof = [
     r.evidence.receiptFileId ? 'receipt photo' : r.how === 'receipt' ? 'from a receipt' : null,
@@ -302,7 +303,8 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
       const r = report(rows, {}, await currency());
       const shown = rows.slice(0, limit);
       const more = rows.length > shown.length ? `\n…and ${rows.length - shown.length} more.` : '';
-      return { text: `${shown.map((x) => `- ${line(x, !productId)}`).join('\n')}${more}\nIn all: ${money(r.total, r.currency)} on ${r.count} purchase${r.count === 1 ? '' : 's'}${r.unpriced ? ` (${r.unpriced} without a price)` : ''}.`, data: { purchases: shown, total: r.total } };
+      const units = await ctx.core.units.list();
+      return { text: `${shown.map((x) => `- ${line(units, x, !productId)}`).join('\n')}${more}\nIn all: ${money(r.total, r.currency)} on ${r.count} purchase${r.count === 1 ? '' : 's'}${r.unpriced ? ` (${r.unpriced} without a price)` : ''}.`, data: { purchases: shown, total: r.total } };
     },
   });
 
@@ -338,17 +340,18 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
       item: Item,
       on: DateInput.describe('The day it was bought, if not the latest (YYYY-MM-DD)'),
       price: z.number().min(0).nullable().optional().describe('What the line cost, e.g. 3.2; null if not known'),
-      quantity: z.number().positive().optional().describe('How many were bought, in the item\'s own unit or in unit'),
-      unit: z.string().max(30).optional().describe('What quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
+      quantity: z.number().positive().optional().describe('How many were bought, in what the item is bought in or in unit'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not what the item is bought in: what one contains ("tea bag"), or g, kg, ml, L or pints once it has a Weight'),
       shop: z.string().max(80).nullable().optional().describe('The shop; null for none'),
       note: z.string().max(200).optional(),
     }),
     async run({ item, on, price, quantity: given, unit, shop, note }) {
       const r = await pick(item, on);
-      const quantity = given === undefined ? undefined : inOwnUnit(await ctx.core.resolve.product(item), given, unit);
+      const units = await ctx.core.units.list();
+      const quantity = given === undefined ? undefined : roundQty(toBoughtIn(units, await ctx.core.resolve.product(item), given, unit));
       const shopId = shop === undefined ? undefined : shop === null ? null : (await ctx.core.resolve.shop(shop)).id;
       const next = await change(r.id, { price, quantity, shopId, ...(note !== undefined ? { evidence: { note } } : {}) });
-      return { text: `Changed: ${line(next, true)}.`, data: next };
+      return { text: `Changed: ${line(units, next, true)}.`, data: next };
     },
   });
 
@@ -359,7 +362,7 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
     async run({ item, on }) {
       const r = await pick(item, on);
       await remove(r.id);
-      return { text: `Removed from the history: ${line(r, true)}.`, data: { removed: r.id } };
+      return { text: `Removed from the history: ${line(await ctx.core.units.list(), r, true)}.`, data: { removed: r.id } };
     },
   });
 }

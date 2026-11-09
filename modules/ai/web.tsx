@@ -17,8 +17,8 @@ interface Identified {
   name: string;
   kind: string | null;
   brand: string | null;
-  unit: string;
-  pack: { name: string; holds: number } | null;
+  boughtIn: string;
+  contents: { amount: number; unit: string } | null;
   categoryId: string | null;
   shelfLifeDays: number | null;
   aliases: string[];
@@ -92,7 +92,7 @@ const photoReader: PhotoReader = {
 /** What the AI said, as the scanner takes it. */
 function reading(r: Identified): PhotoReading {
   return {
-    readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, unit: r.unit, pack: r.pack ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
+    readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, boughtIn: r.boughtIn, contents: r.contents ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
     by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message),
   };
 }
@@ -194,7 +194,7 @@ function PickItem({ row, onPick, onClose }: { row: Row; onPick: (item: ItemRef |
       <input className="input" autoFocus placeholder="Search your items" aria-label="Search your items" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="list" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
         {shown.map((s) => (
-          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit }, s.product.pack?.holds ?? 1)}>
+          <button key={s.product.id} type="button" className="item" onClick={() => onPick({ id: s.product.id, name: s.product.name, unit: s.product.unit }, 1)}>
             <span className="item-main">
               <span className="item-name">{s.product.name}</span>
               <span className="item-meta">{s.product.aliases.length ? `Also ${s.product.aliases.join(', ')} · ` : ''}counted in {s.product.unit}</span>

@@ -10,7 +10,7 @@
  * id, a name and a level, so any other system could send the same thing.
  */
 import { z } from 'zod';
-import { amount, defineModule, LarderError, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
+import { amountText, defineModule, LarderError, ValidationError, type CoreApi, type ProductSummary, type Units } from '@larder/core';
 
 export const Device = z.object({
   /** The device's id in Home Assistant (or whatever sent it). */
@@ -47,14 +47,14 @@ export type Advice = z.infer<typeof Advice>;
 const DeviceView = Device.extend({ batteries: z.array(z.object({ id: z.string(), name: z.string() })) });
 
 /** What to do about a device's battery, given the battery product linked to it. */
-export function adviceFor(device: Device, battery: ProductSummary | null): Omit<Advice, 'deviceId' | 'device'> {
+export function adviceFor(units: Units, device: Device, battery: ProductSummary | null): Omit<Advice, 'deviceId' | 'device'> {
   if (!battery) {
     return { kind: 'unlinked', productId: null, battery: null, place: null, message: `${device.name} needs a new battery. Link its battery type in Larder to see if there's a spare.` };
   }
   const p = battery.product;
   const need = device.batteryQuantity ?? 1;
   // Batteries are usually counted as "each"; say "batteries" when talking about them.
-  const needs = amount(need, p.unit === 'each' ? 'battery' : p.unit);
+  const needs = amountText(units, need, units.find(p.unit)?.key === 'each' ? 'battery' : p.unit);
   const place = battery.places[0]?.path ?? null;
   const from = place ? ` from ${place}` : '';
   const base = { productId: p.id, battery: p.name, place };
@@ -90,7 +90,7 @@ export default defineModule({
 
     async function advise(device: Device): Promise<Advice> {
       const battery = await linkedBattery(device.id);
-      const a = adviceFor(device, battery);
+      const a = adviceFor(await ctx.core.units.list(), device, battery);
       if (a.kind === 'buy' && battery && !battery.product.onShoppingList) await core.products.setOnList(battery.product.id, true);
       return Advice.parse({ deviceId: device.id, device: device.name, ...a });
     }
@@ -159,7 +159,7 @@ export default defineModule({
       response: Advice,
       async handler({ params }) {
         const d = await findDevice((params as { deviceId: string }).deviceId);
-        return Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) });
+        return Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(await ctx.core.units.list(), d, await linkedBattery(d.id)) });
       },
     });
 
@@ -170,8 +170,9 @@ export default defineModule({
       const need = d.batteryQuantity ?? 1;
       const s = await core.stock.use({ productId: battery.product.id, quantity: need, note: `Into ${d.name}` });
       await devices.put(d.id, { ...d, low: false, updatedAt: core.now() });
-      const left = battery.product.rechargeable ? `${s.charged ?? 0} charged, ${s.flat ?? 0} flat` : `${amount(s.inStock, battery.product.unit)} left`;
-      return { message: `${d.name}: ${amount(need, battery.product.unit)} replaced. ${battery.product.name}: ${left}.`, device: d.name, item: battery.product.name, in_stock: s.inStock };
+      const units = await ctx.core.units.list();
+      const left = battery.product.rechargeable ? `${s.charged ?? 0} charged, ${s.flat ?? 0} flat` : `${amountText(units, s.inStock, battery.product.unit)} left`;
+      return { message: `${d.name}: ${amountText(units, need, battery.product.unit)} replaced. ${battery.product.name}: ${left}.`, device: d.name, item: battery.product.name, in_stock: s.inStock };
     }
 
     const DeviceRef = z.string().min(1).max(120).describe('The device, by name or Home Assistant device id');
@@ -189,7 +190,7 @@ export default defineModule({
       async run({ device }) {
         if (device) {
           const d = await findDevice(device);
-          const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) });
+          const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(await ctx.core.units.list(), d, await linkedBattery(d.id)) });
           return { text: `${d.name}${d.area ? ` (${d.area})` : ''}: battery ${d.level === null ? 'level not known' : `at ${d.level}%`}${d.low ? ', low' : ''}. ${a.message}`, data: a };
         }
         const list = await view();
@@ -229,7 +230,7 @@ export default defineModule({
           await core.products.update(other.product.id, { haDeviceIds: other.product.haDeviceIds.filter((x) => x !== d.id) });
         }
         if (!product.haDeviceIds.includes(d.id)) await core.products.update(product.id, { haDeviceIds: [...product.haDeviceIds, d.id] });
-        const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) });
+        const a = Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(await ctx.core.units.list(), d, await linkedBattery(d.id)) });
         return { text: `${d.name} takes ${product.name}.${d.low ? ` It's low: ${a.message}` : ''}`, data: { device: d.name, battery: product.name } };
       },
     });
@@ -239,7 +240,7 @@ export default defineModule({
       description: 'Devices whose battery is low, with what to do about each.',
       async read() {
         const low = (await allDevices()).filter((d) => d.low);
-        const advice = await Promise.all(low.map(async (d) => Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(d, await linkedBattery(d.id)) })));
+        const advice = await Promise.all(low.map(async (d) => Advice.parse({ deviceId: d.id, device: d.name, ...adviceFor(await ctx.core.units.list(), d, await linkedBattery(d.id)) })));
         return { state: low.length, attributes: { devices: advice.slice(0, 25).map((a) => ({ device: a.device, battery: a.battery, advice: a.kind, message: a.message })) } };
       },
     });

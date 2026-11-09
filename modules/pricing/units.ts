@@ -1,135 +1,125 @@
 /**
- * Price units. A price is per one of the item's own unit (a tea bag, a roll),
- * per its pack (a box of 20), or by weight or volume (per 100 g, per kg, per
- * 100 ml, per litre). Going between an item and a weight needs its size
- * ("1 bag = 200 g"); its pack comes from the item (core `product.pack`).
+ * Price units. A price is per one of what the item is bought in (a box, a bag), per one of
+ * what it contains when that's a count (a tea bag), or by weight or volume (per 100 g, a kg,
+ * per 100 ml, a litre) through the item's Weight. Every conversion goes through the core's
+ * converter (`toBoughtIn`); the only words kept here are price labels, each so many of a core
+ * unit ("100 g" is 100 g), and the words for "one of it" on a price ("each", "an item").
  */
-import { z } from 'zod';
-import type { Pack } from '@larder/core';
+import { LarderError, ValidationError, isCount, isLoose, toBoughtIn, unitOf, type Product, type Units } from '@larder/core';
 
-export type Dim = 'item' | 'mass' | 'volume';
+type Item = Pick<Product, 'name' | 'unit' | 'contents' | 'weight'>;
 
-export const MEASURES: Record<string, { dim: Dim; base: number; label: string }> = {
-  g: { dim: 'mass', base: 1, label: 'g' },
-  '100g': { dim: 'mass', base: 100, label: '100 g' },
-  kg: { dim: 'mass', base: 1000, label: 'kg' },
-  ml: { dim: 'volume', base: 1, label: 'ml' },
-  '100ml': { dim: 'volume', base: 100, label: '100 ml' },
-  l: { dim: 'volume', base: 1000, label: 'litre' },
+/** Price labels, by key: so many of a core unit, and how the label reads. */
+const LABELS: Record<string, { unit: string; amount: number; label: string }> = {
+  '100g': { unit: 'g', amount: 100, label: '100 g' },
+  kg: { unit: 'kg', amount: 1, label: 'kg' },
+  '100ml': { unit: 'ml', amount: 100, label: '100 ml' },
+  l: { unit: 'l', amount: 1, label: 'litre' },
 };
+/** Words on a price that mean one of what it's bought in: "£1.20 each", "per item". */
+const ONE = new Set(['each', 'item', 'items', 'one', 'unit']);
 
-const ALIASES: Record<string, string> = {
-  gram: 'g', grams: 'g', gramme: 'g', grammes: 'g', '100gram': '100g', '100grams': '100g',
-  kilo: 'kg', kilos: 'kg', kilogram: 'kg', kilograms: 'kg', kgs: 'kg',
-  millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml', '100millilitres': '100ml',
-  litre: 'l', litres: 'l', liter: 'l', liters: 'l', ltr: 'l',
-};
+/** What a price is per: a key (a label, or a unit's key), and how much of a core unit that is. */
+export interface PriceUnit { key: string; unit: string; amount: number }
 
-/** Words meaning "one of the item's own unit". */
-const ONE = new Set(['each', 'item', 'unit', 'one', 'pack']);
-
-/** How much one of the item's own unit holds, e.g. a bag of spinach is 200 g. */
-export const ItemSize = z.object({
-  amount: z.number().positive().max(1_000_000),
-  unit: z.enum(['g', 'kg', 'ml', 'l']),
-});
-export type ItemSize = z.infer<typeof ItemSize>;
-
-/** A unit as it's said, one of it: "100 g", "per kg", "Litres", "Tea bags" → "100g", "kg", "l", "tea bag". */
-export function unitName(raw: string): string {
-  const k = raw.trim().toLowerCase().replace(/^(per|a|an)\s+/, '').replace(/\./g, '').replace(/\s+/g, ' ');
-  const tight = k.replace(/\s/g, '');
-  if (ALIASES[tight]) return ALIASES[tight]!;
-  if (MEASURES[tight]) return tight;
-  if (k.length > 4 && k.endsWith('ies')) return `${k.slice(0, -3)}y`;
-  if (/(x|ch|sh|ss)es$/.test(k)) return k.slice(0, -2);
-  if (k.length > 3 && k.endsWith('s') && !k.endsWith('ss')) return k.slice(0, -1);
-  return k;
+/** "100 g", "per kg", "a Litre", "Tea bags", "each" → what it means for this item. Throws for a unit Larder doesn't have. */
+export function priceUnit(units: Units, item: Pick<Item, 'unit'>, raw: string): PriceUnit {
+  const said = raw.trim().toLowerCase().replace(/^(per|a|an)\s+/, '').replace(/\./g, '');
+  const label = (key: string): PriceUnit => ({ key, unit: LABELS[key]!.unit, amount: LABELS[key]!.amount });
+  if (LABELS[said.replace(/\s/g, '')]) return label(said.replace(/\s/g, ''));
+  if (ONE.has(said)) return { key: unitOf(units, item.unit).key, unit: item.unit, amount: 1 };
+  // "100 grams" is the 100 g label; "kilos" and "litre" are the kg and litre ones.
+  const hundred = /^100\s*(.+)$/.exec(said);
+  if (hundred) {
+    const u = unitOf(units, hundred[1]!);
+    if (LABELS[`100${u.key}`]) return label(`100${u.key}`);
+  }
+  const u = unitOf(units, said);
+  return LABELS[u.key] ? label(u.key) : { key: u.key, unit: u.key, amount: 1 };
 }
 
-/** A unit to compare by: its name without spaces ("tea bag" and "teabags" are the same). */
-export const unitKey = (raw: string): string => unitName(raw).replace(/\s/g, '');
+/** The key a price unit is kept under: "100g", "kg", "tea bag". */
+export const priceKey = (units: Units, item: Pick<Item, 'unit'>, raw: string) => priceUnit(units, item, raw).key;
 
-export const isMeasure = (unit: string) => !!MEASURES[unitKey(unit)];
+/** How many of what the item is bought in one price unit is (a tea bag of a box of 80 is 0.0125 box), or a ValidationError saying why it can't be worked out. */
+function inBoughtIn(units: Units, item: Item, pu: PriceUnit): number {
+  return toBoughtIn(units, item, pu.amount, pu.unit);
+}
 
-const isPack = (k: string, pack: Pack | null) => !!pack && unitKey(pack.name) === k;
+/** The factor that turns a price per `from` into a price per `to` (£5 a kg × 0.1 is £0.50 per 100 g). Throws when they can't be compared. */
+export function priceFactor(units: Units, item: Item, from: string, to: string): number {
+  const a = priceUnit(units, item, from);
+  const b = priceUnit(units, item, to);
+  if (a.key === b.key) return 1;
+  // A kg as 100 g needs no Weight, only the core's g; a bag as a kg does.
+  if (!isCount(units, a.unit) && !isCount(units, b.unit)) return measureFactor(units, from, to);
+  return inBoughtIn(units, item, b) / inBoughtIn(units, item, a);
+}
 
-/** How much one `unit` is, in each dimension it can be measured in. Empty for units Larder doesn't know. */
-function amounts(unit: string, itemUnit: string, size: ItemSize | null, pack: Pack | null = null): Partial<Record<Dim, number>> {
-  const k = unitKey(unit);
-  const m = MEASURES[k];
-  if (m) return { [m.dim]: m.base };
-  const own = unitKey(itemUnit);
-  const ownMeasure = MEASURES[own];
-  if (k === own) return ownMeasure ? { [ownMeasure.dim]: ownMeasure.base } : { item: 1, ...(size ? { [MEASURES[size.unit]!.dim]: size.amount * MEASURES[size.unit]!.base } : {}) };
-  // Its pack is so many of its own unit ("pack" too, which otherwise means one of its own).
-  if (isPack(k, pack)) {
-    const one = amounts(itemUnit, itemUnit, size);
-    return Object.fromEntries(Object.entries(one).map(([d, n]) => [d, n * pack!.holds]));
+/** The same, or null when they can't be compared (the price card shows it as needing a Weight). */
+export function factorOrNull(units: Units, item: Item, from: string, to: string): number | null {
+  try {
+    return priceFactor(units, item, from, to);
+  } catch (err) {
+    if (err instanceof LarderError) return null;
+    throw err;
   }
-  if (ONE.has(k) && !ownMeasure) return amounts(itemUnit, itemUnit, size);
-  return {};
 }
 
 /**
- * The factor that turns a price per `from` into a price per `to` (so £5 a kg
- * × 0.1 = £0.50 per 100 g), or null when they can't be compared.
+ * Between two weights or two volumes, with no item: "£3.50 a kg is £0.35 per 100 g". A count
+ * needs the item, and a weight can't be compared with a volume.
  */
-export function priceFactor(from: string, to: string, itemUnit: string, size: ItemSize | null, pack: Pack | null = null): number | null {
-  const a = amounts(from, itemUnit, size, pack);
-  const b = amounts(to, itemUnit, size, pack);
-  for (const d of ['item', 'mass', 'volume'] as const) {
-    if (a[d] && b[d]) return b[d]! / a[d]!;
-  }
-  return null;
+export function measureFactor(units: Units, from: string, to: string): number {
+  const kindOfUnit = (raw: string) => {
+    const pu = priceUnit(units, { unit: 'g' }, raw);
+    return isCount(units, pu.unit) ? null : unitOf(units, pu.unit).kind;
+  };
+  const kinds = [kindOfUnit(from), kindOfUnit(to)];
+  if (kinds.includes(null)) throw new ValidationError(`Say which item, so Larder knows how much one ${kinds[0] === null ? from.trim() : to.trim()} is.`);
+  if (kinds[0] !== kinds[1]) throw new ValidationError('A price by weight can\'t be compared with a price by volume.');
+  // As something bought loose in g or ml, the core converter needs nothing else.
+  const loose = { name: 'it', unit: kinds[0] === 'weight' ? 'g' : 'ml', contents: null, weight: null };
+  return inBoughtIn(units, loose, priceUnit(units, loose, to)) / inBoughtIn(units, loose, priceUnit(units, loose, from));
 }
 
-/** Why two units can't be compared, in words for people and assistants. */
-export function whyNot(from: string, to: string, item: { name: string; unit: string; pack?: Pack | null }): string {
-  const pack = item.pack ?? null;
-  for (const u of [from, to]) {
-    if (!Object.keys(amounts(u, item.unit, null, pack)).length && !Object.keys(amounts(u, item.unit, { amount: 1, unit: 'g' }, pack)).length) {
-      return `Larder doesn't know the unit "${u}". Use ${isMeasure(item.unit) ? '' : `${unitName(item.unit)}, `}${pack ? `${unitName(pack.name)}, ` : ''}g, 100 g, kg, ml, 100 ml or litre${pack ? '' : `, or say what ${item.name} comes in on the item's Edit page`}.`;
-    }
-  }
-  const dims = [from, to].map((u) => MEASURES[unitKey(u)]?.dim ?? 'item');
-  if (dims.includes('item')) {
-    const other = MEASURES[unitKey(dims[0] === 'item' ? to : from)];
-    return `Larder doesn't know how much is in one ${unitName(item.unit)} of ${item.name}, so it can't work out a price ${perText(dims[0] === 'item' ? to : from, item.unit, pack)}. Say how much one holds (for example 1 ${unitName(item.unit)} = 200 ${other?.dim === 'volume' ? 'ml' : 'g'}) with set_item_size, or on the item's price card.`;
-  }
-  return 'A price by weight can\'t be compared with a price by volume.';
+/** "per 100 g", "a kg", "a litre", "a bag", "a tea bag", "an egg". */
+export function perText(units: Units, item: Pick<Item, 'unit'>, raw: string): string {
+  const pu = priceUnit(units, item, raw);
+  const label = LABELS[pu.key];
+  if (label) return label.amount === 100 ? `per ${label.label}` : `a ${label.label}`;
+  const u = unitOf(units, pu.unit);
+  const one = u.key === 'each' ? 'item' : u.one;
+  return /^[aeiou]/i.test(one) ? `an ${one}` : `a ${one}`;
 }
 
-/** "per 100 g", "a kg", "a litre", "a bag", "a box" (its pack). */
-export function perText(unit: string, itemUnit: string, pack: Pack | null = null): string {
-  const k = unitKey(unit);
-  const m = MEASURES[k];
-  if (m) return m.base === 100 ? `per ${m.label}` : `a ${m.label}`;
-  const name = ONE.has(k) && !isPack(k, pack) ? unitName(itemUnit) : unitName(unit);
-  return /^[aeiou]/.test(name) ? `an ${name}` : `a ${name}`;
+/** The weights or volumes a price can be per, through a Weight in g or ml, or both when there's none yet. */
+const measuresFor = (kind: 'weight' | 'volume' | null) => (kind === 'weight' ? ['100g', 'kg'] : kind === 'volume' ? ['100ml', 'l'] : ['100g', 'kg', '100ml', 'l']);
+
+/** What it's weighed or measured by: the unit it's bought loose in, or its Weight. Null with neither. */
+function kindOf(units: Units, item: Item): 'weight' | 'volume' | null {
+  if (isLoose(units, item)) return unitOf(units, item.unit).kind as 'weight' | 'volume';
+  return item.weight ? (item.weight.unit === 'ml' ? 'volume' : 'weight') : null;
 }
 
-/** The units a price can be shown per for this item: its own unit, its pack, then weights or volumes. */
-export function choicesFor(itemUnit: string, size: ItemSize | null, pack: Pack | null = null): string[] {
-  const own = unitName(itemUnit);
-  const ownMeasure = MEASURES[own];
-  const packed = pack ? [unitName(pack.name)] : [];
-  if (ownMeasure) return [...(ownMeasure.dim === 'mass' ? ['100g', 'kg'] : ['100ml', 'l']), ...packed];
-  const dim = size ? MEASURES[size.unit]!.dim : null;
-  return [own, ...packed, ...(dim === 'volume' ? ['100ml', 'l'] : dim === 'mass' ? ['100g', 'kg'] : ['100g', 'kg', '100ml', 'l'])];
+/** What one contains, when that's a count: a price can be per tea bag. */
+const inside = (units: Units, item: Item) => (item.contents && isCount(units, item.contents.unit) ? [unitOf(units, item.contents.unit).key] : []);
+
+/** The units a price can be shown per for this item: what it's bought in, what it contains, then by weight or volume. */
+export function choicesFor(units: Units, item: Item): string[] {
+  if (isLoose(units, item)) return measuresFor(kindOf(units, item));
+  return [item.unit, ...inside(units, item), ...measuresFor(kindOf(units, item))];
 }
 
-/** What a price card shows by default: per item, or per 100 g / kg / 100 ml / litre for things counted by weight or volume. */
-export function defaultShow(itemUnit: string): string {
-  const own = unitName(itemUnit);
-  return ({ g: '100g', ml: '100ml' } as Record<string, string>)[own] ?? own;
+/** What a price card shows by default: per one of what it's bought in, or per 100 g or 100 ml for things bought loose. */
+export function defaultShow(units: Units, item: Item): string {
+  if (!isLoose(units, item)) return item.unit;
+  return kindOf(units, item) === 'weight' ? '100g' : '100ml';
 }
 
-/** Units a pack's size can be given in. */
-export function packUnitsFor(itemUnit: string, pack: Pack | null = null): string[] {
-  const own = unitName(itemUnit);
-  const ownMeasure = MEASURES[own];
-  const packed = pack ? [unitName(pack.name)] : [];
-  if (ownMeasure) return [...(ownMeasure.dim === 'mass' ? ['g', 'kg'] : ['ml', 'l']), ...packed];
-  return [own, ...packed, 'g', 'kg', 'ml', 'l'];
+/** Units a pack's size can be given in: what it's bought in and contains, then weights or volumes. */
+export function packUnitsFor(units: Units, item: Item): string[] {
+  const kind = kindOf(units, item);
+  const measures = kind === 'weight' ? ['g', 'kg'] : kind === 'volume' ? ['ml', 'l'] : ['g', 'kg', 'ml', 'l'];
+  return isLoose(units, item) ? measures : [item.unit, ...inside(units, item), ...measures];
 }

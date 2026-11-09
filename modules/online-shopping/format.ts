@@ -1,5 +1,5 @@
-/** Words and numbers for messages and tool answers. */
-import { amount } from '@larder/core';
+/** Words and numbers for messages and tool answers. Amounts and units are said by the core (`amountText`). */
+import { amountText, isLoose, toBoughtIn, unitOf, type Units } from '@larder/core';
 import type { Product } from './contract';
 
 const SYMBOLS: Record<string, string> = { GBP: '£', EUR: '€', USD: '$' };
@@ -14,19 +14,36 @@ export function unitMoney(n: number, currency = 'GBP'): string {
   return `${SYMBOLS[currency] ?? `${currency} `}${n.toFixed(three ? 3 : 2)}`;
 }
 
-/** "£0.31 a roll", "£4.40 a kg", "£0.50 each" */
-export const perUnit = (n: number, unit: string, currency = 'GBP') => (unit === 'each' ? `${unitMoney(n, currency)} each` : `${unitMoney(n, currency)} a ${unit}`);
+/**
+ * A price per one of what it's bought in: "£0.31 a roll", "£0.50 each". Things bought loose are kept
+ * per g or ml, so they're said per kg or L: "£4.40 per kg".
+ */
+export function perUnit(units: Units, n: number, unit: string, currency = 'GBP'): string {
+  const item = { name: 'it', unit };
+  if (isLoose(units, item)) {
+    const big = unitOf(units, unit).kind === 'weight' ? 'kg' : 'l';
+    return `${unitMoney(n * toBoughtIn(units, item, 1, big), currency)} per ${unitOf(units, big).one}`;
+  }
+  const u = units.find(unit);
+  return u?.key === 'each' ? `${unitMoney(n, currency)} each` : `${unitMoney(n, currency)} a ${u?.one ?? unit}`;
+}
 
-export const packSizeText = (p: Product['pack_size']) => (p ? (p.unit === 'each' ? `${p.amount}` : p.amount < 1 && p.unit === 'kg' ? `${Math.round(p.amount * 1000)} g` : p.amount < 1 && p.unit === 'l' ? `${Math.round(p.amount * 1000)} ml` : `${p.amount} ${p.unit}`) : null);
+/** A shop's pack size: "9", "500 g", "1.5 kg", "1 L". */
+export function packSizeText(units: Units, p: Product['pack_size']): string | null {
+  if (!p) return null;
+  if (p.unit === 'each') return `${p.amount}`;
+  const small = p.unit === 'kg' ? 'g' : 'ml';
+  return amountText(units, toBoughtIn(units, { name: 'pack', unit: small }, p.amount, p.unit), small);
+}
 
 /** One line about a shop's product, for assistants. */
-export function productLine(p: Product, currency = 'GBP', loyaltyName = 'loyalty'): string {
+export function productLine(units: Units, p: Product, currency = 'GBP', loyaltyName = 'loyalty'): string {
   const parts = [`${p.name} (code ${p.listing_id})`];
-  const size = packSizeText(p.pack_size);
+  const size = packSizeText(units, p.pack_size);
   if (size) parts.push(`pack ${size}`);
   if (p.price !== null) parts.push(money(p.price, currency));
   if (p.loyalty_price !== null) parts.push(`${money(p.loyalty_price, currency)} with ${loyaltyName}`);
   return parts.join(', ');
 }
 
-export const qty = (n: number, unit: string) => amount(n, unit);
+export const qty = (units: Units, n: number, unit: string) => amountText(units, n, unit);

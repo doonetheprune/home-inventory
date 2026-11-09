@@ -477,7 +477,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const adding = mode === 'add';
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
   // A barcode is on the pack, so Add counts packs: the item's own, or the one the AI worked out for a new item.
-  const pack = into ? into.product.pack ?? null : reading?.pack ?? null;
+  const pack = into ? into.product.pack ?? null : null;
 
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
@@ -489,7 +489,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   async function save() {
     const fields = {
       name: name.trim(),
-      ...(reading ? { categoryId: reading.categoryId, unit: reading.unit, pack: reading.pack ?? null, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
+      ...(reading ? { categoryId: reading.categoryId, unit: reading.boughtIn, contents: reading.contents ?? null, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
       preferredShopIds: shopId ? [shopId] : [],
     };
     const res = await run(async () => {
@@ -543,7 +543,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
                 <Fragment key={x.url}>{i ? (i === all.length - 1 ? ' and ' : ', ') : ''}<a href={x.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{x.name}</a></Fragment>
               ))}</> : null}
               .{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}
-              {choice === 'new' && (reading.unit !== 'each' || reading.pack) && <> Counted in {plural(reading.unit, 2)}{reading.pack ? `, comes in ${plural(reading.pack.name, 2)} of ${reading.pack.holds}` : ''}: change it later on the item’s Edit page.</>}
+              {choice === 'new' && reading.boughtIn !== 'each' && <> Bought in {plural(reading.boughtIn, 2)}: change it later on the item’s Edit page.</>}
             </>
           ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
             <>
@@ -586,7 +586,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (choice === 'new' && !name.trim())} onClick={() => void save()}>
-          {adding ? `Add ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, into ? into.product.unit : reading?.unit ?? 'each')})` : n}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
+          {adding ? `Add ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, into ? into.product.unit : reading?.boughtIn ?? 'each')})` : n}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
         </button>
       </div>
     </div>

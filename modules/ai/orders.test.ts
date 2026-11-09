@@ -80,7 +80,7 @@ describe('order emails', () => {
     const [email, ask] = net.sent[0]!;
     expect(email!.text).toContain('<<<\nThanks for your order 7712 3409.');
     expect(ask!.text).toContain('sent on 2026-11-03');
-    expect(ask!.text).toContain('1. Baked beans (counted in tin)');
+    expect(ask!.text).toContain('1. Baked beans (bought in tins)');
   });
 
   it('remembers how a shop names an item, as receipts do', async () => {

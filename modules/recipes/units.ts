@@ -1,9 +1,11 @@
 /**
  * Kitchen measures for scaling recipes: grams to pounds, millilitres to UK
- * pints, and spoons. Anything else ("egg", "slice", "clove", or no unit at
- * all) is a count, and a count only matches itself.
+ * pints, and spoons. Each maps onto the core's g or ml (`inCore`), which is
+ * how an ingredient becomes stock, through the core's converter. Anything else
+ * ("egg", "slice", "clove", or no unit at all) is a count, and a count only
+ * matches itself; its singular and plural come from the core's unit list.
  */
-import { andList, pluralWord } from '@larder/core';
+import { andList, builtInUnits, singularOf, unitWord, type Units } from '@larder/core';
 
 type Dim = 'mass' | 'volume';
 
@@ -36,21 +38,19 @@ const ALIASES: Record<string, string> = {
 /** Words that mean "just count them". */
 const COUNT = new Set(['', 'each', 'x', 'whole', 'item', 'items', 'number']);
 
-/** "eggs" → "egg", "tomatoes" → "tomato", "berries" → "berry", "slices" → "slice". */
-export function singular(word: string): string {
-  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
-  if (/(x|ch|sh|ss|o)es$/.test(word)) return word.slice(0, -2);
-  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
-  return word;
-}
-
 /** "Grams" → "g", "tablespoons" → "tbsp", "slices" → "slice", "each" or nothing → "" (a count). */
-export function unitKey(raw: string): string {
+export function unitKey(raw: string, units: Units = builtInUnits): string {
   const k = raw.trim().toLowerCase().replace(/[\s.]/g, '');
   if (COUNT.has(k)) return '';
   if (ALIASES[k]) return ALIASES[k]!;
   if (MEASURES[k]) return k;
-  return singular(k);
+  return singularOf(units, raw.trim().toLowerCase()).replace(/\s/g, '');
+}
+
+/** A kitchen measure as the core's g or ml: 2 tbsp is 30 ml, 1 lb is 453.6 g. Null for a count. */
+export function inCore(n: number, unit: string): { amount: number; unit: 'g' | 'ml' } | null {
+  const m = MEASURES[unitKey(unit)];
+  return m ? { amount: n * m.base, unit: m.dim === 'mass' ? 'g' : 'ml' } : null;
 }
 
 const lastWord = (name: string) => name.trim().split(/[\s-]+/).at(-1) ?? '';
@@ -81,19 +81,20 @@ export function nice(n: number): number {
 }
 
 /** "100 g", "1.5 litres", "2 tsp", "3 slices", "2" (a count). */
-export function measureText(n: number, unit: string): string {
+export function measureText(n: number, unit: string, units: Units = builtInUnits): string {
   const q = nice(n);
-  const k = unitKey(unit);
+  const k = unitKey(unit, units);
   const m = MEASURES[k];
   if (m) return `${q} ${q !== 1 && m.plural ? m.plural : m.label}`;
   if (!k) return String(q);
-  return `${q} ${pluralWord(k, q)}`;
+  const word = units.find(unit)?.key ?? singularOf(units, unit.trim().toLowerCase());
+  return `${q} ${unitWord(units, word, q) || word}`;
 }
 
 /** "2 eggs", "1 egg", "100 g plain flour", "a pinch salt": an amount with what it's of. */
-export function withAmount(shown: string, name: string, unit: string): string {
+export function withAmount(shown: string, name: string, unit: string, units: Units = builtInUnits): string {
   if (!shown) return name;
-  if (shown === '1' && !unitKey(unit)) return `1 ${name.replace(/\S+$/, singular)}`;
+  if (shown === '1' && !unitKey(unit, units)) return `1 ${name.replace(/\S+$/, (w) => singularOf(units, w))}`;
   return `${shown} ${name}`;
 }
 

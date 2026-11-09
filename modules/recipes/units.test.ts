@@ -3,7 +3,7 @@ import { convert, measureText, unitKey } from './units';
 
 describe('recipe units', () => {
   it('reads units however they are written', () => {
-    expect(['Grams', 'kilos', 'tablespoons', 'fl oz', 'Slices', 'each', '', 'tomatoes', 'pinches'].map(unitKey)).toEqual(['g', 'kg', 'tbsp', 'floz', 'slice', '', '', 'tomato', 'pinch']);
+    expect(['Grams', 'kilos', 'tablespoons', 'fl oz', 'Slices', 'each', '', 'tomatoes', 'pinches'].map((u) => unitKey(u))).toEqual(['g', 'kg', 'tbsp', 'floz', 'slice', '', '', 'tomato', 'pinch']);
   });
 
   it('converts between kitchen measures of the same kind, and nothing else', () => {

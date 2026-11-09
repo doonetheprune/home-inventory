@@ -7,7 +7,7 @@
  * remembered, so the next receipt from that shop matches without guessing.
  */
 import { z } from 'zod';
-import { LarderError, pluralWord, type ModuleContext, type Product } from '@larder/core';
+import { LarderError, amountText, type ModuleContext, type Product } from '@larder/core';
 import type { Source, Task } from './providers';
 
 /** What the AI read from the receipt. */
@@ -21,7 +21,7 @@ export const ReceiptReading = z.object({
     count: z.number().describe('How many were bought'),
     price: z.number().nullable().describe('What was paid for the line'),
     item: z.number().nullable().describe('The number of the household item it is, or null if none is'),
-    quantity: z.number().nullable().describe('How much of that item\'s unit it adds in all'),
+    quantity: z.number().nullable().describe('How much of what that item is bought in it adds in all'),
     sure: z.boolean().describe('True if it is certainly that item'),
   })),
 });
@@ -52,7 +52,8 @@ const GEMINI_RECEIPT = {
 };
 
 /** An item the household has, as the AI is shown it. */
-export interface Known { id: string; name: string; unit: string; aliases: string[]; brands: string[]; pack?: { name: string; holds: number } | null }
+/** An item as the AI is told about it: what it's bought in (one and several), and what one contains, said by the core. */
+export interface Known { id: string; name: string; unit: string; one: string; many: string; contains: string | null; aliases: string[]; brands: string[] }
 
 /** How a shop named an item on an earlier receipt (`ai:receipt-names`). */
 export interface Learnt {
@@ -61,7 +62,7 @@ export interface Learnt {
   text: string;
   said: string;
   productId: string;
-  /** How much of the item's unit one of that line adds, e.g. 9 rolls for a 9-pack. */
+  /** How much of what the item is bought in one of that line adds, e.g. 9 rolls for a 9-pack. */
   each: number;
   at: string;
 }
@@ -84,15 +85,14 @@ export function householdItems(known: Known[], learnt: Learnt[], shopName: (id: 
   const number = new Map(known.map((k, i) => [k.id, i + 1]));
   const items = known.map((k, i) => {
     const more = [k.aliases.length ? `also ${k.aliases.slice(0, 4).join(', ')}` : '', k.brands.length ? `brands ${k.brands.slice(0, 3).map((b) => b.slice(0, 60)).join('; ')}` : ''].filter(Boolean);
-    const pack = k.pack ? `, comes in ${pluralWord(k.pack.name, 2)} of ${k.pack.holds}` : '';
-    return `${i + 1}. ${k.name} (counted in ${k.unit}${pack}${more.length ? `; ${more.join('; ')}` : ''})`;
+    return `${i + 1}. ${k.name} (bought in ${k.many}${k.contains ? `, each containing ${k.contains}` : ''}${more.length ? `; ${more.join('; ')}` : ''})`;
   });
   const before = learnt
     .filter((l) => number.has(l.productId))
     .map((l) => {
       const shop = shopName(l.shopId);
       const k = known[number.get(l.productId)! - 1]!;
-      return `${quote(l.text)}${shop ? ` at ${shop}` : ''} is item ${number.get(l.productId)}, ${l.each} ${k.unit} for each one bought`;
+      return `${quote(l.text)}${shop ? ` at ${shop}` : ''} is item ${number.get(l.productId)}, ${l.each} ${l.each > 0 && l.each <= 1 ? k.one : k.many} for each one bought`;
     });
   return [
     'The household\'s items:',
@@ -113,7 +113,7 @@ export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: s
     '  - count: how many were bought, e.g. 2 for "2 @ £0.85" or a line printed twice. 1 if it does not say, and 1 for something weighed.',
     '  - price: what was paid for the line in all, as a number, after any discount printed straight under it. Null if it is not shown.',
     '  - item: the number of the household\'s item it is. Receipts shorten names ("HNZ" is Heinz, "SEMI SKMD" is semi-skimmed milk), so match on what it is, not the exact words. Another brand or size of the same thing is still that item. Null if none of the items is it: never pick the nearest one just to have one.',
-    '  - quantity: how much of that item\'s unit the line adds in all. Two 9-roll packs of an item counted in rolls is 18; 0.85 kg of something counted in kg is 0.85. Null if item is null.',
+    '  - quantity: how much of what that item is bought in the line adds in all. Two 9-roll packs of an item bought in rolls is 18, and of one bought in packs containing 9 rolls, 2; 0.85 kg of something bought loose in g is 850. Null if item is null.',
     '  - sure: true if it is certainly that item, false if it might be something else.',
     '- readable: false if the photo is not a receipt or order, or cannot be read. Then give what you can.',
     '',
@@ -202,13 +202,17 @@ export function itemMemory(ctx: ModuleContext) {
     },
     /** The household's items (not the wish list), with brand names, and what was matched before for them. */
     async load(): Promise<{ known: Known[]; learnt: Learnt[] }> {
-      const [items, brands] = await Promise.all([ctx.core.products.list(), ctx.core.products.brandNames()]);
-      const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => ({ id: p.id, name: p.name, unit: p.unit, aliases: p.aliases, brands: brands[p.id] ?? [], pack: p.pack ?? null }));
+      const [items, brands, units] = await Promise.all([ctx.core.products.list(), ctx.core.products.brandNames(), ctx.core.units.list()]);
+      const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => {
+        const u = units.find(p.unit);
+        const [one, many] = u?.key === 'each' ? ['one', 'ones'] : [u?.one ?? p.unit, u?.many ?? p.unit];
+        return { id: p.id, name: p.name, unit: p.unit, one, many, contains: p.contents ? amountText(units, p.contents.amount, p.contents.unit) : null, aliases: p.aliases, brands: brands[p.id] ?? [] };
+      });
       const ids = new Set(known.map((k) => k.id));
       const learnt = (await this.learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);
       return { known, learnt };
     },
-    /** The item is now counted in what's inside (a box became 80 tea bags): "1 box" on a receipt is 80 now. */
+    /** The item is now counted in another unit (the 0.10.0 upgrade: 80 tea bags are 1 box): "1 box" on a receipt is 1 now, not 80. */
     async recounted(productId: string, factor: number): Promise<void> {
       for (const { id, data } of await names.list()) {
         if (data.productId === productId) await names.put(id, { ...data, each: tidyNum(data.each * factor) });
@@ -337,7 +341,7 @@ export function receipts(ctx: ModuleContext, deps: ReceiptDeps) {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('The date on the receipt (YYYY-MM-DD), kept with the purchase history'),
       lines: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder, e.g. "baked beans"'),
-        quantity: z.number().positive().describe('How much of the item\'s own unit, e.g. 18 for two 9-roll packs of toilet roll counted in rolls, or 80 for a box of 80 tea bags (get_item says what an item comes in)'),
+        quantity: z.number().positive().describe('How much of what the item is bought in, e.g. 18 for two 9-roll packs of toilet roll bought in rolls, or 1 for a box of tea bags bought in boxes (get_item says what an item is bought in)'),
         price: z.number().min(0).optional().describe('What was paid for the line, e.g. 3.25'),
         text: z.string().max(200).optional().describe('The line as printed, e.g. "ANDREX CLASSIC 9PK"'),
         count: z.number().positive().optional().describe('How many were bought on the line, e.g. 2 for "2 @ £3.25". Default 1'),

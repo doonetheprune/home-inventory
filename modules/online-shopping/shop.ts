@@ -5,7 +5,7 @@
  * so its progress and summary can be asked for (shop_status, the app).
  */
 import { z } from 'zod';
-import { LarderError, NotFoundError, amount, andList, newId, ownUsage, type ModuleContext, type Product, type Shop } from '@larder/core';
+import { LarderError, NotFoundError, amountText, andList, newId, usageInBoughtIn, type ModuleContext, type Product, type Shop, type Units } from '@larder/core';
 import { BasketAddResult, ProviderError, STOPPING } from './client';
 import type { QuoteLine } from './contract';
 import { matchFavourite, type Favourites } from './favourites';
@@ -154,8 +154,8 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
         listings: rules.listings.map((l) => ({ listingId: l.listingId, name: l.name || l.listingId, packQuantity: l.packQuantity })),
       };
       if (!isCandidate(c)) continue;
-      // How fast it's used, as the household said, or else as the history shows.
-      const usage = ownUsage(p);
+      // How fast it's used, as the household said (in what it's bought in, through the core's converter), or else as the history shows.
+      const usage = usageInBoughtIn(await ctx.core.units.list(), p);
       if (c.shelfLifeDays) c.dailyUse = usage ? usage.amount / usage.everyDays : dailyUse(await ctx.core.history.product(p.id, 500), ctx.core.today());
       out.push(c);
     }
@@ -249,7 +249,7 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
 
         if (run.kind === 'plan' || !p.lines.length) {
           await update({ status: 'done', step: run.kind === 'plan' ? 'Planned' : 'Nothing to buy', plan: p, finishedAt: ctx.core.now() });
-          current = await save({ ...current, summary: summary(current, await s.currency(), woke) });
+          current = await save({ ...current, summary: summary(await ctx.core.units.list(), current, await s.currency(), woke) });
           return;
         }
 
@@ -263,7 +263,7 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
         const byHand = new Set(cs.filter((c) => c.manual).map((c) => c.productId));
         for (const a of got.added) if (byHand.has(a.productId)) await ctx.core.products.setOnList(a.productId, false);
         await update({ status: 'done', step: 'Basket filled', ...got, finishedAt: ctx.core.now() });
-        current = await save({ ...current, summary: summary(current, await s.currency(), woke) });
+        current = await save({ ...current, summary: summary(await ctx.core.units.list(), current, await s.currency(), woke) });
         ctx.publish('online-shopping.basket_filled', {
           pending_order: `${run.shopName} delivery`,
           shop: run.shopName, run_id: run.id, items: got.added.length, total: p.total, failed: got.failed.length,
@@ -274,7 +274,7 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
       const e = err instanceof LarderError ? { code: err.code, message: err.message } : { code: 'provider_error', message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}` };
       if (!(err instanceof LarderError)) ctx.log.error('A shop failed', { error: String(err) });
       current = await save({ ...current, status: 'failed', step: 'Stopped', error: e, finishedAt: ctx.core.now() });
-      current = await save({ ...current, summary: summary(current, await s.currency(), false) });
+      current = await save({ ...current, summary: summary(await ctx.core.units.list(), current, await s.currency(), false) });
       ctx.publish('online-shopping.failed', { shop: run.shopName, run_id: run.id, code: e.code, message: e.message, needs_you: STOPPING.has(e.code) });
     }
     // Back to sleep, when it was set up and nothing else is running there.
@@ -331,8 +331,9 @@ export function createShops(ctx: ModuleContext, s: Services, favourites: Favouri
 export type Shops = ReturnType<typeof createShops>;
 
 /** The summary for people and assistants: what was (or would be) bought, and everything that needs a look. */
-export function summary(run: Run, currency: string, woke = false): string {
+export function summary(units: Units, run: Run, currency: string, woke = false): string {
   const p = run.plan;
+  const amount = (n: number, unit: string) => amountText(units, n, unit);
   const lines: string[] = [];
   if (woke) lines.push(`Woke the ${run.shopName} provider's computer.`);
   if (run.status === 'failed' && run.error) lines.push(`The shop at ${run.shopName} stopped: ${run.error.message}`);
@@ -347,7 +348,7 @@ export function summary(run: Run, currency: string, woke = false): string {
         : `Planned: ${p.items.length} item${p.items.length === 1 ? '' : 's'} at ${run.shopName}, about ${money(p.total, currency)}${when}:`);
       for (const i of p.items) {
         const packs = i.lines.map((l) => `${l.packs} × ${l.name}${l.deal ? ` (${l.deal}${l.roundedForDeal ? ', rounded up for it' : ''})` : ''}`).join(' + ');
-        const why = i.reason === 'offer' ? `on offer at ${perUnit(i.unitPrice ?? 0, i.unit, currency)}${i.targetPrice !== null ? ` (target ${perUnit(i.targetPrice, i.unit, currency)})` : ''}, up to ${amount(i.level, i.unit)}`
+        const why = i.reason === 'offer' ? `on offer at ${perUnit(units, i.unitPrice ?? 0, i.unit, currency)}${i.targetPrice !== null ? ` (target ${perUnit(units, i.targetPrice, i.unit, currency)})` : ''}, up to ${amount(i.level, i.unit)}`
           : i.reason === 'low' ? `low (${amount(i.have, i.unit)}), up to ${amount(i.level, i.unit)}` : 'on the list by hand';
         lines.push(`- ${i.name}: ${packs} = ${amount(i.quantity, i.unit)}, ${money(i.cost, currency)}; ${why}${i.capped ? `; held to ${amount(i.level, i.unit)} because ${i.capped}` : ''}`);
       }

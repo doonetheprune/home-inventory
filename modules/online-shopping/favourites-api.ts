@@ -46,7 +46,7 @@ export function favouriteFeatures(ctx: ModuleContext, s: Services, favourites: F
     response: z.object({ listing: Listing, message: z.string() }),
     async handler({ params, body }) {
       const r = await favourites.link(params.id, body.productId);
-      return { listing: r.listing, message: `${r.favourite.name} is linked to ${r.product.name} (${packText(r.listing, r.product.unit)}${r.listing.guessed ? ': check this' : ''}).${shopSetText(r.shopSet, r.favourite.shopName)}` };
+      return { listing: r.listing, message: `${r.favourite.name} is linked to ${r.product.name} (${packText(await ctx.core.units.list(), r.listing, r.product.unit)}${r.listing.guessed ? ': check this' : ''}).${shopSetText(r.shopSet, r.favourite.shopName)}` };
     },
   });
 
@@ -109,10 +109,11 @@ export function favouriteFeatures(ctx: ModuleContext, s: Services, favourites: F
       if (!s.can(provider, 'add_favourites')) throw new ValidationError(`The ${sh.name} provider can't add favourites yet. Add it on ${sh.name}'s website.`);
       const product = item ? await ctx.core.resolve.product(item) : null;
       const p = await (await s.ready(provider)).addFavourite(id_or_link.trim());
-      const line = productLine(p, await s.currency(), sh.name === 'Tesco' ? 'Clubcard' : 'loyalty card');
+      const units = await ctx.core.units.list();
+      const line = productLine(units, p, await s.currency(), sh.name === 'Tesco' ? 'Clubcard' : 'loyalty card');
       if (product) {
         const { listing, shopSet } = await items.link(product.id, sh.id, p);
-        return { text: `Added to your ${sh.name} favourites: ${line}. Linked to ${product.name} (${packText(listing, product.unit)}${listing.guessed ? ': check this' : ''}).${shopSetText(shopSet, sh.name)}`, data: { product: p, item: product.name } };
+        return { text: `Added to your ${sh.name} favourites: ${line}. Linked to ${product.name} (${packText(units, listing, product.unit)}${listing.guessed ? ': check this' : ''}).${shopSetText(shopSet, sh.name)}`, data: { product: p, item: product.name } };
       }
       const owner = (await items.linked()).get(`${sh.id}:${p.listing_id}`);
       if (!owner) await favourites.addPending(sh.id, p);

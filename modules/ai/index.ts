@@ -10,7 +10,7 @@
  * reads it. Nothing is saved from a reading: the app shows it to check first.
  */
 import { z } from 'zod';
-import { defineModule, LarderError, LookupResult, oneOf, photoType, sameUnit, singular, SHOP_PRESETS } from '@larder/core';
+import { defineModule, isLoose, LarderError, LookupResult, photoType, SHOP_PRESETS, type Units } from '@larder/core';
 import { barcodeTask, claude, gemini, packTask, PROVIDER_NAMES, type Input, type Photo, type Provider, type ProviderId, type Reading, type Task } from './providers';
 import { orderReader } from './orders';
 import { itemMemory, receipts, type Asked } from './receipts';
@@ -90,10 +90,10 @@ export const Identified = z.object({
   kind: z.string().nullable(),
   /** Brand and pack, e.g. "Heinz Baked Beanz 415 g", saved as the item's brand. */
   brand: z.string().nullable(),
-  /** The single thing used one at a time: "tea bag", "roll", "tin"; or the bottle or bag of something used a bit at a time. */
-  unit: z.string(),
-  /** What it comes in, when a pack holds several: a box of 80 tea bags. */
-  pack: z.object({ name: z.string(), holds: z.number() }).nullable(),
+  /** What it's bought in, a key from the unit list: "box", "jar", "bottle", "each", or g or ml for something bought loose. */
+  boughtIn: z.string(),
+  /** What one contains, as printed on the pack: 20 tea bags, 400 g. Null when it isn't known. */
+  contents: z.object({ amount: z.number(), unit: z.string() }).nullable(),
   categoryId: z.string().nullable(),
   shelfLifeDays: z.number().int().nullable(),
   aliases: z.array(z.string()),
@@ -231,7 +231,7 @@ export default defineModule({
       response: Identified,
       async handler({ body }) {
         const categories = await ctx.core.categories.list();
-        const { answer, ...by } = await ask(body.image, async () => packTask(categories.map((c) => c.name), (await saved()).search !== false));
+        const { answer, ...by } = await ask(body.image, async () => packTask(categories.map((c) => c.name), unitWords(await ctx.core.units.list()), (await saved()).search !== false));
         return { ...(await tidy(answer, categories)), ...by };
       },
     });
@@ -254,7 +254,7 @@ export default defineModule({
           `Categories: ${body.categories.slice(0, 8).map((c: string) => cap(c, 60)).join(', ') || 'not given'}`,
         ].join('\n');
         const categories = await ctx.core.categories.list();
-        const { answer, ...by } = await askAbout(() => ({ text, what: 'barcode' }), async () => barcodeTask(categories.map((c) => c.name), s.search !== false), 'barcode');
+        const { answer, ...by } = await askAbout(() => ({ text, what: 'barcode' }), async () => barcodeTask(categories.map((c) => c.name), unitWords(await ctx.core.units.list()), s.search !== false), 'barcode');
         return { ...(await tidy(answer, categories)), ...by };
       },
     });
@@ -329,19 +329,18 @@ export default defineModule({
       const brand = cap([title, size && !squash(title).includes(squash(size)) ? size : ''].filter(Boolean).join(' '), 160) || null;
       const shop = await shopFor(cap(r.shop, 60) || null);
       const days = r.shelf_life_days;
-      // Said in the singular, as Larder says units ("2 tea bags"): "Tea bags" is "Tea bag".
-      const unit = (cap(r.unit, 20) && oneOf(cap(r.unit, 20))) || 'each';
-      // A pack holds several of what it's counted in; "a box of boxes" or a pack of one isn't one.
-      const packName = cap(r.pack, 30) && singular(cap(r.pack, 30));
-      const holds = typeof r.pack_holds === 'number' && r.pack_holds > 1 && r.pack_holds <= 100000 ? Math.round(r.pack_holds * 1000) / 1000 : null;
-      const pack = packName && holds && !sameUnit(packName, unit) ? { name: packName, holds } : null;
+      // Units from Larder's list, as keys: one the AI made up is "each", for the person to pick on the card.
+      const units = await ctx.core.units.list();
+      const bought = units.find(cap(r.bought_in, 30)) ?? units.find('each')!;
+      const boughtIn = bought.kind === 'count' ? bought.key : bought.kind === 'weight' ? 'g' : 'ml';
+      const contents = containsOf(units, boughtIn, r.contains);
       return {
         readable: r.readable,
         name,
         kind: kind && !same(kind, name) ? kind : null,
         brand,
-        unit,
-        pack,
+        boughtIn,
+        contents,
         categoryId: category?.id ?? null,
         shelfLifeDays: typeof days === 'number' && days >= 1 ? Math.min(36500, Math.round(days)) : null,
         // The plain kind first ("Herbal tea"), so searching for it finds this; no name twice in any case.
@@ -353,3 +352,15 @@ export default defineModule({
     }
   },
 });
+
+/** The units the AI picks from: Larder's counts, and g and ml for something bought loose. */
+function unitWords(units: Units): string[] {
+  return [...units.all.filter((u) => u.kind === 'count').map((u) => u.one), 'g', 'ml'];
+}
+
+/** What one contains, as the AI read it, if it fits: a unit from the list, not "each" or what it's bought in, and nothing for things bought loose. */
+function containsOf(units: Units, boughtIn: string, c: { amount: number; unit: string } | null): { amount: number; unit: string } | null {
+  const u = c && units.find(c.unit);
+  if (!c || !u || !(c.amount > 0 && c.amount <= 1_000_000) || u.key === 'each' || u.key === boughtIn || isLoose(units, { unit: boughtIn })) return null;
+  return { amount: Math.round(c.amount * 1000) / 1000, unit: u.key };
+}

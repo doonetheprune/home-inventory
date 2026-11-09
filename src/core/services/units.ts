@@ -474,7 +474,8 @@ export function singularOf(units: Units, word: string): string {
   const w = tidy(word);
   if (/(^|\s)(lens|series|species|gas|bus|plus)$/.test(w)) return w;
   if (w.length > 4 && w.endsWith('ies')) return `${w.slice(0, -3)}y`;
-  if (/(x|ch|sh|ss)es$/.test(w)) return w.slice(0, -2);
+  // Tomatoes and potatoes, as recipes say them.
+  if (/(x|ch|sh|ss|o)es$/.test(w)) return w.slice(0, -2);
   if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
   return w;
 }

@@ -288,15 +288,13 @@
                   "amount": {
                     "type": "number",
                     "exclusiveMinimum": 0,
-                    "maximum": 1000000
+                    "maximum": 100000000
                   },
                   "unit": {
                     "type": "string",
                     "enum": [
                       "g",
-                      "kg",
-                      "ml",
-                      "l"
+                      "ml"
                     ]
                   }
                 },
@@ -309,6 +307,37 @@
                 "type": "null"
               }
             ]
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "ml"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weightEditable": {
+            "type": "boolean"
           },
           "itemUnit": {
             "type": [
@@ -329,6 +358,8 @@
           "showPer",
           "options",
           "itemSize",
+          "weight",
+          "weightEditable",
           "itemUnit",
           "packUnits"
         ]
@@ -1383,6 +1414,13 @@
                     "number",
                     "null"
                   ]
+                },
+                "why": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -1637,6 +1675,25 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "notTaken": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "why"
+              ]
             }
           },
           "expiresAt": {
@@ -5062,15 +5119,13 @@
                   "amount": {
                     "type": "number",
                     "exclusiveMinimum": 0,
-                    "maximum": 1000000
+                    "maximum": 100000000
                   },
                   "unit": {
                     "type": "string",
                     "enum": [
                       "g",
-                      "kg",
-                      "ml",
-                      "l"
+                      "ml"
                     ]
                   }
                 },
@@ -5084,6 +5139,38 @@
                 "type": "null"
               }
             ]
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "ml"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weightEditable": {
+            "type": "boolean"
           },
           "itemUnit": {
             "type": [
@@ -5104,6 +5191,8 @@
           "showPer",
           "options",
           "itemSize",
+          "weight",
+          "weightEditable",
           "itemUnit",
           "packUnits"
         ],
@@ -6216,6 +6305,13 @@
                     "number",
                     "null"
                   ]
+                },
+                "why": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -6233,7 +6329,8 @@
                 "shown",
                 "label",
                 "scales",
-                "need"
+                "need",
+                "why"
               ],
               "additionalProperties": false
             }
@@ -6488,6 +6585,26 @@
               "type": "string"
             }
           },
+          "notTaken": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "why"
+              ],
+              "additionalProperties": false
+            }
+          },
           "expiresAt": {
             "type": "string"
           }
@@ -6502,6 +6619,7 @@
           "from",
           "items",
           "skipped",
+          "notTaken",
           "expiresAt"
         ],
         "additionalProperties": false
@@ -15664,7 +15782,7 @@
                   },
                   "unit": {
                     "type": "string",
-                    "maxLength": 20
+                    "maxLength": 30
                   },
                   "price": {
                     "type": "number",
@@ -15788,11 +15906,11 @@
     },
     "/api/v1/modules/pricing/display": {
       "put": {
-        "summary": "Choose the unit prices are shown per, and how much one item holds",
+        "summary": "Choose the unit prices are shown per, and the item's Weight",
         "tags": [
           "Module: pricing"
         ],
-        "description": "showPer: e.g. \"100g\", \"kg\" or the item's own unit. itemSize: e.g. { amount: 200, unit: \"g\" } for a 200 g bag (null forgets it).",
+        "description": "showPer: e.g. \"100g\", \"kg\" or what the item is bought in. weight (or itemSize, for older apps): what one weighs or holds, e.g. { amount: 200, unit: \"g\" } for a 200 g bag, null to forget it. It's the item's Weight, so the product service checks it (refused when Contains is an amount, or for things bought loose).",
         "requestBody": {
           "required": true,
           "content": {
@@ -15809,7 +15927,37 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "maxLength": 20
+                        "maxLength": 30
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "weight": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1000000
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "g",
+                              "kg",
+                              "ml",
+                              "l"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "unit"
+                        ]
                       },
                       {
                         "type": "null"
@@ -15944,7 +16092,7 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "maxLength": 20
+                          "maxLength": 30
                         },
                         {
                           "type": "null"
@@ -19618,24 +19766,24 @@
                         "null"
                       ]
                     },
-                    "unit": {
+                    "boughtIn": {
                       "type": "string"
                     },
-                    "pack": {
+                    "contents": {
                       "anyOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "holds": {
+                            "amount": {
                               "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
                             }
                           },
                           "required": [
-                            "name",
-                            "holds"
+                            "amount",
+                            "unit"
                           ],
                           "additionalProperties": false
                         },
@@ -19756,8 +19904,8 @@
                     "name",
                     "kind",
                     "brand",
-                    "unit",
-                    "pack",
+                    "boughtIn",
+                    "contents",
                     "categoryId",
                     "shelfLifeDays",
                     "aliases",
@@ -19851,24 +19999,24 @@
                         "null"
                       ]
                     },
-                    "unit": {
+                    "boughtIn": {
                       "type": "string"
                     },
-                    "pack": {
+                    "contents": {
                       "anyOf": [
                         {
                           "type": "object",
                           "properties": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "holds": {
+                            "amount": {
                               "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
                             }
                           },
                           "required": [
-                            "name",
-                            "holds"
+                            "amount",
+                            "unit"
                           ],
                           "additionalProperties": false
                         },
@@ -19989,8 +20137,8 @@
                     "name",
                     "kind",
                     "brand",
-                    "unit",
-                    "pack",
+                    "boughtIn",
+                    "contents",
                     "categoryId",
                     "shelfLifeDays",
                     "aliases",
@@ -24034,7 +24182,7 @@
         "tags": [
           "Module: online-shopping"
         ],
-        "description": "packRule: fixed (always one listing, fixedListingId or the first) or cheapest (the cheapest mix of listings that covers what's needed). targetPrice is per one of the item's unit and overrides the item's own (null to use it).",
+        "description": "packRule: fixed (always one listing, fixedListingId or the first) or cheapest (the cheapest mix of listings that covers what's needed). targetPrice is per one of what the item is bought in and overrides the item's own (null to use it).",
         "requestBody": {
           "required": true,
           "content": {
@@ -24296,7 +24444,7 @@
         "tags": [
           "Module: online-shopping"
         ],
-        "description": "targetPrice is per one of the item's unit: at or below it counts as on offer, and the order tops up to offerStockUpTo. The normal stock-up amount is the item's own stockUpTo.",
+        "description": "targetPrice is per one of what the item is bought in: at or below it counts as on offer, and the order tops up to offerStockUpTo. The normal stock-up amount is the item's own stockUpTo.",
         "requestBody": {
           "required": true,
           "content": {

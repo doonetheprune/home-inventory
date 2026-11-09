@@ -98,9 +98,9 @@ describe('AI module: receipts', () => {
 
     // The AI is shown the household's items with their other names and brands, numbered; not the wish list.
     const prompt = net.prompts()[0]!;
-    expect(prompt).toContain('1. Baked beans (counted in tin; also beans)');
-    expect(prompt).toContain('2. Semi-skimmed milk (counted in bottle)');
-    expect(prompt).toContain('3. Toilet roll (counted in roll; also loo roll; brands Andrex Classic Clean 9 rolls)');
+    expect(prompt).toContain('1. Baked beans (bought in tins; also beans)');
+    expect(prompt).toContain('2. Semi-skimmed milk (bought in bottles)');
+    expect(prompt).toContain('3. Toilet roll (bought in rolls; also loo roll; brands Andrex Classic Clean 9 rolls)');
     expect(prompt).not.toContain('Garden gnome');
     expect(prompt).toContain('never pick the nearest one just to have one');
     const msg = net.sent.find((r) => r.url.endsWith('/v1/messages'))!;
@@ -142,7 +142,7 @@ describe('AI module: receipts', () => {
     const again = await call<{ lines: Array<{ item: { id: string } | null; quantity: number; match: string }>; addedBefore: string | null }>(core, 'POST', '/receipt', { image: JPEG });
     expect(again.lines).toMatchObject([{ item: { id: loo.id }, quantity: 27, match: 'learnt' }, { item: { id: milk.id }, quantity: 4, match: 'learnt' }]);
     expect(again.addedBefore).toBeNull();
-    expect(net.prompts()[1]).toContain('"ANDREX CLASSIC 9PK" at Tesco is item 3, 9 roll for each one bought');
+    expect(net.prompts()[1]).toContain('"ANDREX CLASSIC 9PK" at Tesco is item 3, 9 rolls for each one bought');
 
     // Saved by 0.9.2 as counted in rolls, in packs of 9: the upgrade buys it in packs, so what Tesco's names were learnt as follows.
     await saveAs092(storage, (await core.products.summary(loo.id)).product, { unit: 'roll', pack: { name: 'pack', holds: 9 } });
@@ -200,8 +200,8 @@ describe('AI module: receipts', () => {
     expect((await core.assistant.call('add_receipt', { shop: 'Lidl', lines: [{ item: 'beans', quantity: 1 }] })).text).toBe("Added Baked beans to stock. Larder doesn't have a shop called Lidl, so the prices were kept without one.");
   });
 
-  it('tells the AI what an item comes in, so a box of 80 is 80 tea bags', () => {
-    const lines = householdItems([{ id: 't', name: 'Yorkshire tea', unit: 'tea bag', aliases: [], brands: [], pack: { name: 'box', holds: 80 } }], [], () => null);
-    expect(lines).toContain('1. Yorkshire tea (counted in tea bag, comes in boxes of 80)');
+  it('tells the AI what an item is bought in and what one contains, so a box of 80 tea bags is 1 box', () => {
+    const lines = householdItems([{ id: 't', name: 'Yorkshire tea', unit: 'box', one: 'box', many: 'boxes', contains: '80 tea bags', aliases: [], brands: [] }], [], () => null);
+    expect(lines).toContain('1. Yorkshire tea (bought in boxes, each containing 80 tea bags)');
   });
 });
