@@ -3,8 +3,9 @@
  * the recipes that use an item, on its page; and a scenario's recipes, on the scenario's page.
  */
 import { useState } from 'react';
+import { isLoose } from '@larder/core';
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, qty, Sheet, Stepper, Switch, useAction, useModuleEnabled, useModuleParams, useNavigate, useQuery,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, qty, Sheet, Stepper, Switch, useAction, useModuleEnabled, useModuleParams, useNavigate, useQuery, useUnits,
   type ProductDetail,
 } from '@larder/web-sdk';
 
@@ -81,6 +82,7 @@ function Cooked({ recipe, ask, onClose }: { recipe: Recipe; ask: Ask | null; onC
   const proposal = useQuery({ queryKey: ['recipes', recipe.id, 'cook', body], queryFn: () => call<Proposal>('POST', `/${recipe.id}/cook`, body), staleTime: Infinity });
   const [changes, setChanges] = useState<Record<string, number>>({});
   const { run, busy } = useAction();
+  const units = useUnits();
   const p = proposal.data;
   const confirm = async () => {
     if (!p) return;
@@ -105,7 +107,7 @@ function Cooked({ recipe, ask, onClose }: { recipe: Recipe; ask: Ask | null; onC
               {p.items.map((i) => (
                 <div className="numfield" key={i.productId}>
                   <span><b>{i.name}</b><small>{qty(i.inStock, i.unit)} in</small></span>
-                  <Stepper value={changes[i.productId] ?? i.quantity} onChange={(n) => setChanges({ ...changes, [i.productId]: n })} min={0} max={i.inStock} step={i.unit === 'g' || i.unit === 'ml' ? 10 : 1} label={i.unit} />
+                  <Stepper value={changes[i.productId] ?? i.quantity} onChange={(n) => setChanges({ ...changes, [i.productId]: n })} min={0} max={i.inStock} step={isLoose(units, { unit: i.unit }) ? 10 : 1} label={i.unit} />
                 </div>
               ))}
               {!p.items.length && <div className="item"><span className="muted small">Nothing to take: none of the ingredients has an amount in Larder's units.</span></div>}

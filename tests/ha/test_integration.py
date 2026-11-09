@@ -312,11 +312,11 @@ async def test_mcp_through_home_assistant(hass: HomeAssistant, hass_client, lard
     assert (await resp.json())["result"]["serverInfo"]["name"] == "larder"
 
     name = unique("Porridge oats")
-    await larder.call("POST", "/products", {"name": name, "unit": "kg"})
+    await larder.call("POST", "/products", {"name": name, "unit": "bag"})
     call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "add_stock", "arguments": {"item": name, "quantity": 2}}}
     resp = await client.post("/api/larder/mcp", json=call, headers={**headers, "mcp-protocol-version": "2025-06-18"})
     body = await resp.json()
-    assert body["result"]["content"][0]["text"] == f"{name}: added 2 kg. 2 kg in stock."
+    assert body["result"]["content"][0]["text"] == f"{name}: added 2 bags. 2 bags in stock."
 
 
 async def test_mcp_needs_signing_in(hass: HomeAssistant, aiohttp_client, setup_larder) -> None:

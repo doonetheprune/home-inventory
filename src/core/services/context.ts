@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { Clock, EventBus, FileStore, HomeAssistantPort, SearchIndex, Storage } from '../ports';
 import { isoNow, localDate } from '../util';
+import { unitList, type HouseholdUnit, type Units } from './units';
+
+/** Where the household's own unit words are kept (`ctx.storage.settings`), beside `instanceId`, so the port and the household settings don't change. */
+export const HOUSEHOLD_UNITS = 'units';
 
 export const HouseholdSettings = z.object({
   householdName: z.string().max(80).default('Our house'),
@@ -33,6 +37,8 @@ export interface CoreContext extends Required<Omit<CoreDeps, 'clock' | 'fetch' |
   now(): string;
   today(): string;
   household(): Promise<HouseholdSettings>;
+  /** The unit list: built in, and the household's own words. */
+  units(): Promise<Units>;
   publish(type: string, data: Record<string, unknown>): void;
   /**
    * Runs changes one at a time. Stock and product writes read, work out the
@@ -46,6 +52,7 @@ export interface CoreContext extends Required<Omit<CoreDeps, 'clock' | 'fetch' |
 export function createContext(deps: CoreDeps): CoreContext {
   const clock = deps.clock ?? { now: () => new Date() };
   let cached: HouseholdSettings | null = null;
+  let cachedUnits: Units | null = null;
   let timeZone = 'Europe/London';
   let queue: Promise<unknown> = Promise.resolve();
   const ctx: CoreContext = {
@@ -66,9 +73,14 @@ export function createContext(deps: CoreDeps): CoreContext {
       }
       return cached;
     },
+    async units() {
+      cachedUnits ??= unitList((await deps.storage.settings.get<HouseholdUnit[]>(HOUSEHOLD_UNITS)) ?? []);
+      return cachedUnits;
+    },
     publish(type, data) {
       deps.events.publish({ type, at: isoNow(clock), data });
       if (type === 'settings.changed') cached = null;
+      if (type === 'units.changed') cachedUnits = null;
     },
     exclusive(fn) {
       const run = queue.then(fn);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '../../src/adapters/storage-memory';
-import { makeCore } from '../../tests/helpers';
+import { makeCore, saveAs092 } from '../../tests/helpers';
 import scenarios from '../scenarios';
 import recipes, { type Proposal, type RecipeView } from './index';
 
@@ -212,9 +212,9 @@ describe('recipes module', () => {
 async function pancakes() {
   const core = await makeCore({ modules: [recipes] });
   const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'egg' });
-  const milk = await core.products.create({ name: 'Milk', unit: 'l' });
+  const milk = await core.products.create({ name: 'Milk', unit: 'ml' });
   await core.stock.add({ productId: eggs.id, quantity: 6 });
-  await core.stock.add({ productId: milk.id, quantity: 2 });
+  await core.stock.add({ productId: milk.id, quantity: 2000 });
   const saved = await core.assistant.call('save_recipe', {
     title: 'Pancakes', serves: 2, method: 'Whisk, rest, fry.',
     ingredients: [
@@ -260,7 +260,7 @@ describe('recipes by ratio, and presets', () => {
     const have = (ingredient: string, amount: number, unit?: string) => core.assistant.call('get_recipe', { recipe: 'pancakes', have: [{ ingredient, amount, unit }] });
     await expect(have('eggs', 100, 'g')).rejects.toThrow('Pancakes counts the eggs, so give how many, with no unit.');
     await expect(have('flour', 2, 'eggs')).rejects.toThrow('Pancakes measures the plain flour by weight, so give it in g, kg, oz or lb.');
-    await expect(have('milk', 200, 'g')).rejects.toThrow('by volume, so give it in ml, cl, litres, tsp, tbsp, fl oz or pints.');
+    await expect(have('milk', 200, 'g')).rejects.toThrow('by volume, so give it in ml, cl, L, pints, tsp, tbsp or fl oz.');
     await expect(have('salt', 1)).rejects.toThrow("Pancakes has no ratio for salt, so the rest can't be worked out from it. It can from plain flour, eggs and milk.");
     await expect(have('bacon', 2)).rejects.toMatchObject({ status: 404 });
     await expect(core.assistant.call('get_recipe', { recipe: 'pancakes', times: 2, servings: 4 })).rejects.toThrow('Give one of preset, servings, times or have, not servings and times.');
@@ -299,12 +299,12 @@ describe('recipes by ratio, and presets', () => {
     const { core, ids } = await pancakes();
     await core.assistant.call('save_recipe_preset', { recipe: 'pancakes', name: 'Family', times: 2, default: true });
     const p = await core.assistant.call('propose_cooking', { recipe: 'pancakes' });
-    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 0.6 l (of 2 l)\nNot taken: plain flour, salt.');
+    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 600 ml (of 2 L)\nNot taken: plain flour, salt.');
     const fewer = await core.assistant.call('propose_cooking', { recipe: 'pancakes', have: [{ ingredient: 'eggs', amount: 2 }] });
-    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 0.2 l (of 2 l)');
+    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 200 ml (of 2 L)');
     await core.assistant.call('confirm_cooking', { proposal: /Proposal id: (\S+)\./.exec(fewer.text)![1]! });
     expect((await core.products.summary(ids.eggs)).inStock).toBe(4);
-    expect((await core.products.summary(ids.milk)).inStock).toBe(1.8);
+    expect((await core.products.summary(ids.milk)).inStock).toBe(1800);
     // Twice the recipe needs 6 eggs, and there are 4 now.
     expect((await core.assistant.call('list_recipes', {})).text).toBe('- Pancakes: missing Free-range eggs (presets: Family)');
   });
@@ -346,18 +346,69 @@ describe('recipes by ratio, and presets', () => {
     await expect(core.assistant.call('save_recipe', { title: 'Soup' })).rejects.toThrow('Give the method (the steps) for a new recipe.');
   });
 
+  it('takes a recipe\'s ml of milk from bottles through their Weight, and says why when there is none', async () => {
+    const core = await makeCore({ modules: [recipes] });
+    // Bought in bottles of 4 pints: a Weight of 2273 ml, so 500 ml is 0.22 bottle.
+    const milk = await core.products.create({ name: 'Whole milk', aliases: ['milk'], unit: 'bottle', packSize: { amount: 4, unit: 'pints' } });
+    const oat = await core.products.create({ name: 'Oat milk', unit: 'carton' });
+    const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'box', packSize: { amount: 6, unit: 'eggs' } });
+    for (const id of [milk.id, oat.id, eggs.id]) await core.stock.add({ productId: id, quantity: 2 });
+    await core.assistant.call('save_recipe', {
+      title: 'Custard', method: 'Whisk and heat.',
+      ingredients: [{ name: 'milk', item: 'whole milk', ratio: 500, ratio_unit: 'ml' }, { name: 'oat milk', item: 'oat milk', ratio: 100, ratio_unit: 'ml' }, { name: 'eggs', item: 'eggs', ratio: 3 }],
+    });
+    const p = await core.assistant.call('propose_cooking', { recipe: 'custard' });
+    expect(p.text).toContain('- Whole milk: 0.22 bottle (of 2 bottles)\n- Free-range eggs: 0.5 box (of 2 boxes)\nNot taken: oat milk.\n'
+      + '- oat milk: Larder doesn\'t know what one carton of Oat milk holds, so it can\'t work in ml. Give how many cartons. Or give it a Weight first.');
+    const v = (await core.assistant.call('get_recipe', { recipe: 'custard' })).data as unknown as RecipeView;
+    expect(v.ingredients.map((i) => [i.name, i.need, i.why])).toEqual([
+      ['milk', 0.22, null], ['oat milk', null, 'Larder doesn\'t know what one carton of Oat milk holds, so it can\'t work in ml. Give how many cartons. Or give it a Weight first.'], ['eggs', 0.5, null],
+    ]);
+  });
+
+  it('takes chicken thighs counted or weighed from an item with a count and a Weight, but only weighed from one bought loose', async () => {
+    const core = await makeCore({ modules: [recipes] });
+    await core.units.add({ one: 'thigh', many: 'thighs' });
+    // Bought one at a time, 125 g each; bought in packs of 8, weighing 1 kg; bought loose, in g.
+    const single = await core.products.create({ name: 'Chicken thighs', unit: 'thigh', weight: { amount: 125, unit: 'g' } });
+    const packs = await core.products.create({ name: 'Thigh fillets', unit: 'pack', packSize: { amount: 8, unit: 'thigh' }, weight: { amount: 1, unit: 'kg' } });
+    const loose = await core.products.create({ name: 'Diced chicken', unit: 'g' });
+    for (const [id, n] of [[single.id, 8], [packs.id, 2], [loose.id, 1000]] as const) await core.stock.add({ productId: id, quantity: n });
+    for (const [title, item] of [['Traybake', 'chicken thighs'], ['Curry', 'thigh fillets'], ['Pie', 'diced chicken']]) {
+      await core.assistant.call('save_recipe', { title: `${title} by count`, method: 'Cook.', ingredients: [{ name: 'chicken thighs', item, ratio: 4 }] });
+      await core.assistant.call('save_recipe', { title: `${title} by weight`, method: 'Cook.', ingredients: [{ name: 'chicken', item, ratio: 500, ratio_unit: 'g' }] });
+    }
+    const need = async (recipe: string) => ((await core.assistant.call('get_recipe', { recipe })).data as unknown as RecipeView).ingredients[0]!.need;
+    expect([await need('traybake by count'), await need('traybake by weight')]).toEqual([4, 4]);
+    expect([await need('curry by count'), await need('curry by weight')]).toEqual([0.5, 0.5]);
+    // 4 thighs of chicken bought by weight can't be worked out; 500 g can.
+    expect([await need('pie by count'), await need('pie by weight')]).toEqual([null, 500]);
+  });
+
+  it('follows an item the upgrade turns round: what cooking takes of it is in boxes now', async () => {
+    const storage = createMemoryStorage();
+    const before = await makeCore({ modules: [recipes], storage });
+    const tea = await before.products.create({ name: 'Tea bags', unit: 'tea bag' });
+    await before.assistant.call('save_recipe', { title: 'Iced tea', method: 'Brew, chill.', ingredients: [{ name: 'tea bags', item: 'tea bags', quantity: 4 }] });
+    await saveAs092(storage, (await before.products.summary(tea.id)).product, { unit: 'tea bag', pack: { name: 'box', holds: 80 } });
+    const core = await makeCore({ modules: [recipes], storage });
+    await new Promise((r) => setTimeout(r, 10));
+    const v = (await core.assistant.call('get_recipe', { recipe: 'iced tea' })).data as unknown as RecipeView;
+    expect(v.ingredients.map((i) => [i.quantity, i.unit, i.need])).toEqual([[0.05, 'box', 0.05]]);
+  });
+
   it('reads recipes saved before ratios and presets, and scales them by their stock quantities', async () => {
     const storage = createMemoryStorage();
     const core = await makeCore({ modules: [recipes], storage });
-    const chicken = await core.products.create({ name: 'Chicken thighs', unit: 'kg' });
-    await core.stock.add({ productId: chicken.id, quantity: 2 });
+    const chicken = await core.products.create({ name: 'Chicken thighs', unit: 'g' });
+    await core.stock.add({ productId: chicken.id, quantity: 2000 });
     const now = '2026-10-01T09:00:00.000Z';
     await storage.documents('recipes:recipes').put('old', {
-      id: 'old', title: 'Roast chicken', serves: 4, ingredients: [{ name: 'chicken thighs', productId: chicken.id, quantity: 1, amount: '8', optional: false }],
+      id: 'old', title: 'Roast chicken', serves: 4, ingredients: [{ name: 'chicken thighs', productId: chicken.id, quantity: 1000, amount: '8', optional: false }],
       method: 'Roast.', notes: '', source: '', createdAt: now, updatedAt: now, lastCookedAt: null, timesCooked: 0,
     });
     const v = (await core.assistant.call('get_recipe', { recipe: 'roast chicken', have: [{ ingredient: 'chicken', amount: 500, unit: 'g' }] })).data as unknown as RecipeView;
-    expect([v.presets, v.defaultPreset, v.scale.times, v.ingredients[0]!.shown]).toEqual([[], null, 0.5, '0.5 kg']);
+    expect([v.presets, v.defaultPreset, v.scale.times, v.ingredients[0]!.shown]).toEqual([[], null, 0.5, '500 g']);
     await core.assistant.call('save_recipe_preset', { recipe: 'roast chicken', name: 'Two of us', servings: 2 });
     expect((await call(core, 'GET', '/:id', undefined, { id: 'old' }) as RecipeView).presets).toEqual([{ name: 'Two of us', times: 0.5 }]);
   });

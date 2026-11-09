@@ -8,7 +8,7 @@
  * inside a cupboard door for whoever needs it in the dark.
  */
 import { z } from 'zod';
-import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, type CoreApi, type PlaceRef, type ProductSummary } from '@larder/core';
+import { amountText, andList, defineModule, Id, LarderError, newId, NotFoundError, type CoreApi, type PlaceRef, type ProductSummary, type Units } from '@larder/core';
 
 /** On each product: the ids of the scenarios it belongs to. */
 export const ScenarioFields = z.array(Id).max(50).default([]);
@@ -61,6 +61,7 @@ const tagsOf = (s: ProductSummary): string[] => ScenarioFields.parse(s.product.f
 
 export async function detailFor(core: CoreApi, scenario: Scenario): Promise<ScenarioDetail> {
   const all = [...(await core.products.list()), ...(await core.products.list({ status: 'wish' }))];
+  const units = await core.units.list();
   const members = all.filter((s) => tagsOf(s).includes(scenario.id)).sort((a, b) => a.product.name.localeCompare(b.product.name));
   const groups = new Map<string, z.infer<typeof Group>>();
   const missing: ScenarioDetail['missing'] = [];
@@ -93,7 +94,7 @@ export async function detailFor(core: CoreApi, scenario: Scenario): Promise<Scen
         g = { place: ref ? { id: ref.id, name: ref.name, path: ref.path, code: ref.code, photoFileId: await photo(ref) } : null, items: [] };
         groups.set(key, g);
       }
-      const note = s.charged !== null ? `${s.charged} charged, ${s.flat ?? 0} flat` : s.status.low && s.product.minQuantity ? `Min ${amount(s.product.minQuantity, s.product.unit)}` : null;
+      const note = s.charged !== null ? `${s.charged} charged, ${s.flat ?? 0} flat` : s.status.low && s.product.minQuantity ? `Min ${amountText(units, s.product.minQuantity, s.product.unit)}` : null;
       g.items.push({ productId: s.product.id, name: s.product.name, quantity: Math.round(at.quantity * 1000) / 1000, unit: s.product.unit, note, low: s.status.low, category: s.category?.name ?? null, visiting: at.visiting });
     }
   }
@@ -107,12 +108,12 @@ export async function detailFor(core: CoreApi, scenario: Scenario): Promise<Scen
 }
 
 /** Plain text for AI assistants: by place, with what's low and missing. */
-export function detailText(d: ScenarioDetail): string {
+export function detailText(units: Units, d: ScenarioDetail): string {
   const lines = [`${d.scenario.name}: ${d.counts.items} items in ${d.counts.places} places${d.counts.low ? `, ${d.counts.low} running low` : ''}.`];
   if (d.scenario.notes) lines.push(d.scenario.notes);
   for (const g of d.groups) {
     lines.push(`${g.place ? `${g.place.path}${g.place.code ? ` (${g.place.code})` : ''}` : 'No place set'}:`);
-    for (const i of g.items) lines.push(`- ${i.name}: ${amount(i.quantity, i.unit)}${i.note ? ` (${i.note})` : ''}${i.visiting ? ', only here for now' : ''}`);
+    for (const i of g.items) lines.push(`- ${i.name}: ${amountText(units, i.quantity, i.unit)}${i.note ? ` (${i.note})` : ''}${i.visiting ? ', only here for now' : ''}`);
   }
   if (d.missing.length) lines.push(`None in the house: ${d.missing.map((m) => m.name).join(', ')}.`);
   if (d.wish.length) lines.push(`On the wish list: ${d.wish.map((w) => w.name).join(', ')}.`);
@@ -276,7 +277,7 @@ export default defineModule({
       input: z.object({ scenario: z.string().min(1).max(60).describe('The scenario\'s name, e.g. "power cut"') }),
       async run({ scenario }) {
         const d = await detailFor(core, await find(scenario));
-        return { text: detailText(d), data: d as unknown as Record<string, unknown> };
+        return { text: detailText(await ctx.core.units.list(), d), data: d as unknown as Record<string, unknown> };
       },
     });
 

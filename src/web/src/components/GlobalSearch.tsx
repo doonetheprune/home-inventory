@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ProductSummary, SearchResult, Shop } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { num, oneBought, plural, qty, stockText } from '../format';
+import { num, plural, qty, stockText } from '../format';
 import { ProductTile, useAction, useDebounced, useShops } from '../ui';
 import { useOpenCopy } from '../offline/current';
 
@@ -102,13 +102,11 @@ export function GlobalSearch() {
     box.current?.querySelector('.gs-row.hl')?.scrollIntoView({ block: 'nearest' });
   }, [sel]);
 
-  // + adds what it's bought in (boxes of 80); − uses what's inside (tea bags).
+  // + and − add and use whole ones of what it's bought in (a box, a jar).
   async function adjust(s: ProductSummary, delta: number) {
-    const pack = s.product.pack ?? null;
-    const added = pack ? `${qty(delta, pack.name)} (${qty(delta * pack.holds, s.product.unit)})` : num(delta);
     await run(
-      () => (delta > 0 ? api.stock.add({ productId: s.product.id, quantity: delta, unit: pack?.name }) : api.stock.use({ productId: s.product.id, quantity: -delta })),
-      (r) => `${delta > 0 ? `Added ${added}` : `Used ${num(-delta)}`} · ${r.product.name}: ${stockText(r)}`,
+      () => (delta > 0 ? api.stock.add({ productId: s.product.id, quantity: delta }) : api.stock.use({ productId: s.product.id, quantity: -delta })),
+      (r) => `${delta > 0 ? `Added ${qty(delta, s.product.unit)}` : `Used ${qty(-delta, s.product.unit)}`} · ${r.product.name}: ${stockText(r)}`,
     );
   }
 
@@ -122,7 +120,7 @@ export function GlobalSearch() {
     if (row.kind === 'stepper' && s) return adjust(s, how === 'minus' ? -1 : 1);
     if (row.kind === 'renew' && s) return run(() => api.products.renew(s.product.id), `${s.product.name} renewed`);
     if (row.kind === 'flat' && s) return run(() => api.stock.use({ productId: s.product.id, quantity: 1 }), (r) => `1 marked flat · ${stockText(r)}`);
-    if (row.kind === 'bought' && s) return run(() => api.stock.add({ productId: s.product.id, quantity: 1, unit: oneBought(s.product).unit }), `${s.product.name} moved into stock`);
+    if (row.kind === 'bought' && s) return run(() => api.stock.add({ productId: s.product.id, quantity: 1 }), `${s.product.name} moved into stock`);
     if (row.kind === 'tolist' && s) return run(() => api.products.setOnList(s.product.id, true), `${s.product.name} is on the ${row.shopName} list`);
     go(row.result.href);
   }
@@ -240,7 +238,7 @@ export function GlobalSearch() {
                       {row.kind === 'stepper' && p ? (
                         <span className="stepper sm">
                           <button type="button" aria-label={`Use one ${p.product.name}`} onClick={() => act(row, 'minus')} disabled={p.inStock <= 0}><Icon name="minus" size="sm" /></button>
-                          <output className={preview !== null ? 'preview' : ''}>{preview !== null ? `${num(preview)} ${p.product.unit === 'each' ? '' : plural(p.product.unit, preview)}` : stockText(p)}</output>
+                          <output className={preview !== null ? 'preview' : ''}>{preview !== null ? `${num(preview)} ${plural(p.product.unit, preview)}`.trim() : stockText(p)}</output>
                           <button type="button" aria-label={`Add one ${p.product.name}`} onClick={() => act(row, 'plus')}><Icon name="plus" size="sm" /></button>
                         </span>
                       ) : (

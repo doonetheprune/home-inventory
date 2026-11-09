@@ -45,9 +45,9 @@ describe('MCP server', () => {
       'search', 'get_item', 'add_item', 'add_stock', 'use_stock', 'finish_item', 'move_item', 'add_expected', 'mark_arrived', 'confirm_order', 'cancel_order', 'add_to_shopping_list',
       'remove_from_shopping_list', 'put_back', 'mark_charged', 'renew', 'shopping_list', 'expiring',
       'list_shops', 'add_shop', 'change_shop', 'remove_shop', 'list_places', 'add_place', 'add_storage_grid', 'change_place', 'remove_place',
-      'list_categories', 'add_category', 'change_category', 'remove_category', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
+      'list_categories', 'add_category', 'change_category', 'remove_category', 'list_units', 'add_unit', 'remove_unit', 'change_item', 'remove_item', 'add_brand', 'remove_brand',
       'correct_stock', 'deliveries', 'recent_changes', 'list_items', 'get_place', 'identify_code', 'bought',
-      'check_price', 'set_usual_price', 'convert_price', 'set_item_size', 'get_price',
+      'check_price', 'set_usual_price', 'convert_price', 'get_price',
     ]);
     for (const t of tools) {
       expect(t.description!.length, t.name).toBeGreaterThan(30);
@@ -60,7 +60,7 @@ describe('MCP server', () => {
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toEqual([
       'cancel_order', 'change_shop', 'remove_shop', 'change_place', 'remove_place',
-      'change_category', 'remove_category', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price', 'set_item_size',
+      'change_category', 'remove_category', 'remove_unit', 'change_item', 'remove_item', 'remove_brand', 'correct_stock', 'set_usual_price',
     ]);
     for (const name of ['use_stock', 'finish_item', 'move_item', 'mark_arrived', 'remove_from_shopping_list']) {
       const hints = tools.find((t) => t.name === name)?.annotations;
@@ -97,7 +97,7 @@ describe('MCP server', () => {
   });
 
   it('adds new items, deliveries and shopping, and plans around what expires', async () => {
-    let r: Any = await client.callTool({ name: 'add_item', arguments: { name: 'Chopped tomatoes', category: 'Food', unit: 'tin', shop: 'aldi', shop_code: '4088600214568', shelf_life_days: 300 } });
+    let r: Any = await client.callTool({ name: 'add_item', arguments: { name: 'Chopped tomatoes', category: 'Food', bought_in: 'tin', shop: 'aldi', shop_code: '4088600214568', shelf_life_days: 300 } });
     expect(text(r)).toBe('Added Chopped tomatoes. It has no stock yet: use add_stock to say how many.');
     r = await client.callTool({ name: 'add_item', arguments: { name: 'Chopped tomatoes' } });
     expect(r.isError).toBe(true);
@@ -111,12 +111,12 @@ describe('MCP server', () => {
     expect(text(r)).not.toContain('Spaghetti hoops');
 
     // From a photo of the pack: the brand is kept, and a shop Larder doesn't have is only added once the person says so.
-    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', unit: 'carton' } });
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', bought_in: 'carton' } });
     expect(r.isError).toBe(true);
     expect(text(r)).toContain('Ask whether to add "Waitrose" as a shop, then call add_item again with new_shop: true');
     r = await client.callTool({ name: 'search', arguments: { query: 'oat drink' } });
     expect(text(r)).not.toContain('Oat drink');
-    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', new_shop: true, unit: 'carton', category: 'Food' } });
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Oat drink', brand: 'Oatly Barista Edition 1 L', shop: 'Waitrose', new_shop: true, bought_in: 'carton', category: 'Food' } });
     expect(text(r)).toBe('Added Oat drink. Added Waitrose to the shops. It has no stock yet: use add_stock to say how many.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'oat drink' } });
     expect(text(r)).toContain('Buy from: Waitrose.');
@@ -151,14 +151,14 @@ describe('MCP server', () => {
   });
 
   it('offers to add a shop that isn\'t set up, instead of leaving it out', async () => {
-    let r: Any = await client.callTool({ name: 'add_item', arguments: { name: 'Cling film', category: 'Household', unit: 'roll', shop: 'Tesco' } });
+    let r: Any = await client.callTool({ name: 'add_item', arguments: { name: 'Cling film', category: 'Household', bought_in: 'roll', shop: 'Tesco' } });
     expect(r.isError).toBe(true);
     expect(text(r)).toBe('Larder doesn\'t know a shop called "Tesco". The shops are Aldi, Waitrose and Lidl. Ask whether to add "Tesco" as a shop, then call add_item again with new_shop: true, or leave the shop out.');
     r = await client.callTool({ name: 'search', arguments: { query: 'cling film' } });
     expect(text(r)).not.toContain('Cling film');
     r = await client.callTool({ name: 'add_shop', arguments: { name: 'tesco' } });
     expect(text(r)).toBe('Added Tesco, which sells Food, Household, Toiletries, Medicine, Pets and Batteries.');
-    r = await client.callTool({ name: 'add_item', arguments: { name: 'Cling film', category: 'Household', unit: 'roll', shop: 'Tesco' } });
+    r = await client.callTool({ name: 'add_item', arguments: { name: 'Cling film', category: 'Household', bought_in: 'roll', shop: 'Tesco' } });
     expect(text(r)).toContain('Added Cling film.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'cling film' } });
     expect(text(r)).toContain('Buy from: Tesco.');
@@ -170,12 +170,12 @@ describe('MCP server', () => {
   });
 
   it('changes anything about an item after it was added', async () => {
-    await client.callTool({ name: 'add_item', arguments: { name: 'Porridge oats', category: 'Food', unit: 'kg' } });
+    await client.callTool({ name: 'add_item', arguments: { name: 'Porridge oats', category: 'Food', bought_in: 'bag' } });
     // "porridge oats", as "oats" could be the oat drink too.
     let r: Any = await client.callTool({ name: 'change_item', arguments: { item: 'porridge oats', minimum: 2, shops: ['aldi', 'tesco'] } });
-    expect(text(r)).toBe('Porridge oats is updated: bought from Aldi and Tesco, low below 2 kg.');
+    expect(text(r)).toBe('Porridge oats is updated: bought from Aldi and Tesco, low below 2 bags.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'porridge oats' } });
-    expect(text(r)).toContain('Running low below 2 kg: it is low now.');
+    expect(text(r)).toContain('Running low below 2 bags: it is low now.');
     r = await client.callTool({ name: 'add_place', arguments: { name: 'Pantry', code: 'P1' } });
     expect(text(r)).toBe('Added Pantry (code P1).');
     r = await client.callTool({ name: 'add_place', arguments: { name: 'Top shelf', inside: 'pantry' } });
@@ -183,9 +183,9 @@ describe('MCP server', () => {
     r = await client.callTool({ name: 'change_item', arguments: { item: 'porridge oats', usual_place: 'top shelf', shops: [], minimum: null, aliases: ['oats'], name: 'Oats' } });
     expect(text(r)).toBe('Oats is updated: from any shop that sells it, usually lives in Pantry › Top shelf, never counts as low.');
     r = await client.callTool({ name: 'add_stock', arguments: { item: 'oats', quantity: 1 } });
-    expect(text(r)).toContain('Oats: added 1 kg');
+    expect(text(r)).toContain('Oats: added 1 bag');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'oats' } });
-    expect(text(r)).toContain('- 1 kg in Pantry › Top shelf');
+    expect(text(r)).toContain('- 1 bag in Pantry › Top shelf');
     r = await client.callTool({ name: 'change_item', arguments: { item: 'oats', name: 'Toilet roll' } });
     expect(text(r)).toBe('There\'s already an item called Toilet roll.');
   });
@@ -226,20 +226,20 @@ describe('MCP server', () => {
 
     await client.callTool({ name: 'add_stock', arguments: { item: 'oats', quantity: 2, place: 'R1-1', expires_on: '2027-03-01' } });
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', quantity: 3 } });
-    expect(text(r)).toBe('Oats has 2 batches. Say which by place or expiry date. Candidates: 2 kg in Pantry › Racking › Shelf 1, box 1, expires 2027-03-01; 1 kg in Pantry › High shelf.');
+    expect(text(r)).toBe('Oats has 2 batches. Say which by place or expiry date. Candidates: 2 bags in Pantry › Racking › Shelf 1, box 1, expires 2027-03-01; 1 bag in Pantry › High shelf.');
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', place: 'r1-1', quantity: 3, new_expiry: '2027-04-01' } });
-    expect(text(r)).toBe('Oats: corrected. 4 kg in stock.');
+    expect(text(r)).toBe('Oats: corrected. 4 bags in stock.');
     r = await client.callTool({ name: 'correct_stock', arguments: { item: 'oats', expires_on: '2027-04-01', remove: true } });
-    expect(text(r)).toBe('Oats: removed the batch of 3 kg in Pantry › Racking › Shelf 1, box 1, expires 2027-04-01. 1 kg in stock.');
+    expect(text(r)).toBe('Oats: removed the batch of 3 bags in Pantry › Racking › Shelf 1, box 1, expires 2027-04-01. 1 bag in stock.');
     r = await client.callTool({ name: 'recent_changes', arguments: { item: 'oats', limit: 3 } });
-    expect(text(r)).toMatch(/Oats removed 3 kg[\s\S]*Oats corrected by \+1 kg/);
+    expect(text(r)).toMatch(/Oats removed 3 bags[\s\S]*Oats corrected by \+1 bag/);
 
     r = await client.callTool({ name: 'remove_from_shopping_list', arguments: { item: 'chopped tomatoes' } });
     expect(text(r)).toContain('Chopped tomatoes is off the shopping list');
     r = await client.callTool({ name: 'deliveries', arguments: {} });
     expect(text(r)).toBe('Nothing is on the way.');
     r = await client.callTool({ name: 'remove_item', arguments: { item: 'oats' } });
-    expect(text(r)).toBe('Removed Oats and its 1 kg in stock.');
+    expect(text(r)).toBe('Removed Oats and its 1 bag in stock.');
     r = await client.callTool({ name: 'remove_shop', arguments: { shop: 'tesco' } });
     expect(text(r)).toBe('Removed Tesco.');
     r = await client.callTool({ name: 'get_item', arguments: { item: 'cling film' } });

@@ -4,7 +4,7 @@
  * Gmail, how to have Claude do it on a schedule instead.
  */
 import { useEffect, useRef, useState } from 'react';
-import { api, defineWebModule, ErrorBox, Header, Icon, Link, Loading, ProductPicker, Sheet, Stepper, useAction, useQuery, useShops, useToast, type ProductSummary } from '@larder/web-sdk';
+import { api, defineWebModule, ErrorBox, Header, Icon, Link, Loading, plural, ProductPicker, Sheet, Stepper, useAction, useQuery, useShops, useToast, type ProductSummary } from '@larder/web-sdk';
 
 type Kind = 'confirmed' | 'delivered';
 interface Rule { id: string; shopId: string; kind: Kind; subject: string; from: string }
@@ -143,7 +143,7 @@ function GmailSetup({ s }: { s: Status }) {
 function ClaudeInstead({ address }: { address: string | null }) {
   const prompt = [
     'Check my Gmail for shops\' order emails from the last 2 days that don\'t have the Gmail label "Larder/done" (Tesco, Toolstation and any other shop I order from), and update Larder with them:',
-    '- An order confirmation: for each thing ordered, search Larder for the item, then use add_expected with the quantity in the item\'s own unit, the shop as the source (e.g. "Tesco delivery"), the order number as the reference and the delivery date. Use the shop\'s product code as the item when the email shows one. For anything the email says is unavailable, use cancel_order for that item if it\'s waiting in a pending order from that shop.',
+    '- An order confirmation: for each thing ordered, search Larder for the item, then use add_expected with the quantity in what the item is bought in, the shop as the source (e.g. "Tesco delivery"), the order number as the reference and the delivery date. Use the shop\'s product code as the item when the email shows one. For anything the email says is unavailable, use cancel_order for that item if it\'s waiting in a pending order from that shop.',
     '- A delivered or "order complete" email: use mark_arrived with that shop\'s delivery as the source.',
     '- An e-receipt: use add_receipt with the lines and prices.',
     'Never add new items to Larder; list anything you couldn\'t match. Then add the label "Larder/done" to each email you dealt with, and finish with a short summary of what changed.',
@@ -315,11 +315,11 @@ function MatchSheet({ seen, n, onClose }: { seen: Seen; n: number; onClose: () =
   return (
     <Sheet title={`“${line.text}”`} onClose={onClose}>
       {!picked ? (
-        <ProductPicker onPick={(p) => { setPicked(p); if (!line.quantity && p.product.pack) setQuantity((line.count || 1) * p.product.pack.holds); }} placeholder="Which item is it?" />
+        <ProductPicker onPick={(p) => setPicked(p)} placeholder="Which item is it?" />
       ) : (
         <>
           <p className="small" style={{ margin: 0 }}><b>{picked.product.name}</b>. Larder remembers this for {seen.shopName}'s next emails.</p>
-          <div className="row" style={{ justifyContent: 'space-between' }}><b>How many {picked.product.unit}?</b><Stepper value={quantity} onChange={setQuantity} min={0.1} label="quantity" /></div>
+          <div className="row" style={{ justifyContent: 'space-between' }}><b>{plural(picked.product.unit, 2) ? `How many ${plural(picked.product.unit, 2)}?` : 'How many?'}</b><Stepper value={quantity} onChange={setQuantity} min={0.1} label="quantity" /></div>
           <div className="btnrow">
             <button type="button" className="btn" onClick={() => setPicked(null)}>Back</button>
             <button type="button" className="btn primary" disabled={busy} onClick={() => void run(() => call('POST', `/emails/${seen.id}/lines/${n}`, { productId: picked.product.id, quantity }), `${picked.product.name} is on the way`).then((r) => r && onClose())}>On the way</button>

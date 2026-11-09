@@ -9,45 +9,36 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
 import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
-import { inOwnUnit, packsText, sameUnit, singular, usageText } from './packs';
+import { amountText, boughtInText, packSizeText, exactText, isCount, isLoose, lastsText, measuredIn, newUnit, stockText, stockWithInside, toBoughtIn, usageText, weightText, type Units } from './units';
 import type { AssistantTool } from './assistant';
-import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService } from './catalogue';
+import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService, type createUnitService } from './catalogue';
 import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { AmbiguousError, type Resolver } from './resolve';
 import type { createStockService } from './stock';
-import { amount, andList, daysBetween, pluralWord } from '../util';
+import { andList, daysBetween } from '../util';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
 
-/** How fast it's used, for add_item and change_item: always in the item's own unit. */
+export const BoughtInInput = z.string().min(1).max(30).describe('What it\'s bought in and counted in, a unit from Larder\'s list (list_units): box, jar, roll, bag, tin, bottle, each… For things bought loose, g or ml (kg and L are fine: they\'re kept as g and ml)');
+const Amount = (what: string) => z.object({
+  amount: z.number().positive().max(1_000_000).describe(`How much, e.g. ${what}`),
+  unit: z.string().min(1).max(30).describe('A unit from Larder\'s list'),
+});
+export const PackSizeInput = Amount('20 (tea bags) or 400 (g)').describe('What one holds, as printed on the pack, never its ingredients: a number of something from the unit list (a box of 20 tea bags is 20 "tea bag", a roll of 200 sheets 200 "sheet") or an amount by weight or volume (a 1 kg bag, a 4 pint bottle). An amount gives it its weight too');
+export const WeightInput = Amount('30').describe('What one weighs, in g or kg (or holds, in ml, L or pints, for liquids), e.g. a box of tea bags weighs 30 g. Kept in g or ml. Only needed to work in g or ml (recipes, prices per kg, usage in grams); not when pack_size is an amount (it\'s worked out from that), and not for things bought loose');
+/** How fast it's used, for add_item and change_item: as the person says it. */
 export const UsesInput = z.object({
-  amount: z.number().positive().max(100000).describe('How many of the item\'s own unit, e.g. 1 (tea bag) or 2 (rolls)'),
+  amount: z.number().positive().max(100000).describe('How much, e.g. 1 (tea bag), 2 (rolls) or 4 (g)'),
   every_days: z.number().int().min(1).max(3650).describe('Every how many days: 1 for a day, 7 for a week, 14 for a sensor that lasts 14 days'),
-}).describe('How fast it\'s used, in what it\'s counted in: count the thing used one at a time (tea bags, not boxes)');
-export const ComesInInput = z.object({
-  name: z.string().min(1).max(30).describe('What it\'s sold in, e.g. "box"'),
-  holds: z.number().gt(1).max(100000).describe('How many of the item\'s own unit one holds, e.g. 20'),
-}).describe('How it\'s sold, e.g. a box of 20 tea bags. Larder still shows how many boxes there are, and takes amounts in boxes');
-export const TakesOutInput = z.boolean().describe('True for Larder to take them out of stock by itself as they\'re used (from today, or from in_use_since)');
-
-/**
- * Counted in boxes and coming in boxes of 20 can't be: say how to keep the boxes and still say
- * how many are in one, so the assistant doesn't settle for a note. `countedSoFar` is the unit of
- * an item that already has stock, which can be counted again in what's inside.
- */
-export function assertPackFits(name: string, unit: string, pack: { name: string; holds: number } | null, countedSoFar?: string) {
-  if (!pack || !sameUnit(pack.name, unit)) return;
-  const box = singular(pack.name);
-  const boxes = pluralWord(box, 2);
-  const recount = countedSoFar && sameUnit(countedSoFar, box) ? `, and recount: true to turn the ${boxes} counted so far into what's inside` : '';
-  throw new ValidationError(`${name} can't be counted in ${boxes} and come in ${boxes}. Count what's inside instead (unit: "tea bag", say), with comes_in a ${box} of ${pack.holds}${recount}. Larder still shows how many ${boxes} there are, and takes amounts in ${boxes} (unit: "${box}").`);
-}
+  unit: z.string().max(30).optional().describe('What amount is in, if not what it\'s bought in: what\'s in its pack ("tea bag", for boxes of 20 tea bags), or g, kg, ml, L or pints once it has a weight'),
+}).describe('How fast it\'s used, the way the person says it: 1 tea bag a day (unit "tea bag", for tea bought in boxes), 2 rolls a week, 4 g a day (unit "g", for coffee bought in jars)');
+export const TakesOutInput = z.boolean().describe('True for Larder to take them out of stock by itself as they\'re used, a little at a time (from today, or from in_use_since)');
 
 /** Product fields from the tools' usage inputs; undefined leaves them as they are. */
 export function usageFields(cur: Pick<Product, 'usage'> | null, uses: z.infer<typeof UsesInput> | null | undefined, takesOut: boolean | undefined): Pick<Product, 'usage'> | Record<string, never> {
   if (uses === null) return { usage: null };
-  if (uses) return { usage: { amount: uses.amount, everyDays: uses.every_days, auto: takesOut ?? cur?.usage?.auto ?? false } };
+  if (uses) return { usage: { amount: uses.amount, everyDays: uses.every_days, auto: takesOut ?? cur?.usage?.auto ?? false, unit: uses.unit?.trim() || null } };
   if (takesOut !== undefined) {
     if (!cur?.usage) throw new ValidationError('Say how fast it\'s used (uses) before Larder can take them out.');
     return { usage: { ...cur.usage, auto: takesOut } };
@@ -55,8 +46,21 @@ export function usageFields(cur: Pick<Product, 'usage'> | null, uses: z.infer<ty
   return {};
 }
 
+/**
+ * Asking how fast it goes, in the words it can be said in: "ask how many tea bags get used a day or a week
+ * (uses, with unit "tea bag"), so Larder can say when they run out, and whether…".
+ */
+export function usageQuestion(units: Units, p: Pick<Product, 'name' | 'unit' | 'packSize' | 'weight'>): string {
+  const c = p.packSize && isCount(units, p.packSize.unit) ? units.find(p.packSize.unit) : null;
+  const bought = units.find(p.unit);
+  const many = c ? c.many : bought?.key === 'each' || !bought ? 'of them' : bought.many;
+  const by = isLoose(units, p) ? null : measuredIn(units, p);
+  return `ask how many ${many} get used a day or a week (uses${c ? `, with unit "${c.key}"` : ''})${by ? `, or how much in ${by} (unit "${by}")` : ''}, so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).`;
+}
+
 export interface ManageDeps {
   ctx: CoreContext;
+  units: ReturnType<typeof createUnitService>;
   products: ReturnType<typeof createProductService>;
   stock: ReturnType<typeof createStockService>;
   categories: ReturnType<typeof createCategoryService>;
@@ -323,24 +327,64 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
     },
   });
 
+  /* -------------------------------- units ------------------------------- */
+
+  addTool({
+    name: 'list_units', title: 'List units', readOnly: true,
+    description: 'The units Larder knows, for what an item is bought in, its pack size and how fast it\'s used: counts (box, jar, tea bag…), weights (g, kg) and volumes (ml, L, pint), and words the household added. Every unit an item uses must be on this list.',
+    input: z.object({}),
+    async run() {
+      const units = await deps.units.list();
+      const words = (kind: string, own: boolean) => units.all.filter((u) => u.kind === kind && u.builtIn !== own).map((u) => u.one);
+      const own = units.all.filter((u) => !u.builtIn);
+      const lines = [`Counts: ${words('count', false).join(', ')}.`, `Weights: ${words('weight', false).join(', ')}.`, `Volumes: ${words('volume', false).join(', ')}.`];
+      lines.push(own.length ? `Added by the household: ${own.map((u) => `${u.one} (${u.many})`).join(', ')}.` : 'The household hasn\'t added any: add_unit adds a count word, once the person agrees.');
+      return { text: lines.join('\n'), data: { units: units.all.map((u) => ({ key: u.key, one: u.one, many: u.many, kind: u.kind, built_in: u.builtIn })) } };
+    },
+  });
+
+  addTool({
+    name: 'add_unit', title: 'Add a unit',
+    description: 'Add a count word to Larder\'s unit list (e.g. "sleeve", "sleeves") when an item needs one Larder doesn\'t have. Only once the person has agreed. Weights and volumes are all there already.',
+    input: z.object({
+      one: z.string().min(1).max(30).describe('One of it, e.g. "sleeve"'),
+      many: z.string().min(1).max(30).describe('Several, e.g. "sleeves"'),
+    }),
+    async run({ one, many }) {
+      const u = await deps.units.add({ one, many });
+      return { text: `Added "${u.one}" (${u.many}) to Larder's units.`, data: { key: u.key, one: u.one, many: u.many } };
+    },
+  });
+
+  addTool({
+    name: 'remove_unit', title: 'Remove a unit', destructive: true,
+    description: 'Remove a count word the household added to the unit list, once no item uses it for what it\'s bought in, its pack size or how fast it\'s used. Larder\'s own units stay.',
+    input: z.object({ unit: z.string().min(1).max(30).describe('The word, e.g. "sleeve"') }),
+    async run({ unit }) {
+      const u = (await deps.units.list()).find(unit);
+      await deps.units.remove(unit);
+      return { text: `Removed "${u?.one ?? unit.trim()}" from Larder's units.`, data: { key: u?.key ?? unit.trim() } };
+    },
+  });
+
   /* -------------------------------- items ------------------------------- */
 
   const Item = z.string().min(1).max(200).describe('The item, by name or alias, barcode, shop code or id');
 
   addTool({
     name: 'change_item', title: 'Change an item', destructive: true,
-    description: 'Change anything about an item: name, category, what it\'s counted in and what it comes in (with recount to turn 2 boxes into 40 tea bags), other names, when it counts as low, how many to stock up to, shelf life, how fast it\'s used and whether Larder takes them out by itself, usual place, places it\'s no longer kept in, which shops to buy it from, notes, links, wish list or rechargeable. Only the fields given change.',
+    description: 'Change anything about an item: name, category, what it\'s bought in (bought_in) and its pack size (pack_size: a box of 20 tea bags, a 400 g jar), its weight, other names, when it counts as low, how many to stock up to, shelf life, how fast it\'s used (uses: 1 tea bag a day, 4 g a day) and whether Larder takes them out by itself, usual place, places it\'s no longer kept in, which shops to buy it from, notes, links, wish list or rechargeable, or that an item to tidy looks right. Only the fields given change. A new bought_in keeps the numbers as they are, so correct the count afterwards (correct_stock) if they were in something else.',
     input: z.object({
       item: Item,
       name: z.string().min(1).max(120).optional().describe('New name'),
       category: z.string().max(60).nullable().optional().describe('One of the household\'s categories; null for none'),
-      unit: z.string().min(1).max(20).optional().describe('What it\'s counted in: the single thing that gets used, e.g. tea bag, roll, tin, kg. On its own it only renames (the numbers stay)'),
+      bought_in: BoughtInInput.optional(),
+      pack_size: PackSizeInput.nullable().optional(),
+      weight: WeightInput.nullable().optional(),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Every other name people use (replaces the old list)'),
-      minimum: z.number().min(0).nullable().optional().describe('Running low below this many; null to never count as low'),
-      stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
+      minimum: z.number().min(0).nullable().optional().describe('Running low below this many, in what it\'s bought in (0.5 for half a box). For things bought loose that\'s g or ml (1000 for 1 kg), or kg or L when this change also sets bought_in to kg or L; null to never count as low'),
+      stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many, in what it\'s bought in (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
-      comes_in: ComesInInput.nullable().optional(),
-      recount: z.boolean().optional().describe('With unit and comes_in, when what it was counted in is what it comes in: true multiplies the stock, orders, minimum, stock-up amount and usage by comes_in.holds (2 boxes become 40 tea bags). Without it, a new unit only renames'),
       uses: UsesInput.nullable().optional(),
       takes_out_automatically: TakesOutInput.optional(),
       in_use_since: IsoDate.nullable().optional().describe('With uses: the day the current one was started, or Larder starts counting from (YYYY-MM-DD); without: the day one was opened. null for none. The one in use isn\'t counted in stock: 3 in stock are 3 spares'),
@@ -351,6 +395,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       rechargeable: z.boolean().optional().describe('True for rechargeable batteries and similar (stock is charged or flat)'),
       links: z.array(z.string().url().max(2000)).max(10).optional().describe('Every web page for it (replaces the old list); [] for none'),
       not_kept_in: z.array(z.string().max(200)).max(20).optional().describe('Places it\'s no longer kept in (it has none there now): they stop listing it at 0'),
+      looks_right: z.boolean().optional().describe('True once the person has checked an item Larder flagged to tidy (needs_check) and it\'s right as it is. Setting bought_in, pack_size or weight also takes it off the To tidy list'),
     }),
     async run(i) {
       const p = await resolve.product(i.item);
@@ -366,15 +411,14 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         const here = (await products.get(p.id)).stockByPlace.filter((x) => leaving.some((l) => l.id === x.id) && x.quantity > 0);
         if (here.length) throw new ValidationError(`${p.name} still has stock in ${andList(here.map((x) => x.path))}. Move it (move_item, permanent) or use it up first.`);
       }
-      const recounting = !!i.recount;
-      if (recounting && (!i.unit || !i.comes_in)) throw new ValidationError('A recount needs the new unit and what it comes in (comes_in with how many one holds).');
-      assertPackFits(p.name, i.unit ?? p.unit, i.comes_in !== undefined ? i.comes_in : p.pack, p.unit);
-      if (recounting) await stock.recount(p.id, { unit: i.unit!, holds: i.comes_in!.holds, pack: i.comes_in!.name });
-      const cur = recounting ? (await products.get(p.id)).product : p;
+      // Fixing what it's bought in, its pack size or weight, or saying it looks right, takes it off the To tidy list.
+      const tidied = !!p.needsCheck && (i.bought_in !== undefined || i.pack_size !== undefined || i.weight !== undefined || !!i.looks_right);
       const next = await products.update(p.id, {
-        ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}), ...(i.unit && !recounting ? { unit: i.unit } : {}),
-        ...(i.comes_in !== undefined && !recounting ? { pack: i.comes_in } : {}),
-        ...usageFields(cur, i.uses, i.takes_out_automatically),
+        ...(i.name ? { name: i.name.trim() } : {}), ...(categoryId !== undefined ? { categoryId } : {}),
+        ...(i.bought_in !== undefined ? { unit: i.bought_in } : {}),
+        ...(i.pack_size !== undefined ? { packSize: i.pack_size } : {}),
+        ...(i.weight !== undefined ? { weight: i.weight } : {}),
+        ...usageFields(p, i.uses, i.takes_out_automatically),
         ...(i.aliases ? { aliases: i.aliases } : {}), ...(i.minimum !== undefined ? { minQuantity: i.minimum } : {}),
         ...(i.stock_up_to !== undefined ? { stockUpTo: i.stock_up_to } : {}),
         ...(i.shelf_life_days !== undefined ? { shelfLifeDays: i.shelf_life_days } : {}),
@@ -384,36 +428,37 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         ...(i.wish_list !== undefined ? { wish: i.wish_list } : {}), ...(i.rechargeable !== undefined ? { rechargeable: i.rechargeable } : {}),
         ...(i.links ? { links: i.links.map((url) => ({ url, title: p.links.find((l) => l.url === url)?.title ?? '' })) } : {}),
         ...(leaving.length ? { keptInPlaceIds: (p.keptInPlaceIds ?? []).filter((id) => !leaving.some((l) => l.id === id)) } : {}),
+        ...(tidied ? { needsCheck: null } : {}),
       });
-      const d = await products.get(next.id);
+      const [d, units] = await Promise.all([products.get(next.id), ctx.units()]);
+      const exactly = (n: number) => exactText(units, next, n);
       const said: string[] = [];
       if (categoryId !== undefined) said.push(d.category ? `in ${d.category.name}` : 'no category');
       if (preferredShopIds) said.push(d.product.preferredShopIds.length ? `bought from ${andList(d.shops.map((s) => s.name))}` : 'from any shop that sells it');
+      // A new Bought in keeps the numbers: say what they read as now, so a count in something else gets corrected.
+      if (i.bought_in !== undefined && next.unit !== p.unit) {
+        said.push(`${boughtInText(units, next).replace(/^B/, 'b')}${d.inStock > 0 ? ` (${stockText(units, p, d.inStock)} is now ${stockText(units, next, d.inStock)}: correct the count if that's wrong)` : ''}`);
+        if (p.packSize && !next.packSize && i.pack_size === undefined) said.push('no pack size now');
+      }
+      if (i.pack_size !== undefined) said.push(next.packSize ? `pack size ${amountText(units, next.packSize.amount, next.packSize.unit)}` : 'no pack size');
+      if (i.weight !== undefined) said.push(next.weight ? `weighs ${weightText(next.weight)}` : 'no weight');
       if (defaultPlaceId !== undefined) said.push(defaultPlaceId ? `usually lives in ${(await places.list()).find((x) => x.id === defaultPlaceId)?.path}` : 'no usual place');
-      if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${amount(i.minimum, next.unit)}`);
-      if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${amount(i.stock_up_to, next.unit)}`);
-      const packs = packsText(next, d.inStock);
-      if (recounting) said.push(`now counted in ${pluralWord(next.unit, 2)}, ${amount(d.inStock, next.unit)} in stock (${packs ? `${packs} of ${next.pack!.holds}` : `1 ${next.pack!.name} = ${next.pack!.holds}`})`);
-      // Only renamed: say what the numbers now read as, so "80 boxes" from 80 tea bags shows.
-      else if (i.unit && !sameUnit(i.unit, p.unit)) said.push(`counted in ${pluralWord(next.unit, 2)}${d.inStock > 0 ? ` (the numbers stay as they were: ${amount(d.inStock, next.unit)} in stock)` : ''}`);
-      if (!recounting && i.comes_in !== undefined) said.push(i.comes_in ? `comes in ${pluralWord(next.pack!.name, 2)} of ${next.pack!.holds}${packs ? ` (${packs} in stock)` : ''}` : 'no pack');
-      if (i.uses !== undefined || i.takes_out_automatically !== undefined) said.push(next.usage ? `uses ${usageText(next)}${next.usage.auto ? ', taken out of stock by Larder' : ''}` : 'no usage set');
+      if (i.minimum !== undefined) said.push(i.minimum === null ? 'never counts as low' : `low below ${exactly(next.minQuantity ?? i.minimum)}`);
+      if (i.stock_up_to !== undefined) said.push(i.stock_up_to === null ? 'buy back up to the minimum' : `stock up to ${exactly(next.stockUpTo ?? i.stock_up_to)}`);
+      const lasts = lastsText(units, next);
+      if (i.uses !== undefined || i.takes_out_automatically !== undefined) said.push(next.usage ? `uses ${usageText(units, next)}${next.usage.auto ? ', taken out of stock by Larder' : ''}${lasts ? ` (${lasts})` : ''}` : 'no usage set');
       if (i.in_use_since !== undefined) said.push(i.in_use_since ? `${next.usage ? 'the current one started on' : 'one open since'} ${i.in_use_since}` : 'none in use');
       if (leaving.length) said.push(`no longer kept in ${andList(leaving.map((l) => l.name))}`);
       if (i.links) said.push(i.links.length ? `${i.links.length} link${i.links.length === 1 ? '' : 's'}` : 'no links');
-      if (d.runsOutOn && (i.uses || i.in_use_since !== undefined || recounting)) said.push(`enough until ${d.runsOutOn}`);
+      if (tidied) said.push('off the To tidy list');
+      if (d.runsOutOn && (d.inStock > 0 || d.inUseUntil) && (i.uses || i.in_use_since !== undefined)) said.push(`enough until ${d.runsOutOn}`);
       // A shelf life set as "lasts 14 days" before there was a usage gives every new batch an expiry: say so.
       const shelf = next.usage && next.shelfLifeDays && i.uses && i.shelf_life_days === undefined
         ? ` It also has a shelf life of ${next.shelfLifeDays} days, so new stock gets an expiry date that far ahead; if that was meant as how long one lasts once started, clear it (shelf_life_days: null).`
         : '';
-      // Given a pack: the boxes aren't lost, and how fast they go is the natural next question.
-      const packed = next.pack && (recounting || i.comes_in) ? next.pack : null;
-      const boxes = packed ? pluralWord(packed.name, 2) : '';
-      const kept = packed ? ` Larder still shows how many ${boxes} there are, add_stock, use_stock and add_expected take amounts in ${boxes} (unit: "${packed.name}"), and the shopping list buys whole ${boxes}.` : '';
-      const ask = packed && !next.usage && i.uses === undefined && !next.rechargeable
-        ? ` No usage is set: ask how many ${next.unit === 'each' ? 'of them' : pluralWord(next.unit, 2)} get used a day or a week (uses), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).`
-        : '';
-      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.${shelf}${kept}${ask}`, data: { id: next.id, name: next.name } };
+      // Told its pack size or weight: how fast it goes is the natural next question.
+      const ask = (i.pack_size || i.weight) && !next.usage && i.uses === undefined && !next.rechargeable ? ` No usage is set: ${usageQuestion(units, next)}` : '';
+      return { text: `${next.name} is updated${said.length ? `: ${said.join(', ')}` : ''}.${shelf}${ask}`, data: { id: next.id, name: next.name } };
     },
   });
 
@@ -423,9 +468,9 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
     input: z.object({ item: Item }),
     async run({ item }) {
       const p = await resolve.product(item);
-      const s = await products.summary(p.id);
+      const [s, units] = await Promise.all([products.summary(p.id), ctx.units()]);
       await products.remove(p.id);
-      return { text: `Removed ${p.name}${s.inStock ? ` and its ${amount(s.inStock, p.unit)} in stock` : ''}.`, data: { id: p.id, name: p.name } };
+      return { text: `Removed ${p.name}${s.inStock ? ` and its ${amountText(units, s.inStock, p.unit)} in stock` : ''}.`, data: { id: p.id, name: p.name } };
     },
   });
 
@@ -466,21 +511,21 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'correct_stock', title: 'Correct stock', destructive: true,
-    description: 'Fix what Larder has for an item when it\'s wrong: how many there really are, or an expiry date, or remove a batch that isn\'t there. If it has more than one batch, say which by its place or expiry date (get_item lists them).',
+    description: 'Fix what Larder has for an item when it\'s wrong: how many there really are, or an expiry date, or remove a batch that isn\'t there. How many can be said in what\'s in its pack, to put Larder\'s daily count right ("3 boxes left and 5 used from the box" is 55 tea bags). If it has more than one batch, say which by its place or expiry date (get_item lists them).',
     input: z.object({
       item: Item,
       place: z.string().max(200).optional().describe('Which batch: the place it\'s in'),
       expires_on: z.string().max(10).optional().describe('Which batch: its current expiry date (YYYY-MM-DD)'),
-      quantity: z.number().min(0).optional().describe('How many there really are in that batch, in the item\'s own unit or in unit'),
-      unit: z.string().max(30).optional().describe('What quantity is in, if not the item\'s own unit: its pack, e.g. "box"'),
+      quantity: z.number().min(0).optional().describe('How many there really are in that batch, in what it\'s bought in or in unit'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not what it\'s bought in: what\'s in its pack ("tea bag", for boxes of 20 tea bags), or g, kg, ml, L or pints once it has a weight'),
       new_expiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullable().optional().describe('Its real expiry date (YYYY-MM-DD); null for none'),
       remove: z.boolean().optional().describe('True to remove the batch altogether'),
     }),
     async run(i) {
       if (i.quantity === undefined && i.new_expiry === undefined && !i.remove) throw new ValidationError('Say what to correct: quantity, new_expiry or remove.');
       const p = await resolve.product(i.item);
-      const d = await products.get(p.id);
-      const describe = (e: (typeof d.entries)[number]) => `${amount(e.quantity, p.unit)} in ${(e.currentPlace ?? e.place)?.path ?? 'no place'}${e.expiresOn ? `, expires ${e.expiresOn}` : ''}`;
+      const [d, units] = await Promise.all([products.get(p.id), ctx.units()]);
+      const describe = (e: (typeof d.entries)[number]) => `${exactText(units, p, e.quantity)} in ${(e.currentPlace ?? e.place)?.path ?? 'no place'}${e.expiresOn ? `, expires ${e.expiresOn}` : ''}`;
       const batches = d.entries.filter((e) => e.status === 'in_stock');
       if (!batches.length) throw new LarderError(`${p.name} has no stock to correct. Use add_stock to add some.`, 404, 'not_found');
       const placeId = i.place ? (await find.place(i.place)).id : null;
@@ -488,11 +533,11 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       if (!chosen.length) throw new LarderError(`None of ${p.name}'s batches match. It has: ${batches.map(describe).join('; ')}.`, 404, 'not_found');
       if (chosen.length > 1) throw new AmbiguousError(`${p.name} has ${chosen.length} batches. Say which by place or expiry date.`, chosen.map(describe));
       const entry = chosen[0]!;
-      if (i.quantity !== undefined) i.quantity = inOwnUnit(p, i.quantity, i.unit);
+      if (i.quantity !== undefined) i.quantity = Math.round(toBoughtIn(units, p, i.quantity, i.unit) * 1000) / 1000;
       const s = i.remove || i.quantity === 0
         ? await stock.removeEntry(entry.id)
         : await stock.updateEntry(entry.id, { ...(i.quantity !== undefined ? { quantity: i.quantity } : {}), ...(i.new_expiry !== undefined ? { expiresOn: i.new_expiry } : {}) });
-      return { text: `${p.name}: ${i.remove || i.quantity === 0 ? `removed the batch of ${describe(entry)}` : 'corrected'}. ${amount(s.inStock, p.unit)} in stock.`, data: { id: p.id, name: p.name, in_stock: s.inStock } };
+      return { text: `${p.name}: ${i.remove || i.quantity === 0 ? `removed the batch of ${describe(entry)}` : 'corrected'}. ${stockWithInside(units, p, s.inStock)} in stock.`, data: { id: p.id, name: p.name, in_stock: s.inStock } };
     },
   });
 
@@ -522,7 +567,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       const p = item ? await resolve.product(item) : null;
       const moves = p ? (await products.get(p.id)).history.slice(0, limit ?? 20) : await ctx.storage.movements.listRecent(limit ?? 20);
       if (!moves.length) return { text: p ? `No changes recorded for ${p.name}.` : 'No changes recorded yet.', data: { changes: [] } };
-      const [all, placeList] = await Promise.all([ctx.storage.products.list(), places.list()]);
+      const [all, placeList, units] = await Promise.all([ctx.storage.products.list(), places.list(), ctx.units()]);
       const names = new Map(all.map((x) => [x.id, x]));
       const paths = new Map(placeList.map((x) => [x.id, x.path]));
       const rows = moves.map((m) => {
@@ -530,7 +575,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
         const to = m.toPlaceId ? paths.get(m.toPlaceId) : null;
         return { at: m.at, item: prod?.name ?? 'a removed item', change: MOVEMENT_WORDS[m.kind], quantity: m.quantity, unit: prod?.unit ?? 'each', place: to ?? null, note: m.note };
       });
-      const text = rows.map((r) => `- ${r.at.slice(0, 16).replace('T', ' ')}: ${r.item} ${r.change}${r.quantity ? `${r.change === 'corrected' ? ` by ${r.quantity > 0 ? '+' : '−'}` : ' '}${amount(Math.abs(r.quantity), r.unit)}` : ''}${r.place ? ` to ${r.place}` : ''}${r.note ? ` (${r.note})` : ''}`).join('\n');
+      const text = rows.map((r) => `- ${r.at.slice(0, 16).replace('T', ' ')}: ${r.item} ${r.change}${r.quantity ? `${r.change === 'corrected' ? ` by ${r.quantity > 0 ? '+' : '−'}` : ' '}${amountText(units, Math.abs(r.quantity), r.unit)}` : ''}${r.place ? ` to ${r.place}` : ''}${r.note ? ` (${r.note})` : ''}`).join('\n');
       return { text, data: { changes: rows } };
     },
   });

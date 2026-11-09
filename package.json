@@ -1,6 +1,6 @@
 {
   "name": "larder",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "private": true,
   "description": "Self-hosted home inventory: stock, places, shopping lists and scanning. Runs on its own or with Home Assistant.",
   "license": "MIT",
@@ -22,6 +22,7 @@
     "test:e2e": "npm run build:web && playwright test",
     "openapi": "tsx scripts/export-openapi.ts",
     "ha:services": "tsx scripts/export-ha-services.ts",
+    "eval:assistant": "tsx scripts/assistant-eval.ts",
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {

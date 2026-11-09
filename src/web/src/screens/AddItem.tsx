@@ -5,8 +5,9 @@ import { api, ApiError } from '../api';
 import { takeDraft, type AddItemDraft } from '../drafts';
 import { rotatePhoto } from '../components/camera';
 import { Icon } from '../icons';
-import { oneBought, plural, qty, stockText } from '../format';
-import { ProductForm, emptyForm, packOf, toPayload, type ProductFormValue } from '../components/ProductForm';
+import { plural, qty, stockText } from '../format';
+import { useUnits } from '../units';
+import { ProductForm, emptyForm, toPayload, type ProductFormValue } from '../components/ProductForm';
 import { Header, PlaceSelect, ProductRow, Stepper, useAction, useCategories, useDebounced, usePlaces, useShops } from '../ui';
 
 function fromDraft(d: AddItemDraft): ProductFormValue {
@@ -48,8 +49,7 @@ export function AddItem() {
   const photoUrl = newPhotoUrl ?? (draft?.photoFileId ? api.files.url(draft.photoFileId) : null);
   const [form, setForm] = useState(() => (draft ? fromDraft(draft) : { ...emptyForm(params.get('name') ?? ''), wish: params.get('wish') === '1' }));
   const [n, setN] = useState(1);
-  // With a pack, the first stock is counted in packs (1 box = 20 tea bags).
-  const pack = packOf(form);
+  const units = useUnits();
   // From a place's "Add stock here": that's where it goes.
   const [placeId, setPlaceId] = useState<string | null>(() => params.get('place'));
   const dq = useDebounced(form.name.trim(), 200);
@@ -60,7 +60,7 @@ export function AddItem() {
   async function save() {
     const created = await run(async () => {
       const photoId = photo ? (await api.files.upload(new File([photo], 'photo.jpg', { type: photo.type || 'image/jpeg' }))).id : (draft?.photoFileId ?? null);
-      const p = await api.products.create({ ...toPayload(form), photoFileIds: photoId ? [photoId] : [] });
+      const p = await api.products.create({ ...toPayload(form, units), photoFileIds: photoId ? [photoId] : [] });
       if (draft && (draft.brand || draft.barcode)) {
         const variant = { name: draft.brand || p.name, barcodes: draft.barcode ? [draft.barcode] : [], photoFileId: photoId, source: draft.source ?? 'local' };
         // A barcode another item has already got is left off rather than losing the new item.
@@ -70,9 +70,9 @@ export function AddItem() {
         });
       }
       if (draft?.onSaved) await draft.onSaved(p.id);
-      if (!form.wish && n > 0) await api.stock.add({ productId: p.id, quantity: n, unit: pack?.name, placeId: placeId ?? form.defaultPlaceId });
+      if (!form.wish && n > 0) await api.stock.add({ productId: p.id, quantity: n, placeId: placeId ?? form.defaultPlaceId });
       return p;
-    }, form.wish ? `${form.name} is on the wish list` : `${form.name} added · ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, form.unit.trim() || 'each')})` : qty(n, form.unit)}`);
+    }, form.wish ? `${form.name} is on the wish list` : `${form.name} added · ${qty(n, form.unit)}`);
     if (created) navigate(`/products/${created.id}`, { replace: true });
   }
 
@@ -103,7 +103,7 @@ export function AddItem() {
             <div className="list">
               {existing.map((r) => r.product && (
                 <ProductRow key={r.id} s={r.product} to={`/products/${r.id}`}
-                  side={<button type="button" className="btn small" disabled={busy} onClick={(e) => { e.preventDefault(); void run(() => api.stock.add({ productId: r.id, quantity: 1, unit: oneBought(r.product!.product).unit }), (s) => `Added ${oneBought(r.product!.product).text} · ${stockText(s)}`); }}>Add {oneBought(r.product.product).text}</button>} />
+                  side={<button type="button" className="btn small" disabled={busy} onClick={(e) => { e.preventDefault(); void run(() => api.stock.add({ productId: r.id, quantity: 1 }), (s) => `Added 1 · ${stockText(s)}`); }}>Add 1</button>} />
               ))}
             </div>
             {!exact && <p className="small muted">Not one of these? Fill in the rest below to create “{form.name.trim()}”.</p>}
@@ -112,7 +112,7 @@ export function AddItem() {
 
         {!form.wish && (
           <div className="list">
-            <div className="numfield"><span><b>{pack ? `How many ${plural(pack.name, 2)} now` : 'How many now'}</b></span><Stepper value={n} onChange={setN} label="quantity" /></div>
+            <div className="numfield"><span><b>{plural(form.unit, 2) ? `How many ${plural(form.unit, 2)} now` : 'How many now'}</b></span><Stepper value={n} onChange={setN} label="quantity" /></div>
             <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Where</b><small>{!places.length ? <Link to="/places" style={{ color: 'var(--accent)' }}>Set up places first</Link> : placeId ?? form.defaultPlaceId ? 'Where you’re putting it' : 'No place? It waits in Places → To sort'}</small></span>
               <div style={{ minWidth: 200, flex: 1, maxWidth: 360 }}><PlaceSelect value={placeId ?? form.defaultPlaceId} onChange={(v) => { setPlaceId(v); if (!form.defaultPlaceId) setForm({ ...form, defaultPlaceId: v }); }} places={places} /></div>
             </div>

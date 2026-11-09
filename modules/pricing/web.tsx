@@ -1,23 +1,25 @@
 /** Unit pricing UI: a price panel on product pages and a pack checker on shopping lists. */
 import { useEffect, useState } from 'react';
-import { api, defineWebModule, money, plural, useAction, useQuery, type ProductDetail, type ShoppingList } from '@larder/web-sdk';
+import { isCount } from '@larder/core';
+import { api, defineWebModule, money, plural, useAction, useQuery, useUnits, type ProductDetail, type ShoppingList } from '@larder/web-sdk';
 
-type SizeUnit = 'g' | 'kg' | 'ml' | 'l';
 interface View {
   usual: { price: number; unit: string; per: string } | null;
   basedOn: string;
   showPer: string;
   options: Array<{ unit: string; per: string; price: number | null; needsSize: boolean }>;
-  itemSize: { amount: number; unit: SizeUnit } | null;
+  /** The item's Weight, in g or ml. */
+  weight: { amount: number; unit: string } | null;
+  /** False when the Weight comes from its pack size, so it's changed on the item's Edit page. */
+  weightEditable: boolean;
   itemUnit: string | null;
   packUnits: string[];
 }
 interface Check { unitPrice: number; usualUnitPrice: number | null; verdict: 'cheaper' | 'dearer' | 'same' | 'no_usual_price'; message: string; priceUnit: string; per: string }
 
-const MEASURE_NAMES: Record<string, string> = { g: 'g', kg: 'kg', ml: 'ml', l: 'litres' };
-/** A unit as a pack size reads: "g", "kg", "bags". */
-const packUnitName = (u: string) => MEASURE_NAMES[u] ?? plural(u, 2);
-const isVolume = (u: string) => u === 'ml' || u === '100ml' || u === 'l';
+/** A unit as a pack size reads: "g", "kg", "bags", from the household's unit list. */
+const packUnitName = (u: string) => plural(u, 2) || u;
+
 /** Prices under £1 get a third decimal place when it matters (as on the server): £0.333, but £0.55. */
 const priceText = (n: number, currency: string) => money(n, currency, n < 1 && Math.round(n * 1000) % 10 !== 0 ? 3 : 2);
 
@@ -29,20 +31,21 @@ function useView(productId: string) {
   return useQuery({ queryKey: ['pricing', 'view', productId], queryFn: () => api.modules.call<View>('pricing', 'GET', `/view/${encodeURIComponent(productId)}`), enabled: !!productId });
 }
 
-/** "One bag holds 200 g", so prices can be per 100 g or per kg. */
+/** The item's Weight ("one bag weighs 200 g"), so prices can be per 100 g or per kg. */
 function SizeEditor({ productId, view, wanted, onDone }: { productId: string; view: View; wanted?: string; onDone: () => void }) {
   const { run, busy } = useAction();
-  const [amount, setAmount] = useState(view.itemSize ? String(view.itemSize.amount) : '');
-  const [unit, setUnit] = useState<SizeUnit>(view.itemSize?.unit ?? (wanted && isVolume(wanted) ? 'ml' : 'g'));
+  const units = useUnits();
+  const [amount, setAmount] = useState(view.weight ? String(view.weight.amount) : '');
+  const [unit, setUnit] = useState(view.weight?.unit ?? (wanted && /ml|^l$/.test(wanted) ? 'ml' : 'g'));
   const n = Number(amount);
-  const save = () => run(() => api.modules.call('pricing', 'PUT', '/display', { productId, itemSize: { amount: n, unit }, ...(wanted ? { showPer: wanted } : {}) }), `One ${view.itemUnit} is ${n} ${unit}`).then((r) => r && onDone());
+  const save = () => run(() => api.modules.call('pricing', 'PUT', '/display', { productId, weight: { amount: n, unit }, ...(wanted ? { showPer: wanted } : {}) }), `One ${view.itemUnit} weighs ${n} ${unit}`).then((r) => r && onDone());
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <span className="small muted">How much is in one {view.itemUnit}? Then Larder can work out its price by weight or volume.</span>
+      <span className="small muted">What does one {view.itemUnit} weigh (or hold)? Then Larder can work out its price by weight or volume.</span>
       <div className="inputrow">
-        <input className="input" inputMode="decimal" style={{ flex: 1 }} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="200" aria-label={`How much one ${view.itemUnit} holds`} />
-        <select className="input" style={{ width: 'auto' }} value={unit} onChange={(e) => setUnit(e.target.value as SizeUnit)} aria-label="Unit">
-          {(['g', 'kg', 'ml', 'l'] as const).map((u) => <option key={u} value={u}>{MEASURE_NAMES[u]}</option>)}
+        <input className="input" inputMode="decimal" style={{ flex: 1 }} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="200" aria-label={`What one ${view.itemUnit} weighs`} />
+        <select className="input" style={{ width: 'auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
+          {units.all.filter((u) => !isCount(units, u.key)).map((u) => <option key={u.key} value={u.key}>{packUnitName(u.key)}</option>)}
         </select>
         <button type="button" className="btn small" disabled={busy || !(n > 0)} onClick={() => void save()}>Save</button>
         <button type="button" className="btn small ghost" onClick={onDone}>Cancel</button>
@@ -55,14 +58,15 @@ function PackChecker({ productId, view }: { productId: string; view: View }) {
   const currency = useCurrency();
   const { run, busy } = useAction();
   const [amount, setAmount] = useState('');
-  const [unit, setUnit] = useState(view.itemUnit ?? view.packUnits[0] ?? 'each');
+  const [unit, setUnit] = useState(view.packUnits[0] ?? 'each');
   const [price, setPrice] = useState('');
   const [check, setCheck] = useState<Check | null>(null);
   useEffect(() => setCheck(null), [amount, unit, price]);
   const q = Number(amount);
   const p = Number(price);
   const valid = q > 0 && p >= 0 && price !== '';
-  const byWeight = view.packUnits.includes('g');
+  const units = useUnits();
+  const byWeight = view.packUnits.some((u) => !isCount(units, u));
 
   async function doCheck() {
     if (!valid) return;
@@ -75,7 +79,7 @@ function PackChecker({ productId, view }: { productId: string; view: View }) {
       <div className="inputrow" style={{ flexWrap: 'wrap' }}>
         <label className="field" style={{ flex: '2 1 160px' }}><span>Pack size</span>
           <span className="inputrow">
-            <input className="input" inputMode="decimal" style={{ flex: 1, minWidth: 0 }} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={view.itemUnit && unit === view.itemUnit ? '1' : '500'} aria-label="How much is in the pack" />
+            <input className="input" inputMode="decimal" style={{ flex: 1, minWidth: 0 }} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={unit === view.packUnits[0] ? '1' : '500'} aria-label="How much is in the pack" />
             <select className="input" style={{ width: 'auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Pack size unit">
               {view.packUnits.map((u) => <option key={u} value={u}>{packUnitName(u)}</option>)}
             </select>
@@ -111,7 +115,7 @@ function ProductPricePanel({ product }: { product: ProductDetail }) {
 
   const choose = (unit: string) => {
     const option = view.options.find((o) => o.unit === unit);
-    if (option?.needsSize) setSizing({ wanted: unit });
+    if (option?.needsSize && view.weightEditable) setSizing({ wanted: unit });
     else void run(() => api.modules.call('pricing', 'PUT', '/display', { productId: id, showPer: unit }));
   };
 
@@ -135,8 +139,8 @@ function ProductPricePanel({ product }: { product: ProductDetail }) {
         )}
         {view.itemUnit && !sizing && (
           <span className="small muted">
-            {view.itemSize ? <>One {view.itemUnit} holds {view.itemSize.amount} {view.itemSize.unit} · </> : <>Weight of one {view.itemUnit} not set · </>}
-            <button type="button" className="link small" onClick={() => setSizing({})}>{view.itemSize ? 'Change' : 'Set it'}</button>
+            {view.weight ? <>One {view.itemUnit} weighs {view.weight.amount} {view.weight.unit}{view.weightEditable ? ' · ' : ', from its pack size'}</> : <>Weight of one {view.itemUnit} not set · </>}
+            {view.weightEditable && <button type="button" className="link small" onClick={() => setSizing({})}>{view.weight ? 'Change' : 'Set it'}</button>}
           </span>
         )}
         {sizing && <SizeEditor productId={id} view={view} wanted={sizing.wanted} onDone={() => setSizing(null)} />}

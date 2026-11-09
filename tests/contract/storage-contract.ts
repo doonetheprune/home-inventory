@@ -11,7 +11,7 @@ import type { Movement, Place, Product, Storage, StockEntry, Variant } from '@la
 const now = '2026-10-28T12:00:00.000Z';
 
 const product = (id: string, extra: Partial<Product> = {}): Product => ({
-  id, name: `Product ${id}`, aliases: [], categoryId: null, unit: 'each', shelfLifeDays: null, pack: null, usage: null, inUseSince: null, minQuantity: null, stockUpTo: null, preferredShopIds: [],
+  id, name: `Product ${id}`, aliases: [], categoryId: null, unit: 'each', packSize: null, weight: null, needsCheck: null, shelfLifeDays: null, usage: null, inUseSince: null, minQuantity: null, stockUpTo: null, preferredShopIds: [],
   notes: '', photoFileIds: [], links: [], wish: false, rechargeable: false, onShoppingList: false, defaultPlaceId: null, keptInPlaceIds: [], nfcTags: [],
   haDeviceIds: [], fields: {}, createdAt: now, updatedAt: now, ...extra,
 });
@@ -110,6 +110,13 @@ export function storageContract(name: string, makeStorage: () => Promise<Storage
       expect((await s.stock.listByProduct('a')).map((e) => e.id)).toEqual(['new']);
       expect((await s.products.get('a'))?.wish).toBe(false);
       expect((await s.movements.listByProduct('a', 10)).map((m) => m.id)).toEqual(['m1']);
+    });
+
+    it('rescales an item\'s history in the same batch, before its new movements', async () => {
+      await s.movements.append([{ ...movement('m1', 'a'), quantity: 80 }, { ...movement('m2', 'a'), quantity: -1 }, { ...movement('m3', 'b'), quantity: 5 }]);
+      await s.applyStockChanges({ rescale: [{ productId: 'a', factor: 1 / 20 }], movements: [{ ...movement('m4', 'a'), quantity: 2 }] });
+      expect((await s.movements.listByProduct('a', 10)).map((m) => [m.id, m.quantity])).toEqual([['m4', 2], ['m2', -0.05], ['m1', 4]]);
+      expect((await s.movements.listByProduct('b', 10)).map((m) => m.quantity)).toEqual([5]);
     });
 
     it('lists movements newest first', async () => {

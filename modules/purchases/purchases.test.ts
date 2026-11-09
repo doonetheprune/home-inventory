@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makeCore } from '../../tests/helpers';
+import { createMemoryStorage } from '../../src/adapters/storage-memory';
+import { makeCore, saveAs092 } from '../../tests/helpers';
 import purchases, { type PurchaseRecord, type SpendingReport } from './index';
 
 type Core = Awaited<ReturnType<typeof makeCore>>;
@@ -85,17 +86,20 @@ describe('purchase history', () => {
     expect(sensor.purchases_this_month).toMatchObject({ state: 4.75, attributes: { purchases: 2, shops: { Tesco: 4.75 } } });
   });
 
-  it('follows an item counted again in what is inside', async () => {
-    const core = await makeCore({ modules: [purchases] });
-    const tea = await core.products.create({ name: 'Sleep tea', unit: 'box' });
-    await core.shopping.purchase({ items: [{ productId: tea.id, quantity: 2, price: 6 }] });
+  it('follows an item the upgrade turns round, from tea bags into boxes', async () => {
+    const storage = createMemoryStorage();
+    const before = await makeCore({ modules: [purchases], storage });
+    const tea = await before.products.create({ name: 'Sleep tea', unit: 'tea bag' });
+    await before.shopping.purchase({ items: [{ productId: tea.id, quantity: 40, price: 6 }] });
     await settle();
-    await core.stock.recount(tea.id, { unit: 'tea bag', holds: 20 });
+    // Saved by 0.9.2 as counted in tea bags, in boxes of 20: 0.10.0 buys it in boxes of 20 tea bags.
+    await saveAs092(storage, (await before.products.summary(tea.id)).product, { unit: 'tea bag', pack: { name: 'box', holds: 20 } });
+    const core = await makeCore({ modules: [purchases], storage });
     await settle();
-    expect((await history(core, tea.id)).map((r) => [r.quantity, r.unit, r.price])).toEqual([[40, 'tea bag', 6]]);
-    // Corrected in boxes: it was 3.
-    await core.assistant.call('change_purchase', { item: 'sleep tea', quantity: 3, unit: 'boxes' });
-    expect((await history(core, tea.id)).map((r) => r.quantity)).toEqual([60]);
+    expect((await history(core, tea.id)).map((r) => [r.quantity, r.unit, r.price])).toEqual([[2, 'box', 6]]);
+    // Corrected: it was 3 boxes.
+    await core.assistant.call('change_purchase', { item: 'sleep tea', quantity: 3 });
+    expect((await history(core, tea.id)).map((r) => r.quantity)).toEqual([3]);
   });
 
   it('answers assistants', async () => {

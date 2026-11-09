@@ -1,15 +1,23 @@
-/** Formatting for quantities, dates and statuses, in UK English. */
-import type { ProductSummary } from '@larder/core';
+/**
+ * Formatting for quantities, dates and statuses, in UK English. Amounts and unit words come from the
+ * core's unit helpers (src/core/services/units.ts), with the household's list: the app has no unit
+ * table or plural guess of its own.
+ */
+import { amountText, builtInUnits, daysFor as coreDaysFor, lastsText as coreLastsText, stockText as coreStockText, unitWord, usageText as coreUsageText, type ProductSummary, type UnitItem, type Units } from '@larder/core';
 
-const MEASURES = new Set(['l', 'ml', 'kg', 'g', 'm', 'cm', 'mm', 'oz', 'lb']);
+/** The household's unit list as it last loaded (units.ts keeps it current); the built-in list until then. */
+let units: Units = builtInUnits;
+export const currentUnits = (): Units => units;
+export const setUnitList = (u: Units) => {
+  units = u;
+};
+
+export { everyText, worthText } from '@larder/core';
+
 const FRACTIONS: Record<string, string> = { '0.25': '¼', '0.5': '½', '0.75': '¾', '0.33': '⅓', '0.67': '⅔' };
 
-export function plural(unit: string, n: number): string {
-  if ((n > 0 && n <= 1) || MEASURES.has(unit.toLowerCase())) return unit;
-  if (/(s|x|z|ch|sh)$/i.test(unit)) return `${unit}es`;
-  if (/[^aeiou]y$/i.test(unit)) return `${unit.slice(0, -1)}ies`;
-  return `${unit}s`;
-}
+/** "tea bag" or "tea bags" for `n`: a unit's word, from the household's list. Empty for things counted one by one. */
+export const plural = (unit: string, n: number): string => unitWord(currentUnits(), unit, n);
 
 export function num(n: number): string {
   const whole = Math.trunc(n);
@@ -20,16 +28,22 @@ export function num(n: number): string {
 }
 
 /** "4 rolls", "1.6 kg", "¼ bottle", "3" (for "each"). */
-export function qty(n: number, unit: string): string {
-  if (unit === 'each') return num(n);
-  return `${num(n)} ${plural(unit, n)}`;
-}
+export const qty = (n: number, unit: string): string => amountText(currentUnits(), n, unit, num);
 
-/** Stock as shown in lists: "6 charged · 4 flat" for rechargeables. */
+/** Stock as shown in lists: "4 boxes", "about ¾ jar", "350 g", or "6 charged · 4 flat" for rechargeables. */
 export function stockText(s: ProductSummary): string {
   if (s.product.rechargeable && s.charged !== null && s.flat !== null) return s.flat ? `${num(s.charged)} charged · ${num(s.flat)} flat` : `${qty(s.charged, s.product.unit)}`;
-  return qty(s.inStock, s.product.unit);
+  return coreStockText(currentUnits(), s.product, s.inStock, num);
 }
+
+/** "1 tea bag a day", "2 rolls a week", "4 g a day", "1 every 14 days". */
+export const usageText = (item: UnitItem): string => coreUsageText(currentUnits(), item, num);
+
+/** "a box lasts 20 days": how long one of what it's bought in lasts at its usage, or null. */
+export const lastsText = (item: UnitItem): string | null => coreLastsText(currentUnits(), item);
+
+/** How many days `quantity` of what it's bought in lasts at its usage, or null without one. */
+export const daysFor = (item: UnitItem, quantity: number): number | null => coreDaysFor(currentUnits(), item, quantity);
 
 const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -59,68 +73,6 @@ export function dayText(date: string, days: number | null): string {
   if (days === 1) return 'tomorrow';
   if (days < 7) return dayDate(date);
   return shortDate(date);
-}
-
-/** "Tea bags" and "tea bag" are the same unit, as are "boxes" and "box". */
-export function sameUnit(a: string, b: string): boolean {
-  const one = (w: string) => {
-    const x = w.trim().toLowerCase().replace(/\s+/g, ' ');
-    if (x.length > 4 && x.endsWith('ies')) return `${x.slice(0, -3)}y`;
-    if (/(x|ch|sh|ss)es$/.test(x)) return x.slice(0, -2);
-    return x.length > 3 && x.endsWith('s') && !x.endsWith('ss') ? x.slice(0, -1) : x;
-  };
-  return one(a) === one(b);
-}
-
-interface Usage { amount: number; everyDays: number; auto?: boolean }
-interface Pack { name: string; holds: number }
-
-/** "a day", "a week", "every 2 weeks", "every 14 days". */
-export const everyText = (days: number) => (days === 1 ? 'a day' : days === 7 ? 'a week' : days % 7 === 0 ? `every ${days / 7} weeks` : `every ${days} days`);
-
-/** "1 tea bag a day", "2 rolls a week", "1 every 14 days". */
-export const usageText = (unit: string, u: Usage) => `${qty(u.amount, unit)} ${everyText(u.everyDays)}`;
-
-/** "a day", "a week", "3 weeks", "about 10 days". */
-function daysText(days: number): string {
-  const d = Math.round(days);
-  if (d < 1) return 'less than a day';
-  if (d === 1) return 'a day';
-  if (d === 7) return 'a week';
-  if (d % 7 === 0) return `${d / 7} weeks`;
-  return `${Math.abs(days - d) > 0.05 ? 'about ' : ''}${d} days`;
-}
-
-/** What a usage means, said back so a slip shows: "A box of 80 lasts 40 days." */
-export function usageSentence({ unit, pack, usage }: { unit: string; pack: Pack | null; usage: Usage }): string {
-  const lasts = (n: number) => daysText((n * usage.everyDays) / usage.amount);
-  if (pack) return `A ${pack.name} of ${pack.holds} lasts ${lasts(pack.holds)}.`;
-  return usage.amount <= 1 ? `One lasts ${lasts(1)}.` : `That's ${usageText(unit, usage)}.`;
-}
-
-/** "a week's worth", "about 10 days' worth". */
-export function worthText(days: number): string {
-  const d = Math.round(days);
-  if (d < 1) return "less than a day's worth";
-  if (d === 1) return "a day's worth";
-  if (d === 7) return "a week's worth";
-  if (d % 7 === 0) return `${d / 7} weeks' worth`;
-  return `about ${d} days' worth`;
-}
-
-/** "about 1¼ boxes", "2 boxes": stock as packs, or null without a pack. */
-export function packsText(pack: Pack | null | undefined, quantity: number): string | null {
-  if (!pack || quantity <= 0) return null;
-  const n = quantity / pack.holds;
-  const quarter = Math.round(n * 4) / 4;
-  const whole = Math.abs(n - Math.round(n)) < 1e-9;
-  return `${whole ? '' : 'about '}${num(whole ? Math.round(n) : quarter || 0.25)} ${plural(pack.name, whole ? Math.round(n) : Math.max(quarter, 2))}`;
-}
-
-/** One of what it's bought in, for the quick Add buttons: its pack if it has one ("1 box (80 tea bags)"). */
-export function oneBought(p: { unit: string; pack?: Pack | null }): { quantity: number; unit?: string; text: string } {
-  const pack = p.pack ?? null;
-  return pack ? { quantity: 1, unit: pack.name, text: `1 ${pack.name} (${qty(pack.holds, p.unit)})` } : { quantity: 1, text: '1' };
 }
 
 export function ago(iso: string, now = Date.now()): string {

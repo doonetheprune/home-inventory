@@ -17,6 +17,11 @@ export { AmbiguousError } from './services/resolve';
 export { NfcScan } from './services/nfc';
 export { ASSISTANT_INSTRUCTIONS, type AssistantTool, type ToolInfo, type ToolResult } from './services/assistant';
 export { DEFAULT_CATEGORIES, SHOP_PRESETS } from './services/catalogue';
-export { addDays, amount, andList, daysBetween, localDate, newId, pluralWord, publicWebAddress, roundQty } from './util';
+export { addDays, andList, daysBetween, localDate, newId, publicWebAddress, roundQty } from './util';
 export { photoType } from './photos';
-export { inOwnUnit, oneOf, packsText, sameUnit, singular } from './services/packs';
+export {
+  BUILT_IN_UNITS, UnknownUnitError, amountText, asWeight, boughtInText, builtInUnits, canConvert, packSizeText, daysFor, durationText, everyText, exactText, fromBoughtIn, givenInText,
+  isCount, isLoose, isMeasure, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake, pluralOf, singularGuess, singularOf, startsOne, stockText, stockWithInside, toBoughtIn, unitKeyOf, unitList, unitOf, unitWord,
+  usageInBoughtIn, usageText, weightText, worthText,
+  type HouseholdUnit, type NumberText, type UnitItem, type UnitUsage, type Units,
+} from './services/units';

@@ -17,8 +17,8 @@
  * seasonal recipe doesn't crowd the main list.
  */
 import { z } from 'zod';
-import { amount, andList, defineModule, Id, LarderError, newId, NotFoundError, pluralWord, roundQty, ValidationError, type CoreApi, type ProductSummary } from '@larder/core';
-import { convert, measuredBy, measureText, timesText, unitKey, unitsLike, withAmount } from './units';
+import { amountText, andList, canConvert, defineModule, Id, LarderError, newId, NotFoundError, roundQty, toBoughtIn, unitWord, ValidationError, type CoreApi, type Product, type ProductSummary, type Units } from '@larder/core';
+import { convert, inCore, measuredBy, measureText, timesText, unitKey, unitsLike, withAmount } from './units';
 
 export const Ingredient = z.object({
   /** As the recipe says it, e.g. "chopped tomatoes". */
@@ -157,8 +157,10 @@ const IngredientView = z.object({
   label: z.string(),
   /** False when it has no ratio or stock quantity, so `shown` stays as saved whatever the scale. */
   scales: z.boolean(),
-  /** What cooking takes from stock at this scale, in the item's own unit. */
+  /** What cooking takes from stock at this scale, in what the item is bought in. */
   need: z.number().nullable(),
+  /** Why cooking can't take it out of stock, when Larder can't turn the recipe's amount into what it's bought in (ml of an item with no Weight). */
+  why: z.string().nullable().default(null),
 });
 export const RecipeView = Recipe.extend({
   ingredients: z.array(IngredientView),
@@ -184,6 +186,8 @@ export const Proposal = z.object({
   items: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number(), unit: z.string(), inStock: z.number() })),
   /** Ingredients that can't be taken from stock (not linked, or no amount). */
   skipped: z.array(z.string()),
+  /** Those that have an amount Larder can't turn into what the item is bought in, and why. */
+  notTaken: z.array(z.object({ name: z.string(), why: z.string() })).default([]),
   expiresAt: z.string(),
 }).meta({ id: 'CookingProposal' });
 export type Proposal = z.infer<typeof Proposal>;
@@ -216,8 +220,35 @@ interface Base {
   names: string[];
   /** The ratio, or the stock quantity in the item's unit when there's no ratio. */
   measure: { amount: number; unit: string } | null;
-  /** What cooking takes from stock for the recipe as saved, in the item's unit. */
+  /** What cooking takes from stock for the recipe as saved, in what the item is bought in. */
   stock: number | null;
+  /** Why it can't be taken from stock, when Larder can't work it out. */
+  why: string | null;
+}
+
+const lastWord = (name: string) => name.trim().split(/[\s-]+/).at(-1) ?? '';
+
+/**
+ * What cooking takes from stock for `n` of `unit`, in what the item is bought in, through the core's
+ * converter: a kitchen measure as g or ml through the item's Weight (300 ml of milk from bottles
+ * of 4 pints), and a count in what it's bought in or what's in its pack (2 eggs from boxes of 6).
+ * A plain count is of what the name says ("2 eggs"), never 8 chicken thighs as 8 packs. A measure
+ * Larder can't work out (no Weight) isn't taken, and says why.
+ */
+function stockFor(units: Units, product: Product, names: string[], n: number, unit: string): { quantity: number | null; why: string | null } {
+  const measured = inCore(n, unit);
+  if (measured) {
+    try {
+      return { quantity: roundQty(toBoughtIn(units, product, measured.amount, measured.unit)), why: null };
+    } catch (err) {
+      if (err instanceof LarderError) return { quantity: null, why: err.message };
+      throw err;
+    }
+  }
+  const k = unitKey(unit, units);
+  const said = k ? [unit] : names.map(lastWord);
+  const word = said.find((w) => units.find(w) && canConvert(units, product, w)) ?? (!k && units.find(product.unit)?.key === 'each' ? product.unit : null);
+  return { quantity: word ? roundQty(toBoughtIn(units, product, n, word)) : null, why: null };
 }
 
 function ingredientCalled(core: CoreApi, r: Recipe, base: Base[], ref: string): Base {
@@ -245,16 +276,16 @@ function presetCalled(core: CoreApi, r: Recipe, ref: string): Preset {
   }
 }
 
-function unitMismatch(r: Recipe, b: Base): string {
+function unitMismatch(units: Units, r: Recipe, b: Base): string {
   const u = b.measure!.unit;
   const by = measuredBy(u);
   if (by) return `${r.title} measures the ${b.i.name} by ${by}, so give it in ${unitsLike(u)}.`;
-  if (!unitKey(u)) return `${r.title} counts the ${b.i.name}, so give how many, with no unit.`;
-  return `${r.title} measures the ${b.i.name} in ${pluralWord(unitKey(u), 2)}, so give how many of those.`;
+  if (!unitKey(u, units)) return `${r.title} counts the ${b.i.name}, so give how many, with no unit.`;
+  return `${r.title} measures the ${b.i.name} in ${unitWord(units, unitKey(u, units), 2)}, so give how many of those.`;
 }
 
 /** How much to make, from what was asked (or the default preset). */
-function scaleFor(core: CoreApi, r: Recipe, base: Base[], input: ScaleInput): Scale {
+function scaleFor(core: CoreApi, units: Units, r: Recipe, base: Base[], input: ScaleInput): Scale {
   const asked = (['preset', 'servings', 'times', 'have'] as const).filter((k) => input[k] !== undefined);
   if (asked.length > 1) throw new ValidationError(`Give one of preset, servings, times or have, not ${andList(asked)}.`);
   const plain = { preset: null, servings: null, limitedBy: null };
@@ -275,9 +306,9 @@ function scaleFor(core: CoreApi, r: Recipe, base: Base[], input: ScaleInput): Sc
       const b = ingredientCalled(core, r, base, h.ingredient);
       if (!b.measure) throw new ValidationError(`${r.title} has no ratio for ${b.i.name}, so the rest can't be worked out from it.${scalable.length ? ` It can from ${andList(scalable)}.` : ' Add ratios to its ingredients first (save_recipe).'}`);
       const n = convert(h.amount, h.unit ?? b.measure.unit, b.measure.unit, b.names);
-      if (n === null) throw new ValidationError(unitMismatch(r, b));
+      if (n === null) throw new ValidationError(unitMismatch(units, r, b));
       const unit = h.unit ?? b.measure.unit;
-      said.push(withAmount(measureText(h.amount, unit), b.i.name, unit));
+      said.push(withAmount(measureText(h.amount, unit, units), b.i.name, unit, units));
       const t = n / b.measure.amount;
       if (!least || t < least.times) least = { times: t, name: b.i.name };
     }
@@ -290,6 +321,7 @@ function scaleFor(core: CoreApi, r: Recipe, base: Base[], input: ScaleInput): Sc
 
 async function view(core: CoreApi, r: Recipe, input: ScaleInput = {}, known?: Map<string, string>): Promise<RecipeView> {
   const names = known ?? (await scenarioNames(core));
+  const units = await core.units.list();
   const scenarios = r.scenarioIds.filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id)! }));
   const summaries = new Map<string, ProductSummary>();
   for (const i of r.ingredients) {
@@ -302,19 +334,20 @@ async function view(core: CoreApi, r: Recipe, input: ScaleInput = {}, known?: Ma
     const s = i.productId ? summaries.get(i.productId) : undefined;
     const names = [i.name, ...(s ? [s.product.name] : [])];
     const measure = i.ratio ? { amount: i.ratio, unit: i.ratioUnit } : s && i.quantity ? { amount: i.quantity, unit: s.product.unit } : null;
-    // The quantity given, or the ratio when it's in the item's own unit (or converts to it).
-    const stock = !s ? null : (i.quantity ?? (i.ratio ? convert(i.ratio, i.ratioUnit, s.product.unit, names) : null));
-    return { i, s, names, measure, stock };
+    // The quantity given (in what it's bought in), or the ratio through the core's converter.
+    const fromRatio = s && i.quantity === null && i.ratio ? stockFor(units, s.product, names, i.ratio, i.ratioUnit) : null;
+    const stock = !s ? null : (i.quantity ?? fromRatio?.quantity ?? null);
+    return { i, s, names, measure, stock, why: fromRatio?.why ?? null };
   });
-  const scale = scaleFor(core, r, base, input);
+  const scale = scaleFor(core, units, r, base, input);
   const t = scale.times;
-  const ingredients = base.map(({ i, s, measure, stock }) => {
+  const ingredients = base.map(({ i, s, measure, stock, why }) => {
     const need = stock === null ? null : roundQty(stock * t);
     const status = !s ? 'unknown' : s.inStock <= 0 ? 'none' : s.inStock + 1e-9 < (need ?? 0) ? 'short' : 'have';
-    const shown = t === 1 ? i.amount || (measure ? measureText(measure.amount, measure.unit) : '') : measure ? measureText(measure.amount * t, measure.unit) : i.amount;
+    const shown = t === 1 ? i.amount || (measure ? measureText(measure.amount, measure.unit, units) : '') : measure ? measureText(measure.amount * t, measure.unit, units) : i.amount;
     return {
       name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, inStock: s ? s.inStock : null, status, optional: i.optional,
-      ratio: i.ratio, ratioUnit: i.ratioUnit, shown, label: withAmount(shown, i.name, measure?.unit ?? ''), scales: !!measure, need,
+      ratio: i.ratio, ratioUnit: i.ratioUnit, shown, label: withAmount(shown, i.name, measure?.unit ?? '', units), scales: !!measure, need, why,
     } as const;
   });
   return { ...r, ingredients, missing: ingredients.filter((i) => !i.optional && (i.status === 'none' || i.status === 'short')).map((i) => i.item ?? i.name), scale, scenarios, hidden: r.scenarioOnly && scenarios.length > 0 };
@@ -330,7 +363,7 @@ function scaleLine(v: RecipeView): string | null {
   return v.presets.length ? 'Amounts as saved.' : null;
 }
 
-export function recipeText(v: RecipeView): string {
+export function recipeText(units: Units, v: RecipeView): string {
   const s = v.scale;
   const lines = [`${v.title}${v.serves ? ` (serves ${v.serves})` : ''}`];
   const line = scaleLine(v);
@@ -341,7 +374,7 @@ export function recipeText(v: RecipeView): string {
   }
   lines.push('Ingredients:');
   for (const i of v.ingredients) {
-    const state = i.status === 'have' ? 'in the house' : i.status === 'short' ? `only ${amount(i.inStock ?? 0, i.unit ?? 'each')} in` : i.status === 'none' ? 'none in' : 'not tracked in Larder';
+    const state = i.status === 'have' ? 'in the house' : i.status === 'short' ? `only ${amountText(units, i.inStock ?? 0, i.unit ?? 'each')} in` : i.status === 'none' ? 'none in' : 'not tracked in Larder';
     const fixed = !i.scales && s.times !== 1 ? ' (not scaled)' : '';
     lines.push(`- ${i.label}${i.optional ? ' (optional)' : ''}${fixed}: ${state}`);
   }
@@ -507,11 +540,13 @@ export default defineModule({
       const v = await view(core, r, scale);
       const items: Proposal['items'] = [];
       const skipped: string[] = [];
+      const notTaken: Proposal['notTaken'] = [];
       // One line per item: "butter 200 g" and "butter for greasing" add up.
       const wanted = new Map<string, { name: string; want: number; unit: string; inStock: number; names: string[] }>();
       for (const i of v.ingredients) {
         if (!i.productId || !i.need) {
           if (!i.optional) skipped.push(i.name);
+          if (!i.optional && i.why) notTaken.push({ name: i.name, why: i.why });
           continue;
         }
         const w = wanted.get(i.productId);
@@ -529,7 +564,7 @@ export default defineModule({
       const s = v.scale;
       const p = Proposal.parse({
         id: newId(), recipeId: r.id, recipe: r.title, servings: s.servings, times: s.times, preset: s.preset, from: s.kind === 'have' ? s.by : '',
-        items, skipped, expiresAt: new Date(Date.parse(core.now()) + PROPOSAL_HOURS * 3_600_000).toISOString(),
+        items, skipped, notTaken, expiresAt: new Date(Date.parse(core.now()) + PROPOSAL_HOURS * 3_600_000).toISOString(),
       });
       // Forget old proposals as new ones are made.
       for (const old of await proposals.list()) if (Date.parse(old.data.expiresAt) < Date.parse(core.now())) await proposals.remove(old.id);
@@ -577,13 +612,14 @@ export default defineModule({
       }
     }
 
-    const proposalText = (p: Proposal) => {
+    const proposalText = (units: Units, p: Proposal) => {
       const t = timesText(p.times);
       const how = p.preset ? ` (the "${p.preset}" preset, ${t})` : p.servings ? ` for ${p.servings}` : p.from ? ` from ${p.from} (${t})` : p.times !== 1 ? ` (${t})` : '';
       return [
         `Cooking ${p.recipe}${how} would take out of stock:`,
-        ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${amount(i.quantity, i.unit)} (of ${amount(i.inStock, i.unit)})`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
+        ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${amountText(units, i.quantity, i.unit)} (of ${amountText(units, i.inStock, i.unit)})`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
         ...(p.skipped.length ? [`Not taken: ${p.skipped.join(', ')}.`] : []),
+        ...p.notTaken.map((x) => `- ${x.name}: ${x.why}`),
         `Proposal id: ${p.id}. Nothing has changed yet: ask the person to confirm or adjust, then call confirm_cooking.`,
       ].join('\n');
     };
@@ -815,7 +851,7 @@ export default defineModule({
       input: z.object({ recipe: z.string().min(1).max(120).describe('Its title, e.g. "traybake"'), ...ScaleInput.shape }),
       async run({ recipe, ...scale }) {
         const v = await view(core, await find(recipe), scale);
-        return { text: recipeText(v), data: v as unknown as Record<string, unknown> };
+        return { text: recipeText(await core.units.list(), v), data: v as unknown as Record<string, unknown> };
       },
     });
     ctx.addTool({
@@ -895,7 +931,7 @@ export default defineModule({
       }),
       async run({ recipe, ...scale }) {
         const p = await propose(await find(recipe), scale);
-        return { text: proposalText(p), data: p as unknown as Record<string, unknown> };
+        return { text: proposalText(await core.units.list(), p), data: p as unknown as Record<string, unknown> };
       },
     });
     ctx.addTool({
@@ -907,7 +943,8 @@ export default defineModule({
       }),
       async run({ proposal, changes }) {
         const r = await confirm(proposal, changes);
-        const lines = r.products.map((s) => `${s.product.name}: ${amount(s.inStock, s.product.unit)} left${s.status.low ? ' (running low)' : ''}`);
+        const units = await core.units.list();
+        const lines = r.products.map((s) => `${s.product.name}: ${amountText(units, s.inStock, s.product.unit)} left${s.status.low ? ' (running low)' : ''}`);
         return { text: r.used ? `Done. ${lines.join('; ')}.` : 'Nothing was taken out of stock.', data: { used: r.used } };
       },
     });
@@ -920,7 +957,7 @@ export default defineModule({
     await post.handler({ body: {
       title: 'Chicken and spinach traybake', serves: 4, source: 'Claude',
       ingredients: [
-        { name: 'chicken thighs', productId: id('Chicken thighs'), quantity: 1, amount: '8' },
+        { name: 'chicken thighs', productId: id('Chicken thighs'), quantity: 1000, amount: '8' },
         { name: 'baby spinach', productId: id('Baby spinach'), quantity: 1, amount: '1 bag' },
         { name: 'chopped tomatoes', amount: '400 g tin' },
         { name: 'mature cheddar', productId: id('Mature cheddar'), quantity: 50, amount: '50 g', optional: true },
@@ -941,7 +978,8 @@ export default defineModule({
       ingredients: [
         { name: 'plain flour', ratio: 100, ratioUnit: 'g' },
         { name: 'eggs', productId: id('Free-range eggs'), ratio: 2 },
-        { name: 'milk', productId: id('Semi-skimmed milk'), quantity: 0.25, ratio: 300, ratioUnit: 'ml' },
+        // No quantity: 300 ml of a 4 pint bottle is worked out by the core's converter.
+        { name: 'milk', productId: id('Semi-skimmed milk'), ratio: 300, ratioUnit: 'ml' },
         { name: 'butter, for frying', amount: 'a little' },
       ],
       presets: [{ name: 'Just me', times: 0.5 }, { name: 'Family', times: 2 }],

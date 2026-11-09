@@ -60,24 +60,53 @@ export const Link = z.object({
 });
 export type Link = z.infer<typeof Link>;
 
-/** How it's sold: a box of 20 (in the item's own unit). */
-export const Pack = z.object({
-  /** "box", "pack", "bag". */
-  name: z.string().trim().min(1).max(30),
-  /** How many of the item's own unit one holds: 20 tea bags. More than 1. */
-  holds: z.number().gt(1).max(100000),
+/** A count (bag, tea bag), a weight (g, kg) or a volume (ml, L, pint). */
+export const UnitKind = z.enum(['count', 'weight', 'volume']);
+export type UnitKind = z.infer<typeof UnitKind>;
+
+/** A unit on Larder's list (src/core/services/units.ts), built in or added by the household. */
+export const Unit = z.object({
+  /** How it's stored on items: the singular in lower case, e.g. "tea bag", "l". */
+  key: z.string(),
+  /** One of it, as shown: "tea bag", "L". */
+  one: z.string(),
+  /** Several: "tea bags", "L". */
+  many: z.string(),
+  kind: UnitKind,
+  /** For a weight or volume, how many g or ml one is (kg: 1000, pint: 568.261). Null for a count. */
+  factor: z.number().nullable(),
+  /** False for words the household added (Settings → Units). */
+  builtIn: z.boolean(),
+}).meta({ id: 'Unit' });
+export type Unit = z.infer<typeof Unit>;
+
+/** An amount in a unit from the list (src/core/services/units.ts): a pack size, 20 tea bags or 1 kg. */
+export const UnitAmount = z.object({
+  amount: z.number().positive().max(1_000_000),
+  /** A key from the unit list, e.g. "tea bag", "kg", "pint". */
+  unit: z.string().trim().min(1).max(30),
 });
-export type Pack = z.infer<typeof Pack>;
+export type UnitAmount = z.infer<typeof UnitAmount>;
+
+/** How much one weighs, in grams, or holds, in millilitres for liquids. Always g or ml: 1 kg is kept as 1000 g. */
+export const Weight = z.object({
+  amount: z.number().positive().max(100_000_000),
+  unit: z.enum(['g', 'ml']),
+});
+export type Weight = z.infer<typeof Weight>;
 
 /**
- * How fast it's used: `amount` of the item's own unit every `everyDays` days (1 tea bag
- * every day, 1 sensor every 14 days, 2 rolls every 7). With `auto`, Larder takes them out
- * of stock by itself, one period at a time.
+ * How fast it's used: `amount` every `everyDays` days (1 tea bag a day, 1 sensor every 14 days,
+ * 4 g a day), kept as it was said. In what it's bought in, in what's in its pack when its pack size
+ * is a count, or in a weight or volume once it has a Weight. With `auto`, Larder takes them out of
+ * stock by itself, a little at a time.
  */
 export const Usage = z.object({
   amount: z.number().positive().max(100000),
   everyDays: z.number().int().min(1).max(3650),
   auto: z.boolean().default(false),
+  /** What `amount` is in, a key from the unit list; null for what it's bought in. */
+  unit: z.string().trim().min(1).max(30).nullable().default(null),
 });
 export type Usage = z.infer<typeof Usage>;
 
@@ -87,12 +116,17 @@ export const Product = z.object({
   /** Other names people use: "loo roll", "bog roll". Used by search and voice. */
   aliases: z.array(z.string().min(1).max(80)).default([]),
   categoryId: Id.nullable().default(null),
-  /** What stock is counted in: "roll", "tin", "L", "kg", "each". */
-  unit: z.string().min(1).max(20).default('each'),
+  /**
+   * Bought in: what you buy and count it in, a key from the unit list (box, jar, roll, each), or g
+   * or ml for things bought loose. Stock, minimums, stock-up amounts, orders and history are in this.
+   */
+  unit: z.string().min(1).max(30).default('each'),
+  /** Pack size: what one holds, as printed on the pack. A count (20 tea bags) or an amount (1 kg, 4 pints). */
+  packSize: UnitAmount.nullable().default(null),
+  /** Weight: what one weighs (or holds), in g or ml. From the pack size when that's an amount; the only thing used for sums in g or ml. */
+  weight: Weight.nullable().default(null),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
-  /** Comes in: how it's sold, e.g. a box of 20. Stock is still counted in `unit`. */
-  pack: Pack.nullable().default(null),
   /** How fast it's used, and whether Larder takes them out of stock by itself. */
   usage: Usage.nullable().default(null),
   /**
@@ -127,6 +161,8 @@ export const Product = z.object({
   /** Linked Home Assistant device ids (used from Phase 2). */
   haDeviceIds: z.array(z.string().max(200)).default([]),
   fields: ModuleFields.default({}),
+  /** Why the owner should look at it: set by an upgrade (an old unit not on the list, a pack turned round). Cleared by saving it from Edit, or "Looks right". */
+  needsCheck: z.string().max(300).nullable().default(null),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -369,10 +405,10 @@ export type PlaceToSort = z.infer<typeof PlaceToSort>;
 
 export const ShoppingItem = z.object({
   summary: ProductSummary,
-  /** Suggested amount to buy. */
+  /** Suggested amount to buy, in whole ones of what it's bought in. */
   quantity: z.number(),
   reason: z.enum(['low', 'out', 'manual']),
-  /** With a pack: how many packs `quantity` is (it's rounded up to whole packs). */
+  /** Always null since 0.10.0: `quantity` is already in whole ones of what it's bought in. Kept for older clients until 1.0. */
   packs: z.number().nullable().default(null),
   /** True when the product has no preferred shop and is here because the shop sells its category. */
   anyShop: z.boolean(),

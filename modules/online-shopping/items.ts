@@ -5,14 +5,14 @@
  * The normal stock-up amount is the item's own `stockUpTo`, used in the shop too.
  */
 import { z } from 'zod';
-import { ConflictError, NotFoundError, ValidationError, amount, type ModuleContext, type Product } from '@larder/core';
+import { ConflictError, NotFoundError, ValidationError, amountText, canConvert, isLoose, roundQty, toBoughtIn, type ModuleContext, type Product, type Units } from '@larder/core';
 import { PackSize, type Product as ShopProduct } from './contract';
 
 export const Listing = z.object({
   /** The shop's product code. */
   listingId: z.string().min(1).max(200),
   name: z.string().max(300).default(''),
-  /** How many of the item's own unit one pack gives: 9 (rolls), 0.25 (kg), 1 (bag). */
+  /** How many of what the item is bought in one pack gives: 9 (rolls), 250 (g, for something bought loose), 1 (bag). */
   packQuantity: z.number().positive().max(1_000_000),
   /** Larder worked packQuantity out from the shop's pack size or name, and nobody has checked it. */
   guessed: z.boolean().default(false),
@@ -34,7 +34,7 @@ export const ShopRules = z.object({
   packRule: PackRule.default('cheapest'),
   /** For a fixed pack: which listing (the first, if not set). */
   fixedListingId: z.string().nullable().default(null),
-  /** This shop's target price per one of the item's unit, instead of the item's own. */
+  /** This shop's target price per one of what the item is bought in, instead of the item's own. */
   targetPrice: z.number().min(0).nullable().default(null),
 });
 export type ShopRules = z.infer<typeof ShopRules>;
@@ -44,7 +44,7 @@ export const OnlineFields = z.object({
   shops: z.record(z.string(), ShopRules).default({}),
   /** When it's on offer, top up to this (higher than the normal stock-up amount). */
   offerStockUpTo: z.number().min(0).nullable().default(null),
-  /** The price per one of the item's unit the household is happy to pay: at or below it counts as on offer. */
+  /** The price per one of what the item is bought in the household is happy to pay: at or below it counts as on offer. */
   targetPrice: z.number().min(0).nullable().default(null),
 });
 export type OnlineFields = z.infer<typeof OnlineFields>;
@@ -54,27 +54,27 @@ const KEY = 'online-shopping';
 export const fieldsOf = (p: Product): OnlineFields => OnlineFields.parse(p.fields[KEY] ?? {});
 export const rulesFor = (p: Product, shopId: string): ShopRules => ShopRules.parse(fieldsOf(p).shops[shopId] ?? {});
 
-const MEASURES: Record<string, { unit: 'kg' | 'l'; per: number }> = {
-  kg: { unit: 'kg', per: 1 }, kilo: { unit: 'kg', per: 1 }, kilos: { unit: 'kg', per: 1 }, g: { unit: 'kg', per: 1000 }, gram: { unit: 'kg', per: 1000 }, grams: { unit: 'kg', per: 1000 },
-  l: { unit: 'l', per: 1 }, litre: { unit: 'l', per: 1 }, litres: { unit: 'l', per: 1 }, liter: { unit: 'l', per: 1 }, ml: { unit: 'l', per: 1000 },
-};
-const measureOf = (unit: string) => MEASURES[unit.trim().toLowerCase()];
-
 /**
- * How many of the item's unit one pack gives, from the shop's pack size and
- * name. Sure only for weights and volumes the item is counted in; otherwise a
- * guess for the person to check ("1 pack = 9 rolls").
+ * How many of what the item is bought in one pack gives, from the shop's pack size and name, through
+ * the core's converter. A weight or volume is sure when the item is bought loose or has a Weight (a
+ * 1.6 kg pack of 400 g tins is 4 tins). A count is sure when the name says what it is and
+ * that's what the item is bought in or what's in its pack ("Toilet Tissue 9 Rolls"); otherwise it's a guess for
+ * the person to check ("1 pack = 9 rolls").
  */
-export function packQuantityFor(pack: PackSize | null, name: string, itemUnit: string): { quantity: number; guessed: boolean } {
-  const m = measureOf(itemUnit);
-  if (pack && m && m.unit === pack.unit) return { quantity: Math.round(pack.amount * m.per * 1000) / 1000, guessed: false };
-  if (pack?.unit === 'each' && !m) {
-    // Sure when the item is counted in "each", or the name says what's counted ("Toilet Tissue 9 Rolls" for rolls).
-    const word = itemUnit.trim().toLowerCase().replace(/e?s$/, '').replace(/[^a-z0-9 ]/g, '');
-    return { quantity: pack.amount, guessed: !(word === 'each' || (word && new RegExp(`\\b${word}`, 'i').test(name))) };
+export function packQuantityFor(units: Units, pack: PackSize | null, name: string, item: Product): { quantity: number; guessed: boolean } {
+  const sure = (n: number) => ({ quantity: roundQty(n), guessed: false });
+  if (pack && pack.unit !== 'each' && canConvert(units, item, pack.unit)) return sure(toBoughtIn(units, item, pack.amount, pack.unit));
+  if (pack?.unit === 'each') {
+    // What it's bought in, or what's in its pack, said in the name: 9 rolls of a roll, or of packs of 9 rolls.
+    const counted = [item.unit, ...(item.packSize ? [item.packSize.unit] : [])].map((k) => units.find(k)).filter((u) => !!u && u.kind === 'count');
+    for (const u of counted) {
+      const said = [u!.one, u!.many].some((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(name));
+      if (said || u!.key === 'each') return sure(toBoughtIn(units, item, pack.amount, u!.key));
+    }
+    return { quantity: pack.amount, guessed: true };
   }
   const multi = /(\d+)\s*[x×]\s*\d/i.exec(name);
-  if (multi && !m) return { quantity: Number(multi[1]), guessed: true };
+  if (multi && !isLoose(units, item)) return { quantity: Number(multi[1]), guessed: true };
   return { quantity: 1, guessed: true };
 }
 
@@ -82,8 +82,8 @@ export function packQuantityFor(pack: PackSize | null, name: string, itemUnit: s
 export const shopSetText = (shopSet: boolean, shopName: string) => (shopSet ? ` It's bought from ${shopName} now.` : '');
 
 /** "1 pack = 9 rolls", "1 pack = 300 g" */
-export function packText(l: Pick<Listing, 'packQuantity'>, unit: string): string {
-  return `1 pack = ${amount(l.packQuantity, unit)}`;
+export function packText(units: Units, l: Pick<Listing, 'packQuantity'>, unit: string): string {
+  return `1 pack = ${amountText(units, l.packQuantity, unit)}`;
 }
 
 export function createItems(ctx: ModuleContext) {
@@ -120,7 +120,7 @@ export function createItems(ctx: ModuleContext) {
       const item = await product(productId);
       const owner = (await linked()).get(`${shopId}:${p.listing_id}`);
       if (owner && owner.id !== productId) throw new ConflictError(`${p.name} is already linked to ${owner.name}. Unlink it there first.`);
-      const guess = packQuantityFor(p.pack_size, p.name, item.unit);
+      const guess = packQuantityFor(await ctx.core.units.list(), p.pack_size, p.name, item);
       let listing: Listing | null = null;
       const updated = await change(productId, (f) => {
         const rules = ShopRules.parse(f.shops[shopId] ?? {});

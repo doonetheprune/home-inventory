@@ -4,7 +4,7 @@
  */
 import type {
   Category, Dashboard, IdentifyResult, PlaceContents, PlaceNodeT, PlaceRef, PlaceToSort, Place, Product, ProductCreate, ProductDetail, ProductSummary,
-  SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase,
+  SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Unit, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase,
 } from '@larder/core';
 import { ApiError } from './apiError';
 import { openCopy } from './offline/current';
@@ -104,6 +104,11 @@ export const api = {
   },
   home: () => get<Dashboard>('/home'),
   search: (q: string) => get<{ sections: SearchSectionResult[] }>(`/search${qs({ q })}`),
+  units: {
+    list: () => get<Unit[]>('/units'),
+    add: (b: { one: string; many: string }) => post<Unit>('/units', b),
+    remove: (key: string) => del(`/units/${encodeURIComponent(key)}`),
+  },
   categories: {
     list: () => get<Category[]>('/categories'),
     create: (b: Partial<Category>) => post<Category>('/categories', b),
@@ -144,7 +149,6 @@ export const api = {
     add: (b: { productId: string; quantity: number; placeId?: string | null; expiresOn?: string | null; variantId?: string | null; unit?: string }) => post<ProductSummary>('/stock/add', b),
     use: (b: { productId: string; quantity: number; placeId?: string; open?: boolean; unit?: string }) => post<ProductSummary>('/stock/use', b),
     finished: (productId: string) => post<ProductSummary>(`/products/${productId}/finished`, {}),
-    recount: (productId: string, b: { unit: string; holds: number; pack?: string }) => post<ProductSummary>(`/products/${productId}/recount`, b),
     move: (b: { productId: string; toPlaceId: string; quantity?: number; fromPlaceId?: string | null; mode: 'temporary' | 'permanent' }) => post<ProductSummary>('/stock/move', b),
     returnHome: (b: { productId: string; entryId?: string }) => post<ProductSummary>('/stock/return', b),
     charge: (b: { productId: string; quantity: number }) => post<ProductSummary>('/stock/charge', b),

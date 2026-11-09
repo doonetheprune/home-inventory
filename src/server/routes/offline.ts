@@ -19,7 +19,7 @@ const gzipped = promisify(gzip);
 
 /** What the web app reads, apart from one page per item, place, shop and module page. */
 const CORE_PATHS = [
-  '/auth/status', '/home', '/search', '/settings', '/modules', '/categories', '/shops', '/shops/presets',
+  '/auth/status', '/home', '/search', '/settings', '/modules', '/units', '/categories', '/shops', '/shops/presets',
   '/places', '/places/tree', '/places/to-sort',
   // The app works out the other stock filters (low, expiring…) from these.
   '/products?status=all', '/products?status=wish', '/products?status=to_tidy',

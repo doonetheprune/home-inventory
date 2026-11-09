@@ -7,8 +7,9 @@
  * shop favourites in Pending.
  */
 import { useEffect, useState } from 'react';
+import { amountText, isCount, isLoose, parseAmount, toBoughtIn, unitOf, type Units } from '@larder/core';
 import {
-  api, defineWebModule, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, qty, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops, useToast,
+  api, defineWebModule, Header, Icon, Link, Pill, Seg, Sheet, Stepper, Switch, money, plural, qty, shortDate, useAction, useAddItem, useModuleEnabled, useQuery, useQueryClient, useShops, useToast, useUnits,
   type ProductDetail, type ProductSummary, type ShoppingList,
 } from '@larder/web-sdk';
 
@@ -380,18 +381,20 @@ function ShopImage({ src }: { src: string }) {
   return failed ? <Icon name="cart" /> : <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
-/** Prices are kept per one of the item's unit; things counted in g or ml are easier per kg or litre. */
-function pricePer(unit: string): { label: string; factor: number } {
-  const u = unit.toLowerCase();
-  if (u === 'g') return { label: 'a kg', factor: 1000 };
-  if (u === 'ml') return { label: 'a litre', factor: 1000 };
-  if (u === 'each') return { label: 'each', factor: 1 };
-  return { label: `a ${unit}`, factor: 1 };
+/** Prices are kept per one of what the item is bought in; things bought loose in g or ml are easier per kg or L (through the core's converter). */
+function pricePer(units: Units, unit: string): { label: string; factor: number } {
+  const item = { name: 'it', unit };
+  if (isLoose(units, item)) {
+    const big = unitOf(units, unit).kind === 'weight' ? 'kg' : 'l';
+    return { label: `per ${unitOf(units, big).one}`, factor: toBoughtIn(units, item, 1, big) };
+  }
+  const u = units.find(unit);
+  return { label: !u || u.key === 'each' ? 'each' : `a ${u.one}`, factor: 1 };
 }
 
 /** A price box that saves when it loses focus or on Enter; empty clears it. */
 function PriceBox({ value, unit, onSave, label }: { value: number | null; unit: string; onSave: (v: number | null) => void; label: string }) {
-  const per = pricePer(unit);
+  const per = pricePer(useUnits(), unit);
   const shown = value === null ? '' : String(Math.round(value * per.factor * 1000) / 1000);
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);
@@ -426,7 +429,7 @@ function ListingRow({ l, unit, shopId, shopName, productId }: { l: Listing; unit
         <span className="item-meta">
           {l.deadSince ? <Pill kind="low">Gone from {shopName}: link the new one</Pill> : <>Code {l.listingId} · </>}
           {!l.deadSince && (fixing ? (
-            <span className="row" style={{ gap: 6, display: 'inline-flex' }}>1 pack = <Stepper small value={n} onChange={setN} min={0.001} label={`${unit} in one pack`} /> {unit}
+            <span className="row" style={{ gap: 6, display: 'inline-flex' }}>1 pack = <Stepper small value={n} onChange={setN} min={0.001} label={`${plural(unit, 2) || unit} in one pack`} /> {plural(unit, n)}
               <button type="button" className="btn small" disabled={busy} onClick={() => void run(() => call('PATCH', path, { shopId, packQuantity: n }), 'Pack size saved').then(() => setFixing(false))}>Save</button></span>
           ) : (
             <button type="button" className="link small" onClick={() => setFixing(true)}>1 pack = {qty(l.packQuantity, unit)}{l.guessed ? ' (check this)' : ''}</button>
@@ -728,24 +731,29 @@ function usePendingFavourites() {
   return useQuery({ queryKey: ['online-shopping', 'pending'], queryFn: () => call<Favourite[]>('GET', '/pending') });
 }
 
-/** "Tesco Closed Cup Mushrooms 300G" → "Closed Cup Mushrooms"; the full name is kept as its brand. */
-function plainName(name: string): string {
-  const out = name
-    .replace(/^(tesco( finest| organic| everyday value)?|asda|sainsbury'?s|waitrose|ocado|morrisons|aldi|lidl|co-?op)\s+/i, '')
-    .replace(/\s+\d+(\.\d+)?\s*(x\s*\d+(\.\d+)?\s*)?(g|kg|ml|l|ltr|litres?|cl|pack|pk|rolls?|tins?|bags?|eggs?|pints?|tablets?|pods?)\b.*$/i, '')
-    .trim();
-  return out || name;
+/** "Tesco Closed Cup Mushrooms 300G" → "Closed Cup Mushrooms"; the full name is kept as its brand. A size is cut when the unit list knows its unit. */
+function plainName(units: Units, name: string): string {
+  let out = name.replace(/^(tesco( finest| organic| everyday value)?|asda|sainsbury'?s|waitrose|ocado|morrisons|aldi|lidl|co-?op)\s+/i, '');
+  const size = /\s+\d+(\.\d+)?\s*(x\s*\d+(\.\d+)?\s*)?[a-z].*$/i.exec(out);
+  if (size && parseAmount(units, size[0])) out = out.slice(0, size.index);
+  return out.trim() || name;
 }
 
-/** What it's counted in: g or ml for weights and volumes, rolls for "9 Rolls", else each. */
-function unitFor(f: Favourite): string {
-  if (f.packSize?.unit === 'kg') return 'g';
-  if (f.packSize?.unit === 'l') return 'ml';
-  const counted = /\b\d+\s*(roll|tin|bag|bottle|tablet|egg|can|pod|sachet|capsule|bar)s?\b/i.exec(f.name);
-  return counted ? counted[1]!.toLowerCase() : 'each';
+/** What it's bought in: g or ml for things sold by weight or volume, rolls for "9 Rolls" (from the unit list), else each. */
+function unitFor(units: Units, f: Favourite): string {
+  // Sold by weight or volume: bought loose, in g or ml.
+  if (f.packSize && f.packSize.unit !== 'each') return unitOf(units, f.packSize.unit).kind === 'weight' ? 'g' : 'ml';
+  const counted = parseAmount(units, f.name);
+  return counted && isCount(units, counted.unit) ? counted.unit : 'each';
 }
 
-const sizeText = (p: Favourite['packSize']) => (!p ? '' : p.unit === 'each' ? `${p.amount}` : p.amount < 1 ? `${Math.round(p.amount * 1000)} ${p.unit === 'kg' ? 'g' : 'ml'}` : `${p.amount} ${p.unit}`);
+/** A shop's pack size: "9", "500 g", "1.5 kg". */
+const sizeText = (units: Units, p: Favourite['packSize']) => {
+  if (!p) return '';
+  if (p.unit === 'each') return `${p.amount}`;
+  const small = unitOf(units, p.unit).kind === 'weight' ? 'g' : 'ml';
+  return amountText(units, toBoughtIn(units, { name: 'pack', unit: small }, p.amount, p.unit), small);
+};
 
 /** Picks an item to link a favourite to. */
 function LinkSheet({ f, onClose }: { f: Favourite; onClose: () => void }) {
@@ -761,7 +769,7 @@ function LinkSheet({ f, onClose }: { f: Favourite; onClose: () => void }) {
         {shown.map((s: ProductSummary) => (
           <button type="button" key={s.product.id} className="item" disabled={busy} style={{ width: '100%', textAlign: 'left' }}
             onClick={() => void run(() => call<{ message: string }>('POST', `/pending/${encodeURIComponent(f.id)}/link`, { productId: s.product.id }), (r) => r.message).then((r) => r && onClose())}>
-            <span className="item-main"><span className="item-name">{s.product.name}</span><span className="item-meta">Counted in {s.product.unit}</span></span>
+            <span className="item-main"><span className="item-name">{s.product.name}</span><span className="item-meta">Bought in {plural(s.product.unit, 2) || 'ones'}</span></span>
             <Icon name="chev" size="sm" />
           </button>
         ))}
@@ -772,6 +780,7 @@ function LinkSheet({ f, onClose }: { f: Favourite; onClose: () => void }) {
 }
 
 function FavouritesPending() {
+  const units = useUnits();
   const { data } = usePendingFavourites();
   const providers = useProviders().data?.providers ?? [];
   const { run, busy } = useAction();
@@ -787,13 +796,13 @@ function FavouritesPending() {
   const asNewItem = (f: Favourite) => run(async () => {
     const { photoFileId } = await call<{ photoFileId: string | null }>('POST', `/pending/${encodeURIComponent(f.id)}/photo`);
     addItem({
-      name: plainName(f.name),
+      name: plainName(units, f.name),
       brand: f.name,
-      unit: unitFor(f),
+      unit: unitFor(units, f),
       preferredShopIds: [f.shopId],
       photoFileId,
       links: [f.link],
-      note: `From your ${f.shopName} favourites. Give it a plain name ("Mushrooms") and say what it's counted in; saving links it to this ${f.shopName} product.`,
+      note: `From your ${f.shopName} favourites. Give it a plain name ("Mushrooms") and say what it's bought in; saving links it to this ${f.shopName} product.`,
       onSaved: (productId) => call('POST', `/pending/${encodeURIComponent(f.id)}/added`, { productId }),
     });
   });
@@ -819,7 +828,7 @@ function FavouritesPending() {
               <span className="item-name">{f.name}</span>
               <span className="item-meta">
                 <a href={f.link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{f.shopName}</a>
-                {f.packSize ? ` · ${sizeText(f.packSize)}` : ''}{f.price !== null ? ` · ${money(f.price, 'GBP')}` : ''}{f.loyaltyPrice !== null ? ` (${money(f.loyaltyPrice, 'GBP')} with card)` : ''}
+                {f.packSize ? ` · ${sizeText(units, f.packSize)}` : ''}{f.price !== null ? ` · ${money(f.price, 'GBP')}` : ''}{f.loyaltyPrice !== null ? ` (${money(f.loyaltyPrice, 'GBP')} with card)` : ''}
               </span>
             </span>
             <div className="row" style={{ gap: 6, rowGap: 6, marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>

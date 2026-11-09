@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { oneBought, stockText } from '../format';
+import { qty, stockText } from '../format';
 import { Empty, ErrorBox, Header, Loading, PlaceText, ProductTile, Seg, StatusPills, useAction, useCategories, useIsDesktop } from '../ui';
 
 const STATUSES: Array<[string, string]> = [['low', 'Low'], ['expiring', 'Use soon'], ['out_of_place', 'Out of place'], ['expected', 'On the way'], ['in_stock', 'In stock'], ['to_tidy', 'To tidy']];
@@ -140,7 +140,8 @@ export function Stock() {
                         <ProductTile s={s} />
                         <span className="item-main">
                           <span className="item-name">{s.product.name}</span>
-                          <span className="item-meta">{s.product.aliases[0] ? `${s.product.aliases.slice(0, 2).join(', ')}` : s.category?.name}<span className="m-place">{s.places[0] ? <> · <PlaceText p={s.places[0]} /></> : null}</span></span>
+                          {/* To tidy says why: what the upgrade wants looked at, or no place or type yet. */}
+                          <span className="item-meta">{status === 'to_tidy' ? (s.product.needsCheck ?? (!s.category ? 'No type yet' : 'Some of it has no place yet')) : <>{s.product.aliases[0] ? `${s.product.aliases.slice(0, 2).join(', ')}` : s.category?.name}<span className="m-place">{s.places[0] ? <> · <PlaceText p={s.places[0]} /></> : null}</span></>}</span>
                         </span>
                         <span className="col-place">{s.places[0] ? <PlaceText p={s.places[0]} /> : '—'}</span>
                         <span className="item-side"><span className="qty">{stockText(s)}</span><StatusPills s={s} /></span>
@@ -168,12 +169,12 @@ function StockPane({ s }: { s: ProductSummary }) {
       <dl className="kv">
         <dt>Usually</dt><dd>{s.places[0] ? <PlaceText p={s.places[0]} /> : 'No place set'}</dd>
         {s.nowIn[0] && <><dt>Now in</dt><dd>{s.nowIn[0].path}</dd></>}
-        {s.product.minQuantity !== null && <><dt>Low below</dt><dd>{s.product.minQuantity}</dd></>}
+        {s.product.minQuantity !== null && <><dt>Low below</dt><dd>{qty(s.product.minQuantity, s.product.unit)}</dd></>}
       </dl>
       {s.product.notes && <p className="small muted">{s.product.notes}</p>}
       <div className="btnrow">
         <button className="btn small" type="button" disabled={busy || s.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: s.product.id, quantity: 1 }), (r) => `Used 1 · ${stockText(r)}`)}><Icon name="minus" size="sm" />Use</button>
-        <button className="btn small primary" type="button" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1, unit: oneBought(s.product).unit }), (r) => `Added ${oneBought(s.product).text} · ${stockText(r)}`)}><Icon name="plus" size="sm" />Add</button>
+        <button className="btn small primary" type="button" disabled={busy} onClick={() => run(() => api.stock.add({ productId: s.product.id, quantity: 1 }), (r) => `Added ${qty(1, s.product.unit)} · ${stockText(r)}`)}><Icon name="plus" size="sm" />Add</button>
       </div>
       <Link className="link small" to={`/products/${s.product.id}?add=elsewhere`}>Add at another place</Link>
       <Link className="btn block" to={`/products/${s.product.id}`}>Open full page<Icon name="chev" size="sm" /></Link>

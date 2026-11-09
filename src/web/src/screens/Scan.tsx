@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { IdentifyResult, LookupResult, Place, ProductSummary } from '@larder/core';
+import { isLoose, parseAmount, type IdentifyResult, type LookupResult, type Place, type ProductSummary } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
 import { plural, qty, stockText } from '../format';
@@ -9,6 +9,12 @@ import { readBarcode, useBarcodeScanner } from '../components/useBarcodeScanner'
 import { grabFrame } from '../components/camera';
 import { usePhotoReader, type PhotoReading } from '../components/photoReader';
 import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
+import { UnitPicker } from '../components/UnitPicker';
+import { notBoughtIn } from '../components/ProductForm';
+import { useUnits } from '../units';
+
+/** What new things are most often bought in, as chips on the card; More… has the rest of the list. */
+const CHIPS = ['box', 'bag', 'jar', 'bottle', 'carton', 'tin', 'pack', 'each'];
 
 type Mode = 'add' | 'use' | 'move' | 'putaway' | 'look';
 const MODES: Array<[Mode, string]> = [['add', 'Add'], ['use', 'Use'], ['move', 'Move'], ['putaway', 'Put away'], ['look', 'Look up']];
@@ -376,19 +382,18 @@ function ProductResult({ s, variantName, code, mode, target, onDone, pending, se
   }
   const use = mode === 'use';
   const available = s.product.rechargeable ? (s.charged ?? 0) : s.inStock;
-  // A scanned barcode is on the box, so Add counts boxes (1 box = 80 tea bags); Use counts tea bags.
-  const pack = !use ? s.product.pack ?? null : null;
-  const added = pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, s.product.unit)})` : qty(n, s.product.unit);
+  // Add and Use count whole ones of what it's bought in: the barcode is on the box.
+  const added = qty(n, s.product.unit);
   return (
     <div className="sheet-card">
       {header}
       <p className="small"><span className="pill p-ok">In Larder</span> <span className="muted">You have {stockText(s)}.{s.status.low ? ' Running low.' : ''}</span></p>
-      <div className="row" style={{ justifyContent: 'space-between' }}><b>{pack ? `How many ${plural(pack.name, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><b>{plural(s.product.unit, 2) ? `How many ${plural(s.product.unit, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={use ? Math.max(available, 0.1) : 99999} label="quantity" /></div>
       {!use && <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (use && available <= 0)} onClick={() => run(
-          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId, ...(pack ? { unit: pack.name } : {}) })),
+          () => (use ? api.stock.use({ productId: s.product.id, quantity: n }) : api.stock.add({ productId: s.product.id, quantity: n, placeId })),
           (x) => `${use ? (s.product.rechargeable ? 'Marked flat' : 'Used') : 'Added'} ${use ? qty(n, s.product.unit) : added} · ${stockText(x)} now. Ready for the next scan.`,
         ).then((x) => x && onDone())}>
           {use ? (s.product.rechargeable ? `Mark ${n} flat` : `Use ${qty(n, s.product.unit)}`) : `Add ${added}`}
@@ -456,9 +461,15 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const places = usePlaces();
   const { run, busy } = useAction();
   const photoUrl = usePhotoUrl(photo);
+  const units = useUnits();
   const [name, setName] = useState(reading?.name ?? external?.name ?? '');
   const [choice, setChoice] = useState<string>(suggestions[0] ? suggestions[0].product.id : 'new');
-  const [n, setN] = useState(1);
+  // Bought in, and its pack size as the AI or the barcode database read it ("400 g", "20 tea bags"): is it a box or a weight?
+  const printed = parseAmount(units, external?.quantityText);
+  const [boughtIn, setBoughtIn] = useState<string>(reading?.boughtIn ?? 'each');
+  const [packSize, setPackSize] = useState<{ amount: number; unit: string } | null>(reading?.packSize ?? (printed ? { amount: printed.amount, unit: printed.unit } : null));
+  // A multipack of separate things is that many added: a 4-pack of tins is 4 tins.
+  const [n, setN] = useState(printed && printed.count > 1 ? printed.count : 1);
   const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
   const [shopId, setShopId] = useState<string | null>(reading?.shop?.id ?? null);
   const dq = useDebounced(name.trim(), 250);
@@ -476,8 +487,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const brand = reading?.brand ?? (external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : null);
   const adding = mode === 'add';
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
-  // A barcode is on the pack, so Add counts packs: the item's own, or the one the AI worked out for a new item.
-  const pack = into ? into.product.pack ?? null : reading?.pack ?? null;
+  // Add counts whole ones of what it's bought in: the item's, or what's picked here for a new one.
+  const unit = into ? into.product.unit : boughtIn;
+  const fits = !!packSize && packSize.unit !== boughtIn && !isLoose(units, { unit: boughtIn });
 
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
@@ -489,7 +501,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   async function save() {
     const fields = {
       name: name.trim(),
-      ...(reading ? { categoryId: reading.categoryId, unit: reading.unit, pack: reading.pack ?? null, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
+      unit: boughtIn,
+      packSize: fits ? packSize: null,
+      ...(reading ? { categoryId: reading.categoryId, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
       preferredShopIds: shopId ? [shopId] : [],
     };
     const res = await run(async () => {
@@ -515,9 +529,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
         if (!item.product.photoFileIds.length) await api.products.update(productId, { photoFileIds: [id] });
         if (variantId && !item.variants.find((v) => v.id === variantId)?.photoFileId) await api.products.updateVariant(variantId, { photoFileId: id });
       }
-      const after = adding ? await api.stock.add({ productId, quantity: n, placeId, ...(pack ? { unit: pack.name } : {}) }) : null;
+      const after = adding ? await api.stock.add({ productId, quantity: n, placeId }) : null;
       return { identified, after, productId };
-    }, (x) => (adding && x.after ? `Added ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, x.after.product.unit)})` : qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
+    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
     if (!res) return;
     if (adding || !res.identified) onDone();
     else onIdentified(res.identified);
@@ -543,7 +557,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
                 <Fragment key={x.url}>{i ? (i === all.length - 1 ? ' and ' : ', ') : ''}<a href={x.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{x.name}</a></Fragment>
               ))}</> : null}
               .{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}
-              {choice === 'new' && (reading.unit !== 'each' || reading.pack) && <> Counted in {plural(reading.unit, 2)}{reading.pack ? `, comes in ${plural(reading.pack.name, 2)} of ${reading.pack.holds}` : ''}: change it later on the item’s Edit page.</>}
+
             </>
           ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
             <>
@@ -574,19 +588,37 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
           </div>
         </div>
       )}
+      {choice === 'new' && (
+        <div className="field"><span>Bought in</span>
+          <div className="chips wrap">
+            {CHIPS.map((k) => <button key={k} type="button" className={`chip ${boughtIn === k ? 'on' : ''}`} aria-pressed={boughtIn === k} onClick={() => setBoughtIn(k)}>{units.find(k)?.one ?? k}</button>)}
+            {!CHIPS.includes(boughtIn) && <span className="chip on">{units.find(boughtIn)?.one ?? boughtIn}</span>}
+            <UnitPicker value={null} onChange={setBoughtIn} kinds={['count', 'weight', 'volume']} exclude={notBoughtIn(units)} label="Bought in" empty="More…" />
+          </div>
+          {!isLoose(units, { unit: boughtIn }) && (
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <span className="small">Pack size</span>
+              <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packSize?.amount ?? ''} aria-label="Pack size" placeholder="20"
+                onChange={(e) => setPackSize(Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: packSize?.unit ?? 'g' } : null)} />
+              <UnitPicker value={packSize?.unit ?? null} onChange={(k) => setPackSize({ amount: packSize?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
+              {packSize && !fits && <small style={{ color: 'var(--low)' }}>It's bought in {plural(boughtIn, 2) || boughtIn}, so the pack size can't be in them too.</small>}
+            </div>
+          )}
+        </div>
+      )}
       {reading?.shop && !shopId && choice === 'new' && (
         <p className="small muted" style={{ margin: 0 }}>{reading.shop.name}’s own brand, and {reading.shop.name} isn’t one of your shops. <button type="button" className="link small" disabled={busy} onClick={() => void addShop(reading.shop!)}>Add {reading.shop.name}</button></p>
       )}
       {adding && (
         <>
-          <div className="row" style={{ justifyContent: 'space-between' }}><b>{pack ? `How many ${plural(pack.name, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={99999} label="quantity" /></div>
+          <div className="row" style={{ justifyContent: 'space-between' }}><b>{plural(unit, 2) ? `How many ${plural(unit, 2)}?` : 'How many?'}</b><Stepper value={n} onChange={setN} min={0.1} max={99999} label="quantity" /></div>
           <WhereLine placeId={placeId} onChange={setPlaceId} places={places} />
         </>
       )}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
         <button type="button" className="btn primary" disabled={busy || (choice === 'new' && !name.trim())} onClick={() => void save()}>
-          {adding ? `Add ${pack ? `${qty(n, pack.name)} (${qty(n * pack.holds, into ? into.product.unit : reading?.unit ?? 'each')})` : n}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
+          {adding ? `Add ${qty(n, unit)}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
         </button>
       </div>
     </div>

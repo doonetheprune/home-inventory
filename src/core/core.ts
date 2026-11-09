@@ -6,7 +6,7 @@
  * The server, tests and modules all use the object this returns.
  */
 import { HouseholdSettings, createContext, type CoreDeps } from './services/context';
-import { createCategoryService, createPlaceService, createShopService } from './services/catalogue';
+import { createCategoryService, createPlaceService, createShopService, createUnitService } from './services/catalogue';
 import { createHomeService } from './services/home';
 import { createLookupService } from './services/lookup';
 import { createProductService } from './services/products';
@@ -26,6 +26,8 @@ export interface CoreApi {
   categories: ReturnType<typeof createCategoryService>;
   shops: ReturnType<typeof createShopService>;
   places: ReturnType<typeof createPlaceService>;
+  /** The unit list: Larder's own units and the household's words, for the converter (`toBoughtIn`) and the text helpers. */
+  units: ReturnType<typeof createUnitService>;
   products: ReturnType<typeof createProductService>;
   stock: ReturnType<typeof createStockService>;
   shopping: ReturnType<typeof createShoppingService>;
@@ -77,11 +79,13 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   const resolve = createResolver(ctx, search, lookup);
   const automation = createAutomation({ ctx, products, stock, shopping, resolve });
   const places = createPlaceService(ctx);
+  const units = createUnitService(ctx);
 
   const core: CoreApi = {
     categories,
     shops,
     places,
+    units,
     products,
     stock,
     shopping,
@@ -91,7 +95,7 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
     resolve,
     automation,
     nfc: createNfcService(ctx, products),
-    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, lookup, automation, resolve }),
+    assistant: createAssistant({ ctx, products, stock, shopping, search, categories, shops, places, lookup, units, automation, resolve }),
     settings: {
       get: () => ctx.household(),
       async update(patch) {
@@ -123,7 +127,8 @@ export async function createCore(deps: CoreDeps, options: ModuleOptions = {}): P
   await ctx.household();
   await core.instanceId();
   await categories.ensureDefaults();
-  await products.upgradeStored();
+  // After the modules start, so they hear `product.recounted` and rescale their own numbers.
   await modules.start(core);
+  await products.upgradeStored();
   return core;
 }

@@ -11,7 +11,7 @@ add_stock:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1), or in `unit`"
+      description: "How many, in what the item is bought in (default 1), or in `unit`"
       required: false
       default: 1
       selector:
@@ -60,7 +60,7 @@ add_stock:
         text: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -84,7 +84,7 @@ use_stock:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit, or in `unit`. Default 1, or, when this starts a new one of something with a usage, its usual amount (2 lenses)"
+      description: "How many, in what the item is bought in, or in `unit`. Default 1 (a whole one), or, when this starts a new one of something with a usage, its usual amount (2 lenses)"
       required: false
       selector:
         number:
@@ -111,7 +111,7 @@ use_stock:
         text: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -159,7 +159,7 @@ move_item:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many (default all of it), in the item's own unit or in `unit`"
+      description: "How many (default all of it), in what the item is bought in or in `unit`"
       required: false
       selector:
         number:
@@ -168,7 +168,7 @@ move_item:
           step: "any"
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -229,7 +229,7 @@ add_expected:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1), or in `unit`"
+      description: "How many, in what the item is bought in (default 1), or in `unit`"
       required: false
       default: 1
       selector:
@@ -257,7 +257,7 @@ add_expected:
         date: {}
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -356,7 +356,7 @@ mark_arrived:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many of the item arrived (default all expected), in its own unit or in `unit`"
+      description: "How many of the item arrived (default all expected), in what it's bought in or in `unit`"
       required: false
       selector:
         number:
@@ -365,7 +365,7 @@ mark_arrived:
           step: "any"
     unit:
       name: "Unit"
-      description: "What the quantity is in, if not the item's own unit: its pack, e.g. \"box\" (1 box = 20 tea bags)"
+      description: "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)"
       required: false
       selector:
         text: {}
@@ -431,7 +431,7 @@ mark_charged:
         text: {}
     quantity:
       name: "Quantity"
-      description: "How many, in the item's own unit (default 1), or in `unit`"
+      description: "How many, in what the item is bought in (default 1), or in `unit`"
       required: false
       default: 1
       selector:

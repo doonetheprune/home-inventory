@@ -180,6 +180,9 @@ export function createMemoryStorage(): Storage {
       for (const e of changes.put ?? []) if (!e.id || !e.productId) throw new Error('Stock entry needs an id and productId');
       for (const e of changes.put ?? []) stock.raw().set(e.id, clone(e));
       for (const id of changes.remove ?? []) stock.raw().delete(id);
+      for (const r of changes.rescale ?? []) {
+        for (const m of movements) if (m.productId === r.productId) m.quantity = Math.round(m.quantity * r.factor * 1000) / 1000;
+      }
       movements.push(...(changes.movements ?? []).map(clone));
       for (const p of changes.products ?? []) products.raw().set(p.id, clone(p));
     },

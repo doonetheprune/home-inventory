@@ -3,7 +3,7 @@
  * against these, so they also document the API.
  */
 import { z } from 'zod';
-import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, PurchaseEvidence, Shop, Variant } from './model';
+import { Category, Charge, ExpectedInfo, Id, IsoDate, Place, Product, PurchaseEvidence, Shop, UnitAmount, Variant } from './model';
 
 /**
  * A partial version of an object schema for PATCH requests, with defaults
@@ -46,23 +46,21 @@ export const GridCreate = z.object({
 });
 export type GridCreate = z.input<typeof GridCreate>;
 
-export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt: true });
+export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  /** What one weighs or holds: g, kg, ml, L or pints. Kept in g or ml (1 kg as 1000 g). Worked out from the pack size when that's an amount. */
+  weight: UnitAmount.nullable().default(null),
+});
 export type ProductCreate = z.input<typeof ProductCreate>;
 export const ProductPatch = patchOf(ProductCreate);
 
-/**
- * Count what's inside: what it was counted in becomes its pack, and every number is
- * multiplied by how many one holds (2 boxes become 40 tea bags).
- */
-export const Recount = z.object({
-  /** What to count now, e.g. "tea bag". */
-  unit: z.string().trim().min(1).max(20),
-  /** How many of those one of the old holds, e.g. 20. */
-  holds: z.number().gt(1).max(100000),
-  /** What one of the old is called, e.g. "box". Defaults to what it was counted in (needed when that was "each"). */
-  pack: z.string().trim().min(1).max(30).optional(),
+/** A count word the household adds to the unit list (Settings → Units): its singular and plural. */
+export const UnitCreate = z.object({
+  /** One of it, e.g. "sleeve". */
+  one: z.string().trim().min(1).max(30),
+  /** Several, e.g. "sleeves". */
+  many: z.string().trim().min(1).max(30),
 });
-export type Recount = z.input<typeof Recount>;
+export type UnitCreate = z.input<typeof UnitCreate>;
 
 export const VariantCreate = Variant.omit({ id: true, productId: true, createdAt: true });
 export const VariantPatch = patchOf(VariantCreate);
@@ -85,7 +83,7 @@ export const StockAdd = z.object({
   /** Rechargeables only. Defaults to charged. */
   charge: Charge.optional(),
   note: z.string().max(200).optional(),
-  /** What `quantity` is in: the item's own unit (default) or its pack's name ("box": 1 box = 20 tea bags). */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack ("tea bag"), or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
 });
 export type StockAdd = z.input<typeof StockAdd>;
@@ -102,7 +100,7 @@ export const StockUse = z.object({
    * Without Larder taking them out, using one with a usage always starts one.
    */
   open: z.boolean().optional(),
-  /** What `quantity` is in: the item's own unit (default) or its pack's name. */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack, or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
 });
 export type StockUse = z.input<typeof StockUse>;
@@ -146,7 +144,7 @@ export const StockExpect = z.object({
   placeId: Id.nullable().optional(),
   /** What the whole line cost, when the order says: kept so the purchase is recorded with its price when it arrives. */
   price: z.number().min(0).nullable().optional(),
-  /** What `quantity` is in: the item's own unit (default) or its pack's name. */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack, or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
   /**
    * Not confirmed yet (a filled online basket before checkout): a pending order. Without it,

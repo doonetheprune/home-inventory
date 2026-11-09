@@ -1,5 +1,5 @@
 /** Builds a core on in-memory adapters with a fixed clock, for fast tests. */
-import { createCore, type CoreApi, type HomeAssistantPort, type ModuleDefinition, type Storage } from '@larder/core';
+import { createCore, type CoreApi, type HomeAssistantPort, type ModuleDefinition, type Product, type Storage } from '@larder/core';
 import { createMemoryStorage } from '../src/adapters/storage-memory';
 import { createMemoryFileStore } from '../src/adapters/files-memory';
 import { createMemorySearchIndex } from '../src/adapters/search-memory';
@@ -36,4 +36,13 @@ export async function category(core: CoreApi, name: string) {
   const c = (await core.categories.list()).find((x) => x.name === name);
   if (!c) throw new Error(`No category ${name}`);
   return c;
+}
+
+/**
+ * Saves an item the way 0.9.2 did: what it was counted in, with `pack` for what it came in, and no
+ * pack size, Weight or needsCheck. Starting Larder again on the same storage runs the upgrade on it.
+ */
+export async function saveAs092(storage: Storage, p: Product, old: Record<string, unknown>): Promise<void> {
+  const { packSize: _c, weight: _w, needsCheck: _n, ...rest } = p;
+  await storage.products.put({ ...rest, pack: null, ...old } as unknown as Product);
 }

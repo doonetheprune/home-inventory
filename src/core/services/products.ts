@@ -1,12 +1,78 @@
 /** Products (generic items like "milk") and their variants (brands, packs, barcodes). */
 import { z } from 'zod';
-import { Product, Variant, type ProductDetail, type ProductSummary, type StockEntryView } from '../model';
-import { ProductCreate, ProductPatch, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
+import { Product, StockEntry, Variant, type Movement, type ProductDetail, type ProductSummary, type StockEntryView } from '../model';
+import { ProductCreate, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
-import { addDays, newId, pluralWord, unique } from '../util';
-import { sameUnit, singular } from './packs';
+import { addDays, newId, roundQty, unique } from '../util';
+import { amountText, asWeight, canConvert, isCount, isLoose, toBoughtIn, unitKeyOf, unitOf, weightText, type UnitAmount, type Units } from './units';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
+
+/** A change to a product: any of its fields, as given (defaults inside a usage are filled in). */
+type ProductUpdate = Partial<z.input<typeof ProductCreate>>;
+
+/** Fields this version of Larder knows about; a stored record may have others (from an older version, not upgraded yet). */
+const KNOWN = new Set(Object.keys(Product.shape));
+
+/** A record as an older version saved it: 0.8's "each one lasts", 0.9's pack it came in, and #36's size (0.10.0, never released). */
+type Stored = Partial<Product> & Pick<Product, 'id' | 'name'> & {
+  lastsDays?: number | null;
+  autoUse?: boolean;
+  pack?: { name: string; holds: number } | null;
+  size?: { amount: number; unit: string } | null;
+};
+
+/**
+ * 0.10.0's upgrade of one item (docs/plans/units.md): what it's bought in and its pack size,
+ * from what it was counted in and the pack it came in. Sets `next`'s unit, packSize, weight and
+ * needsCheck, and turns its usage round; says what everything counted in the old unit is
+ * multiplied by (1/20 for a box of 20 tea bags, 1000 for kg to g) and the note for its history.
+ */
+function boughtIn(units: Units, raw: Stored, next: Product): { factor: number; note: string } {
+  const pack = raw.pack ?? null;
+  const counted = units.find(raw.unit || 'each');
+  const was = (raw.unit || 'each').trim();
+  // #36 (never released) kept what one weighs as `size`, by what it was counted in.
+  let weight = raw.size ? (asWeight(units, raw.size) as Product['weight']) : (next.weight ?? null);
+  next.packSize = null;
+  next.needsCheck = null;
+  delete (next as Stored).pack;
+  delete (next as Stored).size;
+  if (pack) {
+    // A box of 20 tea bags: bought in boxes of 20 tea bags. Things counted one by one are pieces.
+    const box = units.find(pack.name);
+    const inside = counted?.key === 'each' ? 'piece' : (counted?.key ?? unitKeyOf(units, was));
+    next.unit = box?.key ?? unitKeyOf(units, pack.name);
+    next.packSize = { amount: pack.holds, unit: inside };
+    const measured = counted && counted.kind !== 'count' ? asWeight(units, next.packSize) : null;
+    weight = measured ? (measured as Product['weight']) : weight ? { ...weight, amount: roundQty(weight.amount * pack.holds) } : null;
+    next.weight = weight;
+    // A usage in what it was counted in is now in what's in its pack: still 1 tea bag a day.
+    if (next.usage && !next.usage.unit) next.usage = { ...next.usage, unit: inside };
+    const unlisted = [box ? null : pack.name.trim(), counted ? null : was].find(Boolean);
+    next.needsCheck = unlisted
+      ? `"${unlisted}" isn't on the unit list. Pick what it's bought in, and its pack size.`
+      : `Now counted in ${box!.many} of ${amountText(units, pack.holds, inside)}. If you count them one by one instead, change Bought in and correct the count.`;
+    return { factor: 1 / pack.holds, note: `Now bought in ${box?.many ?? pack.name} of ${amountText(units, pack.holds, inside)}` };
+  }
+  if (!counted) {
+    next.unit = was;
+    next.weight = weight;
+    next.needsCheck = `"${was}" isn't on the unit list. Pick what it's bought in, and its pack size.`;
+    return { factor: 1, note: '' };
+  }
+  next.unit = counted.key;
+  if (counted.kind === 'count') {
+    next.weight = weight;
+    return { factor: 1, note: '' };
+  }
+  // Bought loose: kept in g or ml, so 1.6 kg is 1600 g. A usage in what it was counted in follows.
+  next.unit = counted.kind === 'weight' ? 'g' : 'ml';
+  next.weight = null;
+  const f = counted.factor!;
+  if (next.usage && !next.usage.unit) next.usage = { ...next.usage, amount: roundQty(next.usage.amount * f) };
+  return { factor: f, note: f === 1 ? '' : `Now counted in ${next.unit}` };
+}
 
 export function createProductService(ctx: CoreContext, validateFields: (fields: Record<string, unknown>) => Record<string, unknown>) {
   async function assertRefs(p: Pick<Product, 'categoryId' | 'preferredShopIds' | 'defaultPlaceId' | 'keptInPlaceIds'>) {
@@ -16,12 +82,86 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     for (const id of p.keptInPlaceIds) if (!(await ctx.storage.places.get(id))) throw new NotFoundError('Place', id);
   }
 
+  /** A Weight as given (g, kg, ml, L or pints), as it's kept: in g or ml. */
+  function weightIn(units: Units, w: UnitAmount | null | undefined): Product['weight'] | undefined {
+    if (!w) return w;
+    const kept = asWeight(units, w);
+    if (!kept) throw new ValidationError(`A Weight is in g, kg, ml, L or pints, not ${unitOf(units, w.unit).many}.`);
+    return kept as Product['weight'];
+  }
+
+  /**
+   * What it's bought in, its pack size, its Weight and what its usage is in, checked and
+   * tidied (docs/plans/units.md). `given` is what this change says; the rest is carried over from
+   * `before` (null for a new item). This is the only place `weight` is written.
+   */
+  function checkUnits(units: Units, p: Product, given: ProductUpdate, before: Product | null): Product {
+    const next = { ...p };
+    const name = p.name.trim();
+    // Bought in: a key from the list. An old item's unit that isn't on the list keeps working until it's changed.
+    if (!before || given.unit !== undefined) {
+      const u = unitOf(units, p.unit);
+      next.unit = u.key;
+      // Things bought loose are kept in g or ml: kg is for typing, so "low below 2 kg" is 2000 g. Numbers not given now stay as they are.
+      if (u.kind !== 'count' && u.factor !== 1) {
+        next.unit = u.kind === 'weight' ? 'g' : 'ml';
+        const times = (n: number | null | undefined) => (n === null || n === undefined ? null : roundQty(n * u.factor!));
+        if (given.minQuantity !== undefined) next.minQuantity = times(given.minQuantity);
+        if (given.stockUpTo !== undefined) next.stockUpTo = times(given.stockUpTo);
+        // A usage in what it's bought in is kept as it was said: 0.1 kg a day.
+        if (given.usage && !given.usage.unit && next.usage) next.usage = { ...next.usage, unit: u.key };
+      }
+    }
+    // Now bought in what was in its pack (boxes of 20 tea bags, now bought in tea bags): the pack size goes, and a usage in tea bags is in what it's bought in.
+    const had = before?.packSize ?? null;
+    if (before && given.unit !== undefined && given.packSize === undefined && had && unitKeyOf(units, had.unit) === next.unit) next.packSize = null;
+
+    if (isLoose(units, next)) {
+      if (given.packSize) throw new ValidationError(`${name} is bought loose, in ${next.unit}, so it has no pack size: leave Pack size empty.`);
+      if (given.weight) throw new ValidationError(`${name} is bought loose, in ${next.unit}, so it has no Weight: its stock is already in ${next.unit}.`);
+      next.packSize = null;
+      next.weight = null;
+    }
+    // Pack size: a count from the list (not each, nor what it's bought in), or a weight or volume.
+    if (next.packSize) {
+      const c = unitOf(units, next.packSize.unit);
+      if (c.key === 'each') throw new ValidationError('Give the pack size with a unit from the list, e.g. 20 tea bags or 6 eggs, or leave Pack size empty.');
+      if (c.key === next.unit) throw new ValidationError(`${name} is bought in ${c.many}, so its pack size can't be in ${c.many} too. Give what's in one (20 tea bags, say), or leave Pack size empty.`);
+      next.packSize = { amount: next.packSize.amount, unit: c.key };
+    }
+    // Weight: from the pack size when that's an amount, always, so the two can't disagree; cleared when the pack size stops being one; otherwise as given.
+    const fromPackSize = next.packSize && !isCount(units, next.packSize.unit) ? asWeight(units, next.packSize) : null;
+    if (fromPackSize) {
+      const typed = given.weight ? weightIn(units, given.weight) : null;
+      if (typed && (typed.unit !== fromPackSize.unit || Math.abs(typed.amount - fromPackSize.amount) > 0.001)) {
+        throw new ValidationError(`${name} has a pack size of ${amountText(units, next.packSize!.amount, next.packSize!.unit)}, so its Weight is ${weightText(fromPackSize)}, worked out from that. Change the pack size instead.`);
+      }
+      next.weight = fromPackSize as Product['weight'];
+    } else if (given.weight !== undefined) next.weight = weightIn(units, given.weight) ?? null;
+    else if (had && !isCount(units, had.unit)) next.weight = null;
+
+    // We use: in what it's bought in (null), in what's in its pack, or in a weight or volume Larder can work out.
+    if (next.usage?.unit) {
+      const k = unitOf(units, next.usage.unit).key;
+      next.usage = { ...next.usage, unit: k === next.unit ? null : k };
+      if (next.usage.unit && !canConvert(units, next, k)) {
+        try {
+          toBoughtIn(units, next, 1, k);
+        } catch (err) {
+          throw new ValidationError(`How fast it's used can't be in ${units.find(k)!.many}. ${(err as Error).message}`);
+        }
+      }
+    }
+    // "Looks right" can't clear an old unit that isn't on the list: that needs a unit from it.
+    if (given.needsCheck === null && before?.needsCheck && !units.find(next.unit)) {
+      throw new ValidationError(`"${next.unit}" isn't on the unit list, so ${name} can't be marked as looking right yet. Pick what it's bought in first.`);
+    }
+    return next;
+  }
+
   function tidy(p: Product): Product {
-    // A pack is named in the singular ("boxes" is kept as "box"), as units are said "2 boxes".
-    const pack = p.pack ? { ...p.pack, name: singular(p.pack.name) } : (p.pack ?? null);
-    if (pack && sameUnit(pack.name, p.unit)) throw new ValidationError(`A ${pack.name} can't come in ${pluralWord(pack.name, 2)}. Count what's inside (tea bags, say) and say how many a ${pack.name} holds.`);
     const aliases = unique(p.aliases.map((a) => a.trim()).filter((a) => a && a.toLowerCase() !== p.name.trim().toLowerCase()));
-    return { ...p, pack, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
+    return { ...p, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
   }
 
   async function assertBarcodesFree(barcodes: string[], exceptVariantId?: string) {
@@ -35,11 +175,13 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
   }
 
   // Reads the product and writes it back, so callers run it in the write queue (ctx.exclusive).
-  async function updateNow(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
+  async function updateNow(id: string, raw: ProductUpdate): Promise<Product> {
     const cur = await ctx.storage.products.get(id);
     if (!cur) throw new NotFoundError('Product', id);
+    const units = await ctx.units();
+    const patch = { ...raw, ...(raw.weight !== undefined ? { weight: weightIn(units, raw.weight) } : {}) };
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
-    const next = tidy(Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }));
+    const next = tidy(checkUnits(units, Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }), patch, Product.parse(cur)));
     if (patch.inUseSince === undefined) {
       // Switching on taking them out counts from today, unless the one in use still has days left: an older
       // start was already taken out by Use, so counting from it would take the days since twice.
@@ -51,7 +193,9 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       if (!next.usage && cur.usage) next.inUseSince = null;
     }
     await assertRefs(next);
-    await ctx.storage.products.put(next);
+    // A record an older version saved keeps what this version doesn't know (a module's change at start-up can come before upgradeStored).
+    const older = Object.fromEntries(Object.entries(cur).filter(([k]) => !KNOWN.has(k)));
+    await ctx.storage.products.put({ ...older, ...next });
     ctx.publish('product.updated', { id, name: next.name });
     return next;
   }
@@ -75,8 +219,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
             case 'expected': return s.status.hasExpected;
             case 'wish': return s.product.wish;
             case 'in_stock': return !s.product.wish && s.inStock > 0;
-            // Added in a hurry (scanned and gone): stock with no place, or no type yet.
-            case 'to_tidy': return !s.product.wish && (!s.product.categoryId || (world.entriesByProduct.get(s.product.id) ?? []).some((e) => e.status === 'in_stock' && !e.placeId));
+            // Added in a hurry (scanned and gone): stock with no place, or no type yet; or an upgrade wants it looked at.
+            case 'to_tidy': return !!s.product.needsCheck || (!s.product.wish && (!s.product.categoryId || (world.entriesByProduct.get(s.product.id) ?? []).some((e) => e.status === 'in_stock' && !e.placeId)));
             default: return !s.product.wish;
           }
         })
@@ -115,10 +259,12 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     },
 
     async create(input: z.input<typeof ProductCreate>): Promise<Product> {
-      const data = ProductCreate.parse(input);
+      const units = await ctx.units();
+      const parsed = ProductCreate.parse(input);
+      const data = { ...parsed, weight: weightIn(units, parsed.weight) ?? null };
       await assertRefs(data);
       const now = ctx.now();
-      const product = tidy(Product.parse({ ...data, id: newId(), createdAt: now, updatedAt: now }));
+      const product = tidy(checkUnits(units, Product.parse({ ...data, id: newId(), createdAt: now, updatedAt: now }), data, null));
       if (product.usage?.auto && !product.inUseSince) product.inUseSince = ctx.today();
       if (product.rechargeable && product.unit === 'each') product.unit = 'battery';
       await ctx.storage.products.put(product);
@@ -126,7 +272,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       return product;
     },
 
-    async update(id: string, patch: z.infer<typeof ProductPatch>): Promise<Product> {
+    async update(id: string, patch: ProductUpdate): Promise<Product> {
       return ctx.exclusive(() => updateNow(id, patch));
     },
 
@@ -165,28 +311,59 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     },
 
     /**
-     * Brings items saved by older versions up to date, through the Storage port (so every
-     * storage adapter is covered). Safe to run at every start: it only writes records that
-     * still have the old fields, or lack the new ones. 0.9.0: "Each one lasts N days"
-     * (`lastsDays`, `autoUse`) became a usage of 1 every N days; as low no longer means "runs
-     * out within the warning days", those items get a minimum that warns no later than before.
-     * A record the current schema can't read is written back as it is, never lost.
+     * Brings items saved by older versions up to date, through the Storage port (so every storage
+     * adapter is covered). Safe to run at every start: a record already up to date is left alone.
+     * It runs after the modules have started, so they hear `product.recounted` and rescale their
+     * own numbers, and each item is read and written in the write queue. A record the current
+     * schema can't read is written back as it is, never lost.
+     * - 0.9.0: "Each one lasts N days" (`lastsDays`, `autoUse`) became a usage of 1 every N days;
+     *   as low no longer means "runs out within the warning days", those items get a minimum that
+     *   warns no later than before.
+     * - 0.10.0 (docs/plans/units.md): the unit word becomes a key from the list; kg and L become g
+     *   and ml; a pack is turned round (80 tea bags in boxes of 20 are 4 boxes of 20 tea bags); #36's `size` becomes `weight`. Stock, orders, the minimum, the stock-up amount
+     *   and history follow. A unit that isn't on the list is kept, and the item flagged
+     *   (`needsCheck`) for the owner to fix, as is a pack turned round.
      */
     async upgradeStored(): Promise<number> {
-      const [all, categories, household] = await Promise.all([ctx.storage.products.list(), ctx.storage.categories.list(), ctx.household()]);
+      const [all, categories, household, units] = await Promise.all([ctx.storage.products.list(), ctx.storage.categories.list(), ctx.household(), ctx.units()]);
       let changed = 0;
-      for (const raw of all as Array<Product & { lastsDays?: number | null; autoUse?: boolean }>) {
-        if (!('lastsDays' in raw) && !('autoUse' in raw) && 'pack' in raw && 'usage' in raw) continue;
-        const { lastsDays, autoUse, ...rest } = raw;
-        const next: Product = { ...rest, pack: rest.pack ?? null, usage: rest.usage ?? null, inUseSince: rest.inUseSince ?? null };
-        if (lastsDays && !rest.usage) {
-          next.usage = { amount: 1, everyDays: lastsDays, auto: !!autoUse };
-          const warn = categories.find((c) => c.id === rest.categoryId)?.warnDays ?? household.expiryWarningDays;
-          next.minQuantity = Math.max(rest.minQuantity ?? 0, Math.floor(warn / lastsDays) + 1);
-        }
-        const parsed = Product.safeParse(next);
-        await ctx.exclusive(() => ctx.storage.products.put(parsed.success ? parsed.data : next));
-        changed++;
+      for (const { id } of all) {
+        const recounted = await ctx.exclusive(async () => {
+          const raw = (await ctx.storage.products.get(id)) as Stored | null;
+          // Up to date: saved by this version (it knows needsCheck), with nothing older left.
+          if (!raw || ('needsCheck' in raw && !('lastsDays' in raw) && !('autoUse' in raw) && !raw.pack && !raw.size)) return null;
+          changed++;
+          const { lastsDays, autoUse, ...rest } = raw;
+          const next = { ...rest, usage: rest.usage ?? null, inUseSince: rest.inUseSince ?? null } as Product;
+          if (lastsDays && !rest.usage) {
+            next.usage = { amount: 1, everyDays: lastsDays, auto: !!autoUse, unit: null };
+            const warn = categories.find((c) => c.id === rest.categoryId)?.warnDays ?? household.expiryWarningDays;
+            next.minQuantity = Math.max(rest.minQuantity ?? 0, Math.floor(warn / lastsDays) + 1);
+          }
+          const change = 'needsCheck' in raw && !raw.pack && !raw.size ? { factor: 1, note: '' } : boughtIn(units, raw, next);
+          const write = (p: Product) => {
+            const parsed = Product.safeParse(p);
+            return parsed.success ? parsed.data : p;
+          };
+          if (change.factor === 1) {
+            await ctx.storage.products.put(write(next));
+            return null;
+          }
+          // Everything counted in the old unit is now in what it's bought in: 80 tea bags are 4 boxes.
+          const f = change.factor;
+          const times = (n: number | null | undefined) => (n === null || n === undefined ? null : roundQty(n * f));
+          next.minQuantity = times(next.minQuantity);
+          next.stockUpTo = times(next.stockUpTo);
+          const entries = (await ctx.storage.stock.listByProduct(id)).map((e) => StockEntry.parse({
+            ...e, quantity: roundQty(e.quantity * f),
+            // Prices are kept per one: per tea bag before, per box now.
+            expected: e.expected ? { ...e.expected, unitPrice: e.expected.unitPrice == null ? null : Math.round((e.expected.unitPrice / f) * 1_000_000) / 1_000_000 } : null,
+          }));
+          const note: Movement = { id: newId(), productId: id, entryId: null, kind: 'adjust', quantity: 0, fromPlaceId: null, toPlaceId: null, note: change.note, userId: null, at: ctx.now() };
+          await ctx.storage.applyStockChanges({ put: entries, products: [write(next)], rescale: [{ productId: id, factor: f }], movements: [note] });
+          return { productId: id, name: next.name, from: raw.unit ?? 'each', to: next.unit, factor: f };
+        });
+        if (recounted) ctx.publish('product.recounted', recounted);
       }
       return changed;
     },

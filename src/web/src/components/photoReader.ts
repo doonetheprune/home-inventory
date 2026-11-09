@@ -17,10 +17,10 @@ export interface PhotoReading {
   kind?: string | null;
   /** Brand and pack, e.g. "Heinz Baked Beanz 415 g". */
   brand: string | null;
-  /** The single thing used one at a time: "tea bag", "roll", "tin". */
-  unit: string;
-  /** What it comes in, when a pack holds several: a box of 80 tea bags. */
-  pack?: { name: string; holds: number } | null;
+  /** What it's bought in, a key from the unit list: "box", "jar", "each", or g or ml for something bought loose. */
+  boughtIn: string;
+  /** Its pack size, as printed on the pack: 20 tea bags, 400 g. */
+  packSize?: { amount: number; unit: string } | null;
   categoryId: string | null;
   shelfLifeDays: number | null;
   aliases: string[];

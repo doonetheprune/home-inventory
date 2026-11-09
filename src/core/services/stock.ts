@@ -8,10 +8,10 @@
 import type { Movement, Product, ProductSummary, StockEntry } from '../model';
 import { StockEntry as StockEntrySchema } from '../model';
 import * as In from '../inputs';
-import type { Recount, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
+import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
-import { addDays, localDate, newId, pluralWord, roundQty } from '../util';
-import { inOwnUnit, oneOf, sameUnit, singular, startsOne } from './packs';
+import { addDays, localDate, newId, roundQty } from '../util';
+import { amountText, periodsPerTake, startsOne, toBoughtIn, usageInBoughtIn } from './units';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
@@ -68,11 +68,6 @@ function sameOrder(a: string, b: string): boolean {
 }
 
 const sameSource = (a: string | undefined, b: string | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-
-function plural(n: number, unit: string): string {
-  if (n === 1 || ['L', 'ml', 'kg', 'g', 'm'].includes(unit)) return `${n} ${unit}`;
-  return `${n} ${unit.endsWith('s') ? unit : `${unit}s`}`;
-}
 
 export function createStockService(ctx: CoreContext) {
   type Txn = { world: World; product: Product; original: StockEntry[]; before: ProductSummary };
@@ -203,12 +198,15 @@ export function createStockService(ctx: CoreContext) {
       .sort((a, b) => (a.eta ?? '9999').localeCompare(b.eta ?? '9999') || a.source.localeCompare(b.source));
   }
 
+  /** An amount as what the item is bought in (the converter is the only thing that does this). */
+  const inBoughtIn = (t: Txn, quantity: number, unit: string | undefined) => toBoughtIn(t.world.units, t.product, quantity, unit);
+
   async function newEntry(t: Txn, input: ReturnType<typeof In.StockAdd.parse>): Promise<{ entry: StockEntry; move: Movement }> {
     const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
     await assertPlace(placeId);
     if (input.variantId && !(await ctx.storage.variants.get(input.variantId))) throw new NotFoundError('Variant', input.variantId);
     const expiresOn = input.expiresOn !== undefined ? input.expiresOn : t.product.shelfLifeDays ? addDays(ctx.today(), t.product.shelfLifeDays) : null;
-    const quantity = inOwnUnit(t.product, input.quantity, input.unit);
+    const quantity = roundQty(inBoughtIn(t, input.quantity, input.unit));
     const entry: StockEntry = StockEntrySchema.parse({
       id: newId(), productId: t.product.id, variantId: input.variantId ?? null, quantity, placeId,
       expiresOn, addedAt: ctx.now(), status: 'in_stock', charge: t.product.rechargeable ? (input.charge ?? 'charged') : null,
@@ -225,7 +223,7 @@ export function createStockService(ctx: CoreContext) {
     const available = roundQty(usable.reduce((n, e) => n + e.quantity, 0));
     if (input.quantity > available + EPS) {
       const what = t.product.rechargeable ? 'charged ' : '';
-      throw new ValidationError(available ? `There ${available === 1 ? 'is' : 'are'} only ${plural(available, `${what}${t.product.unit}`)} of ${t.product.name} to use.` : what ? `None of the ${t.product.name} are charged.` : `There's no ${t.product.name} left to use.`);
+      throw new ValidationError(available ? `There ${available > 0 && available <= 1 ? 'is' : 'are'} only ${what}${amountText(t.world.units, available, t.product.unit)} of ${t.product.name} to use.` : what ? `None of the ${t.product.name} are charged.` : `There's no ${t.product.name} left to use.`);
     }
     let left = input.quantity;
     const movements: Movement[] = [];
@@ -275,7 +273,7 @@ export function createStockService(ctx: CoreContext) {
       const input = In.StockUse.parse(raw);
       const t = await begin(input.productId);
       const work = t.original.map((e) => ({ ...e }));
-      const quantity = inOwnUnit(t.product, input.quantity, input.unit);
+      const quantity = roundQty(inBoughtIn(t, input.quantity, input.unit));
       const movements = takeFrom(t, work, { ...input, quantity, note: input.note ?? (input.open ? (t.product.usage ? 'Started' : 'Opened') : startsOne(t.product) ? 'Started' : undefined) });
       return commit(t, work, movements, t.product.rechargeable ? 'flat' : 'use', started(t.product, input.open));
     },
@@ -293,7 +291,7 @@ export function createStockService(ctx: CoreContext) {
           changes.set(input.productId, c);
         }
         c.productUpdate = started(c.t.product, input.open) ?? c.productUpdate;
-        c.movements.push(...takeFrom(c.t, c.next, { ...input, quantity: inOwnUnit(c.t.product, input.quantity, input.unit) }));
+        c.movements.push(...takeFrom(c.t, c.next, { ...input, quantity: roundQty(inBoughtIn(c.t, input.quantity, input.unit)) }));
       }
       return commitAll([...changes.values()]);
     },
@@ -346,7 +344,7 @@ export function createStockService(ctx: CoreContext) {
         throw new ValidationError(`There's no ${t.product.name.toLowerCase()} to move${input.fromPlaceId ? ' from there' : input.fromPlaceId === null ? ' without a place' : ''}.`);
       }
       const quantity = input.quantity ?? available;
-      if (quantity > available + EPS) throw new ValidationError(`Only ${plural(available, t.product.unit)} can be moved.`);
+      if (quantity > available + EPS) throw new ValidationError(`Only ${amountText(t.world.units, available, t.product.unit)} can be moved.`);
       let left = quantity;
       const movements: Movement[] = [];
       const leave: string[] = [];
@@ -413,7 +411,7 @@ export function createStockService(ctx: CoreContext) {
     async expect(raw: StockExpect): Promise<ProductSummary> {
       const parsed = In.StockExpect.parse(raw);
       const t = await begin(parsed.productId);
-      const input = { ...parsed, quantity: inOwnUnit(t.product, parsed.quantity, parsed.unit) };
+      const input = { ...parsed, quantity: roundQty(inBoughtIn(t, parsed.quantity, parsed.unit)) };
       const placeId = input.placeId !== undefined ? input.placeId : defaultPlace(t.world, t.product);
       await assertPlace(placeId);
       const work = t.original.map((e) => ({ ...e }));
@@ -574,57 +572,30 @@ export function createStockService(ctx: CoreContext) {
       const changes: Change[] = [];
       let taken = 0;
       for (const product of world.products) {
-        const usage = product.usage ?? null;
-        if (!usage?.auto || !product.inUseSince || product.wish || product.rechargeable || isRenewal(world, product)) continue;
+        // In what it's bought in: a little at a time for something used by what's inside or by weight
+        // (1 tea bag a day of a box of 20 is 0.05 box). One the converter can't turn round is left alone.
+        const usage = usageInBoughtIn(world.units, product);
+        if (!product.usage?.auto || !usage || !product.inUseSince || product.wish || product.rechargeable || isRenewal(world, product)) continue;
+        const k = periodsPerTake(usage.amount);
         const t = txn(world, product.id);
         const work = t.original.map((e) => ({ ...e }));
         const movements: Movement[] = [];
         let since = product.inUseSince;
         // Bounded, so a tiny amount after years off can't run away.
         for (let i = 0; i < 4000; i++) {
-          const next = addDays(since, usage.everyDays);
+          const next = addDays(since, usage.everyDays * k);
           if (next > world.today) break;
           const left = work.filter((e) => e.status === 'in_stock' && e.quantity > 0);
           const available = roundQty(left.reduce((n, e) => n + e.quantity, 0));
           if (available <= EPS) break;
           const added = left.map((e) => localDate(new Date(e.addedAt), timeZone)).sort()[0]!;
-          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(usage.amount, available), note: 'Taken by Larder' }));
+          movements.push(...takeFrom(t, work, { productId: product.id, quantity: Math.min(roundQty(usage.amount * k), available), note: 'Taken by Larder' }));
           since = added > next ? added : next;
           taken++;
         }
         if (movements.length) changes.push({ t, next: work, movements, kind: 'use', productUpdate: { inUseSince: since } });
       }
       return { taken, products: changes.length ? await commitAll(changes) : [] };
-    },
-
-    /**
-     * Count what's inside: what it was counted in becomes its pack, and the stock, orders,
-     * minimum, stock-up amount and usage are multiplied by how many one holds (2 boxes become
-     * 40 tea bags). Publishes `product.recounted`, so modules rescale their own numbers.
-     */
-    async recount(productId: string, raw: Recount): Promise<ProductSummary> {
-      const parsed = In.Recount.parse(raw);
-      // Said "tea bags", it's counted in "tea bag" (2 tea bags).
-      const input = { ...parsed, unit: oneOf(parsed.unit), pack: parsed.pack === undefined ? undefined : singular(parsed.pack) };
-      const t = await begin(productId);
-      const p = t.product;
-      if (sameUnit(input.unit, p.unit)) throw new ValidationError(`${p.name} is already counted in ${pluralWord(input.unit, 2)}.`);
-      const packName = input.pack ?? (p.unit === 'each' ? null : singular(p.unit));
-      if (!packName) throw new ValidationError(`Say what one of the ${p.name.toLowerCase()} counted so far is (a box?), so it can become the pack.`);
-      if (sameUnit(packName, input.unit)) throw new ValidationError(`A ${packName} can't come in ${pluralWord(packName, 2)}. Count what's inside (tea bags, say) and say how many a ${packName} holds.`);
-      const f = input.holds;
-      const times = (n: number | null) => (n === null ? null : roundQty(n * f));
-      const work = t.original.map((e) => ({
-        ...e, quantity: roundQty(e.quantity * f),
-        expected: e.expected ? { ...e.expected, unitPrice: e.expected.unitPrice == null ? null : Math.round((e.expected.unitPrice / f) * 1_000_000) / 1_000_000 } : null,
-      }));
-      const update: Partial<Product> = {
-        unit: input.unit, pack: { name: packName, holds: f }, minQuantity: times(p.minQuantity), stockUpTo: times(p.stockUpTo ?? null),
-        usage: p.usage ? { ...p.usage, amount: roundQty(p.usage.amount * f) } : null,
-      };
-      const s = await commit(t, work, [movement(p, 'adjust', 0, { note: `Now counted in ${pluralWord(input.unit, 2)} (1 ${packName} = ${f})` })], 'adjust', update);
-      ctx.publish('product.recounted', { productId, name: p.name, from: p.unit, to: input.unit, factor: f });
-      return s;
     },
 
     /** Deliveries on the way (confirmed), by source. */
@@ -635,7 +606,7 @@ export function createStockService(ctx: CoreContext) {
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'takeDue', 'recount'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'takeDue'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

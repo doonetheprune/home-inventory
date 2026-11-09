@@ -5,7 +5,8 @@
  */
 import type { Category, Place, PlaceRef, Product, ProductSummary, Shop, StockEntry } from '../model';
 import type { CoreContext } from './context';
-import { addDays, amount, andList, daysBetween, roundQty } from '../util';
+import { addDays, andList, daysBetween, roundQty } from '../util';
+import { amountText, usageInBoughtIn, type Units } from './units';
 
 export interface World {
   products: Product[];
@@ -17,18 +18,21 @@ export interface World {
   places: Place[];
   placeById: Map<string, Place>;
   shops: Shop[];
+  /** The unit list, for the converter. */
+  units: Units;
   today: string;
   warnDays: number;
 }
 
 export async function loadWorld(ctx: CoreContext): Promise<World> {
-  const [products, entries, categories, places, shops, settings] = await Promise.all([
+  const [products, entries, categories, places, shops, settings, units] = await Promise.all([
     ctx.storage.products.list(),
     ctx.storage.stock.list(),
     ctx.storage.categories.list(),
     ctx.storage.places.list(),
     ctx.storage.shops.list(),
     ctx.household(),
+    ctx.units(),
   ]);
   const entriesByProduct = new Map<string, StockEntry[]>();
   for (const e of entries) {
@@ -46,6 +50,7 @@ export async function loadWorld(ctx: CoreContext): Promise<World> {
     places,
     placeById: new Map(places.map((p) => [p.id, p])),
     shops,
+    units,
     today: ctx.today(),
     warnDays: settings.expiryWarningDays,
   };
@@ -77,8 +82,8 @@ export function placeRef(world: Pick<World, 'placeById'>, id: string | null): Pl
  * else, and for wish list items.
  */
 function runOut(world: World, product: Product, inStock: number): { inUseUntil: string | null; runsOutOn: string } | null {
-  // Older records have no usage.
-  const usage = product.usage ?? null;
+  // In what it's bought in, through the converter (4 g a day of a 400 g jar is 0.01 jar a day); older records have no usage.
+  const usage = usageInBoughtIn(world.units, product);
   if (!usage || product.wish) return null;
   const ends = product.inUseSince ? addDays(product.inUseSince, usage.everyDays) : null;
   const inUseUntil = ends && ends > world.today ? ends : null;
@@ -160,10 +165,10 @@ export function summarise(world: World, product: Product): ProductSummary {
  * "1 jar in Kitchen and 1 jar in Larder" across places, and "none in Garage"
  * for a place it's kept in that has run out. Empty when it has no places.
  */
-export function placesText(s: ProductSummary): string {
+export function placesText(units: Units, s: ProductSummary): string {
   const kept = s.stockByPlace ?? [];
   if (kept.length === 1 && kept[0]!.quantity > 0) return `in ${kept[0]!.path}`;
-  return andList(kept.map((x) => `${x.quantity > 0 ? amount(x.quantity, s.product.unit) : 'none'} in ${x.path}`));
+  return andList(kept.map((x) => `${x.quantity > 0 ? amountText(units, x.quantity, s.product.unit) : 'none'} in ${x.path}`));
 }
 
 /** Shops a product can come from: its preferred shops, or any shop that sells its category. */

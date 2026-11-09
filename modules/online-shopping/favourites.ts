@@ -4,7 +4,7 @@
  * remembered (by shop and code) and never come back unless the dismissal is undone.
  */
 import { z } from 'zod';
-import { NotFoundError, type ModuleContext } from '@larder/core';
+import { NotFoundError, singularGuess, type ModuleContext } from '@larder/core';
 import { PackSize, type Product as ShopProduct } from './contract';
 import type { Provider } from './providers';
 import type { Services } from './services';
@@ -59,11 +59,13 @@ const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Bo
  * one is never guessed between: they come back as options.
  */
 export function matchFavourite(item: { name: string; aliases: string[] }, favourites: PendingFavourite[]): { match: PendingFavourite | null; options: PendingFavourite[] } {
-  const named = favourites.map((f) => ({ f, words: new Set(words(f.name)) }));
+  // Plural or not ("pints" and "pint"), by the unit helpers' guess at a singular.
+  const one = (text: string) => words(text).map(singularGuess);
+  const named = favourites.map((f) => ({ f, words: new Set(one(f.name)) }));
   for (const term of [item.name, ...item.aliases]) {
-    const want = words(term);
+    const want = one(term);
     if (!want.length) continue;
-    const hits = named.filter((n) => want.every((w) => n.words.has(w) || n.words.has(`${w}s`) || (w.endsWith('s') && n.words.has(w.slice(0, -1))))).map((n) => n.f);
+    const hits = named.filter((n) => want.every((w) => n.words.has(w))).map((n) => n.f);
     if (hits.length) return { match: hits.length === 1 ? hits[0]! : null, options: hits.length === 1 ? [] : hits };
   }
   return { match: null, options: [] };
