@@ -22,6 +22,7 @@
     "test:e2e": "npm run build:web && playwright test",
     "openapi": "tsx scripts/export-openapi.ts",
     "ha:services": "tsx scripts/export-ha-services.ts",
+    "eval:assistant": "tsx scripts/assistant-eval.ts",
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
