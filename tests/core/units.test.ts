@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, containsText, fromBoughtIn, givenInText, lastsText, newUnit, periodsPerTake,
+  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, containsText, fromBoughtIn, givenInText, lastsText, newUnit, parseAmount, periodsPerTake,
   stockText, toBoughtIn, unitList, UnknownUnitError, usageInBoughtIn, usageText, weightText,
 } from '../../src/core/services/units';
 
@@ -155,5 +155,18 @@ describe('saying amounts', () => {
     const sensor = { name: 'Sensor', unit: 'sensor', usage: { amount: 1, everyDays: 14, unit: null } };
     expect([usageText(units, sensor), lastsText(units, sensor)]).toEqual(['1 sensor every 2 weeks', 'a sensor lasts 2 weeks']);
     expect(lastsText(units, { ...cheddar, usage: { amount: 50, everyDays: 1 } })).toBeNull();
+  });
+});
+
+describe('pack sizes as printed', () => {
+  it('reads an amount of a unit on the list, and how many a multipack has', () => {
+    expect(parseAmount(units, '400 g')).toEqual({ amount: 400, unit: 'g', count: 1 });
+    expect(parseAmount(units, '1,5 kg')).toEqual({ amount: 1.5, unit: 'kg', count: 1 });
+    expect(parseAmount(units, '80 pyramid tea bags')).toEqual({ amount: 80, unit: 'tea bag', count: 1 });
+    expect(parseAmount(units, '4 x 415 g')).toEqual({ amount: 415, unit: 'g', count: 4 });
+    expect(parseAmount(units, '4 pints')).toEqual({ amount: 4, unit: 'pint', count: 1 });
+    expect(parseAmount(units, '1L')).toEqual({ amount: 1, unit: 'l', count: 1 });
+    expect(parseAmount(units, 'family size')).toBeNull();
+    expect(parseAmount(units, null)).toBeNull();
   });
 });

@@ -60,6 +60,7 @@ export type { PhotoReader, PhotoReading } from '../components/photoReader';
 export { Header, Empty } from '../ui';
 export { ProductPicker } from '../components/ProductPicker';
 export { money, qty, num, plural, shortDate, longDate } from '../format';
+export { useUnits } from '../units';
 export { useQuery, useQueryClient } from '@tanstack/react-query';
 export { Link, useNavigate } from 'react-router-dom';
 export type { ProductDetail, ProductSummary, Shop, ShoppingList, ShoppingItem, HouseholdSettings } from '@larder/core';

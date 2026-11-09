@@ -10,7 +10,7 @@ import { makeCore, category } from '../helpers';
 const at = '2026-10-20T09:00:00.000Z';
 /** A record as 0.9.2 saved it: a pack, no Contains, Weight or needsCheck. */
 const old = (p: Product, extra: Record<string, unknown>) => {
-  const { contents: _c, weight: _w, needsCheck: _n, size: _s, ...rest } = p;
+  const { contents: _c, weight: _w, needsCheck: _n, ...rest } = p;
   return { ...rest, pack: null, ...extra } as unknown as Product;
 };
 const entry = (productId: string, quantity: number, extra: Partial<StockEntry> = {}): StockEntry => ({
@@ -33,7 +33,7 @@ describe('items saved by 0.9.0 and before', () => {
     const plain = await first.products.create({ name: 'Toilet roll', unit: 'roll' });
     await storage.products.put(old(made, { usage: null, lastsDays: 14, autoUse: true, inUseSince: '2026-10-20' }));
     await storage.products.put(old(lens, { usage: null, lastsDays: 30, autoUse: false }));
-    const { pack: _p, usage: _u, ...bare } = old(plain, {});
+    const { pack: _p, usage: _u, ...bare } = old(plain, {}) as Product & { pack?: unknown };
     await storage.products.put(bare as Product);
 
     const core = await makeCore({ storage });

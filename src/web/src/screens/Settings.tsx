@@ -8,6 +8,8 @@ import { useEnabledWebModules } from '../modules';
 import { useOpenCopy } from '../offline/current';
 import { forgetCopies } from '../offline/state';
 import { OfflineSettings } from '../offline/ui';
+import { AddUnitForm } from '../components/UnitPicker';
+import { useUnits } from '../units';
 
 export function Settings() {
   const status = useQuery({ queryKey: ['auth', 'status'], queryFn: api.auth.status });
@@ -23,6 +25,7 @@ export function Settings() {
       <div className="content" style={{ maxWidth: 860 }}>
         <Household admin={admin} />
         <Categories admin={admin} />
+        <UnitList />
         <Modules admin={admin} />
         <ModuleSettings admin={admin} />
         {local && <Tokens />}
@@ -86,6 +89,34 @@ function Categories({ admin }: { admin: boolean }) {
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="New category" aria-label="New category" />
         <button className="btn" disabled={!name.trim() || busy}>Add</button>
       </form>
+    </div>
+  );
+}
+
+/** Settings → Units: Larder's units, and count words the household adds (or removes, once nothing uses them). */
+function UnitList() {
+  const units = useUnits();
+  const { run, busy } = useAction();
+  const own = units.all.filter((u) => !u.builtIn);
+  const words = (kind: string) => units.all.filter((u) => u.builtIn && u.kind === kind).map((u) => u.one).join(', ');
+  return (
+    <div className="section">
+      <div className="label">Units</div>
+      <div className="card pad stack" style={{ gap: 6 }}>
+        <span className="small"><b>Counts:</b> <span className="muted">{words('count')}</span></span>
+        <span className="small"><b>Weights:</b> <span className="muted">{words('weight')}</span> · <b>Volumes:</b> <span className="muted">{words('volume')}</span></span>
+      </div>
+      {own.length > 0 && (
+        <div className="list">
+          {own.map((u) => (
+            <div className="numfield" key={u.key}>
+              <span><b>{u.one}</b><small>{u.many} · added by the household</small></span>
+              <button type="button" className="iconbtn ghost" aria-label={`Remove ${u.one}`} disabled={busy} onClick={() => run(() => api.units.remove(u.key), `"${u.one}" removed`)}><Icon name="trash" size="sm" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <AddUnitForm />
     </div>
   );
 }

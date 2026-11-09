@@ -32,7 +32,7 @@ export function perUnit(units: Units, n: number, unit: string, currency = 'GBP')
 export function packSizeText(units: Units, p: Product['pack_size']): string | null {
   if (!p) return null;
   if (p.unit === 'each') return `${p.amount}`;
-  const small = p.unit === 'kg' ? 'g' : 'ml';
+  const small = unitOf(units, p.unit).kind === 'weight' ? 'g' : 'ml';
   return amountText(units, toBoughtIn(units, { name: 'pack', unit: small }, p.amount, p.unit), small);
 }
 

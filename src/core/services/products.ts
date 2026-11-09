@@ -4,8 +4,7 @@ import { Product, StockEntry, Variant, type Movement, type ProductDetail, type P
 import { ProductCreate, VariantCreate, VariantPatch, type ProductFilter } from '../inputs';
 import { ConflictError, NotFoundError, ValidationError } from '../errors';
 import { addDays, newId, roundQty, unique } from '../util';
-import { sameUnit, singular } from './packs';
-import { amountText, asWeight, canConvert, isCount, isLoose, pluralOf, toBoughtIn, unitKeyOf, unitOf, weightText, type UnitAmount, type Units } from './units';
+import { amountText, asWeight, canConvert, isCount, isLoose, toBoughtIn, unitKeyOf, unitOf, weightText, type UnitAmount, type Units } from './units';
 import type { CoreContext } from './context';
 import { eligibleShops, loadWorld, placeRef, summarise } from './world';
 
@@ -15,8 +14,13 @@ type ProductUpdate = Partial<z.input<typeof ProductCreate>>;
 /** Fields this version of Larder knows about; a stored record may have others (from an older version, not upgraded yet). */
 const KNOWN = new Set(Object.keys(Product.shape));
 
-/** A record as an older version saved it. */
-type Stored = Partial<Product> & Pick<Product, 'id' | 'name'> & { lastsDays?: number | null; autoUse?: boolean };
+/** A record as an older version saved it: 0.8's "each one lasts", 0.9's pack it came in, and #36's size (0.10.0, never released). */
+type Stored = Partial<Product> & Pick<Product, 'id' | 'name'> & {
+  lastsDays?: number | null;
+  autoUse?: boolean;
+  pack?: { name: string; holds: number } | null;
+  size?: { amount: number; unit: string } | null;
+};
 
 /**
  * 0.10.0's upgrade of one item (docs/plans/units.md): what it's bought in and what one contains,
@@ -32,8 +36,8 @@ function boughtIn(units: Units, raw: Stored, next: Product): { factor: number; n
   let weight = raw.size ? (asWeight(units, raw.size) as Product['weight']) : (next.weight ?? null);
   next.contents = null;
   next.needsCheck = null;
-  delete (next as Partial<Product>).pack;
-  delete (next as Partial<Product>).size;
+  delete (next as Stored).pack;
+  delete (next as Stored).size;
   if (pack) {
     // A box of 20 tea bags: bought in boxes, each containing 20 tea bags. Things counted one by one are pieces.
     const box = units.find(pack.name);
@@ -77,9 +81,6 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     if (p.defaultPlaceId && !(await ctx.storage.places.get(p.defaultPlaceId))) throw new NotFoundError('Place', p.defaultPlaceId);
     for (const id of p.keptInPlaceIds) if (!(await ctx.storage.places.get(id))) throw new NotFoundError('Place', id);
   }
-
-  /** Until the assistant tools, modules and app give Weight, a size they give is the Weight too (the field goes with the last of them). */
-  const bridged = <T extends ProductUpdate>(p: T): T => (p.size !== undefined && p.weight == null ? { ...p, weight: p.size } : p);
 
   /** A Weight as given (g, kg, ml, L or pints), as it's kept: in g or ml. */
   function weightIn(units: Units, w: UnitAmount | null | undefined): Product['weight'] | undefined {
@@ -161,11 +162,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
   }
 
   function tidy(p: Product): Product {
-    // A pack is named in the singular ("boxes" is kept as "box"), as units are said "2 boxes".
-    const pack = p.pack ? { ...p.pack, name: singular(p.pack.name) } : (p.pack ?? null);
-    if (pack && sameUnit(pack.name, p.unit)) throw new ValidationError(`A ${pack.name} can't come in ${pluralOf(pack.name, 2)}. Count what's inside (tea bags, say) and say how many a ${pack.name} holds.`);
     const aliases = unique(p.aliases.map((a) => a.trim()).filter((a) => a && a.toLowerCase() !== p.name.trim().toLowerCase()));
-    return { ...p, pack, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
+    return { ...p, name: p.name.trim(), aliases, preferredShopIds: unique(p.preferredShopIds), keptInPlaceIds: unique(p.keptInPlaceIds), fields: validateFields(p.fields) };
   }
 
   async function assertBarcodesFree(barcodes: string[], exceptVariantId?: string) {
@@ -183,8 +181,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     const cur = await ctx.storage.products.get(id);
     if (!cur) throw new NotFoundError('Product', id);
     const units = await ctx.units();
-    const given = bridged(raw);
-    const patch = { ...given, ...(given.weight !== undefined ? { weight: weightIn(units, given.weight) } : {}) };
+    const patch = { ...raw, ...(raw.weight !== undefined ? { weight: weightIn(units, raw.weight) } : {}) };
     const fields = patch.fields ? { ...cur.fields, ...patch.fields } : cur.fields;
     const next = tidy(checkUnits(units, Product.parse({ ...cur, ...patch, fields, id, createdAt: cur.createdAt, updatedAt: ctx.now() }), patch, Product.parse(cur)));
     if (patch.inUseSince === undefined) {
@@ -265,7 +262,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
 
     async create(input: z.input<typeof ProductCreate>): Promise<Product> {
       const units = await ctx.units();
-      const parsed = bridged(ProductCreate.parse(input));
+      const parsed = ProductCreate.parse(input);
       const data = { ...parsed, weight: weightIn(units, parsed.weight) ?? null };
       await assertRefs(data);
       const now = ctx.now();

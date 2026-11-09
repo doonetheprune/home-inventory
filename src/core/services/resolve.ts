@@ -14,6 +14,7 @@ import type { createLookupService } from './lookup';
 import type { createSearchService } from './search';
 import { placePath } from './world';
 import { andList } from '../util';
+import { singularGuess } from './units';
 
 /** A name matched more than one thing. `candidates` are the names to choose from. */
 export class AmbiguousError extends LarderError {
@@ -27,8 +28,8 @@ export class AmbiguousError extends LarderError {
 
 // Apostrophes join words ("Sainsbury's" is one word), everything else separates them.
 const words = (s: string) => s.toLowerCase().replace(/['’]/g, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-/** "Toilet rolls" and "toilet roll" are the same thing. */
-const singular = (s: string) => words(s).split(' ').filter(Boolean).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+/** "Toilet rolls" and "toilet roll" are the same thing (the singular is the unit helpers' guess). */
+const singular = (s: string) => words(s).split(' ').filter(Boolean).map((w) => (w.length > 3 ? singularGuess(w) : w));
 const same = (a: string, b: string) => words(a) === words(b) || singular(a).join(' ') === singular(b).join(' ');
 
 /**

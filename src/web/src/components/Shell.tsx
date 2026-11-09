@@ -8,6 +8,7 @@ import { AddActions } from './AddActions';
 import { useEnabledWebModules } from '../modules';
 import { useOpenCopy } from '../offline/current';
 import { CopyBar } from '../offline/ui';
+import { useUnits } from '../units';
 
 function todayIso() {
   const d = new Date();
@@ -40,6 +41,8 @@ function useScannerWedge() {
 }
 
 export function Shell() {
+  // The household's unit list, loaded once for every page that says an amount.
+  useUnits();
   const location = useLocation();
   const screen = useRef<HTMLElement>(null);
   const atHome = location.pathname === '/';

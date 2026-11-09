@@ -1,23 +1,26 @@
-/** The product fields form, shared by Add by name and Edit. */
-import type { Category, Link as LinkT, PlaceRef, Shop } from '@larder/core';
+/** The product fields form, shared by Add by name and Edit. Units come from the household's list (docs/plans/units.md). */
+import { asWeight, canConvert, isCount, isLoose, isMeasure, type Category, type Link as LinkT, type PlaceRef, type Shop, type Units } from '@larder/core';
 import { Stepper, Switch, PlaceSelect } from '../ui';
-import { measureName, measureOf, measuresLike, num, ownUsage, perOne, plural, sameUnit, usageSentence, worthText, type Measure } from '../format';
+import { daysFor, lastsText, num, plural, usageText, worthText } from '../format';
+import { useUnits } from '../units';
+import { UnitPicker } from './UnitPicker';
 
 export interface ProductFormValue {
   name: string;
   aliases: string;
   categoryId: string | null;
+  /** Bought in: a key from the unit list. */
   unit: string;
   shelfLifeDays: number | null;
-  /** Comes in: the pack's name ('' for none) and how many of the unit it holds. */
-  packName: string;
-  packHolds: number;
-  /** Weighs: what one of the unit weighs or holds (null for not set, 0 while it's being typed). */
-  sizeAmount: number | null;
-  sizeUnit: Measure;
-  /** We use: how much (null for no usage) every `usageEvery` days or weeks, in the unit or in `usageUnit` ('' for the unit). */
+  /** Each one contains: how much (null for nothing, 0 while it's being typed) of what, a key from the list. */
+  contentsAmount: number | null;
+  contentsUnit: string;
+  /** Weight, given by hand (null for none). Not used when Contains is an amount: that gives the Weight. */
+  weightAmount: number | null;
+  weightUnit: string;
+  /** We use: how much (null for no usage) every `usageEvery` days or weeks, in `usageUnit` ('' for what it's bought in). */
   usageAmount: number | null;
-  usageUnit: Measure | '';
+  usageUnit: string;
   usageEvery: number;
   usagePer: 'day' | 'week';
   /** Larder takes them out of stock by itself. */
@@ -34,13 +37,34 @@ export interface ProductFormValue {
   rechargeable: boolean;
 }
 
-export const UNITS = ['each', 'pack', 'roll', 'tin', 'bottle', 'bag', 'box', 'jar', 'carton', 'tablet', 'dose', 'pair', 'battery', 'L', 'ml', 'kg', 'g', 'm'];
+/** What a Weight can be given in: the list's weights and volumes. */
+const weightUnits = (units: Units) => units.all.filter((u) => u.kind !== 'count').map((u) => u.key);
+/** Things bought loose are bought in g or ml: kg, L and the rest are for typing a Weight or Contains. */
+export const notBoughtIn = (units: Units) => units.all.filter((u) => u.kind !== 'count' && u.factor !== 1).map((u) => u.key);
 
 export function emptyForm(name = ''): ProductFormValue {
-  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, packName: '', packHolds: 20, sizeAmount: null, sizeUnit: 'g', usageAmount: null, usageUnit: '', usageEvery: 1, usagePer: 'day', takeOut: false, inUseSince: '', minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
+  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, contentsAmount: null, contentsUnit: '', weightAmount: null, weightUnit: 'g', usageAmount: null, usageUnit: '', usageEvery: 1, usagePer: 'day', takeOut: false, inUseSince: '', minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
 }
 
-export function toPayload(v: ProductFormValue) {
+/** What one contains, or null (nothing typed yet, or nothing for things bought loose). */
+export const contentsOf = (units: Units, v: ProductFormValue) => (v.contentsAmount && v.contentsAmount > 0 && v.contentsUnit && !isLoose(units, v) ? { amount: v.contentsAmount, unit: v.contentsUnit } : null);
+/** Contains as an amount (400 g) gives the Weight, so the form doesn't ask for one. */
+const contentsGiveWeight = (units: Units, v: ProductFormValue) => { const c = contentsOf(units, v); return !!c && !isCount(units, c.unit); };
+/** The Weight given by hand, or null. */
+const weightOf = (units: Units, v: ProductFormValue) => (v.weightAmount && v.weightAmount > 0 && !isLoose(units, v) && !contentsGiveWeight(units, v) ? { amount: v.weightAmount, unit: v.weightUnit } : null);
+
+/** The item as the form describes it, for the core's helpers (usage text, how long one lasts). */
+function itemOf(units: Units, v: ProductFormValue) {
+  const contents = contentsOf(units, v);
+  const given = weightOf(units, v);
+  // Contains 400 g is a Weight of 400 g; a Weight given in kg is kept in g (as the product service keeps it).
+  const measured = contentsGiveWeight(units, v) ? contents : given;
+  const weight = measured ? asWeight(units, measured) : null;
+  const usage = v.usageAmount ? { amount: v.usageAmount, everyDays: everyDays(v), auto: v.takeOut, unit: v.usageUnit || null } : null;
+  return { name: v.name || 'It', unit: v.unit, contents, weight, usage };
+}
+
+export function toPayload(v: ProductFormValue, units: Units) {
   const links: LinkT[] = v.links
     .split('\n')
     .map((l) => l.trim())
@@ -50,11 +74,11 @@ export function toPayload(v: ProductFormValue) {
     name: v.name.trim(),
     aliases: v.aliases.split(',').map((a) => a.trim()).filter(Boolean),
     categoryId: v.categoryId,
-    unit: v.unit.trim() || 'each',
+    unit: v.unit || 'each',
     shelfLifeDays: v.shelfLifeDays,
-    pack: packOf(v),
-    size: sizeOf(v),
-    usage: v.usageAmount ? { amount: v.usageAmount, everyDays: everyDays(v), auto: v.takeOut, unit: usageUnitOf(v) } : null,
+    contents: contentsOf(units, v),
+    weight: weightOf(units, v),
+    usage: v.usageAmount ? { amount: v.usageAmount, everyDays: everyDays(v), auto: v.takeOut, unit: v.usageUnit || null } : null,
     // Only with a usage: an item's open date (no usage) is the Use sheet's, so saving doesn't clear it.
     ...(v.usageAmount ? { inUseSince: v.inUseSince || null } : {}),
     minQuantity: v.minQuantity,
@@ -65,15 +89,11 @@ export function toPayload(v: ProductFormValue) {
     links,
     wish: v.wish,
     rechargeable: v.rechargeable,
+    // Saved from here, it's been looked at: off the To tidy list.
+    needsCheck: null,
   };
 }
 
-/** The pack the form describes, or null (none, holds 1, or the same as what it's counted in). */
-export const packOf = (v: ProductFormValue) => (v.packName.trim() && v.packHolds > 1 && !sameUnit(v.packName, v.unit) ? { name: v.packName.trim(), holds: v.packHolds } : null);
-/** What one weighs, or null (not set, nothing typed yet, or counted by weight already). */
-export const sizeOf = (v: ProductFormValue) => (v.sizeAmount && v.sizeAmount > 0 && !measureOf(v.unit.trim() || 'each') ? { amount: v.sizeAmount, unit: v.sizeUnit } : null);
-/** What the usage is in: a weight or volume when Larder can turn it into the unit, else the unit (null). */
-const usageUnitOf = (v: ProductFormValue) => (v.usageUnit && perOne(v.unit.trim() || 'each', sizeOf(v), v.usageUnit) ? v.usageUnit : null);
 /** Today on this device, as YYYY-MM-DD. */
 function localToday(): string {
   const d = new Date();
@@ -85,17 +105,17 @@ const addDaysIso = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 const everyDays = (v: ProductFormValue) => Math.max(1, Math.round(v.usageEvery)) * (v.usagePer === 'week' ? 7 : 1);
-/** Containers, not the thing used: counting these with a usage is probably a slip. */
-const CONTAINERS = new Set(['box', 'pack', 'packet', 'case', 'multipack', 'tray', 'bundle', 'crate']);
 
-/** The form's fields for an item's pack, size and usage. */
-export function usageForm(p: { pack?: { name: string; holds: number } | null; size?: { amount: number; unit: Measure } | null; usage?: { amount: number; everyDays: number; auto: boolean; unit?: string | null } | null; inUseSince: string | null }): Pick<ProductFormValue, 'packName' | 'packHolds' | 'sizeAmount' | 'sizeUnit' | 'usageAmount' | 'usageUnit' | 'usageEvery' | 'usagePer' | 'takeOut' | 'inUseSince'> {
+/** The form's fields for what an item contains, weighs and how fast it's used. */
+export function usageForm(units: Units, p: { contents?: { amount: number; unit: string } | null; weight?: { amount: number; unit: string } | null; usage?: { amount: number; everyDays: number; auto: boolean; unit?: string | null } | null; inUseSince: string | null }): Pick<ProductFormValue, 'contentsAmount' | 'contentsUnit' | 'weightAmount' | 'weightUnit' | 'usageAmount' | 'usageUnit' | 'usageEvery' | 'usagePer' | 'takeOut' | 'inUseSince'> {
   const u = p.usage ?? null;
   const weeks = !!u && u.everyDays % 7 === 0;
+  // A Weight worked out from Contains (400 g) isn't one given by hand.
+  const fromContents = !!p.contents && !isCount(units, p.contents.unit);
   return {
-    packName: p.pack?.name ?? '', packHolds: p.pack?.holds ?? 20,
-    sizeAmount: p.size?.amount ?? null, sizeUnit: p.size?.unit ?? 'g',
-    usageAmount: u?.amount ?? null, usageUnit: (u?.unit ?? '') as Measure | '', usageEvery: u ? (weeks ? u.everyDays / 7 : u.everyDays) : 1, usagePer: weeks ? 'week' : 'day',
+    contentsAmount: p.contents?.amount ?? null, contentsUnit: p.contents?.unit ?? '',
+    weightAmount: fromContents ? null : (p.weight?.amount ?? null), weightUnit: p.weight?.unit ?? 'g',
+    usageAmount: u?.amount ?? null, usageUnit: u?.unit ?? '', usageEvery: u ? (weeks ? u.everyDays / 7 : u.everyDays) : 1, usagePer: weeks ? 'week' : 'day',
     takeOut: u?.auto ?? false, inUseSince: u ? (p.inUseSince ?? '') : '',
   };
 }
@@ -103,38 +123,24 @@ export function usageForm(p: { pack?: { name: string; holds: number } | null; si
 export function ProductForm({ value, onChange, categories, shops, places, showName = true }: {
   value: ProductFormValue; onChange: (v: ProductFormValue) => void; categories: Category[]; shops: Shop[]; places: PlaceRef[]; showName?: boolean;
 }) {
+  const units = useUnits();
   const set = <K extends keyof ProductFormValue>(k: K, v: ProductFormValue[K]) => onChange({ ...value, [k]: v });
   const cat = categories.find((c) => c.id === value.categoryId);
   const renewal = cat?.name === 'Renewals';
-  const unit = value.unit.trim() || 'each';
-  const many = unit === 'each' ? '' : plural(unit, 2);
-  const pack = packOf(value);
-  const size = sizeOf(value);
-  const ownMeasure = measureOf(unit);
-  const one = unit === 'each' ? 'item' : unit;
-  const usage = value.usageAmount ? { amount: value.usageAmount, everyDays: everyDays(value), auto: value.takeOut, unit: usageUnitOf(value) } : null;
-  // In the unit, for how long the minimum lasts.
-  const own = usage ? ownUsage(unit, size, usage) : null;
+  const unit = value.unit || 'each';
+  const bought = units.find(unit);
+  const loose = isLoose(units, value);
+  const one = bought?.key === 'each' ? 'one' : (bought?.one ?? unit);
+  const item = itemOf(units, value);
+  const usage = item.usage;
   const usageAllowed = !renewal && !value.rechargeable;
-  const packSlip = !!value.packName.trim() && sameUnit(value.packName, unit);
-  const containerSlip = !!usage && !pack && !usage.unit && (unit === 'each' || CONTAINERS.has(unit.toLowerCase()));
-  // What "We use" can be said in besides the unit: by weight once Larder knows what one weighs.
-  const measureChoices = size ? measuresLike(size.unit) : ownMeasure ? measuresLike(ownMeasure).filter((m) => m !== ownMeasure) : [];
-  /** A new unit for the usage, keeping what it means (1 jar every 100 days is 400 g every 100 days). */
-  const setUsageUnit = (to: Measure | '') => {
-    const from = usageUnitOf(value);
-    const inOwn = from ? (value.usageAmount ?? 0) / (perOne(unit, size, from) ?? 1) : (value.usageAmount ?? 0);
-    const amount = to ? inOwn * (perOne(unit, size, to) ?? 1) : inOwn;
-    onChange({ ...value, usageUnit: to, usageAmount: value.usageAmount === null ? null : Math.round(amount * 1000) / 1000 || value.usageAmount });
-  };
-  /** No weight any more: a usage by weight goes back to the unit. */
-  const clearSize = () => {
-    const from = usageUnitOf(value);
-    const per = from ? perOne(unit, size, from) : null;
-    onChange({ ...value, sizeAmount: null, usageUnit: '', usageAmount: value.usageAmount !== null && per ? Math.round((value.usageAmount / per) * 1000) / 1000 || value.usageAmount : value.usageAmount });
-  };
-  /** A weight in ml instead of g (or back): a usage by weight follows it. */
-  const setSizeUnit = (m: Measure) => onChange({ ...value, sizeUnit: m, ...(value.usageUnit && !measuresLike(m).includes(value.usageUnit) ? { usageUnit: measuresLike(m)[0]! } : {}) });
+  // What We use can be said in: what it's bought in, what one contains when that's a count, and g or ml once there's a Weight.
+  const inside = item.contents && isCount(units, item.contents.unit) ? item.contents.unit : null;
+  const usageChoices = [{ key: '', label: bought?.key === 'each' ? 'of them' : plural(unit, 2) || unit }, ...(inside ? [{ key: inside, label: plural(inside, 2) }] : []), ...(item.weight && !loose ? [{ key: item.weight.unit, label: item.weight.unit }] : [])];
+  if (value.usageUnit && !usageChoices.some((c) => c.key === value.usageUnit)) usageChoices.push({ key: value.usageUnit, label: units.find(value.usageUnit)?.many ?? value.usageUnit });
+  const usageWorks = !usage?.unit || canConvert(units, item, usage.unit);
+  const lasts = usage && usageWorks ? lastsText(item) : null;
+  const worth = usage && usageWorks && value.minQuantity ? daysFor(item, value.minQuantity) : null;
   // Switched on, Larder counts from today, unless the one in use still has days left (it was taken out
   // when it was started, so counting from an older day would take those days out again).
   const takeOut = (on: boolean) => {
@@ -142,6 +148,11 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
     const running = !!usage && !!value.inUseSince && addDaysIso(value.inUseSince, usage.everyDays) > today;
     onChange({ ...value, takeOut: on, ...(on && !value.takeOut && !running ? { inUseSince: today } : {}) });
   };
+  /** Bought in something new: if that's what one contained, Contains goes, and a usage in it is in what it's bought in. */
+  const setUnit = (key: string) => onChange({
+    ...value, unit: key,
+    ...(key === value.contentsUnit ? { contentsAmount: null, contentsUnit: '', usageUnit: value.usageUnit === key ? '' : value.usageUnit } : {}),
+  });
   const toggleShop = (id: string) => set('preferredShopIds', value.preferredShopIds.includes(id) ? value.preferredShopIds.filter((s) => s !== id) : [...value.preferredShopIds, id]);
 
   return (
@@ -159,50 +170,46 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
       </div>
 
       <div className="list">
-        <div className="numfield"><span><b>Counted in</b><small>The single thing you use: a tea bag, a roll, a sensor. For things you weigh or pour: g, kg, ml or L</small></span>
-          <input className="input" list="units" style={{ width: 150, flexShrink: 0 }} value={value.unit} onChange={(e) => set('unit', e.target.value)} aria-label="Unit" />
-          <datalist id="units">{UNITS.map((u) => <option key={u} value={u} />)}</datalist>
+        <div className="numfield"><span><b>Bought in</b><small>What you buy and count it in{loose ? ': bought loose, by weight or volume' : ''}</small>
+            {!bought && <small style={{ color: 'var(--low)' }}>“{unit}” isn't on the unit list: pick what it's bought in.</small>}</span>
+          <UnitPicker value={unit} onChange={setUnit} kinds={['count', 'weight', 'volume']} exclude={notBoughtIn(units)} label="Bought in" />
         </div>
-        <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Comes in</b><small>{pack ? `How you buy it: adding 1 ${pack.name} adds ${pack.holds}${many ? ` ${many}` : ''}` : 'How you buy it, e.g. a box of 20. Leave it if you buy them singly'}</small>
-            {packSlip && <small style={{ color: 'var(--low)' }}>A {unit} can't come in {plural(unit, 2)}. Count what's inside (tea bags, say) and say how many a {unit} holds.</small>}</span>
-          {!value.packName && !pack ? <button type="button" className="btn small" aria-label="Set what it comes in" onClick={() => set('packName', 'box')}>Set</button> : (
-            <div className="row" style={{ flexWrap: 'wrap', gap: 6, flex: '1 1 100%' }}>
-              <input className="input" style={{ width: 90 }} value={value.packName} onChange={(e) => set('packName', e.target.value)} aria-label="What it comes in" placeholder="box" />
-              <span className="small">of</span>
-              <Stepper small value={value.packHolds} onChange={(n) => set('packHolds', Math.max(2, n))} min={2} label="how many one holds" />
-              {many && <span className="small">{many}</span>}
-              <button type="button" className="link small" onClick={() => onChange({ ...value, packName: '', packHolds: 20 })}>Clear</button>
-            </div>
-          )}
-        </div>
-        {!ownMeasure && (
-          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Weighs</b><small>{size ? `So you can say how much you use by ${size.unit === 'g' || size.unit === 'kg' ? 'weight' : 'volume'} (${measureName(measuresLike(size.unit)[0]!)} a day)` : `What 1 ${one} weighs or holds, e.g. 400 g. Leave it unless you'd rather say how much you use by weight`}</small></span>
-            {value.sizeAmount === null ? <button type="button" className="btn small" aria-label="Set what one weighs" onClick={() => set('sizeAmount', 0)}>Set</button> : (
+        {!loose && (
+          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Each {one} contains</b><small>What's in one, as on the pack</small></span>
+            {value.contentsAmount === null ? <button type="button" className="btn small" aria-label={`Set what each ${one} contains`} onClick={() => set('contentsAmount', 0)}>Set</button> : (
               <div className="row" style={{ flexWrap: 'wrap', gap: 6, flex: '1 1 100%' }}>
-                <span className="small">1 {one} =</span>
-                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 100 }} value={value.sizeAmount || ''} onChange={(e) => set('sizeAmount', Math.max(0, Number(e.target.value) || 0))} aria-label="What one weighs or holds" placeholder="400" />
-                <select className="input" style={{ width: 'auto' }} value={value.sizeUnit} onChange={(e) => setSizeUnit(e.target.value as Measure)} aria-label="Grams, kilograms, millilitres or litres">
-                  {(['g', 'kg', 'ml', 'l'] as const).map((m) => <option key={m} value={m}>{measureName(m)}</option>)}
+                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 100 }} value={value.contentsAmount || ''} onChange={(e) => set('contentsAmount', Math.max(0, Number(e.target.value) || 0))} aria-label="How much one contains" placeholder="20" />
+                <UnitPicker value={value.contentsUnit || null} onChange={(k) => set('contentsUnit', k)} kinds={['count', 'weight', 'volume']} exclude={['each', unit]} label="What it contains" empty="Pick a unit" />
+                <button type="button" className="link small" onClick={() => onChange({ ...value, contentsAmount: null, contentsUnit: '', usageUnit: value.usageUnit === value.contentsUnit ? '' : value.usageUnit })}>Clear</button>
+              </div>
+            )}
+          </div>
+        )}
+        {!loose && !contentsGiveWeight(units, value) && (
+          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>Weight</b><small>Only needed to work out recipes and prices by weight</small></span>
+            {value.weightAmount === null ? <button type="button" className="btn small" aria-label="Set its weight" onClick={() => set('weightAmount', 0)}>Set</button> : (
+              <div className="row" style={{ flexWrap: 'wrap', gap: 6, flex: '1 1 100%' }}>
+                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 100 }} value={value.weightAmount || ''} onChange={(e) => set('weightAmount', Math.max(0, Number(e.target.value) || 0))} aria-label="What one weighs" placeholder="30" />
+                <select className="input" style={{ width: 'auto' }} value={value.weightUnit} onChange={(e) => set('weightUnit', e.target.value)} aria-label="Weight in">
+                  {weightUnits(units).map((k) => <option key={k} value={k}>{units.find(k)?.many ?? k}</option>)}
                 </select>
-                <button type="button" className="link small" onClick={clearSize}>Clear</button>
+                <button type="button" className="link small" onClick={() => onChange({ ...value, weightAmount: null, usageUnit: isMeasure(units, value.usageUnit) ? '' : value.usageUnit })}>Clear</button>
               </div>
             )}
           </div>
         )}
         {usageAllowed && (
-          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>We use</b><small>{usage ? usageSentence({ unit, pack, size, usage }) : 'How fast it goes, so Larder knows when it runs out'}</small>
-              {containerSlip && <small style={{ color: 'var(--low)' }}>Counting {unit === 'each' ? 'whole packs' : plural(unit, 2)}? If you use what's inside one at a time, count those (Counted in: tea bag) and say what it comes in.</small>}</span>
+          <div className="numfield" style={{ flexWrap: 'wrap' }}><span><b>We use</b><small>{usage ? (usageWorks ? (lasts ? `${lasts[0]!.toUpperCase()}${lasts.slice(1)}.` : `That's ${usageText(item)}.`) : 'Give it a Weight first, or pick another unit.') : 'How fast it goes, so Larder knows when it runs out'}</small></span>
             {usage === null ? <button type="button" className="btn small" aria-label="Set how fast it's used" onClick={() => onChange({ ...value, usageAmount: 1 })}>Set</button> : (
               <div className="row" style={{ flexWrap: 'wrap', gap: 6, flex: '1 1 100%' }}>
                 {/* Two halves that each stay on one line: "1 tea bags" and "every 1 day". */}
                 <span className="row" style={{ gap: 6 }}>
-                  <Stepper small value={value.usageAmount!} onChange={(n) => set('usageAmount', n > 0 ? n : value.usageAmount)} min={0.1} step={1} label={usage?.unit ? `how much in ${measureName(usage.unit)}` : `how many ${many || 'of them'}`} />
-                  {measureChoices.length ? (
-                    <select className="input" style={{ width: 'auto' }} value={usage?.unit ?? ''} onChange={(e) => setUsageUnit(e.target.value as Measure | '')} aria-label="Used in">
-                      <option value="">{many || 'of them'}</option>
-                      {measureChoices.map((m) => <option key={m} value={m}>{measureName(m)}</option>)}
+                  <Stepper small value={value.usageAmount!} onChange={(n) => set('usageAmount', n > 0 ? n : value.usageAmount)} min={0.1} step={1} label={`how many ${usageChoices.find((c) => c.key === value.usageUnit)?.label ?? 'of them'}`} />
+                  {usageChoices.length > 1 ? (
+                    <select className="input" style={{ width: 'auto' }} value={value.usageUnit} onChange={(e) => set('usageUnit', e.target.value)} aria-label="Used in">
+                      {usageChoices.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
-                  ) : many && <span className="small">{many}</span>}
+                  ) : <span className="small">{usageChoices[0]!.label}</span>}
                 </span>
                 <span className="row" style={{ gap: 6 }}>
                   <span className="small">every</span>
@@ -212,13 +219,13 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
                     <option value="week">{value.usageEvery === 1 ? 'week' : 'weeks'}</option>
                   </select>
                 </span>
-                <button type="button" className="link small" onClick={() => onChange({ ...value, usageAmount: null, takeOut: false, inUseSince: '' })}>Clear</button>
+                <button type="button" className="link small" onClick={() => onChange({ ...value, usageAmount: null, usageUnit: '', takeOut: false, inUseSince: '' })}>Clear</button>
               </div>
             )}
           </div>
         )}
         {usageAllowed && usage && (
-          <div className="numfield"><span><b>Take them out of stock for me</b><small>{usage.unit ? (value.takeOut ? `Larder takes ${num(usage.amount)} ${measureName(usage.unit)} out ${usage.everyDays === 1 ? 'each day' : `every ${usage.everyDays} days`}, so you don't press Use` : `Or press Use when a ${one} is finished`) : value.takeOut ? 'Larder takes them out as they\'re used, so you don\'t press Use. Press Use only for an extra one' : 'Or press Use as each one is used'}</small></span>
+          <div className="numfield"><span><b>Take them out of stock for me</b><small>{usage.unit ? (value.takeOut ? `Larder takes ${usageText(item)} out a little at a time, so you don't press Use` : `Or press Use when a ${one} is finished`) : value.takeOut ? 'Larder takes them out as they\'re used, so you don\'t press Use. Press Use only for an extra one' : 'Or press Use as each one is used'}</small></span>
             <Switch checked={value.takeOut} onChange={takeOut} label="Take them out of stock for me" />
           </div>
         )}
@@ -227,7 +234,7 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
             <input className="input" type="date" style={{ width: 170 }} value={value.inUseSince} onChange={(e) => set('inUseSince', e.target.value)} aria-label="Started on" />
           </div>
         )}
-        <div className="numfield"><span><b>Running low below</b><small>Puts it on the shopping list{own && value.minQuantity ? ` · ${worthText((value.minQuantity * own.everyDays) / own.amount)}` : ''}</small></span>
+        <div className="numfield"><span><b>Running low below</b><small>Puts it on the shopping list{worth !== null ? ` · ${worthText(worth)}` : ''}</small></span>
           {value.minQuantity === null ? <button type="button" className="btn small" onClick={() => set('minQuantity', 1)}>Set</button> : <div className="row"><Stepper value={value.minQuantity} onChange={(n) => set('minQuantity', n)} label="minimum" /><button type="button" className="link small" onClick={() => set('minQuantity', null)}>Clear</button></div>}
         </div>
         <div className="numfield"><span><b>Stock up to</b><small>How many to have after buying more</small></span>

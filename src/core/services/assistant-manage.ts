@@ -16,7 +16,7 @@ import type { CoreContext } from './context';
 import type { createProductService } from './products';
 import { AmbiguousError, type Resolver } from './resolve';
 import type { createStockService } from './stock';
-import { amount, andList, daysBetween, pluralWord } from '../util';
+import { andList, daysBetween } from '../util';
 
 type AddTool = <I extends z.ZodObject>(tool: AssistantTool<I>) => void;
 

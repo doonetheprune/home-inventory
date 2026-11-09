@@ -128,7 +128,7 @@ describe('pricing module', () => {
     expect(fields).toMatchObject({ usualUnitPrice: 4, priceUnit: null });
     const view = (await call(core, 'GET', '/view/:productId', undefined, { productId: tea.id })) as PriceView;
     expect(view.options.map((o) => [o.unit, o.price])).toEqual([['box', 4], ['tea bag', 0.05], ['100g', null], ['kg', null], ['100ml', null], ['l', null]]);
-    expect(view.packUnits).toEqual(['box', 'tea bag', 'g', 'kg', 'ml', 'l']);
+    expect(view.packUnits).toEqual(['box', 'tea bag', 'g', 'kg', 'ml', 'cl', 'l', 'pint']);
     // A box of 80 for £3.20 at the shop, or 40 loose for £2.40.
     let r = (await call(core, 'POST', '/check', { productId: tea.id, quantity: 1, price: 3.2 })) as ReturnType<typeof checkPrice>;
     expect(r.message).toBe("That's £3.20 a box against the usual £4.00: 20% cheaper, saving about £0.80 on this pack.");

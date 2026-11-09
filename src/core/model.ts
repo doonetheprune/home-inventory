@@ -80,26 +80,6 @@ export const Unit = z.object({
 }).meta({ id: 'Unit' });
 export type Unit = z.infer<typeof Unit>;
 
-/** How it's sold: a box of 20 (in the item's own unit). */
-export const Pack = z.object({
-  /** "box", "pack", "bag". */
-  name: z.string().trim().min(1).max(30),
-  /** How many of the item's own unit one holds: 20 tea bags. More than 1. */
-  holds: z.number().gt(1).max(100000),
-});
-export type Pack = z.infer<typeof Pack>;
-
-/** A weight or volume: g, kg, ml or l. */
-export const Measure = z.enum(['g', 'kg', 'ml', 'l']);
-export type Measure = z.infer<typeof Measure>;
-
-/** How much one of what an item is counted in weighs or holds: a jar of coffee is 400 g. */
-export const Size = z.object({
-  amount: z.number().positive().max(1_000_000),
-  unit: Measure,
-});
-export type Size = z.infer<typeof Size>;
-
 /** An amount in a unit from the list (src/core/services/units.ts): what one contains, 20 tea bags or 1 kg. */
 export const UnitAmount = z.object({
   amount: z.number().positive().max(1_000_000),
@@ -147,10 +127,6 @@ export const Product = z.object({
   weight: Weight.nullable().default(null),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),
-  /** Deprecated: turned into Bought in and Contains by the 0.10.0 upgrade. Removed once nothing reads it (docs/plans/units.md). */
-  pack: Pack.nullable().default(null),
-  /** Deprecated: became `weight` in 0.10.0. Removed once nothing reads it (docs/plans/units.md). */
-  size: Size.nullable().default(null),
   /** How fast it's used, and whether Larder takes them out of stock by itself. */
   usage: Usage.nullable().default(null),
   /**

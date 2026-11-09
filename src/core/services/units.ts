@@ -451,6 +451,25 @@ export function worthText(days: number): string {
   return `about ${d} days' worth`;
 }
 
+/**
+ * A pack size as printed ("400 g", "1,5 kg", "20 tea bags", "80 pyramid tea bags", "4 x 415 g"): so many
+ * of a unit on the list, and how many of them a multipack has (4). Null when it can't be read.
+ */
+export function parseAmount(units: Units, text: string | null | undefined): { amount: number; unit: string; count: number } | null {
+  const t = (text ?? '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2');
+  const m = /(?:(\d+)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*([a-z][a-z .'-]*)/.exec(t);
+  if (!m) return null;
+  const words = m[3]!.trim().split(/\s+/);
+  // The first words that are a unit, the longest first: "pyramid tea bags" is tea bags.
+  for (let i = 0; i < words.length; i++) {
+    for (let j = words.length; j > i; j--) {
+      const u = units.find(words.slice(i, j).join(' '));
+      if (u && u.key !== 'each') return { amount: Number(m[2]), unit: u.key, count: m[1] ? Number(m[1]) : 1 };
+    }
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ */
 /* Words that aren't units                                             */
 /* ------------------------------------------------------------------ */
@@ -470,8 +489,12 @@ export function pluralOf(word: string, n: number): string {
 /** "handfuls" → "handful", "slices" → "slice": the singular of a word, from the list when it's on it, else a guess. */
 export function singularOf(units: Units, word: string): string {
   const u = units.find(word);
-  if (u) return u.key;
-  const w = tidy(word);
+  return u ? u.key : singularGuess(tidy(word));
+}
+
+/** The singular of a word that isn't a unit, a guess: "rolls" → "roll", "batteries" → "battery", "tomatoes" → "tomato". The resolver matches names with it. */
+export function singularGuess(word: string): string {
+  const w = word.toLowerCase();
   if (/(^|\s)(lens|series|species|gas|bus|plus)$/.test(w)) return w;
   if (w.length > 4 && w.endsWith('ies')) return `${w.slice(0, -3)}y`;
   // Tomatoes and potatoes, as recipes say them.

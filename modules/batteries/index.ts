@@ -70,7 +70,7 @@ export function adviceFor(units: Units, device: Device, battery: ProductSummary 
     return { ...base, kind: 'spare', message: `${device.name} needs ${needs}. There ${battery.inStock === 1 ? 'is a spare' : `are ${battery.inStock} spares`}${place ? ` in ${place}` : ''}.` };
   }
   if (battery.expected > 0) return { ...base, kind: 'on_the_way', message: `${device.name} needs ${needs}. None spare, but ${battery.expected} ${battery.expected === 1 ? 'is' : 'are'} on the way.` };
-  return { ...base, kind: 'buy', message: `${device.name} needs ${needs} and there are none spare. ${p.name} ${p.name.endsWith('s') ? 'are' : 'is'} on the shopping list.` };
+  return { ...base, kind: 'buy', message: `${device.name} needs ${needs} and there are none spare: ${p.name} is on the shopping list.` };
 }
 
 export default defineModule({

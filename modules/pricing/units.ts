@@ -120,6 +120,6 @@ export function defaultShow(units: Units, item: Item): string {
 /** Units a pack's size can be given in: what it's bought in and contains, then weights or volumes. */
 export function packUnitsFor(units: Units, item: Item): string[] {
   const kind = kindOf(units, item);
-  const measures = kind === 'weight' ? ['g', 'kg'] : kind === 'volume' ? ['ml', 'l'] : ['g', 'kg', 'ml', 'l'];
+  const measures = units.all.filter((u) => u.kind !== 'count' && (!kind || u.kind === kind)).map((u) => u.key);
   return isLoose(units, item) ? measures : [item.unit, ...inside(units, item), ...measures];
 }
