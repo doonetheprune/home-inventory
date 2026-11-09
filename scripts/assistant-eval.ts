@@ -6,8 +6,11 @@
  * what went wrong in the owner's chats (docs/plans/units.md). It costs money, so it isn't part of
  * `npm test`.
  *
- *   ANTHROPIC_API_KEY=… npm run eval:assistant -- [--model claude-opus-5-5] [--runs 3] [--case sleep] [--verbose]
+ *   npm run eval:assistant -- [--model claude-opus-5-5] [--runs 3] [--case sleep] [--verbose]
  *   npm run eval:assistant -- --dry    (no model: makes each case's right calls, to check the grading)
+ *
+ * The API key is ANTHROPIC_API_KEY, from the shell or from a `.env` at the top of the repository
+ * (which git ignores).
  *
  * Grading reads Larder's state, never the assistant's words, so it works on any wording of the
  * tools. It reads Pack size as `packSize`, or `contents` before that was renamed.
@@ -161,6 +164,15 @@ const CASES: Case[] = [
   },
 ];
 
+try {
+  process.loadEnvFile();
+} catch {
+  // No .env: the key can come from the shell.
+}
+if (!DRY && !process.env.ANTHROPIC_API_KEY) {
+  console.error('No API key. Put ANTHROPIC_API_KEY=… in .env at the top of the repository (git ignores it), or export it in your shell.');
+  process.exit(1);
+}
 const client = DRY ? (null as unknown as Anthropic) : new Anthropic();
 const spent = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
 
