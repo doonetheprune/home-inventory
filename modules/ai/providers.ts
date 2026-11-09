@@ -27,6 +27,7 @@ export const Reading = z.object({
   shelf_life_days: z.number().nullable().describe('Roughly how many whole days it keeps unopened, for things that go off'),
   shop: z.string().nullable().describe('The shop, if this is a shop\'s own brand, e.g. "Tesco"'),
   other_names: z.array(z.string()).describe('Up to three other names people use for it'),
+  guessed: z.array(z.enum(['bought_in', 'pack_size', 'category'])).describe('Which of bought_in, pack_size and category are guesses rather than read or plain'),
 });
 export type Reading = z.infer<typeof Reading>;
 
@@ -89,6 +90,7 @@ export function instructions(categories: string[], units: string[], search = fal
     '- shelf_life_days: roughly how many days it keeps unopened from the day it is bought, for food, drink, medicine and other things that go off. Null for things that do not go off.',
     '- shop: the shop, only if this is a shop\'s own brand (e.g. "Tesco", "Sainsbury\'s", "Aldi", "Boots"). Null for other brands.',
     '- other_names: up to three other names people use for it, e.g. ["beans"]. Empty if none.',
+    `- guessed: which of bought_in, pack_size and category are guesses, so the household checks them. pack_size is a guess unless it is ${photo ? 'printed on the pack' : 'in the description'}${search ? ' or on a page you looked at' : ''}: a number worked out from what such packs usually hold is a guess. bought_in and category are guesses when it could as well be another (a tub or a bag, Food or Baking). Empty when none are.`,
     photo
       ? '- readable: false if the photo does not show a product you can make out. Then give your best guess for the rest.'
       : '- readable: false if the description does not say what product it is. Then give your best guess for the rest.',
@@ -324,8 +326,9 @@ export const GEMINI_SCHEMA = {
     shelf_life_days: { type: 'INTEGER', nullable: true },
     shop: { type: 'STRING', nullable: true },
     other_names: { type: 'ARRAY', items: { type: 'STRING' } },
+    guessed: { type: 'ARRAY', items: { type: 'STRING', enum: ['bought_in', 'pack_size', 'category'] } },
   },
-  required: ['readable', 'name', 'kind', 'title', 'size', 'bought_in', 'pack_size', 'category', 'shelf_life_days', 'shop', 'other_names'],
+  required: ['readable', 'name', 'kind', 'title', 'size', 'bought_in', 'pack_size', 'category', 'shelf_life_days', 'shop', 'other_names', 'guessed'],
 };
 
 /** Gemini models that only make pictures, speech or embeddings, or need a live connection. */
