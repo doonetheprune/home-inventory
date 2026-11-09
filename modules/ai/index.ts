@@ -99,6 +99,8 @@ export const Identified = z.object({
   aliases: z.array(z.string()),
   /** The shop, for a shop's own brand: `id` is null when Larder doesn't have it yet. */
   shop: z.object({ name: z.string(), id: z.string().nullable(), preset: z.boolean() }).nullable(),
+  /** What it's bought in, its pack size or its category, when the AI guessed rather than read them: the scanner marks these to check. */
+  guessed: z.array(z.enum(['boughtIn', 'packSize', 'categoryId'])),
   /** The AI that read it, and its model. */
   provider: ProviderName,
   model: z.string(),
@@ -331,9 +333,15 @@ export default defineModule({
       const days = r.shelf_life_days;
       // Units from Larder's list, as keys: one the AI made up is "each", for the person to pick on the card.
       const units = await ctx.core.units.list();
-      const bought = units.find(cap(r.bought_in, 30)) ?? units.find('each')!;
+      const listed = units.find(cap(r.bought_in, 30));
+      const bought = listed ?? units.find('each')!;
       const boughtIn = bought.kind === 'count' ? bought.key : bought.kind === 'weight' ? 'g' : 'ml';
       const packSize = packSizeOf(units, boughtIn, r.pack_size);
+      // Only what's filled in can be checked; a unit that isn't on the list became "each", which is a guess too.
+      const guessed: Identified['guessed'] = [];
+      if (!listed || r.guessed.includes('bought_in')) guessed.push('boughtIn');
+      if (packSize && r.guessed.includes('pack_size')) guessed.push('packSize');
+      if (category && r.guessed.includes('category')) guessed.push('categoryId');
       return {
         readable: r.readable,
         name,
@@ -348,6 +356,7 @@ export default defineModule({
           .filter((a, i, all) => a && !same(a, name) && all.findIndex((b) => same(a, b)) === i)
           .slice(0, 3),
         shop,
+        guessed,
       };
     }
   },

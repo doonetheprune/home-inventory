@@ -24,6 +24,7 @@ const BEANS: Reading = {
   shelf_life_days: 730,
   shop: 'Tesco',
   other_names: ['beans', 'Baked beans'],
+  guessed: [],
 };
 
 interface Sent { url: string; method: string; headers: Record<string, string>; body: Record<string, unknown> | null }
@@ -215,6 +216,7 @@ describe('AI module: Claude', () => {
       shelfLifeDays: 730,
       aliases: ['beans'],
       shop: { name: 'Tesco', id: null, preset: true },
+      guessed: [],
       provider: 'claude',
       model: 'claude-haiku-5-5',
       sources: [],
@@ -334,7 +336,7 @@ describe('AI module: Gemini', () => {
 describe('AI module: barcodes found online', () => {
   const PG: Reading = {
     readable: true, name: 'PG Tips tea bags', kind: 'Black tea', title: 'PG Tips Original', size: '80 tea bags 232 g', bought_in: 'Boxes', pack_size: { amount: 80, unit: 'tea bags' },
-    category: 'Food', shelf_life_days: 540, shop: null, other_names: ['tea bags'],
+    category: 'Food', shelf_life_days: 540, shop: null, other_names: ['tea bags'], guessed: [],
   };
   const FOUND = { barcode: '8720608023402', name: 'PG tips original 80 pyramid tea bags', brand: 'PG Tips', quantityText: '232 g', categories: ['Beverages', 'Teas', 'Black teas'] };
 
@@ -343,7 +345,7 @@ describe('AI module: barcodes found online', () => {
     const core = await makeCore({ modules: [ai], fetch: net.fetch });
     await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
     const out = await call(core, 'POST', '/describe', { body: FOUND });
-    expect(out).toMatchObject({ name: 'PG Tips tea bags', boughtIn: 'box', packSize: { amount: 80, unit: 'tea bag' }, brand: 'PG Tips Original 80 tea bags 232 g', shelfLifeDays: 540, provider: 'claude' });
+    expect(out).toMatchObject({ name: 'PG Tips tea bags', boughtIn: 'box', packSize: { amount: 80, unit: 'tea bag' }, brand: 'PG Tips Original 80 tea bags 232 g', shelfLifeDays: 540, guessed: [], provider: 'claude' });
 
     // What was found goes as text, before the request; no photo.
     const msg = net.sent.find((r) => r.url.endsWith('/v1/messages'))!;
@@ -354,6 +356,21 @@ describe('AI module: barcodes found online', () => {
     expect(prompt).toContain('a box of tea bags is bought in boxes');
     expect(prompt).toContain('Exactly one of: each, bag, bale, bar, battery,');
     expect(prompt).toContain('You can search the web, at most 2 times, for the barcode or the product');
+    expect(prompt).toContain('pack_size is a guess unless it is in the description or on a page you looked at');
+  });
+
+  it('says which answers are guesses, for those it filled in', async () => {
+    let reading: Reading = { ...PG, guessed: ['pack_size', 'category'] };
+    const net = internet({ claude: () => ({ id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'end_turn', stop_sequence: null, content: [{ type: 'text', text: JSON.stringify(reading) }], usage: { input_tokens: 1, output_tokens: 1 } }) });
+    const core = await makeCore({ modules: [ai], fetch: net.fetch });
+    await call(core, 'PUT', '/settings', { body: { claude: { apiKey: CLAUDE_KEY } } });
+    expect(await call(core, 'POST', '/describe', { body: FOUND })).toMatchObject({ packSize: { amount: 80, unit: 'tea bag' }, guessed: ['packSize', 'categoryId'] });
+    // A category the household doesn't have isn't filled in, so there's nothing to check.
+    reading = { ...PG, category: 'Hot drinks', guessed: ['category'] };
+    expect(await call(core, 'POST', '/describe', { body: FOUND })).toMatchObject({ categoryId: null, guessed: [] });
+    // A unit that isn't on the list is "each", to be checked.
+    reading = { ...PG, bought_in: 'sleeve', guessed: [] };
+    expect(await call(core, 'POST', '/describe', { body: FOUND })).toMatchObject({ boughtIn: 'each', guessed: ['boughtIn'] });
   });
 
   it('can be switched off, and leaves out units that are not on the list, and contents that are what it is bought in', async () => {
@@ -389,7 +406,7 @@ describe('AI module: barcodes found online', () => {
 describe('AI module: looking it up online', () => {
   const SLEEP: Reading = {
     readable: true, name: 'Twinings Sleep tea bags', kind: 'Herbal tea', title: 'Twinings Sleep', size: '20 tea bags', bought_in: 'box', pack_size: { amount: 20, unit: 'tea bag' },
-    category: 'food', shelf_life_days: 540, shop: null, other_names: ['sleep tea'],
+    category: 'food', shelf_life_days: 540, shop: null, other_names: ['sleep tea'], guessed: [],
   };
   const TWININGS = 'https://www.twinings.co.uk/products/sleep';
   const TESCO = 'https://www.tesco.com/groceries/en-GB/products/123';

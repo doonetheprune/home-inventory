@@ -26,6 +26,8 @@ export interface PhotoReading {
   aliases: string[];
   /** A shop's own brand: `id` is null when Larder doesn't have the shop yet. */
   shop: { name: string; id: string | null; preset: boolean } | null;
+  /** Which of these it guessed rather than read: the scanner marks them to check. */
+  guessed: Array<'boughtIn' | 'packSize' | 'categoryId'>;
   /** Which AI read it, e.g. "Claude". */
   by: string;
   /** Web pages it looked at when the photo wasn't enough, by site name, e.g. "twinings.co.uk". */

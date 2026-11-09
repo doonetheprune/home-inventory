@@ -70,7 +70,7 @@ test('adds an unknown barcode in one go, remembers it, and leaves the tidying fo
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.locator('.sheet-card .pill', { hasText: 'New' })).toBeVisible();
-  await page.getByLabel('What is it?').fill(name);
+  await page.getByLabel('Name').fill(name);
   // One press names it, remembers the barcode and adds the stock; then it's ready for the next scan.
   await page.getByRole('button', { name: 'Add 1', exact: true }).click();
   await expect(page.locator('.toast')).toContainText(`Added 1 · ${name}. Ready for the next scan.`);
@@ -556,7 +556,7 @@ async function pretendAi(page: Page, answer: Record<string, unknown>, until?: Pr
   await page.route('**/api/v1/modules/ai/identify', async (r) => {
     sent.push((r.request().postDataJSON() as { image: string }).image);
     await until;
-    return r.fulfill({ json: { readable: true, kind: null, brand: null, boughtIn: 'each', packSize: null, categoryId: null, shelfLifeDays: null, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [], ...answer } });
+    return r.fulfill({ json: { readable: true, kind: null, brand: null, boughtIn: 'each', packSize: null, categoryId: null, shelfLifeDays: null, aliases: [], shop: null, guessed: [], provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [], ...answer } });
   });
   return sent;
 }
@@ -592,7 +592,8 @@ test('Add by photo is the scanner: Take photo names it, one press adds it, and i
 
   const card = page.locator('.sheet-card');
   await expect(card.getByText("Read from the photo by Gemini. Claude couldn't read the photo: Your credit balance is too low. Check the name.")).toBeVisible();
-  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  await expect(card.getByLabel('Name')).toHaveValue(name);
+  await expect(card.getByRole('button', { name: 'carton', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Paused: finish this one first')).toBeVisible();
   // The photo was shrunk to a JPEG on the phone before it was sent, and sent once.
   expect(sent).toHaveLength(1);
@@ -606,9 +607,10 @@ test('Add by photo is the scanner: Take photo names it, one press adds it, and i
   // Back to the live camera, ready for the next.
   await expect(page.getByRole('img', { name: 'The photo you took' })).toHaveCount(0);
   await expect(shutter).toBeEnabled();
-  // A volume button takes it too, like a camera's shutter.
+  // A volume button takes it too, like a camera's shutter. It's the same again, so the card says it's one you have.
   await page.keyboard.press('AudioVolumeDown');
-  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  await expect(card.locator('.match-box')).toContainText(`Looks like one you have${name}`);
+  await expect(card.getByRole('button', { name: `Add 1 carton to ${name}` })).toBeEnabled();
   expect(sent).toHaveLength(2);
   await card.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
@@ -683,35 +685,56 @@ test('Add from receipt matches lines to items, leaves the rest out, and adds wha
   expect(stock).toEqual([1, 2, 1]);
 });
 
-test('a barcode found online goes to the AI, which works out it is bought in boxes of 80 tea bags', async ({ page }, info) => {
+test('a barcode found online is shown straight away while the AI works out it is bought in boxes of 80 tea bags', async ({ page }, info) => {
   await signIn(page);
   const code = `5000${info.project.name === 'phone' ? '1' : '2'}08023402`;
   const name = `PG Tips tea bags ${info.project.name}`;
   const set = { enabled: true, keySet: true, keyHint: '…abcd', keyFrom: 'app', model: null };
   await page.route('**/api/v1/modules/ai', (r) => r.fulfill({ json: { ready: true, order: ['claude', 'gemini'], first: 'claude', search: true, barcodes: true, claude: set, gemini: set } }));
-  // Open Food Facts knows it (stood in for here); the AI is asked about what it found.
+  const category = await page.evaluate(async () => ((await (await fetch('api/v1/categories')).json()) as Array<{ id: string; name: string }>)[0]!);
+  // Open Food Facts knows it (stood in for here); the AI is asked about what it found, and answers when told to.
   const found = { provider: 'openfoodfacts', barcode: code, name: 'PG tips original 80 pyramid tea bags', brand: 'PG Tips', quantityText: '232 g', imageUrl: null, categories: ['Teas'] };
   await page.route(`**/api/v1/identify?code=${code}`, (r) => r.fulfill({ json: { kind: 'external', code, result: found, suggestions: [] } }));
   const asked: unknown[] = [];
-  await page.route('**/api/v1/modules/ai/describe', (r) => {
+  let answer = () => {};
+  const answered = new Promise<void>((ok) => { answer = ok; });
+  await page.route('**/api/v1/modules/ai/describe', async (r) => {
     asked.push(r.request().postDataJSON());
-    return r.fulfill({ json: { readable: true, name, kind: 'Black tea', brand: 'PG Tips Original 80 tea bags', boughtIn: 'box', packSize: { amount: 80, unit: 'tea bag' }, categoryId: null, shelfLifeDays: 540, aliases: [], shop: null, provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [] } });
+    await answered;
+    return r.fulfill({ json: { readable: true, name: 'PG Tips tea bags', kind: 'Black tea', brand: 'PG Tips Original 80 tea bags', boughtIn: 'box', packSize: { amount: 80, unit: 'tea bag' }, categoryId: category.id, shelfLifeDays: 540, aliases: [], shop: null, guessed: ['categoryId'], provider: 'claude', model: 'claude-haiku-5-5', sources: [], skipped: [] } });
   });
   await page.goto('/#/scan');
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
+
+  // The card is up straight away with what the database says, a spinner in each box the AI is filling in.
   const card = page.locator('.sheet-card');
-  await expect(card.getByText('Found in Open Food Facts, worked out by Claude. Check the name.')).toBeVisible();
+  await expect(card.getByText('Found in Open Food Facts. Claude is working out the rest…')).toBeVisible();
+  await expect(card.getByLabel('Name')).toHaveValue(found.name);
+  await expect(card.getByRole('status', { name: 'Working it out' })).toHaveCount(4);
+  await expect(card.getByRole('button', { name: 'Add 1', exact: true })).toBeDisabled();
   expect(asked).toEqual([{ barcode: code, name: found.name, brand: 'PG Tips', quantityText: '232 g', categories: ['Teas'] }]);
-  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  // A name typed meanwhile is kept when the AI answers.
+  await card.getByLabel('Name').fill(name);
+  await expect(card.getByRole('status', { name: 'Working it out' })).toHaveCount(3);
+  answer();
+
+  await expect(card.getByText('Found in Open Food Facts, worked out by Claude. Check the name.')).toBeVisible();
+  await expect(card.getByRole('status')).toHaveCount(0);
+  await expect(card.getByLabel('Name')).toHaveValue(name);
   // Bought in boxes of 80 tea bags, as the AI read it: the chips say which, and can change it.
   await expect(card.getByRole('button', { name: 'box', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(card.getByLabel('Pack size', { exact: true })).toHaveValue('80');
   await expect(card.getByRole('button', { name: 'Pack size in' })).toHaveText('tea bag');
+  // Its category was a guess: amber, and it says so.
+  await expect(card.getByLabel('Category')).toHaveValue(category.id);
+  await expect(card.locator('.slot.guess')).toHaveCount(1);
+  await expect(card.locator('.slot.guess')).toContainText('Category');
+  await expect(card.locator('.slot.guess .pill')).toHaveText('guess');
   await card.getByRole('button', { name: 'Add 1 box' }).click();
   await expect(page.locator('.toast')).toContainText(`Added 1 box · ${name}`);
-  const item = await page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { name: string; unit: string; packSize: unknown; shelfLifeDays: number }; inStock: number }>).find((s) => s.product.name === n)!, name);
-  expect([item.product.unit, item.product.packSize, item.product.shelfLifeDays, item.inStock]).toEqual(['box', { amount: 80, unit: 'tea bag' }, 540, 1]);
+  const item = await page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { name: string; unit: string; packSize: unknown; shelfLifeDays: number; categoryId: string }; inStock: number }>).find((s) => s.product.name === n)!, name);
+  expect([item.product.unit, item.product.packSize, item.product.shelfLifeDays, item.product.categoryId, item.inStock]).toEqual(['box', { amount: 80, unit: 'tea bag' }, 540, category.id, 1]);
 
   // The AI can't (out of credit): what the barcode database says is still there to add.
   const other = `${code}9`;
@@ -722,7 +745,8 @@ test('a barcode found online goes to the AI, which works out it is bought in box
   await page.getByLabel('Barcode or code').press('Enter');
   await expect(page.locator('.toast')).toContainText("Claude is out of credit. Here's what the barcode database says.");
   await expect(card.getByText('Not in Larder yet. Found in Open Food Facts.')).toBeVisible();
-  await expect(card.getByLabel('Call it')).toHaveValue(found.name);
+  await expect(card.getByRole('status')).toHaveCount(0);
+  await expect(card.getByLabel('Name')).toHaveValue(found.name);
   // The pack size comes from what Open Food Facts printed (232 g); the person says it's a box.
   await expect(card.getByLabel('Pack size', { exact: true })).toHaveValue('232');
   await card.getByRole('button', { name: 'box', exact: true }).click();
@@ -742,7 +766,7 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await page.getByLabel('Barcode or code').press('Enter');
   await page.getByRole('button', { name: 'Read it with AI' }).click();
   const card = page.locator('.sheet-card');
-  await expect(card.getByLabel('Call it')).toHaveValue(name);
+  await expect(card.getByLabel('Name')).toHaveValue(name);
   await expect(card.getByText(code)).toBeVisible();
   await expect(card.getByRole('button', { name: 'jar', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await card.getByRole('button', { name: 'Add 1 jar', exact: true }).click();
@@ -754,7 +778,7 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip' }).click();
 
-  // A pack named exactly, looked up online: the pages are shown, and an item for its kind is offered.
+  // A pack named exactly, looked up online: the pages are shown, and the item the household keeps for its kind is what's offered.
   const kind = `Night-time infusion ${info.project.name}`;
   await page.evaluate(async (n) => fetch('api/v1/products', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, unit: 'box' }) }), kind);
   await pretendAi(page, {
@@ -764,8 +788,14 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await page.getByTestId('scan-upload').setInputFiles({ name: 'tea.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64') });
   await expect(card.getByText('Read from the photo by Claude, looked up on twinings.co.uk and tesco.com. Check the name.')).toBeVisible();
   await expect(card.getByRole('link', { name: 'twinings.co.uk' })).toHaveAttribute('href', 'https://www.twinings.co.uk/sleep');
-  await expect(card.getByLabel('Call it')).toHaveValue(`Twinings Sleep tea bags ${info.project.name}`);
-  await expect(card.getByRole('button', { name: new RegExp(kind) })).toBeVisible();
+  await expect(card.locator('.match-box')).toContainText(`Looks like one you have${kind}`);
+  await expect(card.getByRole('button', { name: `Add 1 box to ${kind}` })).toBeEnabled();
+  // Not it: it's something new, with what the AI read in the boxes, and the item still a tap away.
+  await card.getByRole('button', { name: 'It’s something new' }).click();
+  await expect(card.getByLabel('Name')).toHaveValue(`Twinings Sleep tea bags ${info.project.name}`);
+  await expect(card.getByRole('button', { name: 'Add 1 box', exact: true })).toBeEnabled();
+  await card.getByRole('button', { name: kind }).click();
+  await expect(card.locator('.match-box')).toContainText(`One you have${kind}`);
   await card.getByRole('button', { name: 'Skip' }).click();
 
   // An uploaded photo the AI can't make out says so.
@@ -773,6 +803,7 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
   await page.getByTestId('scan-upload').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: png });
   await expect(card.getByText("It couldn't make it out: check the name.")).toBeVisible();
+  await expect(card.locator('.slot.guess')).toContainText('Name');
   await card.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
 });

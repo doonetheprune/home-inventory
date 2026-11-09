@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0
+
+**The scanner card for something new.** It used to wait for the AI, then show a list of "Is it a brand of something you already have?" options.
+
+- **Shown straight away:** when a barcode is found online, or a photo is taken, the card is up with what's known so far. Each box the AI is filling in has a spinner, and Add waits for it. Anything you type meanwhile is kept.
+- **Four boxes:** Name, Bought in, Pack size and Category. How long it keeps and its other names are still filled in, and can be changed on the item later.
+- **Guesses are amber**, with the word "guess": the AI now says when it guessed what it's bought in, its pack size or its category rather than reading them. A pack size printed on the pack, in the barcode database or on a page it looked at isn't a guess.
+- **One you've already got comes first:** when an item you have is plainly this ("Black tea" for your Breakfast tea), the card says "Looks like one you have", and **Add 1 box to Breakfast tea** adds it as a brand. **It's something new** is underneath if it isn't.
+- **No more near misses picked for you:** other items are offered as links only when their name shares a word with it (Breakfast tea for PG Tips tea bags, not Bin bags or Candles). The old card picked the barcode database's nearest match unless you changed it.
+- **On a phone, Skip and Add stay at the bottom of the card** while you scroll the boxes.
+
 ## 0.10.1
 
 **Part of a box is said in what's in it.** "About ⅔ box" didn't say how many eggs were left.

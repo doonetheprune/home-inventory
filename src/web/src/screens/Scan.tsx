@@ -1,14 +1,14 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { isLoose, parseAmount, type IdentifyResult, type LookupResult, type Place, type ProductSummary } from '@larder/core';
+import { isLoose, parseAmount, type IdentifyResult, type LookupResult, type Place, type ProductSummary, type UnitAmount } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
 import { plural, qty, stockText } from '../format';
 import { readBarcode, useBarcodeScanner } from '../components/useBarcodeScanner';
 import { grabFrame } from '../components/camera';
 import { usePhotoReader, type PhotoReading } from '../components/photoReader';
-import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
+import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useCategories, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
 import { UnitPicker } from '../components/UnitPicker';
 import { notBoughtIn } from '../components/ProductForm';
 import { useUnits } from '../units';
@@ -24,9 +24,13 @@ const MODE_CHIP: Record<Mode, [string, string]> = {
 
 /** A barcode just scanned that nothing knew, kept while the AI reads the pack. */
 interface Kept { code: string; external: LookupResult | null; suggestions: ProductSummary[] }
-interface AiDraft { photo: Blob | null; reading: PhotoReading; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
-/** What's being looked up: a barcode, a barcode found online that the AI is reading, or a photo the AI is reading. */
-type Looking = false | 'code' | 'barcode' | 'photo';
+/**
+ * Something new the AI is working out (`working`) or has worked out, from a barcode found online or a
+ * photo. Its card is up meanwhile, with what's known so far. `id` tells an old answer from this one's.
+ */
+interface AiDraft { id: number; photo: Blob | null; reading: PhotoReading | null; working: boolean; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
+/** What's being looked up: a barcode, or a photo (checking it for a barcode Larder knows). */
+type Looking = false | 'code' | 'photo';
 
 export function Scan() {
   const [params, setParams] = useSearchParams();
@@ -43,6 +47,9 @@ export function Scan() {
   const [target, setTarget] = useState<{ id: string; label: string } | null>(null);
   /** What the AI read from a photo, as a new item to check and add. */
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
+  const drafts = useRef(0);
+  const draftRef = useRef(aiDraft);
+  draftRef.current = aiDraft;
   /**
    * The photo the AI is reading (or has read). One taken with the camera stays
    * still in the viewfinder until its card is done, so it's clear the photo was taken.
@@ -87,19 +94,24 @@ export function Scan() {
         if (mode === 'add') setTarget({ id: r.place.id, label: r.place.code ?? r.place.name });
       }
       if (r.kind === 'product' && (mode === 'move' || mode === 'putaway')) setPending(r.product);
-      // Found online, with Read barcode results with AI on: the AI works out the rest (counted in tea bags, a box of 80).
+      // Found online, with Read barcode results with AI on: the card shows what the database says straight
+      // away, and the AI fills in the rest as it comes (bought in boxes of 80 tea bags).
       const describe = readerRef.current?.describe;
       if (r.kind === 'external' && describe) {
-        setLooking('barcode');
-        try {
-          const reading = await describe(r.result);
-          setResult(null);
-          setAiDraft({ photo: null, reading, code: r.code, external: r.result, suggestions: r.suggestions });
-          return;
-        } catch (err) {
-          toast({ text: `${err instanceof ApiError ? err.message : "The AI couldn't read it."} Here's what the barcode database says.`, error: true });
-        }
+        const id = ++drafts.current;
+        setResult(null);
+        setAiDraft({ id, photo: null, reading: null, working: true, code: r.code, external: r.result, suggestions: r.suggestions });
+        describe(r.result).then(
+          (reading) => setAiDraft((d) => (d?.id === id ? { ...d, reading, working: false } : d)),
+          (err: unknown) => {
+            if (draftRef.current?.id !== id) return;
+            setAiDraft((d) => (d?.id === id ? { ...d, working: false } : d));
+            toast({ text: `${err instanceof ApiError ? err.message : "The AI couldn't read it."} Here's what the barcode database says.`, error: true });
+          },
+        );
+        return;
       }
+      setAiDraft(null);
       setResult(r);
     } catch (err) {
       toast({ text: err instanceof ApiError ? err.message : 'That code could not be looked up.', error: true });
@@ -173,12 +185,30 @@ export function Scan() {
       const barcode = keep?.code ?? (await readBarcode(photo));
       const known = !keep && barcode ? await api.identify(barcode).catch(() => null) : null;
       if (known?.kind === 'product') {
+        setAiDraft(null);
         setResult(known);
         return;
       }
-      const r = await reading;
+      // Not one Larder knows: its card is up while the AI reads the photo.
+      const id = ++drafts.current;
+      const external = keep?.external ?? (known?.kind === 'external' ? known.result : null);
       setResult(null);
-      setAiDraft({ photo: r.photo ?? photo, reading: r, code: barcode, external: keep?.external ?? (known?.kind === 'external' ? known.result : null), suggestions: keep?.suggestions ?? (known?.kind === 'external' ? known.suggestions : []) });
+      setAiDraft({ id, photo, reading: null, working: true, code: barcode, external, suggestions: keep?.suggestions ?? (known?.kind === 'external' ? known.suggestions : []) });
+      setLooking(false);
+      shooting.current = false;
+      try {
+        const r = await reading;
+        setAiDraft((d) => (d?.id === id ? { ...d, photo: r.photo ?? photo, reading: r, working: false } : d));
+      } catch (err) {
+        if (draftRef.current?.id !== id) return;
+        // What a barcode database said is still worth adding; with nothing else, the card goes.
+        if (external) setAiDraft((d) => (d?.id === id ? { ...d, working: false } : d));
+        else {
+          setAiDraft(null);
+          setTaken(null);
+        }
+        toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
+      }
     } catch (err) {
       setTaken(null);
       toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
@@ -216,8 +246,9 @@ export function Scan() {
   }, [reader, mode, state, holding]);
 
   // What the camera's doing, on the chip at the top of it.
-  const [chipIcon, chipText]: [string, string] = looking === 'photo' ? ['sparkle', 'Reading the photo…']
-    : looking === 'barcode' ? ['sparkle', 'Working it out…']
+  const readingPhoto = looking === 'photo' || (!!aiDraft?.working && !!aiDraft.photo);
+  const [chipIcon, chipText]: [string, string] = readingPhoto ? ['sparkle', 'Reading the photo…']
+    : aiDraft?.working ? ['sparkle', 'Working it out…']
     : looking && camera ? ['clock', 'Looking it up…']
     : holding && camera ? ['clock', 'Paused: finish this one first']
     : [MODE_CHIP[mode][0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]];
@@ -251,7 +282,7 @@ export function Scan() {
             <div className="stack" style={{ gap: 8 }}>
               {shutter && (
                 <button type="button" className="btn primary block" disabled={state !== 'on' || holding} onClick={() => void readWithAi()}>
-                  {looking === 'photo' && taken?.shot ? <><Icon name="sparkle" />Reading the photo…</> : <><Icon name="camera" />Take photo</>}
+                  {readingPhoto && taken?.shot ? <><Icon name="sparkle" />Reading the photo…</> : <><Icon name="camera" />Take photo</>}
                 </button>
               )}
               <span className="small muted">
@@ -271,12 +302,6 @@ export function Scan() {
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
         <div className={`section ${looking || result || pending || aiDraft ? 'scan-result' : ''}`}>
           {looking === 'code' && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
-          {looking === 'barcode' && (
-            <div className="sheet-card">
-              <div className="row" style={{ gap: 10 }}><div className="spinner" /><b>Found it online. {by ?? 'The AI'} is working out the details…</b></div>
-              <span className="small muted">What it’s counted in, what it comes in, its type and how long it keeps. This takes a few seconds.</span>
-            </div>
-          )}
           {looking === 'photo' && (
             <div className="sheet-card">
               <div className="match">
@@ -289,8 +314,8 @@ export function Scan() {
             </div>
           )}
           {!looking && aiDraft && (
-            <NewItemCard key={aiDraft.code ?? 'photo'} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} photo={aiDraft.photo ?? undefined}
-              mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
+            <NewItemCard key={aiDraft.id} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} working={aiDraft.working} by={by}
+              photo={aiDraft.photo ?? undefined} mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
           )}
           {!looking && pending && !result && (
             <div className="sheet-card">
@@ -449,52 +474,101 @@ function usePhotoUrl(photo: Blob | null | undefined): string | null {
   return photo ? url : null;
 }
 
+
+/** The boxes a new item's card fills in. */
+type Box = 'name' | 'boughtIn' | 'packSize' | 'categoryId';
+/** What's been typed or picked in them on the card. */
+interface Own { name?: string; boughtIn?: string; packSize?: UnitAmount | null; categoryId?: string | null }
+/** A spinner while the AI works on a box, or that it guessed. */
+type Mark = 'working' | 'guess' | null;
+
+/** A box's name, with a spinner while the AI works on it, or "guess" in amber (and in words) when it guessed. */
+function BoxLabel({ text, mark }: { text: string; mark: Mark }) {
+  return (
+    <span>
+      {text}
+      {mark === 'working' && <span className="spinner sm" role="status" aria-label="Working it out" />}
+      {mark === 'guess' && <span className="pill p-soon">guess</span>}
+    </span>
+  );
+}
+
 /**
  * Something new to Larder, from a barcode (found online, or not) and/or a photo
- * the AI read: named, remembered and added in one press, then on to the next.
+ * the AI reads: named, remembered and added in one press, then on to the next.
+ * It's up while the AI works (`working`), with a spinner in each box it's
+ * filling in; a box changed meanwhile keeps what was typed. When it plainly is
+ * an item the household has, that's what the card offers.
  */
-function NewItemCard({ code, external, suggestions, tried = [], failed = [], reading, photo, mode, target, onDone, onIdentified, onReadWithAi }: {
+function NewItemCard({ code, external, suggestions, tried = [], failed = [], reading = null, working = false, by = null, photo, mode, target, onDone, onIdentified, onReadWithAi }: {
   code: string | null; external: LookupResult | null; suggestions: ProductSummary[]; tried?: string[]; failed?: string[];
-  reading?: PhotoReading; photo?: Blob; mode: Mode; target: { id: string; label: string } | null;
+  reading?: PhotoReading | null; working?: boolean; by?: string | null; photo?: Blob; mode: Mode; target: { id: string; label: string } | null;
   onDone: () => void; onIdentified: (r: IdentifyResult) => void; onReadWithAi?: () => void;
 }) {
   const places = usePlaces();
+  const categories = useCategories();
   const { run, busy } = useAction();
   const photoUrl = usePhotoUrl(photo);
   const units = useUnits();
-  const [name, setName] = useState(reading?.name ?? external?.name ?? '');
-  const [choice, setChoice] = useState<string>(suggestions[0] ? suggestions[0].product.id : 'new');
-  // Bought in, and its pack size as the AI or the barcode database read it ("400 g", "20 tea bags"): is it a box or a weight?
+  // The pack size as the barcode database printed it ("400 g", "20 tea bags").
   const printed = parseAmount(units, external?.quantityText);
-  const [boughtIn, setBoughtIn] = useState<string>(reading?.boughtIn ?? 'each');
-  const [packSize, setPackSize] = useState<{ amount: number; unit: string } | null>(reading?.packSize ?? (printed ? { amount: printed.amount, unit: printed.unit } : null));
+  const printedPack = printed ? { amount: printed.amount, unit: printed.unit } : null;
+  // What's typed or picked here; until then, what the AI read (once it has) or what the barcode database says.
+  const [own, setOwn] = useState<Own>({});
+  const set = <K extends keyof Own>(k: K, v: Own[K]) => setOwn((o) => ({ ...o, [k]: v }));
+  const name = own.name ?? reading?.name ?? external?.name ?? '';
+  const boughtIn = own.boughtIn ?? reading?.boughtIn ?? 'each';
+  const packSize = 'packSize' in own ? (own.packSize ?? null) : (reading?.packSize ?? printedPack);
+  const categoryId = 'categoryId' in own ? (own.categoryId ?? null) : (reading?.categoryId ?? null);
+  const mark = (b: Box): Mark => (b in own ? null : working ? 'working' : !reading ? null : b === 'name' ? (reading.readable ? null : 'guess') : reading.guessed.includes(b) ? 'guess' : null);
   // A multipack of separate things is that many added: a 4-pack of tins is 4 tins.
   const [n, setN] = useState(printed && printed.count > 1 ? printed.count : 1);
   const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
-  const [shopId, setShopId] = useState<string | null>(reading?.shop?.id ?? null);
+  const [addedShop, setAddedShop] = useState<string | null>(null);
+  const shopId = addedShop ?? reading?.shop?.id ?? null;
+
   const dq = useDebounced(name.trim(), 250);
   const { data } = useQuery({ queryKey: ['search', dq], queryFn: () => api.search(dq), enabled: !external && dq.length > 2 });
-  // The plain kind the AI gave ("Herbal tea") finds an item the household keeps for any brand of it.
-  const kind = reading?.kind?.trim() ?? '';
-  const byKind = useQuery({ queryKey: ['search', kind], queryFn: () => api.search(kind), enabled: !external && kind.length > 2 });
+  // What the AI says it is ("Black tea", or its name when that's all it is) finds an item the household keeps for any brand of it.
+  const said = (reading?.kind ?? reading?.name ?? '').trim();
+  const bySaid = useQuery({ queryKey: ['search', said], queryFn: () => api.search(said), enabled: said.length > 2 });
   const stockIn = (r: typeof data) => r?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? [];
-  // Turn about, so the best match for the kind isn't pushed out by near matches for the name.
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  /** An item that plainly is this: called, or also called, what the AI or the barcode database says it is. */
+  const plainly = (c: ProductSummary) => [c.product.name, ...c.product.aliases].some((x) => [reading?.name, reading?.kind, external?.name].some((y) => !!y && same(x, y)));
+  // Search finds near matches ("tea lights" for tea bags): others are offered only when their own name shares a word
+  // with what this is, other than a unit's ("bags").
+  const words = (t: string) => t.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2).map((w) => w.replace(/s$/, ''));
+  const unitWords = new Set(units.all.flatMap((u) => [u.key, u.one, u.many]).filter((w) => !w.includes(' ')).flatMap(words));
+  const wanted = new Set([name, reading?.name, reading?.kind, external?.name].flatMap((t) => (t ? words(t) : [])).filter((w) => !unitWords.has(w)));
+  const related = (c: ProductSummary) => plainly(c) || words(c.product.name).some((w) => wanted.has(w));
+  // Turn about, so the best match for what it is isn't pushed out by near matches for the name; plain ones first.
   const byName = stockIn(data);
-  const forKind = stockIn(byKind.data);
-  const candidates: ProductSummary[] = external ? suggestions
-    : Array.from({ length: Math.max(byName.length, forKind.length) }, (_, i) => [byName[i], forKind[i]]).flat()
-      .filter((c, i, all): c is ProductSummary => !!c && all.findIndex((x) => x?.product.id === c.product.id) === i).slice(0, 3);
+  const forSaid = stockIn(bySaid.data);
+  const candidates = [...suggestions, ...Array.from({ length: Math.max(byName.length, forSaid.length) }, (_, i) => [forSaid[i], byName[i]]).flat()]
+    .filter((c, i, all): c is ProductSummary => !!c && all.findIndex((x) => x?.product.id === c.product.id) === i && related(c))
+    .sort((a, b) => Number(plainly(b)) - Number(plainly(a)))
+    .slice(0, 3);
+  /** The item picked here, "new", or (null) the one it plainly is, if any. */
+  const [picked, setPicked] = useState<ProductSummary | 'new' | null>(null);
+  const likely = candidates[0] && plainly(candidates[0]) ? candidates[0] : undefined;
+  const into = picked === 'new' ? undefined : (picked ?? likely);
+  const others = candidates.filter((c) => c.product.id !== into?.product.id);
+  // Adding waits for the AI, and for what it says to be looked for among the household's items.
+  const settling = working || bySaid.isFetching;
+
   const brand = reading?.brand ?? (external ? [external.brand, external.name, external.quantityText].filter(Boolean).join(' ') : null);
   const adding = mode === 'add';
-  const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
   // Add counts whole ones of what it's bought in: the item's, or what's picked here for a new one.
   const unit = into ? into.product.unit : boughtIn;
   const fits = !!packSize && packSize.unit !== boughtIn && !isLoose(units, { unit: boughtIn });
+  const ai = reading?.by ?? by ?? 'the AI';
+  const where = external ? PROVIDER_NAMES[external.provider] ?? external.provider : 'a barcode database';
 
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
-    const made = await run(() => (shop.preset ? api.shops.addPreset(shop.name) : api.shops.create({ name: shop.name, sells: reading?.categoryId ? [reading.categoryId] : [] })), `${shop.name} added to your shops`);
-    if (made) setShopId(made.id);
+    const made = await run(() => (shop.preset ? api.shops.addPreset(shop.name) : api.shops.create({ name: shop.name, sells: categoryId ? [categoryId] : [] })), `${shop.name} added to your shops`);
+    if (made) setAddedShop(made.id);
   }
 
   /** Remembers the barcode (or makes the item), keeps the photo, and when adding, adds the stock too: one press. */
@@ -502,8 +576,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
     const fields = {
       name: name.trim(),
       unit: boughtIn,
-      packSize: fits ? packSize: null,
-      ...(reading ? { categoryId: reading.categoryId, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
+      packSize: fits ? packSize : null,
+      categoryId,
+      ...(reading ? { shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
       preferredShopIds: shopId ? [shopId] : [],
     };
     const res = await run(async () => {
@@ -537,7 +612,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
     else onIdentified(res.identified);
   }
 
+  const ready = !busy && !settling && (!!into || !!name.trim());
   const tile = photoUrl ?? external?.imageUrl ?? null;
+  const box = (b: Box) => `field slot${mark(b) === 'guess' ? ' guess' : ''}`;
   return (
     <div className="sheet-card">
       <div className="match">
@@ -550,16 +627,17 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
       <p className="small">
         <span className="pill p-wish">New</span>{' '}
         <span className="muted">
-          {reading ? (
+          {working ? (
+            photo ? `Reading the photo with ${ai}…` : `Found in ${where}. ${ai.charAt(0).toUpperCase()}${ai.slice(1)} is working out the rest…`
+          ) : reading ? (
             <>
-              {photo ? `Read from the photo by ${reading.by}` : `Found in ${external ? PROVIDER_NAMES[external.provider] ?? external.provider : 'a barcode database'}, worked out by ${reading.by}`}
+              {photo ? `Read from the photo by ${reading.by}` : `Found in ${where}, worked out by ${reading.by}`}
               {reading.sources?.length ? <>, looked up on {reading.sources.map((x, i, all) => (
                 <Fragment key={x.url}>{i ? (i === all.length - 1 ? ' and ' : ', ') : ''}<a href={x.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{x.name}</a></Fragment>
               ))}</> : null}
               .{reading.notes.map((x) => ` ${x}`).join('')}{reading.readable ? ' Check the name.' : " It couldn't make it out: check the name."}
-
             </>
-          ) : external ? `Not in Larder yet. Found in ${PROVIDER_NAMES[external.provider] ?? external.provider}.` : (
+          ) : external ? `Not in Larder yet. Found in ${where}.` : (
             <>
               {tried.length ? `${tried.join(', ')} ${tried.length === 1 ? "doesn't" : "don't"} know this barcode. ` : ''}
               {failed.length ? `Couldn't reach ${failed.join(', ')} just now. ` : ''}
@@ -574,40 +652,61 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
           <Icon name="sparkle" size="sm" />Read it with AI
         </button>
       )}
-      <label className="field"><span>{external || reading ? 'Call it' : 'What is it?'}</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!external && !reading}
-        onKeyDown={(e) => { if (e.key === 'Enter' && !busy && (choice !== 'new' || name.trim())) void save(); }} /></label>
-      {candidates.length > 0 && (
-        <div className="field"><span>Is it a brand of something you already have?</span>
-          <div className="stack" style={{ gap: 8 }}>
-            {candidates.map((c) => (
-              <button key={c.product.id} type="button" className={`choice ${choice === c.product.id ? 'on' : ''}`} onClick={() => setChoice(c.product.id)}>
-                <span className="radio" /><span className="item-main"><span className="item-name">{c.product.name}</span><span className="item-meta">You have {stockText(c)} · adds this as a brand</span></span>
-              </button>
-            ))}
-            <button type="button" className={`choice ${choice === 'new' ? 'on' : ''}`} onClick={() => setChoice('new')}><span className="radio" /><span className="item-main"><span className="item-name">No, it’s something new</span><span className="item-meta">Creates “{name.trim() || 'a new item'}”</span></span></button>
+      {into ? (
+        <>
+          <div className="match-box">
+            <span className="small">{picked ? 'One you have' : 'Looks like one you have'}</span>
+            <b>{into.product.name}</b>
+            <span className="small muted">You have {stockText(into)}{code || brand ? ' · adds this as a brand' : ''}</span>
           </div>
-        </div>
-      )}
-      {choice === 'new' && (
-        <div className="field"><span>Bought in</span>
-          <div className="chips wrap">
-            {CHIPS.map((k) => <button key={k} type="button" className={`chip ${boughtIn === k ? 'on' : ''}`} aria-pressed={boughtIn === k} onClick={() => setBoughtIn(k)}>{units.find(k)?.one ?? k}</button>)}
-            {!CHIPS.includes(boughtIn) && <span className="chip on">{units.find(boughtIn)?.one ?? boughtIn}</span>}
-            <UnitPicker value={null} onChange={setBoughtIn} kinds={['count', 'weight', 'volume']} exclude={notBoughtIn(units)} label="Bought in" empty="More…" />
+          <p className="small muted" style={{ margin: 0 }}>
+            Not it?{' '}
+            {others.map((c) => <Fragment key={c.product.id}><button type="button" className="link small" onClick={() => setPicked(c)}>{c.product.name}</button>{' · '}</Fragment>)}
+            <button type="button" className="link small" onClick={() => setPicked('new')}>It’s something new</button>
+          </p>
+        </>
+      ) : (
+        <>
+          <label className={box('name')}><BoxLabel text="Name" mark={mark('name')} />
+            <input className="input" value={name} onChange={(e) => set('name', e.target.value)} autoFocus={!external && !reading && !working}
+              onKeyDown={(e) => { if (e.key === 'Enter' && ready) void save(); }} />
+          </label>
+          {others.length > 0 && (
+            <p className="small muted" style={{ margin: 0 }}>
+              Already have it?{' '}
+              {others.map((c, i) => <Fragment key={c.product.id}>{i ? ' · ' : ''}<button type="button" className="link small" onClick={() => setPicked(c)}>{c.product.name}</button></Fragment>)}
+            </p>
+          )}
+          <div className={box('boughtIn')}><BoxLabel text="Bought in" mark={mark('boughtIn')} />
+            <div className="chips wrap">
+              {CHIPS.map((k) => {
+                const on = mark('boughtIn') !== 'working' && boughtIn === k;
+                return <button key={k} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => set('boughtIn', k)}>{units.find(k)?.one ?? k}</button>;
+              })}
+              {!CHIPS.includes(boughtIn) && <span className="chip on">{units.find(boughtIn)?.one ?? boughtIn}</span>}
+              <UnitPicker value={null} onChange={(k) => set('boughtIn', k)} kinds={['count', 'weight', 'volume']} exclude={notBoughtIn(units)} label="Bought in" empty="More…" />
+            </div>
           </div>
           {!isLoose(units, { unit: boughtIn }) && (
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <span className="small">Pack size</span>
-              <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packSize?.amount ?? ''} aria-label="Pack size" placeholder="20"
-                onChange={(e) => setPackSize(Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: packSize?.unit ?? 'g' } : null)} />
-              <UnitPicker value={packSize?.unit ?? null} onChange={(k) => setPackSize({ amount: packSize?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
+            <div className={box('packSize')}><BoxLabel text="Pack size" mark={mark('packSize')} />
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packSize?.amount ?? ''} aria-label="Pack size" placeholder="20"
+                  onChange={(e) => set('packSize', Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: packSize?.unit ?? 'g' } : null)} />
+                <UnitPicker value={packSize?.unit ?? null} onChange={(k) => set('packSize', { amount: packSize?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
+              </div>
               {packSize && !fits && <small style={{ color: 'var(--low)' }}>It's bought in {plural(boughtIn, 2) || boughtIn}, so the pack size can't be in them too.</small>}
             </div>
           )}
-        </div>
-      )}
-      {reading?.shop && !shopId && choice === 'new' && (
-        <p className="small muted" style={{ margin: 0 }}>{reading.shop.name}’s own brand, and {reading.shop.name} isn’t one of your shops. <button type="button" className="link small" disabled={busy} onClick={() => void addShop(reading.shop!)}>Add {reading.shop.name}</button></p>
+          <label className={box('categoryId')}><BoxLabel text="Category" mark={mark('categoryId')} />
+            <select className="input" value={categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value || null)}>
+              <option value="">None</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          {reading?.shop && !shopId && (
+            <p className="small muted" style={{ margin: 0 }}>{reading.shop.name}’s own brand, and {reading.shop.name} isn’t one of your shops. <button type="button" className="link small" disabled={busy} onClick={() => void addShop(reading.shop!)}>Add {reading.shop.name}</button></p>
+          )}
+        </>
       )}
       {adding && (
         <>
@@ -617,7 +716,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
       )}
       <div className="btnrow">
         <button type="button" className="btn" onClick={onDone}>Skip</button>
-        <button type="button" className="btn primary" disabled={busy || (choice === 'new' && !name.trim())} onClick={() => void save()}>
+        <button type="button" className="btn primary" disabled={!ready} onClick={() => void save()}>
           {adding ? `Add ${qty(n, unit)}${into ? ` to ${into.product.name}` : ''}` : 'Save and continue'}
         </button>
       </div>

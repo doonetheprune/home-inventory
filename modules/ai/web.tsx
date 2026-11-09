@@ -23,6 +23,7 @@ interface Identified {
   shelfLifeDays: number | null;
   aliases: string[];
   shop: { name: string; id: string | null; preset: boolean } | null;
+  guessed: Array<'boughtIn' | 'packSize' | 'categoryId'>;
   provider: ProviderId;
   model: string;
   /** Web pages it looked at, when the photo wasn't enough. */
@@ -93,7 +94,7 @@ const photoReader: PhotoReader = {
 function reading(r: Identified): PhotoReading {
   return {
     readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, boughtIn: r.boughtIn, packSize: r.packSize ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
-    by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message),
+    guessed: r.guessed ?? [], by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message),
   };
 }
 

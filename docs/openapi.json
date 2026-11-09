@@ -19666,6 +19666,17 @@
                         }
                       ]
                     },
+                    "guessed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "boughtIn",
+                          "packSize",
+                          "categoryId"
+                        ]
+                      }
+                    },
                     "provider": {
                       "type": "string",
                       "enum": [
@@ -19730,6 +19741,7 @@
                     "shelfLifeDays",
                     "aliases",
                     "shop",
+                    "guessed",
                     "provider",
                     "model",
                     "sources",
@@ -19899,6 +19911,17 @@
                         }
                       ]
                     },
+                    "guessed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "boughtIn",
+                          "packSize",
+                          "categoryId"
+                        ]
+                      }
+                    },
                     "provider": {
                       "type": "string",
                       "enum": [
@@ -19963,6 +19986,7 @@
                     "shelfLifeDays",
                     "aliases",
                     "shop",
+                    "guessed",
                     "provider",
                     "model",
                     "sources",
