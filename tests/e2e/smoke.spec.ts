@@ -315,10 +315,10 @@ test('counts eggs out of a box of 6 when cooking, and keeps them in boxes', asyn
   await signIn(page);
   const eggs = `Boxed eggs ${info.project.name}`;
   const id = await page.evaluate(async ([name, title]) => {
-    const post = async (path: string, body: unknown) => (await fetch(path, { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+    const post = async (path: string, body: unknown) => (await (await fetch(path, { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json()) as { id: string };
     const p = await post('api/v1/products', { name, unit: 'box', packSize: { amount: 6, unit: 'egg' } });
     await post('api/v1/stock/add', { productId: p.id, quantity: 1 });
-    return (await post('api/v1/modules/recipes', { title, ingredients: [{ name: 'eggs', productId: p.id, ratio: 2, ratioUnit: '' }] })).id as string;
+    return (await post('api/v1/modules/recipes', { title, ingredients: [{ name: 'eggs', productId: p.id, ratio: 2, ratioUnit: '' }] })).id;
   }, [eggs, `Boiled eggs ${info.project.name}`]);
   await page.goto(`/#/m/recipes/${id}`);
   await page.getByRole('button', { name: 'Cooked it' }).click();
