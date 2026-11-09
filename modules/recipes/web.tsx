@@ -3,13 +3,13 @@
  * the recipes that use an item, on its page; and a scenario's recipes, on the scenario's page.
  */
 import { useState } from 'react';
-import { isLoose } from '@larder/core';
+import { fromBoughtIn, isCount, isLoose, roundQty, stockText, toBoughtIn, type UnitAmount } from '@larder/core';
 import {
-  api, defineWebModule, Empty, Header, Icon, Link, Loading, Pill, qty, Sheet, Stepper, Switch, useAction, useModuleEnabled, useModuleParams, useNavigate, useQuery, useUnits,
+  api, defineWebModule, Empty, Header, Icon, Link, Loading, num, Pill, Sheet, Stepper, Switch, useAction, useModuleEnabled, useModuleParams, useNavigate, useQuery, useUnits,
   type ProductDetail,
 } from '@larder/web-sdk';
 
-interface Have { name: string; productId: string | null; item: string | null; amount: string; quantity: number | null; unit: string | null; inStock: number | null; status: 'have' | 'short' | 'none' | 'unknown'; optional: boolean; ratio: number | null; ratioUnit: string; shown: string; label: string; scales: boolean; need: number | null }
+interface Have { name: string; productId: string | null; item: string | null; amount: string; quantity: number | null; unit: string | null; packSize: UnitAmount | null; inStock: number | null; status: 'have' | 'short' | 'none' | 'unknown'; optional: boolean; ratio: number | null; ratioUnit: string; shown: string; label: string; scales: boolean; need: number | null }
 interface Preset { name: string; times: number }
 interface Scale { kind: 'saved' | 'preset' | 'servings' | 'times' | 'have'; times: number; preset: string | null; servings: number | null; by: string; limitedBy: string | null }
 interface Recipe {
@@ -17,7 +17,7 @@ interface Recipe {
   presets: Preset[]; defaultPreset: string | null; scale: Scale;
   scenarioIds: string[]; scenarioOnly: boolean; scenarios: Array<{ id: string; name: string }>; hidden: boolean;
 }
-interface Proposal { id: string; recipe: string; items: Array<{ productId: string; name: string; quantity: number; unit: string; inStock: number }>; skipped: string[] }
+interface Proposal { id: string; recipe: string; items: Array<{ productId: string; name: string; quantity: number; unit: string; packSize: UnitAmount | null; inStock: number }>; skipped: string[] }
 /** How much to make, as the API takes it. */
 interface Ask { preset?: string; times?: number; servings?: number; have?: Array<{ ingredient: string; amount: number }> }
 
@@ -104,12 +104,18 @@ function Cooked({ recipe, ask, onClose }: { recipe: Recipe; ask: Ask | null; onC
           <>
             <p className="small muted">This is what Larder will take out of stock. Change anything you used more or less of.</p>
             <div className="list">
-              {p.items.map((i) => (
-                <div className="numfield" key={i.productId}>
-                  <span><b>{i.name}</b><small>{qty(i.inStock, i.unit)} in</small></span>
-                  <Stepper value={changes[i.productId] ?? i.quantity} onChange={(n) => setChanges({ ...changes, [i.productId]: n })} min={0} max={i.inStock} step={isLoose(units, { unit: i.unit }) ? 10 : 1} label={i.unit} />
-                </div>
-              ))}
+              {p.items.map((i) => {
+                // Boxes of 6 eggs are counted out in eggs; what's taken is still kept in boxes.
+                const inside = i.packSize && isCount(units, i.packSize.unit) ? i.packSize.unit : null;
+                const shown = (n: number) => (inside ? Math.round(fromBoughtIn(units, i, n, inside)) : n);
+                const taken = (n: number) => (inside ? Math.min(i.inStock, roundQty(toBoughtIn(units, i, n, inside))) : n);
+                return (
+                  <div className="numfield" key={i.productId}>
+                    <span><b>{i.name}</b><small>{stockText(units, i, i.inStock, num, ' in')}</small></span>
+                    <Stepper value={shown(changes[i.productId] ?? i.quantity)} onChange={(n) => setChanges({ ...changes, [i.productId]: taken(n) })} min={0} max={shown(i.inStock)} step={isLoose(units, { unit: i.unit }) ? 10 : 1} label={inside ?? i.unit} />
+                  </div>
+                );
+              })}
               {!p.items.length && <div className="item"><span className="muted small">Nothing to take: none of the ingredients has an amount in Larder's units.</span></div>}
             </div>
             {p.skipped.length > 0 && <p className="small muted">Not taken: {p.skipped.join(', ')}.</p>}
@@ -185,6 +191,7 @@ function SavePresetSheet({ recipe, onSaved, onClose }: { recipe: Recipe; onSaved
 }
 
 function RecipePage() {
+  const units = useUnits();
   const { id } = useModuleParams();
   // The amounts picked for this recipe; none means its default preset (or the amounts as saved).
   const [asked, setAsked] = useState<{ id: string | undefined; ask: Ask } | null>(null);
@@ -240,7 +247,7 @@ function RecipePage() {
                     <span className="item-main">
                       <span className="item-name">{i.label}{i.optional ? ' (optional)' : ''}</span>
                       {(i.item || (!i.scales && s.times !== 1)) && (
-                        <span className="item-meta">{i.item ? `${i.item}: ${qty(i.inStock ?? 0, i.unit ?? 'each')} in` : ''}{i.item && !i.scales && s.times !== 1 ? ' · ' : ''}{!i.scales && s.times !== 1 ? 'Not scaled' : ''}</span>
+                        <span className="item-meta">{i.item ? `${i.item}: ${stockText(units, { unit: i.unit ?? 'each', packSize: i.packSize }, i.inStock ?? 0, num, ' in')}` : ''}{i.item && !i.scales && s.times !== 1 ? ' · ' : ''}{!i.scales && s.times !== 1 ? 'Not scaled' : ''}</span>
                       )}
                     </span>
                     <Pill kind={kind}>{text}</Pill>

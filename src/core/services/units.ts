@@ -346,23 +346,46 @@ export function unitWord(units: Units, unit: string, n: number): string {
   return one ? u.one : u.many;
 }
 
-const QUARTERS: Record<number, string> = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
-/** 3.75 as "3¾", 0.5 as "½", 4 as "4". */
-const quarters = (q: number) => {
-  const whole = Math.floor(q);
-  const part = QUARTERS[Math.round((q - whole) * 4) / 4];
-  return part ? `${whole || ''}${part}` : String(whole);
-};
+const PARTS: Array<[number, string]> = [[0, ''], [0.25, '¼'], [1 / 3, '⅓'], [0.5, '½'], [2 / 3, '⅔'], [0.75, '¾'], [1, '']];
+/** Roughly `n`, to the nearest quarter or third and at least ¼: 3.8 as "3¾", 0.7 as "⅔", 0.1 as "¼", 4.05 as "4". `q` is what that reads as, for the unit's word. */
+function roughly(n: number, num: NumberText): { q: number; text: string } {
+  const whole = Math.floor(n);
+  const [f, part] = PARTS.reduce((a, b) => (Math.abs(n - whole - b[0]) < Math.abs(n - whole - a[0]) ? b : a));
+  if (whole + f < 0.25) return { q: 0.25, text: '¼' };
+  return { q: whole + f, text: part ? `${whole || ''}${part}` : num(whole + f) };
+}
 
 /**
- * Stock in what it's bought in: "4 boxes", "about 3¾ boxes", "about ¾ jar", "350 g", "1.6 kg".
- * Part of one left is said in quarters, at least ¼.
+ * Part of one, in what's in its pack when its pack size is a count: "10 fish fingers", "about 3
+ * eggs". Null for any other pack size, or when it's less than one of them.
  */
-export function stockText(units: Units, item: Pick<UnitItem, 'unit'>, n: number, num: NumberText = plain): string {
-  if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001) return amountText(units, Math.round(n * 1000) / 1000, item.unit, num);
-  const q = Math.max(0.25, Math.round(n * 4) / 4);
+function countInside(units: Units, item: Pick<UnitItem, 'unit' | 'packSize'>, n: number, num: NumberText): string | null {
+  const c = item.packSize ?? null;
+  if (n <= 0 || !c || !isCount(units, c.unit) || !unitWord(units, c.unit, 2)) return null;
+  const count = fromBoughtIn(units, { name: '', unit: item.unit, packSize: c }, n, c.unit);
+  const whole = Math.round(count);
+  if (whole < 1) return null;
+  // Stock is kept to thousandths of what it's bought in, so 4 of a box of 6 eggs is 4.002.
+  const exact = Math.abs(count - whole) <= c.amount * 0.0005 + 0.001;
+  return `${exact ? '' : 'about '}${num(whole)} ${unitWord(units, c.unit, whole)}`;
+}
+
+/**
+ * Stock in what it's bought in: "4 boxes", "about 3¾ boxes", "about ⅔ jar", "350 g", "1.6 kg".
+ * Part of one left is said to the nearest quarter or third, at least ¼. When its pack size is a
+ * count, part of one is said in what's in the pack first, as that's what gets counted out:
+ * "10 fish fingers (about ⅔ box)". A pack size in g or ml isn't: "about ⅔ jar".
+ * `after` goes straight after the amount: "10 fish fingers left (about ⅔ box)".
+ */
+export function stockText(units: Units, item: Pick<UnitItem, 'unit' | 'packSize'>, n: number, num: NumberText = plain, after = ''): string {
+  if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001) return `${amountText(units, Math.round(n * 1000) / 1000, item.unit, num)}${after}`;
+  const { q, text } = roughly(n, num);
   const word = unitWord(units, item.unit, q);
-  return `about ${Number.isInteger(q) ? num(q) : quarters(q)}${word ? ` ${word}` : ''}`;
+  const rough = `${text}${word ? ` ${word}` : ''}`;
+  const inside = countInside(units, item, n, num);
+  // "About" once: "about 2 eggs (⅓ box)".
+  if (inside) return `${inside}${after} (${inside.startsWith('about ') ? '' : 'about '}${rough})`;
+  return `about ${rough}${after}`;
 }
 
 /** What part of one is best said in: what's in its pack when its pack size is a count, else what it's used in or its Weight's g or ml. Null when there's none. */
@@ -385,9 +408,9 @@ export function exactText(units: Units, item: UnitItem, n: number): string {
   return inside ? `${said} (${amountText(units, roundQty(fromBoughtIn(units, item, n, inside)), inside)})` : said;
 }
 
-/** Stock as stockText says it, with the exact amount inside when part of one is left: "about 4 boxes (79 tea bags)", "about ¾ jar (300 g)", "3.8 boxes". */
+/** Stock as stockText says it, with the exact amount inside when part of one is left: "79 tea bags (about 4 boxes)", "about ¾ jar (300 g)", "3.8 boxes". */
 export function stockWithInside(units: Units, item: UnitItem, n: number): string {
-  if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001) return stockText(units, item, n);
+  if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001 || countInside(units, item, n, plain)) return stockText(units, item, n);
   const inside = insideUnit(units, item);
   return inside ? `${stockText(units, item, n)} (${amountText(units, roundQty(fromBoughtIn(units, item, n, inside)), inside)})` : amountText(units, n, item.unit);
 }

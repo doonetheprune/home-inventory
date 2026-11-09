@@ -30,10 +30,13 @@ export function num(n: number): string {
 /** "4 rolls", "1.6 kg", "¼ bottle", "3" (for "each"). */
 export const qty = (n: number, unit: string): string => amountText(currentUnits(), n, unit, num);
 
-/** Stock as shown in lists: "4 boxes", "about ¾ jar", "350 g", or "6 charged · 4 flat" for rechargeables. */
-export function stockText(s: ProductSummary): string {
-  if (s.product.rechargeable && s.charged !== null && s.flat !== null) return s.flat ? `${num(s.charged)} charged · ${num(s.flat)} flat` : `${qty(s.charged, s.product.unit)}`;
-  return coreStockText(currentUnits(), s.product, s.inStock, num);
+/**
+ * Stock as shown in lists: "4 boxes", "about ⅔ jar", "10 fish fingers (about ⅔ box)", "350 g", or
+ * "6 charged · 4 flat" for rechargeables. `after` goes straight after the amount: "10 fish fingers left (about ⅔ box)".
+ */
+export function stockText(s: ProductSummary, after = ''): string {
+  if (s.product.rechargeable && s.charged !== null && s.flat !== null) return `${s.flat ? `${num(s.charged)} charged · ${num(s.flat)} flat` : `${qty(s.charged, s.product.unit)}`}${after}`;
+  return coreStockText(currentUnits(), s.product, s.inStock, num, after);
 }
 
 /** "1 tea bag a day", "2 rolls a week", "4 g a day", "1 every 14 days". */

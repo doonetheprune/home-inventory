@@ -17,7 +17,7 @@
  * seasonal recipe doesn't crowd the main list.
  */
 import { z } from 'zod';
-import { amountText, andList, canConvert, defineModule, Id, LarderError, newId, NotFoundError, roundQty, toBoughtIn, unitWord, ValidationError, type CoreApi, type Product, type ProductSummary, type Units } from '@larder/core';
+import { amountText, andList, canConvert, defineModule, exactText, Id, LarderError, newId, NotFoundError, roundQty, stockText, toBoughtIn, UnitAmount, unitWord, ValidationError, type CoreApi, type Product, type ProductSummary, type Units } from '@larder/core';
 import { convert, inCore, measuredBy, measureText, timesText, unitKey, unitsLike, withAmount } from './units';
 
 export const Ingredient = z.object({
@@ -145,6 +145,8 @@ const IngredientView = z.object({
   amount: z.string(),
   quantity: z.number().nullable(),
   unit: z.string().nullable(),
+  /** The item's pack size, so amounts can be said in what's in it (boxes of 6 eggs). */
+  packSize: UnitAmount.nullable().default(null),
   inStock: z.number().nullable(),
   /** have: enough in stock. short: some, not enough. none: none in. unknown: not linked to a Larder item. */
   status: z.enum(['have', 'short', 'none', 'unknown']),
@@ -183,7 +185,8 @@ export const Proposal = z.object({
   times: z.number().default(1),
   preset: z.string().nullable().default(null),
   from: z.string().default(''),
-  items: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number(), unit: z.string(), inStock: z.number() })),
+  /** In what each item is bought in, with its pack size so the app can say it in eggs (boxes of 6 eggs). */
+  items: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number(), unit: z.string(), packSize: UnitAmount.nullable().default(null), inStock: z.number() })),
   /** Ingredients that can't be taken from stock (not linked, or no amount). */
   skipped: z.array(z.string()),
   /** Those that have an amount Larder can't turn into what the item is bought in, and why. */
@@ -346,7 +349,7 @@ async function view(core: CoreApi, r: Recipe, input: ScaleInput = {}, known?: Ma
     const status = !s ? 'unknown' : s.inStock <= 0 ? 'none' : s.inStock + 1e-9 < (need ?? 0) ? 'short' : 'have';
     const shown = t === 1 ? i.amount || (measure ? measureText(measure.amount, measure.unit, units) : '') : measure ? measureText(measure.amount * t, measure.unit, units) : i.amount;
     return {
-      name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, inStock: s ? s.inStock : null, status, optional: i.optional,
+      name: i.name, productId: s ? i.productId : null, item: s?.product.name ?? null, amount: i.amount, quantity: i.quantity, unit: s?.product.unit ?? null, packSize: s?.product.packSize ?? null, inStock: s ? s.inStock : null, status, optional: i.optional,
       ratio: i.ratio, ratioUnit: i.ratioUnit, shown, label: withAmount(shown, i.name, measure?.unit ?? '', units), scales: !!measure, need, why,
     } as const;
   });
@@ -542,7 +545,7 @@ export default defineModule({
       const skipped: string[] = [];
       const notTaken: Proposal['notTaken'] = [];
       // One line per item: "butter 200 g" and "butter for greasing" add up.
-      const wanted = new Map<string, { name: string; want: number; unit: string; inStock: number; names: string[] }>();
+      const wanted = new Map<string, { name: string; want: number; unit: string; packSize: UnitAmount | null; inStock: number; names: string[] }>();
       for (const i of v.ingredients) {
         if (!i.productId || !i.need) {
           if (!i.optional) skipped.push(i.name);
@@ -553,12 +556,12 @@ export default defineModule({
         if (w) {
           w.want += i.need;
           w.names.push(i.name);
-        } else wanted.set(i.productId, { name: i.item ?? i.name, want: i.need, unit: i.unit ?? 'each', inStock: i.inStock ?? 0, names: [i.name] });
+        } else wanted.set(i.productId, { name: i.item ?? i.name, want: i.need, unit: i.unit ?? 'each', packSize: i.packSize, inStock: i.inStock ?? 0, names: [i.name] });
       }
       for (const [productId, w] of wanted) {
         // Propose no more than there is; the person can change it before confirming.
         const qty = Math.min(roundQty(w.want), w.inStock);
-        if (qty > 0) items.push({ productId, name: w.name, quantity: qty, unit: w.unit, inStock: w.inStock });
+        if (qty > 0) items.push({ productId, name: w.name, quantity: qty, unit: w.unit, packSize: w.packSize, inStock: w.inStock });
         else skipped.push(...w.names);
       }
       const s = v.scale;
@@ -617,7 +620,7 @@ export default defineModule({
       const how = p.preset ? ` (the "${p.preset}" preset, ${t})` : p.servings ? ` for ${p.servings}` : p.from ? ` from ${p.from} (${t})` : p.times !== 1 ? ` (${t})` : '';
       return [
         `Cooking ${p.recipe}${how} would take out of stock:`,
-        ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${amountText(units, i.quantity, i.unit)} (of ${amountText(units, i.inStock, i.unit)})`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
+        ...(p.items.length ? p.items.map((i) => `- ${i.name}: ${exactText(units, { name: i.name, unit: i.unit, packSize: i.packSize }, i.quantity)}, of ${stockText(units, i, i.inStock)}`) : ['- nothing (no ingredient has an amount in Larder\'s units)']),
         ...(p.skipped.length ? [`Not taken: ${p.skipped.join(', ')}.`] : []),
         ...p.notTaken.map((x) => `- ${x.name}: ${x.why}`),
         `Proposal id: ${p.id}. Nothing has changed yet: ask the person to confirm or adjust, then call confirm_cooking.`,
@@ -944,7 +947,7 @@ export default defineModule({
       async run({ proposal, changes }) {
         const r = await confirm(proposal, changes);
         const units = await core.units.list();
-        const lines = r.products.map((s) => `${s.product.name}: ${amountText(units, s.inStock, s.product.unit)} left${s.status.low ? ' (running low)' : ''}`);
+        const lines = r.products.map((s) => `${s.product.name}: ${stockText(units, s.product, s.inStock, undefined, ' left')}${s.status.low ? ' (running low)' : ''}`);
         return { text: r.used ? `Done. ${lines.join('; ')}.` : 'Nothing was taken out of stock.', data: { used: r.used } };
       },
     });
