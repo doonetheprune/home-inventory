@@ -52,8 +52,8 @@ const GEMINI_RECEIPT = {
 };
 
 /** An item the household has, as the AI is shown it. */
-/** An item as the AI is told about it: what it's bought in (one and several), and what one contains, said by the core. */
-export interface Known { id: string; name: string; unit: string; one: string; many: string; contains: string | null; aliases: string[]; brands: string[] }
+/** An item as the AI is told about it: what it's bought in (one and several), and its pack size, said by the core. */
+export interface Known { id: string; name: string; unit: string; one: string; many: string; packSize: string | null; aliases: string[]; brands: string[] }
 
 /** How a shop named an item on an earlier receipt (`ai:receipt-names`). */
 export interface Learnt {
@@ -85,7 +85,7 @@ export function householdItems(known: Known[], learnt: Learnt[], shopName: (id: 
   const number = new Map(known.map((k, i) => [k.id, i + 1]));
   const items = known.map((k, i) => {
     const more = [k.aliases.length ? `also ${k.aliases.slice(0, 4).join(', ')}` : '', k.brands.length ? `brands ${k.brands.slice(0, 3).map((b) => b.slice(0, 60)).join('; ')}` : ''].filter(Boolean);
-    return `${i + 1}. ${k.name} (bought in ${k.many}${k.contains ? `, each containing ${k.contains}` : ''}${more.length ? `; ${more.join('; ')}` : ''})`;
+    return `${i + 1}. ${k.name} (bought in ${k.many}${k.packSize ? ` of ${k.packSize}` : ''}${more.length ? `; ${more.join('; ')}` : ''})`;
   });
   const before = learnt
     .filter((l) => number.has(l.productId))
@@ -113,7 +113,7 @@ export function receiptPrompt(known: Known[], learnt: Learnt[], shopName: (id: s
     '  - count: how many were bought, e.g. 2 for "2 @ £0.85" or a line printed twice. 1 if it does not say, and 1 for something weighed.',
     '  - price: what was paid for the line in all, as a number, after any discount printed straight under it. Null if it is not shown.',
     '  - item: the number of the household\'s item it is. Receipts shorten names ("HNZ" is Heinz, "SEMI SKMD" is semi-skimmed milk), so match on what it is, not the exact words. Another brand or size of the same thing is still that item. Null if none of the items is it: never pick the nearest one just to have one.',
-    '  - quantity: how much of what that item is bought in the line adds in all. Two 9-roll packs of an item bought in rolls is 18, and of one bought in packs containing 9 rolls, 2; 0.85 kg of something bought loose in g is 850. Null if item is null.',
+    '  - quantity: how much of what that item is bought in the line adds in all. Two 9-roll packs of an item bought in rolls is 18, and of one bought in packs of 9 rolls, 2; 0.85 kg of something bought loose in g is 850. Null if item is null.',
     '  - sure: true if it is certainly that item, false if it might be something else.',
     '- readable: false if the photo is not a receipt or order, or cannot be read. Then give what you can.',
     '',
@@ -206,7 +206,7 @@ export function itemMemory(ctx: ModuleContext) {
       const known = items.slice(0, MAX_ITEMS).map(({ product: p }) => {
         const u = units.find(p.unit);
         const [one, many] = u?.key === 'each' ? ['one', 'ones'] : [u?.one ?? p.unit, u?.many ?? p.unit];
-        return { id: p.id, name: p.name, unit: p.unit, one, many, contains: p.contents ? amountText(units, p.contents.amount, p.contents.unit) : null, aliases: p.aliases, brands: brands[p.id] ?? [] };
+        return { id: p.id, name: p.name, unit: p.unit, one, many, packSize: p.packSize ? amountText(units, p.packSize.amount, p.packSize.unit) : null, aliases: p.aliases, brands: brands[p.id] ?? [] };
       });
       const ids = new Set(known.map((k) => k.id));
       const learnt = (await this.learntNames()).filter((l) => ids.has(l.productId)).slice(0, MAX_LEARNT);

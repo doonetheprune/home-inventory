@@ -200,8 +200,8 @@ describe('AI module: receipts', () => {
     expect((await core.assistant.call('add_receipt', { shop: 'Lidl', lines: [{ item: 'beans', quantity: 1 }] })).text).toBe("Added Baked beans to stock. Larder doesn't have a shop called Lidl, so the prices were kept without one.");
   });
 
-  it('tells the AI what an item is bought in and what one contains, so a box of 80 tea bags is 1 box', () => {
-    const lines = householdItems([{ id: 't', name: 'Yorkshire tea', unit: 'box', one: 'box', many: 'boxes', contains: '80 tea bags', aliases: [], brands: [] }], [], () => null);
-    expect(lines).toContain('1. Yorkshire tea (bought in boxes, each containing 80 tea bags)');
+  it('tells the AI what an item is bought in and its pack size, so a box of 80 tea bags is 1 box', () => {
+    const lines = householdItems([{ id: 't', name: 'Yorkshire tea', unit: 'box', one: 'box', many: 'boxes', packSize: '80 tea bags', aliases: [], brands: [] }], [], () => null);
+    expect(lines).toContain('1. Yorkshire tea (bought in boxes of 80 tea bags)');
   });
 });

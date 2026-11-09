@@ -50,7 +50,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -95,7 +95,7 @@
           "maxLength": 200
         },
         "unit": {
-          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         }
@@ -153,7 +153,7 @@
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -238,7 +238,7 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "unit": {
-          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },
@@ -335,7 +335,7 @@
           "exclusiveMinimum": 0
         },
         "unit": {
-          "description": "What the quantity is in, if not what the item is bought in: what one contains, e.g. \"tea bag\" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
+          "description": "What the quantity is in, if not what the item is bought in: what's in its pack, e.g. \"tea bag\" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)",
           "type": "string",
           "maxLength": 30
         },

@@ -348,10 +348,10 @@ describe('recipes by ratio, and presets', () => {
 
   it('takes a recipe\'s ml of milk from bottles through their Weight, and says why when there is none', async () => {
     const core = await makeCore({ modules: [recipes] });
-    // Bought in bottles containing 4 pints: a Weight of 2273 ml, so 500 ml is 0.22 bottle.
-    const milk = await core.products.create({ name: 'Whole milk', aliases: ['milk'], unit: 'bottle', contents: { amount: 4, unit: 'pints' } });
+    // Bought in bottles of 4 pints: a Weight of 2273 ml, so 500 ml is 0.22 bottle.
+    const milk = await core.products.create({ name: 'Whole milk', aliases: ['milk'], unit: 'bottle', packSize: { amount: 4, unit: 'pints' } });
     const oat = await core.products.create({ name: 'Oat milk', unit: 'carton' });
-    const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'box', contents: { amount: 6, unit: 'eggs' } });
+    const eggs = await core.products.create({ name: 'Free-range eggs', aliases: ['eggs'], unit: 'box', packSize: { amount: 6, unit: 'eggs' } });
     for (const id of [milk.id, oat.id, eggs.id]) await core.stock.add({ productId: id, quantity: 2 });
     await core.assistant.call('save_recipe', {
       title: 'Custard', method: 'Whisk and heat.',
@@ -369,9 +369,9 @@ describe('recipes by ratio, and presets', () => {
   it('takes chicken thighs counted or weighed from an item with a count and a Weight, but only weighed from one bought loose', async () => {
     const core = await makeCore({ modules: [recipes] });
     await core.units.add({ one: 'thigh', many: 'thighs' });
-    // Bought one at a time, 125 g each; bought in packs containing 8, weighing 1 kg; bought loose, in g.
+    // Bought one at a time, 125 g each; bought in packs of 8, weighing 1 kg; bought loose, in g.
     const single = await core.products.create({ name: 'Chicken thighs', unit: 'thigh', weight: { amount: 125, unit: 'g' } });
-    const packs = await core.products.create({ name: 'Thigh fillets', unit: 'pack', contents: { amount: 8, unit: 'thigh' }, weight: { amount: 1, unit: 'kg' } });
+    const packs = await core.products.create({ name: 'Thigh fillets', unit: 'pack', packSize: { amount: 8, unit: 'thigh' }, weight: { amount: 1, unit: 'kg' } });
     const loose = await core.products.create({ name: 'Diced chicken', unit: 'g' });
     for (const [id, n] of [[single.id, 8], [packs.id, 2], [loose.id, 1000]] as const) await core.stock.add({ productId: id, quantity: n });
     for (const [title, item] of [['Traybake', 'chicken thighs'], ['Curry', 'thigh fillets'], ['Pie', 'diced chicken']]) {

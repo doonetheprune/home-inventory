@@ -80,7 +80,7 @@ const LIST_LIMIT = 25;
 
 const Item = z.string().min(1).max(200).describe('The item: its name or alias ("loo roll"), barcode, or id');
 const Quantity = z.number().positive().default(1).describe('How many, in what the item is bought in (default 1), or in `unit`');
-const Unit = z.string().max(30).optional().describe('What the quantity is in, if not what the item is bought in: what one contains, e.g. "tea bag" (a box contains 20), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)');
+const Unit = z.string().max(30).optional().describe('What the quantity is in, if not what the item is bought in: what\'s in its pack, e.g. "tea bag" (for boxes of 20 tea bags), or g, kg, ml, L or pints for something with a Weight (100 g of a 400 g jar)');
 
 /** The plural of what it's bought in, as sensors and actions say it: "boxes", "g", "each". */
 const unitsOf = (units: Units, key: string) => units.find(key)?.many ?? key;

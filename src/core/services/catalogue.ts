@@ -361,14 +361,14 @@ export function createUnitService(ctx: CoreContext) {
       });
     },
 
-    /** Removes one of the household's words, once no item is bought in it, contains it or is used in it. */
+    /** Removes one of the household's words, once no item uses it for Bought in, Pack size or We use. */
     remove(key: string): Promise<void> {
       return ctx.exclusive(async () => {
         const units = await ctx.units();
         const u = units.find(key);
         if (!u) throw new LarderError(`Larder doesn't have the unit "${key.trim()}".`, 404, 'not_found');
         if (u.builtIn) throw new ValidationError(`"${u.one}" is one of Larder's own units, so it can't be removed.`);
-        const using = (await ctx.storage.products.list()).filter((p) => [p.unit, p.contents?.unit, p.usage?.unit].some((w) => w && units.find(w)?.key === u.key));
+        const using = (await ctx.storage.products.list()).filter((p) => [p.unit, p.packSize?.unit, p.usage?.unit].some((w) => w && units.find(w)?.key === u.key));
         if (using.length) {
           const names = using.slice(0, 5).map((p) => p.name);
           throw new ConflictError(`${andList(using.length > 5 ? [...names, `${using.length - 5} more`] : names)} ${using.length === 1 ? 'uses' : 'use'} "${u.one}". Change ${using.length === 1 ? 'it' : 'them'} first.`);

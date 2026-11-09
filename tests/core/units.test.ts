@@ -4,16 +4,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, containsText, fromBoughtIn, givenInText, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake,
+  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, packSizeText, fromBoughtIn, givenInText, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake,
   stockText, toBoughtIn, unitList, UnknownUnitError, usageInBoughtIn, usageText, weightText,
 } from '../../src/core/services/units';
 
-const sleep = { name: 'Twinings Sleep', unit: 'box', contents: { amount: 20, unit: 'tea bag' }, weight: null };
-const decaf = { name: 'Decaf coffee', unit: 'jar', contents: { amount: 400, unit: 'g' }, weight: { amount: 400, unit: 'g' } };
-const milk = { name: 'Whole milk', unit: 'bottle', contents: { amount: 4, unit: 'pint' }, weight: { amount: 2273.044, unit: 'ml' } };
-const loo = { name: 'Toilet roll', unit: 'roll', contents: { amount: 200, unit: 'sheet' }, weight: null };
-const cheddar = { name: 'Loose cheddar', unit: 'g', contents: null, weight: null };
-const drill = { name: 'Cordless drill', unit: 'each', contents: null, weight: { amount: 1600, unit: 'g' } };
+const sleep = { name: 'Twinings Sleep', unit: 'box', packSize: { amount: 20, unit: 'tea bag' }, weight: null };
+const decaf = { name: 'Decaf coffee', unit: 'jar', packSize: { amount: 400, unit: 'g' }, weight: { amount: 400, unit: 'g' } };
+const milk = { name: 'Whole milk', unit: 'bottle', packSize: { amount: 4, unit: 'pint' }, weight: { amount: 2273.044, unit: 'ml' } };
+const loo = { name: 'Toilet roll', unit: 'roll', packSize: { amount: 200, unit: 'sheet' }, weight: null };
+const cheddar = { name: 'Loose cheddar', unit: 'g', packSize: null, weight: null };
+const drill = { name: 'Cordless drill', unit: 'each', packSize: null, weight: { amount: 1600, unit: 'g' } };
 
 describe('the unit list', () => {
   it('finds a unit by its key, one, many, any case and common spellings', () => {
@@ -56,7 +56,7 @@ describe('the converter', () => {
     expect(toBoughtIn(units, { name: 'Milk', unit: '4 pint bottle' }, 2, '4 pint bottle')).toBe(2);
   });
 
-  it('2. divides what one contains, when that is a count', () => {
+  it('2. divides what is in its pack, when the pack size is a count', () => {
     expect(toBoughtIn(units, sleep, 5, 'tea bags')).toBe(0.25);
     expect(fromBoughtIn(units, sleep, 3.95, 'tea bag')).toBeCloseTo(79);
     expect(toBoughtIn(units, loo, 100, 'sheets')).toBe(0.5);
@@ -87,7 +87,7 @@ describe('the converter', () => {
   });
 
   it('says what an item can be given in when it can\'t be', () => {
-    expect(() => toBoughtIn(units, sleep, 1, 'jar')).toThrow('Twinings Sleep is bought in boxes, each containing 20 tea bags. Give how many boxes or tea bags.');
+    expect(() => toBoughtIn(units, sleep, 1, 'jar')).toThrow('Twinings Sleep is bought in boxes of 20 tea bags. Give how many boxes or tea bags.');
     expect(() => toBoughtIn(units, drill, 1, 'box')).toThrow('Cordless drill is counted one by one. Give how many, or how much in g or kg.');
     expect(givenInText(units, decaf)).toBe('Give how many jars, or how much in g or kg.');
     expect(canConvert(units, sleep, 'g')).toBe(false);
@@ -135,15 +135,15 @@ describe('saying amounts', () => {
     expect(stockText(units, drill, 1.5)).toBe('about 1½');
   });
 
-  it('says amounts, Contains, Weight and Bought in', () => {
+  it('says amounts, pack size, Weight and Bought in', () => {
     expect(amountText(units, 2, 'tea bag')).toBe('2 tea bags');
     expect(amountText(units, 1, 'battery')).toBe('1 battery');
     expect(amountText(units, 300000, 'ml')).toBe('300 L');
     expect(amountText(units, 3, 'each')).toBe('3');
     expect(amountText(units, 2, '4 pint bottle')).toBe('2 4 pint bottles');
-    expect(containsText(units, sleep)).toBe('Each box contains 20 tea bags');
-    expect(containsText(units, { unit: 'bag', contents: { amount: 1, unit: 'kg' } })).toBe('Each bag contains 1 kg');
-    expect(containsText(units, cheddar)).toBeNull();
+    expect(packSizeText(units, sleep)).toBe('Pack size: 20 tea bags');
+    expect(packSizeText(units, { unit: 'bag', packSize: { amount: 1, unit: 'kg' } })).toBe('Pack size: 1 kg');
+    expect(packSizeText(units, cheddar)).toBeNull();
     expect(weightText({ amount: 2273.044, unit: 'ml' })).toBe('2273 ml');
     expect(weightText({ amount: 1.5, unit: 'g' })).toBe('1.5 g');
     expect([boughtInText(units, sleep), boughtInText(units, drill), boughtInText(units, cheddar), boughtInText(units, { unit: '4 pint bottle' })])

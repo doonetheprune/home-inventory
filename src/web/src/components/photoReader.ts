@@ -19,8 +19,8 @@ export interface PhotoReading {
   brand: string | null;
   /** What it's bought in, a key from the unit list: "box", "jar", "each", or g or ml for something bought loose. */
   boughtIn: string;
-  /** What one contains, as printed on the pack: 20 tea bags, 400 g. */
-  contents?: { amount: number; unit: string } | null;
+  /** Its pack size, as printed on the pack: 20 tea bags, 400 g. */
+  packSize?: { amount: number; unit: string } | null;
   categoryId: string | null;
   shelfLifeDays: number | null;
   aliases: string[];

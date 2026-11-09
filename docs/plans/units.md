@@ -1,6 +1,6 @@
 # Plan: Bought in, Contains, Weight (0.10.0)
 
-Agreed with the owner on 8 November 2026. This file is the source of truth for the work: where the code or older docs disagree with it, this wins. Read `AGENTS.md` first. If the code contradicts this plan, or it doesn't cover a case, ask the owner rather than guessing.
+Agreed with the owner on 8 November 2026. Since then (9 November 2026) the owner renamed **Contains** to **Pack size** everywhere, because on food "contains" reads as ingredients: read Contains below as Pack size (`packSize`, `pack_size`). See `docs/DECISIONS.md`. This file is the source of truth for the work: where the code or older docs disagree with it, this wins. Read `AGENTS.md` first. If the code contradicts this plan, or it doesn't cover a case, ask the owner rather than guessing.
 
 ## Why
 

@@ -342,7 +342,7 @@ function addTools(ctx: ModuleContext, deps: { all: () => Promise<PurchaseRecord[
       on: DateInput.describe('The day it was bought, if not the latest (YYYY-MM-DD)'),
       price: z.number().min(0).nullable().optional().describe('What the line cost, e.g. 3.2; null if not known'),
       quantity: z.number().positive().optional().describe('How many were bought, in what the item is bought in or in unit'),
-      unit: z.string().max(30).optional().describe('What quantity is in, if not what the item is bought in: what one contains ("tea bag"), or g, kg, ml, L or pints once it has a Weight'),
+      unit: z.string().max(30).optional().describe('What quantity is in, if not what the item is bought in: what\'s in its pack ("tea bag", for boxes of 20 tea bags), or g, kg, ml, L or pints once it has a Weight'),
       shop: z.string().max(80).nullable().optional().describe('The shop; null for none'),
       note: z.string().max(200).optional(),
     }),

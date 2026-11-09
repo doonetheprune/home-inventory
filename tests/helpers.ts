@@ -43,6 +43,6 @@ export async function category(core: CoreApi, name: string) {
  * Contains, Weight or needsCheck. Starting Larder again on the same storage runs the upgrade on it.
  */
 export async function saveAs092(storage: Storage, p: Product, old: Record<string, unknown>): Promise<void> {
-  const { contents: _c, weight: _w, needsCheck: _n, ...rest } = p;
+  const { packSize: _c, weight: _w, needsCheck: _n, ...rest } = p;
   await storage.products.put({ ...rest, pack: null, ...old } as unknown as Product);
 }

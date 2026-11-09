@@ -27,7 +27,7 @@ export function registerCatalogueRoutes(app: ZodApp, { core }: { core: CoreApi }
       schema: { tags, summary: 'Add a count word to the unit list', description: 'Its singular and plural, e.g. "sleeve" and "sleeves". A word Larder already has is refused.', body: UnitCreate, response: { 200: Unit } },
     }, (r) => core.units.add(r.body));
     app.delete('/units/:key', {
-      schema: { tags, summary: 'Remove one of the household\'s words, once no item is bought in it, contains it or is used in it', params: z.object({ key: z.string().min(1).max(30) }), response: { 200: Ok } },
+      schema: { tags, summary: 'Remove one of the household\'s words, once no item uses it for Bought in, Pack size or We use', params: z.object({ key: z.string().min(1).max(30) }), response: { 200: Ok } },
     }, async (r) => {
       await core.units.remove(r.params.key);
       return { ok: true as const };

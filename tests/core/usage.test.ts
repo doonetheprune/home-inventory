@@ -1,12 +1,12 @@
 /**
  * How fast things are used ("we use 1 tea bag a day", "1 sensor every 14 days",
- * "4 g a day"), what one contains ("a box contains 20 tea bags"), Larder taking
+ * "4 g a day"), its pack size ("a box of 20 tea bags"), Larder taking
  * them out of stock by itself, a little at a time, and opened-not-finished.
  */
 import { describe, expect, it } from 'vitest';
 import { makeCore, category } from '../helpers';
 
-const tea = { name: 'Tea bags', unit: 'box', contents: { amount: 20, unit: 'tea bag' } };
+const tea = { name: 'Tea bags', unit: 'box', packSize: { amount: 20, unit: 'tea bag' } };
 
 describe('how fast things are used', () => {
   it('works out when they run out: 3 sensors used one every 2 weeks last 6 weeks', async () => {
@@ -135,7 +135,7 @@ describe('Larder taking them out by itself', () => {
   it('takes tea bags out of boxes of 80, waiting a day when one would not round cleanly', async () => {
     const core = await makeCore();
     // 1 tea bag of 80 is 0.0125 of a box, which would round to 0.013: it takes 0.025 every 2 days.
-    const breakfast = await core.products.create({ name: 'Breakfast tea', unit: 'box', contents: { amount: 80, unit: 'tea bag' }, usage: { amount: 1, everyDays: 1, auto: true, unit: 'tea bag' } });
+    const breakfast = await core.products.create({ name: 'Breakfast tea', unit: 'box', packSize: { amount: 80, unit: 'tea bag' }, usage: { amount: 1, everyDays: 1, auto: true, unit: 'tea bag' } });
     await core.stock.add({ productId: breakfast.id, quantity: 1 });
     core.clock.set('2026-10-29T09:00:00.000Z');
     expect((await core.automation.checkExpiry()).taken).toBe(0);
@@ -246,7 +246,7 @@ describe('Larder taking them out by itself', () => {
   });
 });
 
-describe('what one contains', () => {
+describe('pack size', () => {
   it('adds, uses and orders in boxes or in tea bags, and says what it can be given in', async () => {
     const core = await makeCore();
     const bags = await core.products.create(tea);
@@ -283,7 +283,7 @@ describe('Home Assistant', () => {
   it('says how fast things are used, takes extras in whole boxes, and amounts in tea bags', async () => {
     const core = await makeCore();
     const shed = await core.places.create({ name: 'Shed' });
-    const bags = await core.products.create({ ...tea, contents: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.175 });
+    const bags = await core.products.create({ ...tea, packSize: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.175 });
     const sensor = await core.products.create({ name: 'Glucose sensor', unit: 'sensor', usage: { amount: 1, everyDays: 14, auto: false } });
     expect((await core.automation.run('add_stock', { item: 'tea bags', quantity: 2 })).message).toBe('Tea bags: added 2 boxes (160 tea bags). 2 boxes in stock.');
     await core.stock.add({ productId: sensor.id, quantity: 3 });
@@ -364,7 +364,7 @@ describe('opened, not finished', () => {
 describe('used by weight', () => {
   it('takes a little out every day, in amounts that round cleanly', async () => {
     const core = await makeCore();
-    const coffee = await core.products.create({ name: 'Decaf coffee', unit: 'jar', contents: { amount: 400, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' } });
+    const coffee = await core.products.create({ name: 'Decaf coffee', unit: 'jar', packSize: { amount: 400, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' } });
     await core.stock.add({ productId: coffee.id, quantity: 1 });
     core.clock.set('2026-10-29T09:00:00.000Z');
     await core.automation.checkExpiry();
@@ -375,7 +375,7 @@ describe('used by weight', () => {
     expect((await core.products.summary(coffee.id)).inStock).toBe(0.9);
 
     // 5 g a day is 0.0125 of a jar, which would round to 0.013: it waits a day and takes 0.025.
-    const tea = await core.products.create({ name: 'Loose leaf tea', unit: 'bag', contents: { amount: 400, unit: 'g' }, usage: { amount: 5, everyDays: 1, auto: true, unit: 'g' } });
+    const tea = await core.products.create({ name: 'Loose leaf tea', unit: 'bag', packSize: { amount: 400, unit: 'g' }, usage: { amount: 5, everyDays: 1, auto: true, unit: 'g' } });
     await core.stock.add({ productId: tea.id, quantity: 1 });
     core.clock.set('2026-11-08T09:00:00.000Z');
     await core.automation.checkExpiry();
@@ -391,7 +391,7 @@ describe('used by weight', () => {
 
   it('takes grams from Home Assistant, and a plain use is a whole jar', async () => {
     const core = await makeCore();
-    await core.products.create({ name: 'Decaf coffee', unit: 'jar', contents: { amount: 400, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: false, unit: 'g' } });
+    await core.products.create({ name: 'Decaf coffee', unit: 'jar', packSize: { amount: 400, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: false, unit: 'g' } });
     await core.automation.run('add_stock', { item: 'decaf coffee', quantity: 2 });
     expect((await core.automation.run('use_stock', { item: 'decaf coffee', quantity: 100, unit: 'g' })).message).toBe('Decaf coffee: used 100 g (0.25 jar). About 1¾ jars left, enough until 2027-04-21.');
     expect((await core.automation.run('use_stock', { item: 'decaf coffee' })).message).toBe('Decaf coffee: used 1 jar (400 g). About ¾ jar left, enough until 2027-01-11.');

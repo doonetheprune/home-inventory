@@ -464,10 +464,10 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const units = useUnits();
   const [name, setName] = useState(reading?.name ?? external?.name ?? '');
   const [choice, setChoice] = useState<string>(suggestions[0] ? suggestions[0].product.id : 'new');
-  // Bought in, and what one contains as the AI or the barcode database read it ("400 g", "20 tea bags"): is it a box or a weight?
+  // Bought in, and its pack size as the AI or the barcode database read it ("400 g", "20 tea bags"): is it a box or a weight?
   const printed = parseAmount(units, external?.quantityText);
   const [boughtIn, setBoughtIn] = useState<string>(reading?.boughtIn ?? 'each');
-  const [contents, setContents] = useState<{ amount: number; unit: string } | null>(reading?.contents ?? (printed ? { amount: printed.amount, unit: printed.unit } : null));
+  const [packSize, setPackSize] = useState<{ amount: number; unit: string } | null>(reading?.packSize ?? (printed ? { amount: printed.amount, unit: printed.unit } : null));
   // A multipack of separate things is that many added: a 4-pack of tins is 4 tins.
   const [n, setN] = useState(printed && printed.count > 1 ? printed.count : 1);
   const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
@@ -489,7 +489,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const into = choice !== 'new' ? candidates.find((c) => c.product.id === choice) : undefined;
   // Add counts whole ones of what it's bought in: the item's, or what's picked here for a new one.
   const unit = into ? into.product.unit : boughtIn;
-  const fits = !!contents && contents.unit !== boughtIn && !isLoose(units, { unit: boughtIn });
+  const fits = !!packSize && packSize.unit !== boughtIn && !isLoose(units, { unit: boughtIn });
 
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
@@ -502,7 +502,7 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
     const fields = {
       name: name.trim(),
       unit: boughtIn,
-      contents: fits ? contents : null,
+      packSize: fits ? packSize: null,
       ...(reading ? { categoryId: reading.categoryId, shelfLifeDays: reading.shelfLifeDays, aliases: reading.aliases } : {}),
       preferredShopIds: shopId ? [shopId] : [],
     };
@@ -597,11 +597,11 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
           </div>
           {!isLoose(units, { unit: boughtIn }) && (
             <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              <span className="small">Each {boughtIn === 'each' ? 'one' : (units.find(boughtIn)?.one ?? boughtIn)} contains</span>
-              <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={contents?.amount ?? ''} aria-label="How much one contains" placeholder="20"
-                onChange={(e) => setContents(Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: contents?.unit ?? 'g' } : null)} />
-              <UnitPicker value={contents?.unit ?? null} onChange={(k) => setContents({ amount: contents?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="What it contains" empty="Pick a unit" />
-              {contents && !fits && <small style={{ color: 'var(--low)' }}>A {units.find(boughtIn)?.one ?? boughtIn} can't contain {plural(contents.unit, 2)}.</small>}
+              <span className="small">Pack size</span>
+              <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packSize?.amount ?? ''} aria-label="Pack size" placeholder="20"
+                onChange={(e) => setPackSize(Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: packSize?.unit ?? 'g' } : null)} />
+              <UnitPicker value={packSize?.unit ?? null} onChange={(k) => setPackSize({ amount: packSize?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
+              {packSize && !fits && <small style={{ color: 'var(--low)' }}>It's bought in {plural(boughtIn, 2) || boughtIn}, so the pack size can't be in them too.</small>}
             </div>
           )}
         </div>

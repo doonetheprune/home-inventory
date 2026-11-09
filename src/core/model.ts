@@ -80,7 +80,7 @@ export const Unit = z.object({
 }).meta({ id: 'Unit' });
 export type Unit = z.infer<typeof Unit>;
 
-/** An amount in a unit from the list (src/core/services/units.ts): what one contains, 20 tea bags or 1 kg. */
+/** An amount in a unit from the list (src/core/services/units.ts): a pack size, 20 tea bags or 1 kg. */
 export const UnitAmount = z.object({
   amount: z.number().positive().max(1_000_000),
   /** A key from the unit list, e.g. "tea bag", "kg", "pint". */
@@ -97,8 +97,8 @@ export type Weight = z.infer<typeof Weight>;
 
 /**
  * How fast it's used: `amount` every `everyDays` days (1 tea bag a day, 1 sensor every 14 days,
- * 4 g a day), kept as it was said. In what it's bought in, in what one contains when that's a
- * count, or in a weight or volume once it has a Weight. With `auto`, Larder takes them out of
+ * 4 g a day), kept as it was said. In what it's bought in, in what's in its pack when its pack size
+ * is a count, or in a weight or volume once it has a Weight. With `auto`, Larder takes them out of
  * stock by itself, a little at a time.
  */
 export const Usage = z.object({
@@ -121,9 +121,9 @@ export const Product = z.object({
    * or ml for things bought loose. Stock, minimums, stock-up amounts, orders and history are in this.
    */
   unit: z.string().min(1).max(30).default('each'),
-  /** Contains: what one holds, as printed on the pack. A count (20 tea bags) or an amount (1 kg, 4 pints). */
-  contents: UnitAmount.nullable().default(null),
-  /** Weight: what one weighs (or holds), in g or ml. From Contains when that's an amount; the only thing used for sums in g or ml. */
+  /** Pack size: what one holds, as printed on the pack. A count (20 tea bags) or an amount (1 kg, 4 pints). */
+  packSize: UnitAmount.nullable().default(null),
+  /** Weight: what one weighs (or holds), in g or ml. From the pack size when that's an amount; the only thing used for sums in g or ml. */
   weight: Weight.nullable().default(null),
   /** Days until expiry from the day stock is added. Renewals use the renewal period. */
   shelfLifeDays: z.number().int().min(1).max(36500).nullable().default(null),

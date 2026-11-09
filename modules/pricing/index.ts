@@ -35,7 +35,7 @@ export const PriceCheck = z.object({
   productId: Id,
   /** How much is in the pack you're looking at (e.g. 24 rolls, 500 g). */
   quantity: z.number().positive(),
-  /** The unit `quantity` is in: what the item is bought in (default), what one contains, or g, kg, ml or L. */
+  /** The unit `quantity` is in: what the item is bought in (default), what's in its pack, or g, kg, ml or L. */
   unit: z.string().max(30).optional(),
   /** Price of the whole pack. */
   price: z.number().min(0),
@@ -71,7 +71,7 @@ export const PriceView = z.object({
   itemSize: Weight.nullable(),
   /** What one weighs or holds, in g or ml: the item's Weight. */
   weight: Weight.nullable(),
-  /** Whether the Weight is the item's own (false when it comes from what it contains, so it's changed there). */
+  /** Whether the Weight is the item's own (false when it comes from its pack size, so it's changed there). */
   weightEditable: z.boolean(),
   /** One of what it's bought in, when that isn't g or ml (a bag, a roll): it can have a Weight. */
   itemUnit: z.string().nullable(),
@@ -112,7 +112,7 @@ export function priceView(units: Units, product: Product, currency: string): Pri
   });
   // Show the chosen unit when the price can be worked out in it, else the first that can.
   const shown = options.find((o) => o.unit === wanted && !o.needsSize) ?? options.find((o) => !o.needsSize) ?? options[0]!;
-  const fromContents = !!product.contents && !isCount(units, product.contents.unit);
+  const fromPackSize = !!product.packSize && !isCount(units, product.packSize.unit);
   return {
     usual: p.usualUnitPrice !== null && shown.price !== null ? { price: shown.price, unit: shown.unit, per: `${price(shown.price, currency)} ${shown.per}` } : null,
     basedOn: p.basedOn,
@@ -120,7 +120,7 @@ export function priceView(units: Units, product: Product, currency: string): Pri
     options,
     itemSize: product.weight,
     weight: product.weight,
-    weightEditable: !fromContents,
+    weightEditable: !fromPackSize,
     itemUnit: isLoose(units, product) ? null : (units.find(product.unit)?.key === 'each' ? 'item' : (units.find(product.unit)?.one ?? product.unit)),
     packUnits: packUnitsFor(units, product),
   };
@@ -155,7 +155,7 @@ async function getProduct(core: CoreApi, id: string) {
   return s.product;
 }
 
-const UNIT_HELP = 'The unit: what the item is bought in (default, e.g. "roll"), what one contains (e.g. "tea bag"), or "g", "100 g", "kg", "ml", "100 ml", "litre".';
+const UNIT_HELP = 'The unit: what the item is bought in (default, e.g. "roll"), what\'s in its pack (e.g. "tea bag"), or "g", "100 g", "kg", "ml", "100 ml", "litre".';
 
 export default defineModule({
   id: 'pricing',
@@ -204,7 +204,7 @@ export default defineModule({
 
     ctx.addRoute({
       method: 'PUT', path: '/display', summary: 'Choose the unit prices are shown per, and the item\'s Weight',
-      description: 'showPer: e.g. "100g", "kg" or what the item is bought in. weight (or itemSize, for older apps): what one weighs or holds, e.g. { amount: 200, unit: "g" } for a 200 g bag, null to forget it. It\'s the item\'s Weight, so the product service checks it (refused when Contains is an amount, or for things bought loose).',
+      description: 'showPer: e.g. "100g", "kg" or what the item is bought in. weight (or itemSize, for older apps): what one weighs or holds, e.g. { amount: 200, unit: "g" } for a 200 g bag, null to forget it. It\'s the item\'s Weight, so the product service checks it (refused when the pack size is an amount, or for things bought loose).',
       body: z.object({ productId: Id, showPer: z.string().max(30).nullable().optional(), weight: ItemSize.nullable().optional(), itemSize: ItemSize.nullable().optional() }),
       response: PriceView,
       async handler({ body }) {
@@ -280,12 +280,12 @@ export default defineModule({
 
     ctx.addTool({
       name: 'convert_price', title: 'Convert a price to another unit', readOnly: true,
-      description: 'Turn a price per one unit into a price per another, e.g. £3.50 a kg is £0.35 per 100 g. Give the item to convert between what it\'s bought in or contains (a bag, a tea bag) and a weight or volume, through its Weight.',
+      description: 'Turn a price per one unit into a price per another, e.g. £3.50 a kg is £0.35 per 100 g. Give the item to convert between what it\'s bought in or what\'s in its pack (a bag, a tea bag) and a weight or volume, through its Weight.',
       input: z.object({
         price: z.number().min(0).describe('The price, e.g. 3.5 for £3.50'),
         per: z.string().min(1).max(20).describe('The unit it\'s per, e.g. "kg"'),
         to: z.string().min(1).max(20).describe('The unit wanted, e.g. "100 g"'),
-        item: z.string().max(200).optional().describe('The item, needed when either unit is what it\'s bought in or contains (e.g. "bag")'),
+        item: z.string().max(200).optional().describe('The item, needed when either unit is what it\'s bought in or what\'s in its pack (e.g. "bag")'),
       }),
       async run({ price: value, per, to, item }) {
         const [cur, u] = await Promise.all([currency(), units()]);

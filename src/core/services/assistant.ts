@@ -13,8 +13,8 @@ import { z } from 'zod';
 import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addBrowseTools } from './assistant-browse';
-import { addManageTools, BoughtInInput, ContainsInput, finders, TakesOutInput, UsesInput, usageFields, usageQuestion, WeightInput } from './assistant-manage';
-import { amountText, boughtInText, containsText, daysFor, exactText, isCount, lastsText, stockWithInside, UnknownUnitError, usageText, weightText, worthText, type Units } from './units';
+import { addManageTools, BoughtInInput, PackSizeInput, finders, TakesOutInput, UsesInput, usageFields, usageQuestion, WeightInput } from './assistant-manage';
+import { amountText, boughtInText, packSizeText, daysFor, exactText, isCount, lastsText, stockWithInside, UnknownUnitError, usageText, weightText, worthText, type Units } from './units';
 import { placesText } from './world';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService, type createUnitService } from './catalogue';
@@ -71,13 +71,13 @@ export const ASSISTANT_INSTRUCTIONS = [
   'Refer to items, places and shops by name as people say them ("loo roll", "garage racking", "aldi"); ids, barcodes and place codes like "G2-4" work too.',
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Items have a usual place; "out of place" means it is somewhere else for now.',
-  'Every item is bought in a unit from Larder\'s list (bag, box, jar, roll, each…), or loose in g or ml, and stock is counted in it.',
-  'Contains is what one holds, as on the pack: a number of something (a box contains 20 tea bags) or an amount (a bag contains 1 kg).',
-  'Weight is the grams (or ml) in one. It\'s set from Contains when that\'s an amount, can be given for anything, and is the only thing Larder uses to work in g or ml (recipes, prices per kg, usage in grams). Without it Larder can\'t work in g or ml, and says so.',
+  'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
+  'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock stays in boxes, so never switch it to counting tea bags.',
+  'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
   'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
-  'How fast something is used (uses: 1 tea bag a day) tells Larder when it runs out; with takes_out_automatically, Larder takes them out of stock by itself.',
+  'How fast it\'s used (uses: 1 tea bag a day, 4 g a day) tells Larder when it runs out; with takes_out_automatically, Larder takes that much out of stock by itself.',
   'Before adding something new with add_item, search for it: it may already exist under another name.',
-  'Anything about an item can be changed later with change_item (its name, category, shop, usual place, minimum, what it\'s bought in and contains, its weight and how fast it is used).',
+  'Anything about an item can be changed later with change_item (its name, category, shop, usual place, minimum, what it\'s bought in, its pack size and weight, and how fast it is used).',
   'If a shop, place or category doesn\'t exist yet, the tool says so: offer to add it (add_shop, add_place, add_category), then carry on.',
   'Low stock counts deliveries on the way and pending orders (ordered, not confirmed). Wish list items are things to buy that the house has none of yet.',
 ].join(' ');
@@ -130,9 +130,9 @@ function detailText(ctx: CoreContext, units: Units, d: ProductDetail): string {
   if (p.needsCheck) lines.push(`To tidy: ${p.needsCheck}`);
   if (p.wish) lines.push('On the wish list: the house has none yet.');
   else lines.push(`In stock: ${stockWithInside(units, p, d.inStock)}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${exactly(d.expected)} on the way` : ''}.`);
-  // "Bought in boxes. Each box contains 20 tea bags. Weight: 30 g." The Weight only when it was given, not worked out from Contains.
-  const fromContents = !!p.contents && !isCount(units, p.contents.unit);
-  lines.push([`${boughtInText(units, p)}.`, containsText(units, p) ? `${containsText(units, p)}.` : '', p.weight && !fromContents ? `Weight: ${weightText(p.weight)}.` : ''].filter(Boolean).join(' '));
+  // "Bought in boxes. Pack size: 20 tea bags. Weight: 30 g." The Weight only when it was given, not worked out from the pack size.
+  const fromPackSize = !!p.packSize && !isCount(units, p.packSize.unit);
+  lines.push([`${boughtInText(units, p)}.`, packSizeText(units, p) ? `${packSizeText(units, p)}.` : '', p.weight && !fromPackSize ? `Weight: ${weightText(p.weight)}.` : ''].filter(Boolean).join(' '));
   const where = placesText(units, d);
   if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
@@ -214,7 +214,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'get_item', title: 'Look up an item', readOnly: true,
-    description: 'Everything about one item: how many, how many in each place it\'s kept in (including places that have run out), where each batch is, expiry dates, deliveries on the way, when it counts as low, what it\'s bought in, what one contains and weighs, how fast it\'s used and when it runs out, which shops sell it, notes (e.g. policy details for a renewal), and why it\'s on the To tidy list if it is.',
+    description: 'Everything about one item: how many, how many in each place it\'s kept in (including places that have run out), where each batch is, expiry dates, deliveries on the way, when it counts as low, what it\'s bought in, its pack size and weight, how fast it\'s used and when it runs out, which shops sell it, notes (e.g. policy details for a renewal), and why it\'s on the To tidy list if it is.',
     input: z.object({ item: Item }),
     async run({ item }) {
       const p = await resolve.product(item);
@@ -226,7 +226,7 @@ export function createAssistant(deps: {
           places: (d.stockByPlace ?? []).map((x) => ({ place: x.path, quantity: x.quantity })),
           batches: d.entries.map((e) => ({ quantity: e.quantity, status: e.status, place: e.place?.path ?? null, now_in: e.currentPlace?.path ?? null, expires_on: e.expiresOn, from: e.expected?.source ?? null })),
           shops: d.shops.map((s) => s.name), notes: p.notes,
-          contains: p.contents ? { amount: p.contents.amount, unit: p.contents.unit } : null,
+          pack_size: p.packSize ? { amount: p.packSize.amount, unit: p.packSize.unit } : null,
           weight: p.weight ? { amount: p.weight.amount, unit: p.weight.unit } : null,
           uses: p.usage ? { amount: p.usage.amount, every_days: p.usage.everyDays, unit: p.usage.unit ?? p.unit, taken_out_by_larder: p.usage.auto } : null,
           in_use_since: p.inUseSince ?? null, in_use_until: d.inUseUntil, runs_out_on: d.runsOutOn, needs_check: p.needsCheck ?? null,
@@ -254,7 +254,7 @@ export function createAssistant(deps: {
 
   addTool({
     name: 'add_item', title: 'Add a new item',
-    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Say what it\'s bought in (bought_in: box, jar, roll…), and what one contains as printed on the pack (contains: 20 tea bags, 400 g). Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
+    description: 'Add something Larder doesn\'t know yet (search first). Give a plain generic name ("Chopped tomatoes", not a brand), and the brand separately if the person said one. From a photo of the pack, read the name, brand and size, and the shop if it\'s a shop\'s own brand. Say what it\'s bought in (bought_in: box, jar, roll…), and its pack size as printed on the pack (pack_size: 20 tea bags, 400 g). Then use add_stock to say how many there are, or add_expected if it\'s on order. Anything can be changed later with change_item.',
     input: z.object({
       name: z.string().min(1).max(120).describe('Generic name, e.g. "Chopped tomatoes" or "Cordless drill"'),
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
@@ -263,7 +263,7 @@ export function createAssistant(deps: {
       minimum: z.number().min(0).optional().describe('Running low below this many, in what it\'s bought in'),
       stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many, in what it\'s bought in'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
-      contains: ContainsInput.optional(),
+      pack_size: PackSizeInput.optional(),
       weight: WeightInput.optional(),
       uses: UsesInput.optional(),
       takes_out_automatically: TakesOutInput.optional(),
@@ -291,7 +291,7 @@ export function createAssistant(deps: {
       const shop = i.shop ? await findShop(i.shop, !!i.new_shop, categoryId) : null;
       const p = await products.create({
         name: i.name.trim(), categoryId, ...(i.bought_in ? { unit: i.bought_in } : {}), aliases: i.aliases ?? [], minQuantity: i.minimum ?? null, stockUpTo: i.stock_up_to ?? null,
-        shelfLifeDays: i.shelf_life_days ?? null, contents: i.contains ?? null, weight: i.weight ?? null, ...usageFields(null, i.uses, i.uses ? i.takes_out_automatically : undefined), defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
+        shelfLifeDays: i.shelf_life_days ?? null, packSize: i.pack_size ?? null, weight: i.weight ?? null, ...usageFields(null, i.uses, i.uses ? i.takes_out_automatically : undefined), defaultPlaceId: place?.id ?? null, preferredShopIds: shop ? [shop.id] : [], wish: i.wish_list ?? false,
         rechargeable: i.rechargeable ?? false, notes: i.notes ?? '', links: (i.links ?? []).map((url) => ({ url, title: '' })),
       });
       // A photo from its barcode, or from its brand (food only); never the reason it can't be added.
@@ -312,17 +312,17 @@ export function createAssistant(deps: {
       const photo = photoFileId ? ` with a photo of ${photoOf}` : '';
       const shopNote = shop?.made ? ` Added ${shop.name} to the shops.` : '';
       const units = await ctx.units();
-      const inside = p.contents && isCount(units, p.contents.unit) ? units.find(p.contents.unit) : null;
+      const inside = p.packSize && isCount(units, p.packSize.unit) ? units.find(p.packSize.unit) : null;
       const bought = units.find(p.unit);
       // Bought in boxes of tea bags: say both can be given.
       const inWhat = inside ? `, in ${bought?.key === 'each' ? 'ones' : (bought?.many ?? p.unit)} or in ${inside.many} (unit: "${inside.key}")` : '';
-      const ask = (i.contains || i.weight) && !p.usage && !p.wish && !p.rechargeable ? ` No usage is set: ${usageQuestion(units, p)}` : '';
+      const ask = (i.pack_size || i.weight) && !p.usage && !p.wish && !p.rechargeable ? ` No usage is set: ${usageQuestion(units, p)}` : '';
       return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${shopNote} ${i.wish_list ? 'It has no stock yet.' : `It has no stock yet: use add_stock to say how many${inWhat}.`}${ask}`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
     },
   });
 
   fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
-  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in what it\'s bought in (a whole box or jar), or set unit for what one contains or a weight ("5 tea bags", "100 g").');
+  fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in what it\'s bought in (a whole box or jar), or set unit for what\'s in its pack or a weight ("5 tea bags", "100 g").');
   fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or the one in use is stopped (Larder stops taking them out until one is started). Use use_stock with opened: true when one is opened or started.');
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.');
   fromAction('add_expected', 'add_expected', 'Add an expected delivery', 'Something has been ordered but not arrived (e.g. from an order email). It counts towards stock so it isn\'t bought twice. The item can be a shop code from the order.');

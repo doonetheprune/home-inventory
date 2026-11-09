@@ -15,14 +15,14 @@ describe('the owner\'s chats', () => {
     await core.automation.run('add_stock', { item: 'twinings sleep', quantity: 4 });
 
     // "A box holds 20 tea bags": the boxes stay, and the next question is how fast they go.
-    expect(await text(core, 'change_item', { item: 'twinings sleep', contains: { amount: 20, unit: 'tea bags' } })).toBe(
-      'Twinings Sleep is updated: each box contains 20 tea bags. No usage is set: ask how many tea bags get used a day or a week (uses, with unit "tea bag"), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
+    expect(await text(core, 'change_item', { item: 'twinings sleep', pack_size: { amount: 20, unit: 'tea bags' } })).toBe(
+      'Twinings Sleep is updated: pack size 20 tea bags. No usage is set: ask how many tea bags get used a day or a week (uses, with unit "tea bag"), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
     expect(await text(core, 'change_item', { item: 'twinings sleep', uses: { amount: 1, every_days: 1, unit: 'tea bag' }, takes_out_automatically: true })).toBe(
       'Twinings Sleep is updated: uses 1 tea bag a day, taken out of stock by Larder (a box lasts 20 days), enough until 2027-01-17.');
     const item = await core.assistant.call('get_item', { item: 'twinings sleep' });
-    expect(item.text).toContain('In stock: 4 boxes.\nBought in boxes. Each box contains 20 tea bags.\n');
+    expect(item.text).toContain('In stock: 4 boxes.\nBought in boxes. Pack size: 20 tea bags.\n');
     expect(item.text).toContain('Uses 1 tea bag a day, taken out of stock by Larder a little at a time: a box lasts 20 days. Enough until 2027-01-17 (in 81 days).');
-    expect(item.data).toMatchObject({ bought_in: 'box', in_stock: 4, contains: { amount: 20, unit: 'tea bag' }, weight: null, uses: { amount: 1, every_days: 1, unit: 'tea bag', taken_out_by_larder: true }, needs_check: null });
+    expect(item.data).toMatchObject({ bought_in: 'box', in_stock: 4, pack_size: { amount: 20, unit: 'tea bag' }, weight: null, uses: { amount: 1, every_days: 1, unit: 'tea bag', taken_out_by_larder: true }, needs_check: null });
 
     // A tea bag a day comes out of the box; the count can be put right in tea bags.
     core.clock.set('2026-10-29T09:00:00.000Z');
@@ -31,25 +31,25 @@ describe('the owner\'s chats', () => {
     expect(await text(core, 'correct_stock', { item: 'twinings sleep', quantity: 55, unit: 'tea bags' })).toBe('Twinings Sleep: corrected. about 2¾ boxes (55 tea bags) in stock.');
     // A Weight can be given for anything, even tea bags in a box.
     expect(await text(core, 'change_item', { item: 'twinings sleep', weight: { amount: 30, unit: 'g' } })).toBe('Twinings Sleep is updated: weighs 30 g.');
-    expect(await text(core, 'get_item', { item: 'twinings sleep' })).toContain('Bought in boxes. Each box contains 20 tea bags. Weight: 30 g.');
+    expect(await text(core, 'get_item', { item: 'twinings sleep' })).toContain('Bought in boxes. Pack size: 20 tea bags. Weight: 30 g.');
   });
 
   it('Decaf: a 400 g jar, four grams a day', async () => {
     const core = await makeCore();
     await core.assistant.call('add_item', { name: 'Decaf coffee', bought_in: 'jar' });
     await core.automation.run('add_stock', { item: 'decaf coffee', quantity: 1 });
-    expect(await text(core, 'change_item', { item: 'decaf coffee', contains: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' }, takes_out_automatically: true })).toBe(
-      'Decaf coffee is updated: each jar contains 400 g, uses 4 g a day, taken out of stock by Larder (a jar lasts 100 days), enough until 2027-02-06.');
+    expect(await text(core, 'change_item', { item: 'decaf coffee', pack_size: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' }, takes_out_automatically: true })).toBe(
+      'Decaf coffee is updated: pack size 400 g, uses 4 g a day, taken out of stock by Larder (a jar lasts 100 days), enough until 2027-02-06.');
     const item = await core.assistant.call('get_item', { item: 'decaf coffee' });
     // The Weight comes from Contains, so it isn't said twice.
-    expect(item.text).toContain('Bought in jars. Each jar contains 400 g.\n');
+    expect(item.text).toContain('Bought in jars. Pack size: 400 g.\n');
     expect(item.text).toContain('Uses 4 g a day, taken out of stock by Larder a little at a time: a jar lasts 100 days.');
-    expect(item.data).toMatchObject({ contains: { amount: 400, unit: 'g' }, weight: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' } });
+    expect(item.data).toMatchObject({ pack_size: { amount: 400, unit: 'g' }, weight: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' } });
     core.clock.set('2026-10-29T09:00:00.000Z');
     await core.automation.checkExpiry();
     expect(await text(core, 'get_item', { item: 'decaf coffee' })).toContain('In stock: about 1 jar (396 g).');
     // A Weight alongside Contains 400 g is refused: it's worked out from it.
-    await expect(core.assistant.call('change_item', { item: 'decaf coffee', weight: { amount: 200, unit: 'g' } })).rejects.toThrow('Decaf coffee contains 400 g, so its Weight is 400 g, worked out from that. Change Contains instead.');
+    await expect(core.assistant.call('change_item', { item: 'decaf coffee', weight: { amount: 200, unit: 'g' } })).rejects.toThrow('Decaf coffee has a pack size of 400 g, so its Weight is 400 g, worked out from that. Change the pack size instead.');
   });
 });
 
@@ -77,10 +77,10 @@ describe('units for assistants', () => {
     await core.automation.run('add_stock', { item: 'kitchen roll', quantity: 2 });
     expect(await text(core, 'change_item', { item: 'kitchen roll', bought_in: 'rolls' })).toBe('Kitchen roll is updated: bought in rolls (2 packs is now 2 rolls: correct the count if that\'s wrong).');
     // Counted one by one instead of in boxes: Contains goes, and the usage is in what it's bought in.
-    await core.assistant.call('add_item', { name: 'Sleep tea', bought_in: 'box', contains: { amount: 20, unit: 'tea bag' }, uses: { amount: 1, every_days: 1, unit: 'tea bag' } });
+    await core.assistant.call('add_item', { name: 'Sleep tea', bought_in: 'box', pack_size: { amount: 20, unit: 'tea bag' }, uses: { amount: 1, every_days: 1, unit: 'tea bag' } });
     await core.automation.run('add_stock', { item: 'sleep tea', quantity: 4 });
-    expect(await text(core, 'change_item', { item: 'sleep tea', bought_in: 'tea bag' })).toBe('Sleep tea is updated: bought in tea bags (4 boxes is now 4 tea bags: correct the count if that\'s wrong), contains nothing now.');
-    expect((await core.assistant.call('get_item', { item: 'sleep tea' })).data).toMatchObject({ bought_in: 'tea bag', contains: null, uses: { amount: 1, unit: 'tea bag' } });
+    expect(await text(core, 'change_item', { item: 'sleep tea', bought_in: 'tea bag' })).toBe('Sleep tea is updated: bought in tea bags (4 boxes is now 4 tea bags: correct the count if that\'s wrong), no pack size now.');
+    expect((await core.assistant.call('get_item', { item: 'sleep tea' })).data).toMatchObject({ bought_in: 'tea bag', pack_size: null, uses: { amount: 1, unit: 'tea bag' } });
     // Bought loose: no Contains or Weight, and kg is kept as g.
     expect(await text(core, 'add_item', { name: 'Cheddar', bought_in: 'kg', minimum: 0.2 })).toBe('Added Cheddar. It has no stock yet: use add_stock to say how many.');
     expect((await core.assistant.call('get_item', { item: 'cheddar' })).text).toContain('Bought loose, by weight (g).');
@@ -90,7 +90,7 @@ describe('units for assistants', () => {
 
   it('show what Larder flagged to tidy, and take it off when it looks right', async () => {
     const core = await makeCore();
-    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', contents: { amount: 20, unit: 'tea bag' }, categoryId: (await core.categories.list())[0]!.id });
+    const sleep = await core.products.create({ name: 'Sleep tea', unit: 'box', packSize: { amount: 20, unit: 'tea bag' }, categoryId: (await core.categories.list())[0]!.id });
     await core.adapters.storage.products.put({ ...sleep, needsCheck: 'Now counted in boxes of 20 tea bags. If you count them one by one instead, change Bought in and correct the count.' });
     expect(await text(core, 'get_item', { item: 'sleep tea' })).toContain('Sleep tea (Food)\nTo tidy: Now counted in boxes of 20 tea bags.');
     expect(await text(core, 'list_items', { status: 'to_tidy' })).toBe('- Sleep tea: 0 boxes. To tidy: Now counted in boxes of 20 tea bags. If you count them one by one instead, change Bought in and correct the count.');
@@ -99,16 +99,16 @@ describe('units for assistants', () => {
     expect(await text(core, 'list_items', { status: 'to_tidy' })).toBe('No items like that.');
 
     const milk = await core.products.create({ name: 'Whole milk', unit: 'bottle', categoryId: sleep.categoryId });
-    await core.adapters.storage.products.put({ ...milk, unit: '4 pint bottle', needsCheck: '"4 pint bottle" isn\'t on the unit list. Pick what it\'s bought in, and what one contains.' });
+    await core.adapters.storage.products.put({ ...milk, unit: '4 pint bottle', needsCheck: '"4 pint bottle" isn\'t on the unit list. Pick what it\'s bought in, and its pack size.' });
     await expect(core.assistant.call('change_item', { item: 'whole milk', looks_right: true })).rejects.toThrow('"4 pint bottle" isn\'t on the unit list, so Whole milk can\'t be marked as looking right yet.');
-    expect(await text(core, 'change_item', { item: 'whole milk', bought_in: 'bottle', contains: { amount: 4, unit: 'pints' } })).toBe(
-      'Whole milk is updated: bought in bottles, each bottle contains 4 pints, off the To tidy list. No usage is set: ask how many bottles get used a day or a week (uses), or how much in ml (unit "ml"), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
+    expect(await text(core, 'change_item', { item: 'whole milk', bought_in: 'bottle', pack_size: { amount: 4, unit: 'pints' } })).toBe(
+      'Whole milk is updated: bought in bottles, pack size 4 pints, off the To tidy list. No usage is set: ask how many bottles get used a day or a week (uses), or how much in ml (unit "ml"), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
   });
 
   it('buy whole ones of what it is bought in, with no pack wording', async () => {
     const core = await makeCore();
     await core.shops.create({ name: 'Aldi' });
-    await core.assistant.call('add_item', { name: 'Tea bags', bought_in: 'box', contains: { amount: 80, unit: 'tea bag' }, minimum: 0.5, shop: 'aldi' });
+    await core.assistant.call('add_item', { name: 'Tea bags', bought_in: 'box', pack_size: { amount: 80, unit: 'tea bag' }, minimum: 0.5, shop: 'aldi' });
     await core.automation.run('add_stock', { item: 'tea bags', quantity: 20, unit: 'tea bags' });
     const list = await core.assistant.call('shopping_list', { shop: 'aldi' });
     expect(list.text).toBe('At Aldi (1):\nOther: Tea bags ×1 box');
@@ -116,13 +116,13 @@ describe('units for assistants', () => {
     expect(await text(core, 'get_item', { item: 'tea bags' })).toContain('Running low below 0.5 box (40 tea bags): it is low now.');
   });
 
-  it('are explained in the instructions in four short sentences', () => {
+  it('are explained in the instructions in four short sentences, with the tea bags that went wrong', () => {
     for (const sentence of [
-      'Every item is bought in a unit from Larder\'s list (bag, box, jar, roll, each…), or loose in g or ml, and stock is counted in it.',
-      'Contains is what one holds, as on the pack: a number of something (a box contains 20 tea bags) or an amount (a bag contains 1 kg).',
-      'Weight is the grams (or ml) in one. It\'s set from Contains when that\'s an amount, can be given for anything, and is the only thing Larder uses to work in g or ml (recipes, prices per kg, usage in grams). Without it Larder can\'t work in g or ml, and says so.',
+      'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
+      'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock stays in boxes, so never switch it to counting tea bags.',
+      'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
       'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
     ]) expect(ASSISTANT_INSTRUCTIONS).toContain(sentence);
-    expect(ASSISTANT_INSTRUCTIONS).not.toMatch(/comes_in|recount|weighs|pack, not a note/);
+    expect(ASSISTANT_INSTRUCTIONS).not.toMatch(/comes_in|recount|weighs:|pack, not a note|[Cc]ontains/);
   });
 });

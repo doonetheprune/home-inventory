@@ -10,7 +10,7 @@ import { makeCore, category } from '../helpers';
 const at = '2026-10-20T09:00:00.000Z';
 /** A record as 0.9.2 saved it: a pack, no Contains, Weight or needsCheck. */
 const old = (p: Product, extra: Record<string, unknown>) => {
-  const { contents: _c, weight: _w, needsCheck: _n, ...rest } = p;
+  const { packSize: _c, weight: _w, needsCheck: _n, ...rest } = p;
   return { ...rest, pack: null, ...extra } as unknown as Product;
 };
 const entry = (productId: string, quantity: number, extra: Partial<StockEntry> = {}): StockEntry => ({
@@ -47,7 +47,7 @@ describe('items saved by 0.9.0 and before', () => {
     expect(stored && ('lastsDays' in stored || 'autoUse' in stored)).toBe(false);
     // Older records with no usage at all read as none.
     const roll = await core.products.summary(plain.id);
-    expect([roll.product.usage, roll.product.contents, roll.product.needsCheck, roll.runsOutOn]).toEqual([null, null, null, null]);
+    expect([roll.product.usage, roll.product.packSize, roll.product.needsCheck, roll.runsOutOn]).toEqual([null, null, null, null]);
     expect(await core.products.upgradeStored()).toBe(0);
   });
 });
@@ -95,7 +95,7 @@ describe('items saved by 0.9.2 (Counted in and Comes in)', () => {
     expect((await storage.stock.listByProduct(peas)).map((e) => e.quantity).sort()).toEqual([1000, 1600]);
   });
 
-  it('turns a pack round: tea bags in boxes of 20 are bought in boxes, each containing 20 tea bags', async () => {
+  it('turns a pack round: tea bags in boxes of 20 are bought in boxes of 20 tea bags', async () => {
     let sleep = '';
     const { core } = await upgraded(async (c) => {
       const p = await c.products.create({ name: 'Twinings Sleep', unit: 'tea bag' });
@@ -107,12 +107,12 @@ describe('items saved by 0.9.2 (Counted in and Comes in)', () => {
       };
     });
     const s = await core.products.get(sleep);
-    expect([s.product.unit, s.product.contents, s.product.weight, s.product.minQuantity, s.product.stockUpTo, s.product.usage]).toEqual([
+    expect([s.product.unit, s.product.packSize, s.product.weight, s.product.minQuantity, s.product.stockUpTo, s.product.usage]).toEqual([
       'box', { amount: 20, unit: 'tea bag' }, { amount: 30, unit: 'g' }, 1.4, 3, { amount: 1, everyDays: 1, auto: true, unit: 'tea bag' }]);
     expect([s.inStock, s.pending]).toEqual([4, 1]);
     expect(s.entries.find((e) => e.status === 'pending')?.expected?.unitPrice).toBe(1);
     expect(s.product.needsCheck).toBe('Now counted in boxes of 20 tea bags. If you count them one by one instead, change Bought in and correct the count.');
-    expect(s.history.map((m) => [m.kind, m.quantity, m.note])).toEqual([['adjust', 0, 'Now bought in boxes, each containing 20 tea bags'], ['add', 4, '']]);
+    expect(s.history.map((m) => [m.kind, m.quantity, m.note])).toEqual([['adjust', 0, 'Now bought in boxes of 20 tea bags'], ['add', 4, '']]);
     expect((await core.adapters.storage.products.get(sleep) as Record<string, unknown>).pack ?? null).toBeNull();
     expect(heard.map((e) => e.data)).toEqual([{ productId: sleep, name: 'Twinings Sleep', from: 'tea bag', to: 'box', factor: 0.05 }]);
     expect((await core.products.list({ status: 'to_tidy' })).map((x) => x.product.name)).toContain('Twinings Sleep');
@@ -142,9 +142,9 @@ describe('items saved by 0.9.2 (Counted in and Comes in)', () => {
       };
     });
     const get = async (name: string) => (await core.products.summary(ids[name]!)).product;
-    expect(await get('Pens')).toMatchObject({ unit: 'pack', contents: { amount: 5, unit: 'piece' }, needsCheck: 'Now counted in packs of 5 pieces. If you count them one by one instead, change Bought in and correct the count.' });
-    expect(await get('Whole milk')).toMatchObject({ unit: '4 pint bottle', contents: null, needsCheck: '"4 pint bottle" isn\'t on the unit list. Pick what it\'s bought in, and what one contains.' });
-    expect(await get('Cups')).toMatchObject({ unit: 'sleeve', contents: { amount: 50, unit: 'cups' }, needsCheck: '"sleeve" isn\'t on the unit list. Pick what it\'s bought in, and what one contains.' });
+    expect(await get('Pens')).toMatchObject({ unit: 'pack', packSize: { amount: 5, unit: 'piece' }, needsCheck: 'Now counted in packs of 5 pieces. If you count them one by one instead, change Bought in and correct the count.' });
+    expect(await get('Whole milk')).toMatchObject({ unit: '4 pint bottle', packSize: null, needsCheck: '"4 pint bottle" isn\'t on the unit list. Pick what it\'s bought in, and its pack size.' });
+    expect(await get('Cups')).toMatchObject({ unit: 'sleeve', packSize: { amount: 50, unit: 'cups' }, needsCheck: '"sleeve" isn\'t on the unit list. Pick what it\'s bought in, and its pack size.' });
     expect((await Promise.all(['Loo roll', 'Dishwasher tabs', 'Crisps', 'Bananas'].map(get))).map((p) => [p.unit, p.needsCheck])).toEqual([['roll', null], ['tablet', null], ['packet', null], ['each', null]]);
     // Flagged items still work.
     expect((await core.stock.add({ productId: ids['Whole milk']!, quantity: 2 })).inStock).toBe(2);

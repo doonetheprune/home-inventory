@@ -46,7 +46,7 @@ describe('pricing module', () => {
   });
 
   it('converts between per item, per 100 g and per kg through the core converter', () => {
-    const bag = { name: 'Baby spinach', unit: 'bag', contents: null, weight: null };
+    const bag = { name: 'Baby spinach', unit: 'bag', packSize: null, weight: null };
     expect(priceKey(units, bag, '100 g')).toBe('100g');
     expect(priceKey(units, bag, '100 grams')).toBe('100g');
     expect(priceKey(units, bag, 'per Kilogram')).toBe('kg');
@@ -101,7 +101,7 @@ describe('pricing module', () => {
     expect((await core.assistant.call('convert_price', { price: 3.5, per: 'kg', to: '100 g' })).text).toBe('£3.50 a kg is £0.35 per 100 g.');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg' })).rejects.toThrow('Say which item');
     await expect(core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).rejects.toThrow("Larder doesn't know what one bag of Baby spinach weighs, so it can't work in kg.");
-    expect((await core.assistant.call('change_item', { item: 'baby spinach', contains: { amount: 200, unit: 'g' } })).text).toContain('Baby spinach is updated: each bag contains 200 g.');
+    expect((await core.assistant.call('change_item', { item: 'baby spinach', pack_size: { amount: 200, unit: 'g' } })).text).toContain('Baby spinach is updated: pack size 200 g.');
     expect((await core.assistant.call('convert_price', { price: 1.1, per: 'bag', to: 'kg', item: 'baby spinach' })).text).toBe('£1.10 a bag is £5.50 a kg.');
     // A usual price per 100 g, then a pack per kg at the shop.
     expect((await core.assistant.call('set_usual_price', { item: 'baby spinach', quantity: 100, unit: 'g', price: 0.6 })).text).toBe('The usual price for Baby spinach is now £1.20 a bag.');
@@ -123,7 +123,7 @@ describe('pricing module', () => {
 
   it('prices an item bought in boxes by the box, by the tea bag, or per 100 g through its Weight', async () => {
     const core = await makeCore({ modules: [pricing] });
-    const tea = await core.products.create({ name: 'Tea bags', unit: 'box', contents: { amount: 80, unit: 'tea bag' } });
+    const tea = await core.products.create({ name: 'Tea bags', unit: 'box', packSize: { amount: 80, unit: 'tea bag' } });
     const fields = await call(core, 'PUT', '/usual', { productId: tea.id, quantity: 1, unit: 'box', price: 4 });
     expect(fields).toMatchObject({ usualUnitPrice: 4, priceUnit: null });
     const view = (await call(core, 'GET', '/view/:productId', undefined, { productId: tea.id })) as PriceView;
@@ -139,8 +139,8 @@ describe('pricing module', () => {
     await core.assistant.call('change_item', { item: 'tea bags', weight: { amount: 250, unit: 'g' } });
     expect((await core.assistant.call('get_price', { item: 'tea bags' })).text).toBe('Tea bags: usually £4.00 a box, £0.05 a tea bag, £1.60 per 100 g, £16.00 a kg.');
     await expect(call(core, 'POST', '/check', { productId: tea.id, quantity: 1, unit: 'sleeve', price: 3 })).rejects.toThrow('Larder doesn\'t have the unit "sleeve".');
-    // A Weight from Contains is changed there, not on the price card.
-    const decaf = await core.products.create({ name: 'Decaf coffee', unit: 'jar', contents: { amount: 400, unit: 'g' } });
+    // A Weight from the pack size is changed there, not on the price card.
+    const decaf = await core.products.create({ name: 'Decaf coffee', unit: 'jar', packSize: { amount: 400, unit: 'g' } });
     expect(((await call(core, 'GET', '/view/:productId', undefined, { productId: decaf.id })) as PriceView)).toMatchObject({ weight: { amount: 400, unit: 'g' }, weightEditable: false, itemUnit: 'jar' });
   });
 

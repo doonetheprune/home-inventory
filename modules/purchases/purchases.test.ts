@@ -92,7 +92,7 @@ describe('purchase history', () => {
     const tea = await before.products.create({ name: 'Sleep tea', unit: 'tea bag' });
     await before.shopping.purchase({ items: [{ productId: tea.id, quantity: 40, price: 6 }] });
     await settle();
-    // Saved by 0.9.2 as counted in tea bags, in boxes of 20: 0.10.0 buys it in boxes, each containing 20 tea bags.
+    // Saved by 0.9.2 as counted in tea bags, in boxes of 20: 0.10.0 buys it in boxes of 20 tea bags.
     await saveAs092(storage, (await before.products.summary(tea.id)).product, { unit: 'tea bag', pack: { name: 'box', holds: 20 } });
     const core = await makeCore({ modules: [purchases], storage });
     await settle();

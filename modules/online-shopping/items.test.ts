@@ -39,19 +39,19 @@ const fields = (core: Core, id: string) => core.products.summary(id).then((s) =>
 
 describe('online shopping: item settings', () => {
   it('works out how many of what the item is bought in one pack gives, through the converter, and says when it is only a guess', () => {
-    const item = (unit: string, extra: Partial<Product> = {}) => ({ name: 'It', unit, contents: null, weight: null, ...extra }) as Product;
+    const item = (unit: string, extra: Partial<Product> = {}) => ({ name: 'It', unit, packSize: null, weight: null, ...extra }) as Product;
     expect(packQuantityFor(units, { amount: 0.3, unit: 'kg' }, 'Mushrooms 300G', item('g'))).toEqual({ quantity: 300, guessed: false });
     expect(packQuantityFor(units, { amount: 2.272, unit: 'l' }, 'Semi Skimmed Milk 4 Pints', item('ml'))).toEqual({ quantity: 2272, guessed: false });
-    // Bottles containing 4 pints have a Weight of 2273 ml: a 2.272 L pack is one bottle.
+    // Bottles of 4 pints have a Weight of 2273 ml: a 2.272 L pack is one bottle.
     expect(packQuantityFor(units, { amount: 2.273, unit: 'l' }, 'Semi Skimmed Milk 4 Pints', item('bottle', { weight: { amount: 2273.044, unit: 'ml' } }))).toEqual({ quantity: 1, guessed: false });
     expect(packQuantityFor(units, { amount: 9, unit: 'each' }, 'Toilet Tissue 9 Rolls', item('roll'))).toEqual({ quantity: 9, guessed: false });
-    // Bought in packs containing 9 rolls: 9 rolls is one pack.
-    expect(packQuantityFor(units, { amount: 9, unit: 'each' }, 'Toilet Tissue 9 Rolls', item('pack', { contents: { amount: 9, unit: 'roll' } }))).toEqual({ quantity: 1, guessed: false });
+    // Bought in packs of 9 rolls: 9 rolls is one pack.
+    expect(packQuantityFor(units, { amount: 9, unit: 'each' }, 'Toilet Tissue 9 Rolls', item('pack', { packSize: { amount: 9, unit: 'roll' } }))).toEqual({ quantity: 1, guessed: false });
     expect(packQuantityFor(units, { amount: 6, unit: 'each' }, 'Free Range Eggs 6 Pack', item('egg'))).toEqual({ quantity: 6, guessed: false });
-    expect(packQuantityFor(units, { amount: 12, unit: 'each' }, 'Free Range Eggs 12 Pack', item('box', { contents: { amount: 6, unit: 'egg' } }))).toEqual({ quantity: 2, guessed: false });
+    expect(packQuantityFor(units, { amount: 12, unit: 'each' }, 'Free Range Eggs 12 Pack', item('box', { packSize: { amount: 6, unit: 'egg' } }))).toEqual({ quantity: 2, guessed: false });
     expect(packQuantityFor(units, { amount: 100, unit: 'each' }, 'Cable Ties 100 Pack', item('box'))).toEqual({ quantity: 100, guessed: true });
     expect(packQuantityFor(units, { amount: 4, unit: 'each' }, 'Cordless drill', item('each'))).toEqual({ quantity: 4, guessed: false });
-    // Tins containing 415 g: the 1.66 kg pack is 4 tins, and sure; without a Weight it's a guess from the name.
+    // Tins of 415 g: the 1.66 kg pack is 4 tins, and sure; without a Weight it's a guess from the name.
     expect(packQuantityFor(units, { amount: 1.66, unit: 'kg' }, 'Heinz Baked Beanz 4 X 415G', item('tin', { weight: { amount: 415, unit: 'g' } }))).toEqual({ quantity: 4, guessed: false });
     expect(packQuantityFor(units, { amount: 1.66, unit: 'kg' }, 'Heinz Baked Beanz 4 X 415G', item('tin'))).toEqual({ quantity: 4, guessed: true });
     expect(packQuantityFor(units, null, 'Something', item('bag'))).toEqual({ quantity: 1, guessed: true });
@@ -159,7 +159,7 @@ describe('online shopping: item settings', () => {
     const tesco = await before.shops.addPreset('Tesco');
     const fields = { shops: { [tesco.id]: { listings: [{ listingId: '1001', name: 'Toilet Tissue 9 Rolls', packQuantity: 9, addedAt: before.now() }], targetPrice: 0.3 } }, targetPrice: 0.25, offerStockUpTo: 36 };
     const loo = await before.products.create({ name: 'Toilet roll', unit: 'roll', fields: { 'online-shopping': fields } });
-    // 0.9.2: counted in rolls, in packs of 9. Now bought in packs, each containing 9 rolls.
+    // 0.9.2: counted in rolls, in packs of 9. Now bought in packs of 9 rolls.
     await saveAs092(storage, (await before.products.summary(loo.id)).product, { unit: 'roll', pack: { name: 'pack', holds: 9 } });
     const core = await makeCore({ modules: [onlineShopping], storage });
     await new Promise((r) => setTimeout(r, 10));

@@ -20,7 +20,7 @@ export { DEFAULT_CATEGORIES, SHOP_PRESETS } from './services/catalogue';
 export { addDays, andList, daysBetween, localDate, newId, publicWebAddress, roundQty } from './util';
 export { photoType } from './photos';
 export {
-  BUILT_IN_UNITS, UnknownUnitError, amountText, asWeight, boughtInText, builtInUnits, canConvert, containsText, daysFor, durationText, everyText, exactText, fromBoughtIn, givenInText,
+  BUILT_IN_UNITS, UnknownUnitError, amountText, asWeight, boughtInText, builtInUnits, canConvert, packSizeText, daysFor, durationText, everyText, exactText, fromBoughtIn, givenInText,
   isCount, isLoose, isMeasure, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake, pluralOf, singularGuess, singularOf, startsOne, stockText, stockWithInside, toBoughtIn, unitKeyOf, unitList, unitOf, unitWord,
   usageInBoughtIn, usageText, weightText, worthText,
   type HouseholdUnit, type NumberText, type UnitItem, type UnitUsage, type Units,

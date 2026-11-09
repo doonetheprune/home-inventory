@@ -2887,7 +2887,7 @@
             "minLength": 1,
             "maxLength": 30
           },
-          "contents": {
+          "packSize": {
             "default": null,
             "anyOf": [
               {
@@ -7804,7 +7804,7 @@
             "minLength": 1,
             "maxLength": 30
           },
-          "contents": {
+          "packSize": {
             "default": null,
             "anyOf": [
               {
@@ -8073,7 +8073,7 @@
           "aliases",
           "categoryId",
           "unit",
-          "contents",
+          "packSize",
           "weight",
           "shelfLifeDays",
           "usage",
@@ -10846,7 +10846,7 @@
     },
     "/api/v1/units/{key}": {
       "delete": {
-        "summary": "Remove one of the household's words, once no item is bought in it, contains it or is used in it",
+        "summary": "Remove one of the household's words, once no item uses it for Bought in, Pack size or We use",
         "tags": [
           "Units"
         ],
@@ -11749,7 +11749,7 @@
                     "minLength": 1,
                     "maxLength": 30
                   },
-                  "contents": {
+                  "packSize": {
                     "default": null,
                     "anyOf": [
                       {
@@ -12091,7 +12091,7 @@
                     "minLength": 1,
                     "maxLength": 30
                   },
-                  "contents": {
+                  "packSize": {
                     "anyOf": [
                       {
                         "type": "object",
@@ -14050,7 +14050,7 @@
                         "minLength": 1,
                         "maxLength": 30
                       },
-                      "contents": {
+                      "packSize": {
                         "default": null,
                         "anyOf": [
                           {
@@ -15618,7 +15618,7 @@
         "tags": [
           "Module: pricing"
         ],
-        "description": "showPer: e.g. \"100g\", \"kg\" or what the item is bought in. weight (or itemSize, for older apps): what one weighs or holds, e.g. { amount: 200, unit: \"g\" } for a 200 g bag, null to forget it. It's the item's Weight, so the product service checks it (refused when Contains is an amount, or for things bought loose).",
+        "description": "showPer: e.g. \"100g\", \"kg\" or what the item is bought in. weight (or itemSize, for older apps): what one weighs or holds, e.g. { amount: 200, unit: \"g\" } for a 200 g bag, null to forget it. It's the item's Weight, so the product service checks it (refused when the pack size is an amount, or for things bought loose).",
         "requestBody": {
           "required": true,
           "content": {
@@ -19477,7 +19477,7 @@
                     "boughtIn": {
                       "type": "string"
                     },
-                    "contents": {
+                    "packSize": {
                       "anyOf": [
                         {
                           "type": "object",
@@ -19613,7 +19613,7 @@
                     "kind",
                     "brand",
                     "boughtIn",
-                    "contents",
+                    "packSize",
                     "categoryId",
                     "shelfLifeDays",
                     "aliases",
@@ -19710,7 +19710,7 @@
                     "boughtIn": {
                       "type": "string"
                     },
-                    "contents": {
+                    "packSize": {
                       "anyOf": [
                         {
                           "type": "object",
@@ -19846,7 +19846,7 @@
                     "kind",
                     "brand",
                     "boughtIn",
-                    "contents",
+                    "packSize",
                     "categoryId",
                     "shelfLifeDays",
                     "aliases",

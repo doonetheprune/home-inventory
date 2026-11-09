@@ -7,10 +7,10 @@
  *   called. Stored as keys: the singular in lower case ("tea bag", "l").
  * - **The converter.** An amount in any unit an item can be given in, as what it's bought in
  *   (`toBoughtIn`), and back again (`fromBoughtIn`). It has three cases, each reading one
- *   field: in what it's bought in (`unit`), in what one contains when that's a count
- *   (`contents`), and in a weight or volume, through what one weighs (`weight`, always in g
- *   or ml). Nothing else turns an amount into what an item is bought in, nothing reads
- *   `contents` for grams, and only the converter reads `weight`.
+ *   field: in what it's bought in (`unit`), in what's in its pack when its pack size is a
+ *   count (`packSize`), and in a weight or volume, through what one weighs (`weight`, always
+ *   in g or ml). Nothing else turns an amount into what an item is bought in, nothing reads
+ *   `packSize` for grams, and only the converter reads `weight`.
  * - **Saying amounts.** "4 boxes", "about ¾ jar", "350 g", "1.6 kg", "1 tea bag a day",
  *   "a box lasts 20 days".
  *
@@ -22,7 +22,7 @@ import { roundQty } from '../util';
 
 export type { Unit, UnitKind } from '../model';
 
-/** An amount in a unit from the list: what one contains (20 tea bags, 1 kg) or weighs (400 g). */
+/** An amount in a unit from the list: a pack size (20 tea bags, 1 kg) or a weight (400 g). */
 export interface UnitAmount { amount: number; unit: string }
 
 /** How fast something is used: `amount` (in `unit`, or what it's bought in) every `everyDays` days. */
@@ -33,8 +33,8 @@ export interface UnitItem {
   name: string;
   /** Bought in: a key from the list. */
   unit: string;
-  /** What one contains: a count (20 tea bags) or an amount (1 kg). */
-  contents?: UnitAmount | null;
+  /** Pack size: what one holds, a count (20 tea bags) or an amount (1 kg). */
+  packSize?: UnitAmount | null;
   /** What one weighs or holds, in g or ml. */
   weight?: UnitAmount | null;
   usage?: UnitUsage | null;
@@ -161,7 +161,7 @@ export function newUnit(units: Units, input: HouseholdUnit): HouseholdUnit {
   const one = input.one.trim().replace(/\s+/g, ' ');
   const many = input.many.trim().replace(/\s+/g, ' ');
   if (!one || !many) throw new ValidationError('Give the unit\'s singular and plural, e.g. "sleeve" and "sleeves".');
-  if (/\d/.test(one + many)) throw new ValidationError('A unit is a word, without a number: "sleeve", not "sleeve of 50". Say how many one contains on the item.');
+  if (/\d/.test(one + many)) throw new ValidationError('A unit is a word, without a number: "sleeve", not "sleeve of 50". Give how many are in one as the item\'s pack size.');
   for (const w of [one, many]) {
     const has = units.find(w);
     if (has) throw new ValidationError(`Larder already has "${has.one}"${has.builtIn ? '' : ' (added by the household)'}${tidy(w) === tidy(has.one) || tidy(w) === tidy(has.many) ? '' : `, which "${w}" means`}.`);
@@ -189,7 +189,7 @@ function measuresText(units: Units, kind: UnitKind): string {
 export function givenInText(units: Units, item: UnitItem): string {
   const bought = units.find(item.unit);
   if (bought && bought.kind !== 'count') return `Give how much in ${measuresText(units, bought.kind)}.`;
-  const c = item.contents ?? null;
+  const c = item.packSize ?? null;
   const inside = c && isCount(units, c.unit) ? manyOf(units, c.unit) : null;
   const counts = bought?.key === 'each' ? `how many${inside ? `, or how many ${inside}` : ''}` : `how many ${orList([manyOf(units, item.unit), ...(inside ? [inside] : [])])}`;
   const w = item.weight ?? null;
@@ -197,14 +197,14 @@ export function givenInText(units: Units, item: UnitItem): string {
   return `Give ${counts}${kind ? `, or how much in ${measuresText(units, kind)}` : ''}.`;
 }
 
-/** "Twinings Sleep is bought in boxes, each containing 20 tea bags." */
+/** "Twinings Sleep is bought in boxes of 20 tea bags." */
 function boughtInSentence(units: Units, item: UnitItem): string {
   const loose = isLoose(units, item);
-  const c = item.contents ?? null;
-  const has = c ? `, each containing ${amountText(units, c.amount, c.unit)}` : '';
+  const c = item.packSize ?? null;
+  const of = c ? amountText(units, c.amount, c.unit) : '';
   if (loose) return `${item.name} is bought loose, by ${units.find(item.unit)!.kind}.`;
-  if (units.find(item.unit)?.key === 'each') return `${item.name} is counted one by one${has}.`;
-  return `${item.name} is bought in ${manyOf(units, item.unit)}${has}.`;
+  if (units.find(item.unit)?.key === 'each') return `${item.name} is counted one by one${of ? `, with a pack size of ${of}` : ''}.`;
+  return `${item.name} is bought in ${manyOf(units, item.unit)}${of ? ` of ${of}` : ''}.`;
 }
 
 /** A weight or volume's kind, and how many g or ml one is. */
@@ -212,8 +212,8 @@ const base = (u: Unit) => ({ kind: u.kind, factor: u.factor! });
 
 /**
  * How many of what the item is bought in `amount` of `unit` is: `unit` left out (or what
- * it's bought in) as it is; what one contains, when that's a count (5 tea bags of a box of
- * 20 is 0.25 box); a weight or volume through what one weighs (100 g of a 400 g jar is 0.25
+ * it's bought in) as it is; what's in its pack, when its pack size is a count (5 tea bags of
+ * a box of 20 is 0.25 box); a weight or volume through what one weighs (100 g of a 400 g jar is 0.25
  * jar). Anything else is a ValidationError that says what the item can be given in.
  * Not rounded: callers keep stock to thousandths, but a usage needs the exact amount.
  */
@@ -243,8 +243,8 @@ function perBoughtIn(units: Units, item: UnitItem, unit: string | null | undefin
   const u = unitOf(units, unit);
   const bought = units.find(item.unit);
   if (u.key === bought?.key) return 1;
-  // 2. In what one contains, when that's a count: divided by how many one contains.
-  const c = item.contents ?? null;
+  // 2. In what's in its pack, when its pack size is a count: divided by the pack size.
+  const c = item.packSize ?? null;
   if (u.kind === 'count') {
     if (c && units.find(c.unit)?.key === u.key && isCount(units, c.unit)) return 1 / c.amount;
     throw new ValidationError(`${boughtInSentence(units, item)} ${givenInText(units, item)}`);
@@ -294,7 +294,7 @@ export function daysFor(units: Units, item: UnitItem, quantity: number): number 
 /**
  * Whether a plain Use starts one: with a usage Larder doesn't take out, always; with one it
  * does, only when none has been started (otherwise it's an extra). Something used a little at
- * a time (in what it contains, or by weight) isn't started one at a time, so a Use is just a
+ * a time (in what's in its pack, or by weight) isn't started one at a time, so a Use is just a
  * use of a whole one, unless Larder has stopped taking it out.
  */
 export function startsOne(item: { usage?: UnitUsage | null; inUseSince?: string | null }): boolean {
@@ -365,10 +365,10 @@ export function stockText(units: Units, item: Pick<UnitItem, 'unit'>, n: number,
   return `about ${Number.isInteger(q) ? num(q) : quarters(q)}${word ? ` ${word}` : ''}`;
 }
 
-/** What part of one is best said in: what one contains when that's a count, else what it's used in or its Weight's g or ml. Null when there's none. */
+/** What part of one is best said in: what's in its pack when its pack size is a count, else what it's used in or its Weight's g or ml. Null when there's none. */
 function insideUnit(units: Units, item: UnitItem): string | null {
   if (isLoose(units, item)) return null;
-  const c = item.contents ?? null;
+  const c = item.packSize ?? null;
   if (c && isCount(units, c.unit)) return c.unit;
   const u = item.usage?.unit ?? null;
   if (u && canConvert(units, item, u)) return u;
@@ -401,12 +401,11 @@ export function boughtInText(units: Units, item: Pick<UnitItem, 'unit'>): string
   return `Bought in ${u.many}`;
 }
 
-/** "Each box contains 20 tea bags", "Each bag contains 1 kg", or null without Contains. */
-export function containsText(units: Units, item: Pick<UnitItem, 'unit' | 'contents'>): string | null {
-  const c = item.contents ?? null;
+/** "Pack size: 20 tea bags", "Pack size: 1 kg", or null without one. */
+export function packSizeText(units: Units, item: Pick<UnitItem, 'unit' | 'packSize'>): string | null {
+  const c = item.packSize ?? null;
   if (!c) return null;
-  const u = units.find(item.unit);
-  return `Each ${u?.key === 'each' ? 'one' : (u?.one ?? item.unit)} contains ${amountText(units, c.amount, c.unit)}`;
+  return `Pack size: ${amountText(units, c.amount, c.unit)}`;
 }
 
 /** "30 g", "2273 ml": what one weighs or holds, in g or ml as it's kept. */

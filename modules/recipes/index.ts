@@ -231,7 +231,7 @@ const lastWord = (name: string) => name.trim().split(/[\s-]+/).at(-1) ?? '';
 /**
  * What cooking takes from stock for `n` of `unit`, in what the item is bought in, through the core's
  * converter: a kitchen measure as g or ml through the item's Weight (300 ml of milk from bottles
- * containing 4 pints), and a count in what it's bought in or what one contains (2 eggs from boxes of 6).
+ * of 4 pints), and a count in what it's bought in or what's in its pack (2 eggs from boxes of 6).
  * A plain count is of what the name says ("2 eggs"), never 8 chicken thighs as 8 packs. A measure
  * Larder can't work out (no Weight) isn't taken, and says why.
  */

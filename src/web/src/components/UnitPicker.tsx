@@ -1,5 +1,5 @@
 /**
- * Picking a unit from the household's list (Bought in, Contains), with a search box, and adding a
+ * Picking a unit from the household's list (Bought in, Pack size), with a search box, and adding a
  * count word Larder doesn't have yet ("Add a unit", the same small form as Settings → Units).
  */
 import { useState } from 'react';
@@ -26,7 +26,7 @@ export function AddUnitForm({ onAdded, onCancel, start = '' }: { onAdded?: (u: U
         <label className="field" style={{ flex: '1 1 120px' }}><span>One</span><input className="input" value={one} onChange={(e) => setOne(e.target.value)} placeholder="sleeve" aria-label="One of it" /></label>
         <label className="field" style={{ flex: '1 1 120px' }}><span>Several</span><input className="input" value={many} onChange={(e) => setMany(e.target.value)} placeholder="sleeves" aria-label="Several" /></label>
       </div>
-      <small className="muted">A word things are bought in or contain, like “sleeve”. Weights and volumes are all there already.</small>
+      <small className="muted">A count word for Bought in or Pack size, like “sleeve”. Weights and volumes are all there already.</small>
       <div className="btnrow">
         <button type="button" className="btn small primary" disabled={busy || !one.trim() || !many.trim()} onClick={() => void add()}>Add unit</button>
         {onCancel && <button type="button" className="btn small ghost" onClick={onCancel}>Cancel</button>}
@@ -37,7 +37,7 @@ export function AddUnitForm({ onAdded, onCancel, start = '' }: { onAdded?: (u: U
 
 /**
  * A button showing the unit; pressing it opens the list to pick from. `kinds` limits it (Bought in: counts,
- * and g or ml for things bought loose), and `exclude` leaves some out (Contains can't be what it's bought in).
+ * and g or ml for things bought loose), and `exclude` leaves some out (a pack size can't be in what it's bought in).
  */
 export function UnitPicker({ value, onChange, kinds, only, exclude = [], label, empty = 'Pick' }: {
   value: string | null; onChange: (key: string) => void; kinds: UnitKind[]; only?: string[]; exclude?: string[]; label: string; empty?: string;

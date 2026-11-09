@@ -18,7 +18,7 @@ interface Identified {
   kind: string | null;
   brand: string | null;
   boughtIn: string;
-  contents: { amount: number; unit: string } | null;
+  packSize: { amount: number; unit: string } | null;
   categoryId: string | null;
   shelfLifeDays: number | null;
   aliases: string[];
@@ -92,7 +92,7 @@ const photoReader: PhotoReader = {
 /** What the AI said, as the scanner takes it. */
 function reading(r: Identified): PhotoReading {
   return {
-    readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, boughtIn: r.boughtIn, contents: r.contents ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
+    readable: r.readable, name: r.name, kind: r.kind, brand: r.brand, boughtIn: r.boughtIn, packSize: r.packSize ?? null, categoryId: r.categoryId, shelfLifeDays: r.shelfLifeDays, aliases: r.aliases, shop: r.shop,
     by: NAMES[r.provider], sources: r.sources ?? [], notes: r.skipped.map((x) => x.message),
   };
 }

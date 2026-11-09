@@ -100,7 +100,7 @@ const CASES: Case[] = [
     about: 'a box holds 20 tea bags, keep counting boxes (the first chat)',
     setup: (core) => add(core, { name: 'Twinings Sleep', unit: 'box' }, 4),
     says: ['There are 20 tea bags in a box of Twinings Sleep.', 'I have one every night. Can Larder take them out for me as I go?'],
-    right: [['change_item', { item: 'twinings sleep', contains: { amount: 20, unit: 'tea bag' }, uses: { amount: 1, every_days: 1, unit: 'tea bag' }, takes_out_automatically: true }]],
+    right: [['change_item', { item: 'twinings sleep', pack_size: { amount: 20, unit: 'tea bag' }, uses: { amount: 1, every_days: 1, unit: 'tea bag' }, takes_out_automatically: true }]],
     async check(core) {
       const s = await item(core, /sleep/i);
       return [...expect(s, { unit: 'box', pack: [20, 'tea bag'], inStock: 4 }), ...(await usage(core, s, 0.05, true)), ...(/20 tea bags/i.test(s?.product.notes ?? '') ? ['wrote the pack size in the notes'] : [])];
@@ -111,7 +111,7 @@ const CASES: Case[] = [
     about: '4 g a day from a 400 g jar (the second chat)',
     setup: (core) => add(core, { name: 'Decaf coffee', unit: 'jar' }, 1),
     says: ['Can you set decaf coffee to four grams a day? It\'s a 400 g jar.', 'Yes, take it out automatically.'],
-    right: [['change_item', { item: 'decaf coffee', contains: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' }, takes_out_automatically: true }]],
+    right: [['change_item', { item: 'decaf coffee', pack_size: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' }, takes_out_automatically: true }]],
     async check(core) {
       const s = await item(core, /decaf/i);
       return [...expect(s, { unit: 'jar', pack: [400, 'g'], inStock: 1 }), ...(await usage(core, s, 0.01, true))];
@@ -122,14 +122,14 @@ const CASES: Case[] = [
     about: 'a new item bought in boxes of 6',
     setup: async (core) => void (await core.places.create({ name: 'Fridge' } as never)),
     says: ['Add eggs to Larder: we buy them in boxes of 6, and there are 2 boxes in the fridge.'],
-    right: [['add_item', { name: 'Eggs', category: 'Food', bought_in: 'box', contains: { amount: 6, unit: 'egg' }, usual_place: 'fridge' }], ['add_stock', { item: 'eggs', quantity: 2 }]],
+    right: [['add_item', { name: 'Eggs', category: 'Food', bought_in: 'box', pack_size: { amount: 6, unit: 'egg' }, usual_place: 'fridge' }], ['add_stock', { item: 'eggs', quantity: 2 }]],
     check: async (core) => expect(await item(core, /egg/i), { unit: 'box', pack: [6, 'egg'], inStock: 2 }),
   },
   {
     id: 'nutella',
     about: 'ingredients aren\'t the pack size',
     says: ['Add a jar of Nutella to Larder. It\'s 400 g, and it contains hazelnuts and milk.'],
-    right: [['add_item', { name: 'Nutella', category: 'Food', bought_in: 'jar', contains: { amount: 400, unit: 'g' }, notes: 'Contains hazelnuts and milk.' }], ['add_stock', { item: 'nutella', quantity: 1 }]],
+    right: [['add_item', { name: 'Nutella', category: 'Food', bought_in: 'jar', pack_size: { amount: 400, unit: 'g' }, notes: 'Contains hazelnuts and milk.' }], ['add_stock', { item: 'nutella', quantity: 1 }]],
     check: async (core) => expect(await item(core, /nutella|hazelnut/i), { unit: 'jar', pack: [400, 'g'] }),
   },
   {
@@ -151,7 +151,7 @@ const CASES: Case[] = [
     id: 'sleeves',
     about: 'a unit Larder doesn\'t have, added once asked',
     says: ['Add paper cups to Larder. They come in sleeves of 50.', 'Yes, add it.'],
-    right: [['add_unit', { one: 'sleeve', many: 'sleeves' }], ['add_item', { name: 'Paper cups', category: 'Household', bought_in: 'sleeve', contains: { amount: 50, unit: 'piece' } }]],
+    right: [['add_unit', { one: 'sleeve', many: 'sleeves' }], ['add_item', { name: 'Paper cups', category: 'Household', bought_in: 'sleeve', pack_size: { amount: 50, unit: 'piece' } }]],
     async check(core) {
       const s = await item(core, /cup/i);
       const wrong = expect(s, { unit: 'sleeve' });

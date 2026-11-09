@@ -1,13 +1,13 @@
 /**
  * Price units. A price is per one of what the item is bought in (a box, a bag), per one of
- * what it contains when that's a count (a tea bag), or by weight or volume (per 100 g, a kg,
+ * what's in its pack when its pack size is a count (a tea bag), or by weight or volume (per 100 g, a kg,
  * per 100 ml, a litre) through the item's Weight. Every conversion goes through the core's
  * converter (`toBoughtIn`); the only words kept here are price labels, each so many of a core
  * unit ("100 g" is 100 g), and the words for "one of it" on a price ("each", "an item").
  */
 import { LarderError, ValidationError, isCount, isLoose, measuredIn, toBoughtIn, unitOf, type Product, type Units } from '@larder/core';
 
-type Item = Pick<Product, 'name' | 'unit' | 'contents' | 'weight'>;
+type Item = Pick<Product, 'name' | 'unit' | 'packSize' | 'weight'>;
 
 /** Price labels, by key: so many of a core unit, and how the label reads. */
 const LABELS: Record<string, { unit: string; amount: number; label: string }> = {
@@ -79,7 +79,7 @@ export function measureFactor(units: Units, from: string, to: string): number {
   if (kinds.includes(null)) throw new ValidationError(`Say which item, so Larder knows how much one ${kinds[0] === null ? from.trim() : to.trim()} is.`);
   if (kinds[0] !== kinds[1]) throw new ValidationError('A price by weight can\'t be compared with a price by volume.');
   // As something bought loose in g or ml, the core converter needs nothing else.
-  const loose = { name: 'it', unit: kinds[0] === 'weight' ? 'g' : 'ml', contents: null, weight: null };
+  const loose = { name: 'it', unit: kinds[0] === 'weight' ? 'g' : 'ml', packSize: null, weight: null };
   return inBoughtIn(units, loose, priceUnit(units, loose, to)) / inBoughtIn(units, loose, priceUnit(units, loose, from));
 }
 
@@ -102,10 +102,10 @@ function kindOf(units: Units, item: Item): 'weight' | 'volume' | null {
   return m ? (m === 'ml' ? 'volume' : 'weight') : null;
 }
 
-/** What one contains, when that's a count: a price can be per tea bag. */
-const inside = (units: Units, item: Item) => (item.contents && isCount(units, item.contents.unit) ? [unitOf(units, item.contents.unit).key] : []);
+/** What's in its pack, when its pack size is a count: a price can be per tea bag. */
+const inside = (units: Units, item: Item) => (item.packSize && isCount(units, item.packSize.unit) ? [unitOf(units, item.packSize.unit).key] : []);
 
-/** The units a price can be shown per for this item: what it's bought in, what it contains, then by weight or volume. */
+/** The units a price can be shown per for this item: what it's bought in, what's in its pack, then by weight or volume. */
 export function choicesFor(units: Units, item: Item): string[] {
   if (isLoose(units, item)) return measuresFor(kindOf(units, item));
   return [item.unit, ...inside(units, item), ...measuresFor(kindOf(units, item))];
@@ -117,7 +117,7 @@ export function defaultShow(units: Units, item: Item): string {
   return kindOf(units, item) === 'weight' ? '100g' : '100ml';
 }
 
-/** Units a pack's size can be given in: what it's bought in and contains, then weights or volumes. */
+/** Units a pack's size can be given in: what it's bought in and what's in its pack, then weights or volumes. */
 export function packUnitsFor(units: Units, item: Item): string[] {
   const kind = kindOf(units, item);
   const measures = units.all.filter((u) => u.kind !== 'count' && (!kind || u.kind === kind)).map((u) => u.key);

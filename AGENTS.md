@@ -13,6 +13,7 @@ npm run test:e2e       # builds the web app, then browser tests on phone and des
 npm run build          # dist/web (web app) + dist/server/main.js (server)
 npm run openapi        # refresh docs/openapi.json after changing any route or schema
 npm run ha:services    # refresh custom_components/larder/services.yaml after changing any action
+npm run eval:assistant # a real Claude model through the assistant tools (ANTHROPIC_API_KEY, about $1-2 a run)
 npm start              # run the built server
 
 # Home Assistant integration (Python 3.13)
@@ -21,7 +22,7 @@ python -m pytest       # tests/ha: Home Assistant's test harness against a real 
 ruff check custom_components tests/ha
 ```
 
-Run `npm run typecheck && npm test` before every commit. Run `npm run test:e2e` when you change the web app, and the Python tests when you change the integration or anything it calls (automation, NFC, live events, the batteries module).
+Run `npm run typecheck && npm test` before every commit. Run `npm run eval:assistant` after changing what assistants are told (the instructions or a tool's description): the tests only check the tools work when they're called correctly. Run `npm run test:e2e` when you change the web app, and the Python tests when you change the integration or anything it calls (automation, NFC, live events, the batteries module).
 
 ## Layout
 
@@ -64,7 +65,7 @@ mockups/             Phase 0 clickable mock-ups (the design reference)
 8. **Home Assistant gets sensors and actions from Larder.** Don't add a sensor or action to the Python integration: add it to `src/core/services/automation.ts` (core) or with `ctx.addSensor` / `ctx.addAction` (modules), then `npm run ha:services`. The integration only talks to the REST API, so it works with Larder anywhere.
 9. **AI tools live in the core, not the MCP server.** Add a tool to `src/core/services/assistant.ts` (core) or with `ctx.addTool` (modules). Cover what the app can do (see docs/DECISIONS.md for what's left out), name tools plainly, describe when to use them in a sentence, take names (resolve them with `core.resolve`), and answer in short readable text. `src/server/mcp.ts` only serves them.
 10. **Versions move together.** `package.json`, `addon/config.yaml` and `custom_components/larder/manifest.json` share one version (a test checks), and `addon/CHANGELOG.md` has an entry for it. The add-on installs the image tagged with that version.
-11. **Units go only through the core's unit list and converter.** Only `src/core/services/units.ts` knows about units: the list, singulars and plurals, kinds, factors to g and ml, and the converter. No other file in the core, the modules, the server or the app has a unit table, unit aliases or a guess at plurals; they get the list (`ctx.units()` in the core, `ctx.core.units.list()` in a module, `useUnits()` in the app) and call the helpers from `@larder/core`. Only `toBoughtIn` turns an amount into what an item is bought in. It reads one field per case (what it's bought in, Contains when that's a count, Weight for any g or ml), and only it reads `product.weight` for a sum; only the product service writes it. Things bought loose are stored in g or ml, usages as said, and unit words as keys from the list. See `docs/plans/units.md` and "Bought in, Contains, Weight" in `docs/DECISIONS.md`.
+11. **Units go only through the core's unit list and converter.** Only `src/core/services/units.ts` knows about units: the list, singulars and plurals, kinds, factors to g and ml, and the converter. No other file in the core, the modules, the server or the app has a unit table, unit aliases or a guess at plurals; they get the list (`ctx.units()` in the core, `ctx.core.units.list()` in a module, `useUnits()` in the app) and call the helpers from `@larder/core`. Only `toBoughtIn` turns an amount into what an item is bought in. It reads one field per case (what it's bought in, the pack size when that's a count, Weight for any g or ml), and only it reads `product.weight` for a sum; only the product service writes it. Things bought loose are stored in g or ml, usages as said, and unit words as keys from the list. See `docs/plans/units.md` and "Bought in, Pack size, Weight" in `docs/DECISIONS.md`.
 
 ## Adding a feature module (step by step)
 

@@ -47,7 +47,7 @@ export const GridCreate = z.object({
 export type GridCreate = z.input<typeof GridCreate>;
 
 export const ProductCreate = Product.omit({ id: true, createdAt: true, updatedAt: true }).extend({
-  /** What one weighs or holds: g, kg, ml, L or pints. Kept in g or ml (1 kg as 1000 g). Worked out from Contains when that's an amount. */
+  /** What one weighs or holds: g, kg, ml, L or pints. Kept in g or ml (1 kg as 1000 g). Worked out from the pack size when that's an amount. */
   weight: UnitAmount.nullable().default(null),
 });
 export type ProductCreate = z.input<typeof ProductCreate>;
@@ -83,7 +83,7 @@ export const StockAdd = z.object({
   /** Rechargeables only. Defaults to charged. */
   charge: Charge.optional(),
   note: z.string().max(200).optional(),
-  /** What `quantity` is in: what the item is bought in (default), what one contains ("tea bag"), or a weight or volume through its Weight. */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack ("tea bag"), or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
 });
 export type StockAdd = z.input<typeof StockAdd>;
@@ -100,7 +100,7 @@ export const StockUse = z.object({
    * Without Larder taking them out, using one with a usage always starts one.
    */
   open: z.boolean().optional(),
-  /** What `quantity` is in: what the item is bought in (default), what one contains, or a weight or volume through its Weight. */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack, or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
 });
 export type StockUse = z.input<typeof StockUse>;
@@ -144,7 +144,7 @@ export const StockExpect = z.object({
   placeId: Id.nullable().optional(),
   /** What the whole line cost, when the order says: kept so the purchase is recorded with its price when it arrives. */
   price: z.number().min(0).nullable().optional(),
-  /** What `quantity` is in: what the item is bought in (default), what one contains, or a weight or volume through its Weight. */
+  /** What `quantity` is in: what the item is bought in (default), what's in its pack, or a weight or volume through its Weight. */
   unit: z.string().max(30).optional(),
   /**
    * Not confirmed yet (a filled online basket before checkout): a pending order. Without it,

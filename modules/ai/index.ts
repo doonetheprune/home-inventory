@@ -92,8 +92,8 @@ export const Identified = z.object({
   brand: z.string().nullable(),
   /** What it's bought in, a key from the unit list: "box", "jar", "bottle", "each", or g or ml for something bought loose. */
   boughtIn: z.string(),
-  /** What one contains, as printed on the pack: 20 tea bags, 400 g. Null when it isn't known. */
-  contents: z.object({ amount: z.number(), unit: z.string() }).nullable(),
+  /** Its pack size, as printed on the pack: 20 tea bags, 400 g. Null when it isn't known. */
+  packSize: z.object({ amount: z.number(), unit: z.string() }).nullable(),
   categoryId: z.string().nullable(),
   shelfLifeDays: z.number().int().nullable(),
   aliases: z.array(z.string()),
@@ -333,14 +333,14 @@ export default defineModule({
       const units = await ctx.core.units.list();
       const bought = units.find(cap(r.bought_in, 30)) ?? units.find('each')!;
       const boughtIn = bought.kind === 'count' ? bought.key : bought.kind === 'weight' ? 'g' : 'ml';
-      const contents = containsOf(units, boughtIn, r.contains);
+      const packSize = packSizeOf(units, boughtIn, r.pack_size);
       return {
         readable: r.readable,
         name,
         kind: kind && !same(kind, name) ? kind : null,
         brand,
         boughtIn,
-        contents,
+        packSize,
         categoryId: category?.id ?? null,
         shelfLifeDays: typeof days === 'number' && days >= 1 ? Math.min(36500, Math.round(days)) : null,
         // The plain kind first ("Herbal tea"), so searching for it finds this; no name twice in any case.
@@ -358,8 +358,8 @@ function unitWords(units: Units): string[] {
   return [...units.all.filter((u) => u.kind === 'count').map((u) => u.one), 'g', 'ml'];
 }
 
-/** What one contains, as the AI read it, if it fits: a unit from the list, not "each" or what it's bought in, and nothing for things bought loose. */
-function containsOf(units: Units, boughtIn: string, c: { amount: number; unit: string } | null): { amount: number; unit: string } | null {
+/** The pack size, as the AI read it, if it fits: a unit from the list, not "each" or what it's bought in, and nothing for things bought loose. */
+function packSizeOf(units: Units, boughtIn: string, c: { amount: number; unit: string } | null): { amount: number; unit: string } | null {
   const u = c && units.find(c.unit);
   if (!c || !u || !(c.amount > 0 && c.amount <= 1_000_000) || u.key === 'each' || u.key === boughtIn || isLoose(units, { unit: boughtIn })) return null;
   return { amount: Math.round(c.amount * 1000) / 1000, unit: u.key };

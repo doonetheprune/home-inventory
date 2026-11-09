@@ -232,16 +232,16 @@ function StockQty({ s }: { s: ProductDetail }) {
   return <><b>{lead}</b><span className="muted">{word || 'in the house'}</span></>;
 }
 
-/** Bought in, what one contains, and its Weight when it was given (one from Contains is that). */
+/** Bought in, pack size, and its Weight when it was given (one from the pack size is that). */
 function Units({ p }: { p: ProductDetail }) {
   const units = useUnits();
   const x = p.product;
   const u = units.find(x.unit);
-  const given = x.weight && !(x.contents && !isCount(units, x.contents.unit));
+  const given = x.weight && !(x.packSize && !isCount(units, x.packSize.unit));
   return (
     <>
       <dt>Bought in</dt><dd>{!u ? <span style={{ color: 'var(--low)' }}>“{x.unit}”, not on the unit list</span> : u.key === 'each' ? 'One at a time' : isLoose(units, x) ? `Loose, in ${u.one}` : u.many}</dd>
-      {x.contents ? <><dt>Each {!u || u.key === 'each' ? 'one' : u.one} contains</dt><dd>{qty(x.contents.amount, x.contents.unit)}</dd></> : null}
+      {x.packSize ? <><dt>Pack size</dt><dd>{qty(x.packSize.amount, x.packSize.unit)}</dd></> : null}
       {given ? <><dt>Weight</dt><dd>{weightText(x.weight!)}</dd></> : null}
     </>
   );
@@ -276,8 +276,8 @@ function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {
   const { run, busy } = useAction();
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState(e.expiresOn ?? '');
-  // A count can be put right in what one contains, to set Larder's daily count straight: 3 boxes and 5 used is 55 tea bags.
-  const inside = p.product.contents && isCount(units, p.product.contents.unit) ? p.product.contents.unit : null;
+  // A count can be put right in what's in its pack, to set Larder's daily count straight: 3 boxes and 5 used is 55 tea bags.
+  const inside = p.product.packSize && isCount(units, p.product.packSize.unit) ? p.product.packSize.unit : null;
   const [countIn, setCountIn] = useState(inside ?? p.product.unit);
   const [count, setCount] = useState('');
   const away = e.currentPlace && e.currentPlace.id !== e.place?.id;

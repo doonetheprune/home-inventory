@@ -119,7 +119,7 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
       items: z.array(z.object({
         item: z.string().min(1).max(200).describe('The item in Larder'),
         quantity: z.number().positive().describe('How many, in what the item is bought in, or in unit'),
-        unit: z.string().max(30).optional().describe('What the quantity is in, if not what the item is bought in: what one contains ("tea bag"), or g, kg, ml, L or pints once it has a Weight'),
+        unit: z.string().max(30).optional().describe('What the quantity is in, if not what the item is bought in: what\'s in its pack ("tea bag", for boxes of 20 tea bags), or g, kg, ml, L or pints once it has a Weight'),
         price: z.number().min(0).optional().describe('What the line cost, e.g. 3.20'),
       })).min(1).max(100),
       date: IsoDate.optional().describe('When they were bought, if not today (YYYY-MM-DD)'),

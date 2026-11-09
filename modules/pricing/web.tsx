@@ -10,7 +10,7 @@ interface View {
   options: Array<{ unit: string; per: string; price: number | null; needsSize: boolean }>;
   /** The item's Weight, in g or ml. */
   weight: { amount: number; unit: string } | null;
-  /** False when the Weight comes from what one contains, so it's changed on the item's Edit page. */
+  /** False when the Weight comes from its pack size, so it's changed on the item's Edit page. */
   weightEditable: boolean;
   itemUnit: string | null;
   packUnits: string[];
@@ -139,7 +139,7 @@ function ProductPricePanel({ product }: { product: ProductDetail }) {
         )}
         {view.itemUnit && !sizing && (
           <span className="small muted">
-            {view.weight ? <>One {view.itemUnit} weighs {view.weight.amount} {view.weight.unit}{view.weightEditable ? ' · ' : ', from what it contains'}</> : <>Weight of one {view.itemUnit} not set · </>}
+            {view.weight ? <>One {view.itemUnit} weighs {view.weight.amount} {view.weight.unit}{view.weightEditable ? ' · ' : ', from its pack size'}</> : <>Weight of one {view.itemUnit} not set · </>}
             {view.weightEditable && <button type="button" className="link small" onClick={() => setSizing({})}>{view.weight ? 'Change' : 'Set it'}</button>}
           </span>
         )}

@@ -53,19 +53,19 @@ export async function seedDemo(core: CoreApi): Promise<number> {
     return created;
   };
 
-  await product({ name: 'Baby spinach', aliases: ['spinach', 'salad'], categoryId: cats.Food, unit: 'bag', contents: { amount: 200, unit: 'g' }, shelfLifeDays: 5, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: today }]);
+  await product({ name: 'Baby spinach', aliases: ['spinach', 'salad'], categoryId: cats.Food, unit: 'bag', packSize: { amount: 200, unit: 'g' }, shelfLifeDays: 5, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: today }]);
   await product({ name: 'Chicken thighs', aliases: ['chicken'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 4, defaultPlaceId: fridge }, [{ quantity: 1000, expiresOn: addDays(today, 1) }]);
-  await product({ name: 'Semi-skimmed milk', aliases: ['milk'], categoryId: cats.Food, unit: 'bottle', contents: { amount: 4, unit: 'pint' }, shelfLifeDays: 7, minQuantity: 1, defaultPlaceId: fridge, preferredShopIds: [shopIds.Aldi!] }, [{ quantity: 2, expiresOn: addDays(today, 2) }]);
+  await product({ name: 'Semi-skimmed milk', aliases: ['milk'], categoryId: cats.Food, unit: 'bottle', packSize: { amount: 4, unit: 'pint' }, shelfLifeDays: 7, minQuantity: 1, defaultPlaceId: fridge, preferredShopIds: [shopIds.Aldi!] }, [{ quantity: 2, expiresOn: addDays(today, 2) }]);
   await product({ name: 'Baked beans', aliases: ['beans', 'beanz'], categoryId: cats.Food, unit: 'tin', shelfLifeDays: 730, minQuantity: 4, defaultPlaceId: pantry }, [{ quantity: 6 }]);
   // Bought loose: kept in g, said as 1.6 kg.
   await product({ name: 'Frozen peas', aliases: ['peas'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 365, defaultPlaceId: cf2 }, [{ quantity: 1600 }]);
   await product({ name: 'Bananas', categoryId: cats.Food, unit: 'bunch', shelfLifeDays: 5, minQuantity: 1, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen });
   await product({ name: 'Free-range eggs', aliases: ['eggs'], categoryId: cats.Food, unit: 'egg', shelfLifeDays: 21, minQuantity: 6, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen }, [{ quantity: 2 }]);
   await product({ name: 'Mature cheddar', aliases: ['cheese'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 30, minQuantity: 200, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: fridge }, [{ quantity: 100 }]);
-  // Bought in boxes containing 80 tea bags, 2 tea bags a day, taken out by Larder a little at a time (100 tea bags in, low below 28).
-  await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'box', contents: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.35, defaultPlaceId: pantry }, [{ quantity: 1.25 }]);
-  // Bought in jars containing 200 g, used by weight: Larder takes 4 g out each day.
-  await product({ name: 'Decaf coffee', aliases: ['instant coffee'], categoryId: cats.Food, unit: 'jar', contents: { amount: 200, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' }, minQuantity: 1, defaultPlaceId: pantry }, [{ quantity: 2 }]);
+  // Bought in boxes of 80 tea bags, 2 tea bags a day, taken out by Larder a little at a time (100 tea bags in, low below 28).
+  await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'box', packSize: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.35, defaultPlaceId: pantry }, [{ quantity: 1.25 }]);
+  // Bought in jars of 200 g, used by weight: Larder takes 4 g out each day.
+  await product({ name: 'Decaf coffee', aliases: ['instant coffee'], categoryId: cats.Food, unit: 'jar', packSize: { amount: 200, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' }, minQuantity: 1, defaultPlaceId: pantry }, [{ quantity: 2 }]);
   await product({ name: 'Oat milk', aliases: ['oatly'], categoryId: cats.Food, unit: 'carton', minQuantity: 3, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: pantry }, [{ quantity: 1 }]);
   await product({ name: 'Fish fingers', categoryId: cats.Food, unit: 'pack', minQuantity: 1, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: cf2 });
 

@@ -23,8 +23,8 @@ type Stored = Partial<Product> & Pick<Product, 'id' | 'name'> & {
 };
 
 /**
- * 0.10.0's upgrade of one item (docs/plans/units.md): what it's bought in and what one contains,
- * from what it was counted in and the pack it came in. Sets `next`'s unit, contents, weight and
+ * 0.10.0's upgrade of one item (docs/plans/units.md): what it's bought in and its pack size,
+ * from what it was counted in and the pack it came in. Sets `next`'s unit, packSize, weight and
  * needsCheck, and turns its usage round; says what everything counted in the old unit is
  * multiplied by (1/20 for a box of 20 tea bags, 1000 for kg to g) and the note for its history.
  */
@@ -34,31 +34,31 @@ function boughtIn(units: Units, raw: Stored, next: Product): { factor: number; n
   const was = (raw.unit || 'each').trim();
   // #36 (never released) kept what one weighs as `size`, by what it was counted in.
   let weight = raw.size ? (asWeight(units, raw.size) as Product['weight']) : (next.weight ?? null);
-  next.contents = null;
+  next.packSize = null;
   next.needsCheck = null;
   delete (next as Stored).pack;
   delete (next as Stored).size;
   if (pack) {
-    // A box of 20 tea bags: bought in boxes, each containing 20 tea bags. Things counted one by one are pieces.
+    // A box of 20 tea bags: bought in boxes of 20 tea bags. Things counted one by one are pieces.
     const box = units.find(pack.name);
     const inside = counted?.key === 'each' ? 'piece' : (counted?.key ?? unitKeyOf(units, was));
     next.unit = box?.key ?? unitKeyOf(units, pack.name);
-    next.contents = { amount: pack.holds, unit: inside };
-    const measured = counted && counted.kind !== 'count' ? asWeight(units, next.contents) : null;
+    next.packSize = { amount: pack.holds, unit: inside };
+    const measured = counted && counted.kind !== 'count' ? asWeight(units, next.packSize) : null;
     weight = measured ? (measured as Product['weight']) : weight ? { ...weight, amount: roundQty(weight.amount * pack.holds) } : null;
     next.weight = weight;
-    // A usage in what it was counted in is now in what one contains: still 1 tea bag a day.
+    // A usage in what it was counted in is now in what's in its pack: still 1 tea bag a day.
     if (next.usage && !next.usage.unit) next.usage = { ...next.usage, unit: inside };
     const unlisted = [box ? null : pack.name.trim(), counted ? null : was].find(Boolean);
     next.needsCheck = unlisted
-      ? `"${unlisted}" isn't on the unit list. Pick what it's bought in, and what one contains.`
+      ? `"${unlisted}" isn't on the unit list. Pick what it's bought in, and its pack size.`
       : `Now counted in ${box!.many} of ${amountText(units, pack.holds, inside)}. If you count them one by one instead, change Bought in and correct the count.`;
-    return { factor: 1 / pack.holds, note: `Now bought in ${box?.many ?? pack.name}, each containing ${amountText(units, pack.holds, inside)}` };
+    return { factor: 1 / pack.holds, note: `Now bought in ${box?.many ?? pack.name} of ${amountText(units, pack.holds, inside)}` };
   }
   if (!counted) {
     next.unit = was;
     next.weight = weight;
-    next.needsCheck = `"${was}" isn't on the unit list. Pick what it's bought in, and what one contains.`;
+    next.needsCheck = `"${was}" isn't on the unit list. Pick what it's bought in, and its pack size.`;
     return { factor: 1, note: '' };
   }
   next.unit = counted.key;
@@ -91,7 +91,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
   }
 
   /**
-   * What it's bought in, what one contains, its Weight and what its usage is in, checked and
+   * What it's bought in, its pack size, its Weight and what its usage is in, checked and
    * tidied (docs/plans/units.md). `given` is what this change says; the rest is carried over from
    * `before` (null for a new item). This is the only place `weight` is written.
    */
@@ -112,37 +112,35 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
         if (given.usage && !given.usage.unit && next.usage) next.usage = { ...next.usage, unit: u.key };
       }
     }
-    // Now bought in what one contained (boxes of 20 tea bags, now counted in tea bags): Contains goes, and a usage in tea bags is in what it's bought in.
-    const had = before?.contents ?? null;
-    if (before && given.unit !== undefined && given.contents === undefined && had && unitKeyOf(units, had.unit) === next.unit) next.contents = null;
+    // Now bought in what was in its pack (boxes of 20 tea bags, now bought in tea bags): the pack size goes, and a usage in tea bags is in what it's bought in.
+    const had = before?.packSize ?? null;
+    if (before && given.unit !== undefined && given.packSize === undefined && had && unitKeyOf(units, had.unit) === next.unit) next.packSize = null;
 
     if (isLoose(units, next)) {
-      if (given.contents) throw new ValidationError(`${name} is bought loose, in ${next.unit}, so one doesn't contain anything: leave Contains empty.`);
+      if (given.packSize) throw new ValidationError(`${name} is bought loose, in ${next.unit}, so it has no pack size: leave Pack size empty.`);
       if (given.weight) throw new ValidationError(`${name} is bought loose, in ${next.unit}, so it has no Weight: its stock is already in ${next.unit}.`);
-      next.contents = null;
+      next.packSize = null;
       next.weight = null;
     }
-    // Contains: a count from the list (not each, nor what it's bought in), or a weight or volume.
-    if (next.contents) {
-      const c = unitOf(units, next.contents.unit);
-      const box = units.find(next.unit);
-      const one = box?.key === 'each' || !box ? 'one' : `a ${box.one}`;
-      if (c.key === 'each') throw new ValidationError(`Say what ${one} contains with a unit from the list, e.g. 20 tea bags or 6 eggs, or leave Contains empty.`);
-      if (c.key === next.unit) throw new ValidationError(`A ${c.one} can't contain ${c.many}. Say what's inside one (20 tea bags, say), or leave Contains empty.`);
-      next.contents = { amount: next.contents.amount, unit: c.key };
+    // Pack size: a count from the list (not each, nor what it's bought in), or a weight or volume.
+    if (next.packSize) {
+      const c = unitOf(units, next.packSize.unit);
+      if (c.key === 'each') throw new ValidationError('Give the pack size with a unit from the list, e.g. 20 tea bags or 6 eggs, or leave Pack size empty.');
+      if (c.key === next.unit) throw new ValidationError(`${name} is bought in ${c.many}, so its pack size can't be in ${c.many} too. Give what's in one (20 tea bags, say), or leave Pack size empty.`);
+      next.packSize = { amount: next.packSize.amount, unit: c.key };
     }
-    // Weight: from Contains when that's an amount, always, so the two can't disagree; cleared when Contains stops being one; otherwise as given.
-    const fromContents = next.contents && !isCount(units, next.contents.unit) ? asWeight(units, next.contents) : null;
-    if (fromContents) {
+    // Weight: from the pack size when that's an amount, always, so the two can't disagree; cleared when the pack size stops being one; otherwise as given.
+    const fromPackSize = next.packSize && !isCount(units, next.packSize.unit) ? asWeight(units, next.packSize) : null;
+    if (fromPackSize) {
       const typed = given.weight ? weightIn(units, given.weight) : null;
-      if (typed && (typed.unit !== fromContents.unit || Math.abs(typed.amount - fromContents.amount) > 0.001)) {
-        throw new ValidationError(`${name} contains ${amountText(units, next.contents!.amount, next.contents!.unit)}, so its Weight is ${weightText(fromContents)}, worked out from that. Change Contains instead.`);
+      if (typed && (typed.unit !== fromPackSize.unit || Math.abs(typed.amount - fromPackSize.amount) > 0.001)) {
+        throw new ValidationError(`${name} has a pack size of ${amountText(units, next.packSize!.amount, next.packSize!.unit)}, so its Weight is ${weightText(fromPackSize)}, worked out from that. Change the pack size instead.`);
       }
-      next.weight = fromContents as Product['weight'];
+      next.weight = fromPackSize as Product['weight'];
     } else if (given.weight !== undefined) next.weight = weightIn(units, given.weight) ?? null;
     else if (had && !isCount(units, had.unit)) next.weight = null;
 
-    // We use: in what it's bought in (null), in what one contains, or in a weight or volume Larder can work out.
+    // We use: in what it's bought in (null), in what's in its pack, or in a weight or volume Larder can work out.
     if (next.usage?.unit) {
       const k = unitOf(units, next.usage.unit).key;
       next.usage = { ...next.usage, unit: k === next.unit ? null : k };
@@ -322,8 +320,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
      *   as low no longer means "runs out within the warning days", those items get a minimum that
      *   warns no later than before.
      * - 0.10.0 (docs/plans/units.md): the unit word becomes a key from the list; kg and L become g
-     *   and ml; a pack is turned round (80 tea bags in boxes of 20 are 4 boxes, each containing 20
-     *   tea bags); #36's `size` becomes `weight`. Stock, orders, the minimum, the stock-up amount
+     *   and ml; a pack is turned round (80 tea bags in boxes of 20 are 4 boxes of 20 tea bags); #36's `size` becomes `weight`. Stock, orders, the minimum, the stock-up amount
      *   and history follow. A unit that isn't on the list is kept, and the item flagged
      *   (`needsCheck`) for the owner to fix, as is a pack turned round.
      */

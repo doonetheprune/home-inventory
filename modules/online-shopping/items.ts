@@ -57,16 +57,16 @@ export const rulesFor = (p: Product, shopId: string): ShopRules => ShopRules.par
 /**
  * How many of what the item is bought in one pack gives, from the shop's pack size and name, through
  * the core's converter. A weight or volume is sure when the item is bought loose or has a Weight (a
- * 1.6 kg pack of tins containing 400 g is 4 tins). A count is sure when the name says what it is and
- * that's what the item is bought in or contains ("Toilet Tissue 9 Rolls"); otherwise it's a guess for
+ * 1.6 kg pack of 400 g tins is 4 tins). A count is sure when the name says what it is and
+ * that's what the item is bought in or what's in its pack ("Toilet Tissue 9 Rolls"); otherwise it's a guess for
  * the person to check ("1 pack = 9 rolls").
  */
 export function packQuantityFor(units: Units, pack: PackSize | null, name: string, item: Product): { quantity: number; guessed: boolean } {
   const sure = (n: number) => ({ quantity: roundQty(n), guessed: false });
   if (pack && pack.unit !== 'each' && canConvert(units, item, pack.unit)) return sure(toBoughtIn(units, item, pack.amount, pack.unit));
   if (pack?.unit === 'each') {
-    // What it's bought in, or what one contains, said in the name: 9 rolls of a roll, or of packs containing 9 rolls.
-    const counted = [item.unit, ...(item.contents ? [item.contents.unit] : [])].map((k) => units.find(k)).filter((u) => !!u && u.kind === 'count');
+    // What it's bought in, or what's in its pack, said in the name: 9 rolls of a roll, or of packs of 9 rolls.
+    const counted = [item.unit, ...(item.packSize ? [item.packSize.unit] : [])].map((k) => units.find(k)).filter((u) => !!u && u.kind === 'count');
     for (const u of counted) {
       const said = [u!.one, u!.many].some((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(name));
       if (said || u!.key === 'each') return sure(toBoughtIn(units, item, pack.amount, u!.key));
