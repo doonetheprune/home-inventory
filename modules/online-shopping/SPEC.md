@@ -24,9 +24,9 @@ Settings → **Online shops** lists every shop Larder can shop online at, linked
 
 On an item's page, **Online shopping** (shown once a provider is set up):
 
-- **Listings**, per shop: the shop's products to buy for this item, linked by pasting a code or link (looked up with the provider; an unknown one is refused, never guessed), optionally adding it to the shop's favourites at the same time. Each says how many of the item one pack gives ("1 pack = 9 rolls"): sure for weights and volumes the item is counted in, and when the name says what's counted ("9 Rolls"); otherwise a guess marked **check this** until someone sets it. A listing belongs to one item. Linking one to an item with no shop makes that shop its shop ("It's bought from Tesco now."); an item already set to other shops keeps them, so a link alone never decides where it's bought. A listing the shop says has gone is marked **Gone from Tesco: link the new one** (Tesco often gives a changed product a new code).
+- **Listings**, per shop: the shop's products to buy for this item, linked by pasting a code or link (looked up with the provider; an unknown one is refused, never guessed), optionally adding it to the shop's favourites at the same time. Each says how many of what the item is bought in one pack gives ("1 pack = 9 rolls"), worked out by the core's converter: sure for a weight or volume when the item is bought loose or has a Weight (a 1.6 kg pack of tins containing 400 g is 4 tins), and when the name says what it's bought in or contains ("9 Rolls"); otherwise a guess marked **check this** until someone sets it. A listing belongs to one item. Linking one to an item with no shop makes that shop its shop ("It's bought from Tesco now."); an item already set to other shops keeps them, so a link alone never decides where it's bought. A listing the shop says has gone is marked **Gone from Tesco: link the new one** (Tesco often gives a changed product a new code).
 - **Pack rule**, per shop: the **cheapest mix** of listings that covers what's needed (default), or **always the first** (a fixed pack).
-- **On offer at**: the target price per one of the item's unit (per kg for things counted in g, per litre for ml). At or below it counts as on offer. Each shop can have its own, which wins.
+- **On offer at**: the target price per one of what the item is bought in (shown per kg for things bought loose in g, per litre for ml). At or below it counts as on offer. Each shop can have its own, which wins.
 - **Stock up to, on offer**: how many to have after buying when it's on offer.
 - **Stock up to** (the normal amount) is the item's own setting, beside **Running low below** on Edit: Larder's shopping lists suggest topping up to it at every shop, not just back to the minimum. Example: loo roll, minimum 4, stock up to 12, on offer 36.
 - **Use picture** makes a listing's picture the item's photo.
@@ -105,7 +105,7 @@ Action `larder.online_shopping_sync_favourites` (`shop`, optional): for a weekly
 
 ## Events
 
-Listens to `product.recounted` (2 boxes became 40 tea bags): each listing's `packQuantity` and the stock-up amount on offer are multiplied, and target prices divided, by how many a box holds.
+Listens to `product.recounted` (the upgrade to 0.10.0's units: kg became g with factor 1000, or tea bags became boxes containing 20 with factor 1/20): each listing's `packQuantity` and the stock-up amount on offer are multiplied, and target prices divided, by the factor.
 
 `online-shopping.basket_filled` (`larder_online_shopping_basket_filled` in Home Assistant): `{ pending_order, shop, run_id, items, total, failed, relink, slot, summary }`, for a notification (with `sensor.larder_pending_orders` for a reminder to confirm it). `online-shopping.slot_booked`: `{ shop, slot, start, end, reference, reserved_until, method, store }` (`method` is `delivery` or `collection`, `store` the branch for collection; `slot` in words, `start` and `end` as the shop gives them, e.g. `2026-11-06T09:30`); the email module watches for that delivery's email. `online-shopping.favourites_pending`: `{ shop, added, pending }` when new favourites are waiting. `online-shopping.failed`: `{ shop, run_id, code, message, needs_you }`; `needs_you` is true for `login_expired` and `bot_challenge` (log in again, or solve the shop's challenge in the provider's browser).
 
@@ -145,7 +145,7 @@ Under `/api/v1/modules/online-shopping`. Changing providers is for household adm
 
 ## Data
 
-`product.fields['online-shopping']`: `{ shops: { <shopId>: { listings: [{ listingId, name, packQuantity, guessed, packSize, link, imageUrl, deadSince, addedAt }], packRule, fixedListingId, targetPrice } }, offerStockUpTo, targetPrice }`. Prices are per one of the item's unit. The item's own `stockUpTo` (core) is the normal stock-up amount.
+`product.fields['online-shopping']`: `{ shops: { <shopId>: { listings: [{ listingId, name, packQuantity, guessed, packSize, link, imageUrl, deadSince, addedAt }], packRule, fixedListingId, targetPrice } }, offerStockUpTo, targetPrice }`. Prices are per one of what the item is bought in. The item's own `stockUpTo` (core) is the normal stock-up amount.
 
 `online-shopping:pending` and `online-shopping:dismissed` (favourites, by `<shopId>:<code>`), `online-shopping:runs` (each plan or fill), `online-shopping:bookings` (each provider's booked slot), `online-shopping:slots` (each provider's slots listed in the last hour), `online-shopping:settings` (`options`, and `hub`: `{ url, token, wake, sleepEntityId, status }`). `online-shopping:providers` collection, one document per provider: `{ id, type, shopId, isDefault, automation, url, token, wake: { entityId, mac, broadcastAddress, timeoutSeconds }, sleepEntityId, loyaltyPrices, status, createdAt }`; an automation's `url` and `token` are empty and its waking unused (the hub's are). Tokens are kept in Larder's data folder, so they're in backups.
 

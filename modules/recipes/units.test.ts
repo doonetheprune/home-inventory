@@ -11,6 +11,7 @@ describe('recipe units', () => {
     expect(convert(2, 'tbsp', 'tsp')).toBe(6);
     expect(convert(1, 'lb', 'oz')).toBeCloseTo(16);
     expect(convert(1, 'pint', 'ml')).toBeCloseTo(568.26);
+    expect(convert(1, 'litre', 'cl')).toBe(100);
     expect(convert(1, 'g', 'ml')).toBeNull();
     expect(convert(3, 'slice', 'slices')).toBe(3);
     expect(convert(1, 'cup', 'g')).toBeNull();
@@ -25,8 +26,9 @@ describe('recipe units', () => {
 
   it('rounds amounts the way a cook would measure them', () => {
     expect(measureText(66.6667, 'g')).toBe('67 g');
-    expect(measureText(1.5, 'l')).toBe('1.5 litres');
-    expect(measureText(1, 'litre')).toBe('1 litre');
+    expect(measureText(1.5, 'l')).toBe('1.5 L');
+    expect(measureText(1, 'litre')).toBe('1 L');
+    expect(measureText(2, 'pints')).toBe('2 pints');
     expect(measureText(0.333, 'tsp')).toBe('0.33 tsp');
     expect(measureText(2.6667, '')).toBe('2.7');
     expect(measureText(3, 'slice')).toBe('3 slices');

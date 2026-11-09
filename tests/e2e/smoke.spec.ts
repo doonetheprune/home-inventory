@@ -427,8 +427,9 @@ test('adds a unit in Settings, and lists an item Larder flagged in To tidy until
   await expect(page.getByRole('note', { name: 'To tidy' })).toContainText(reason);
   await page.getByRole('note', { name: 'To tidy' }).getByRole('button', { name: 'Looks right' }).click();
   await expect(page.getByRole('note', { name: 'To tidy' })).toBeHidden();
+  // It has no category, so it's still to tidy for that, but no longer for its units.
   await page.goto('/#/stock?status=to_tidy');
-  await expect(page.locator('.item', { hasText: name })).toBeHidden();
+  await expect(page.locator('.item', { hasText: name })).not.toContainText(reason);
 });
 
 test('marks one open, and keeps what was paid', async ({ page }, info) => {
@@ -484,7 +485,7 @@ test('adds stock at another place, and says from home that something has moved',
   await page.getByRole('button', { name: 'Add somewhere else' }).click();
   await page.getByLabel('Where', { exact: true }).selectOption({ index: pick + 1 });
   await page.getByRole('button', { name: /^Add 1/ }).click();
-  await expect(page.locator('.toast')).toContainText('Added 1 to');
+  await expect(page.locator('.toast')).toContainText('Added 1 bag to');
 
   await page.goto('/#/');
   await page.getByRole('button', { name: "Something's moved" }).first().click();
@@ -576,7 +577,7 @@ test('Add by photo is the scanner: Take photo names it, one press adds it, and i
   // A shop Larder doesn't have is offered, without stopping to ask.
   await card.getByRole('button', { name: `Add ${shop}` }).click();
   await expect(page.locator('.toast')).toContainText(`${shop} added to your shops`);
-  await card.getByRole('button', { name: 'Add 1', exact: true }).click();
+  await card.getByRole('button', { name: 'Add 1 carton', exact: true }).click();
   await expect(page.locator('.toast')).toContainText(`Added 1 carton · ${name}. Ready for the next scan.`);
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
   // Back to the live camera, ready for the next.

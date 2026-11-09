@@ -5,7 +5,7 @@
  * converter (`toBoughtIn`); the only words kept here are price labels, each so many of a core
  * unit ("100 g" is 100 g), and the words for "one of it" on a price ("each", "an item").
  */
-import { LarderError, ValidationError, isCount, isLoose, toBoughtIn, unitOf, type Product, type Units } from '@larder/core';
+import { LarderError, ValidationError, isCount, isLoose, measuredIn, toBoughtIn, unitOf, type Product, type Units } from '@larder/core';
 
 type Item = Pick<Product, 'name' | 'unit' | 'contents' | 'weight'>;
 
@@ -98,8 +98,8 @@ const measuresFor = (kind: 'weight' | 'volume' | null) => (kind === 'weight' ? [
 
 /** What it's weighed or measured by: the unit it's bought loose in, or its Weight. Null with neither. */
 function kindOf(units: Units, item: Item): 'weight' | 'volume' | null {
-  if (isLoose(units, item)) return unitOf(units, item.unit).kind as 'weight' | 'volume';
-  return item.weight ? (item.weight.unit === 'ml' ? 'volume' : 'weight') : null;
+  const m = measuredIn(units, item);
+  return m ? (m === 'ml' ? 'volume' : 'weight') : null;
 }
 
 /** What one contains, when that's a count: a price can be per tea bag. */

@@ -1,39 +1,33 @@
 /**
- * Kitchen measures for scaling recipes: grams to pounds, millilitres to UK
- * pints, and spoons. Each maps onto the core's g or ml (`inCore`), which is
- * how an ingredient becomes stock, through the core's converter. Anything else
- * ("egg", "slice", "clove", or no unit at all) is a count, and a count only
- * matches itself; its singular and plural come from the core's unit list.
+ * Kitchen measures for scaling recipes. g, kg, ml, cl, L and pints are the core's own units, read
+ * from its list with its spellings; the only words kept here are the kitchen measures it doesn't
+ * have (oz, lb, spoons, fl oz), each so many of the core's g or ml (`inCore`), which is how an
+ * ingredient becomes stock, through the core's converter. Anything else ("egg", "slice", "clove",
+ * or no unit at all) is a count, and a count only matches itself; its singular and plural come
+ * from the core's unit list.
  */
 import { andList, builtInUnits, singularOf, unitWord, type Units } from '@larder/core';
 
 type Dim = 'mass' | 'volume';
 
-const MEASURES: Record<string, { dim: Dim; base: number; label: string; plural?: string }> = {
-  g: { dim: 'mass', base: 1, label: 'g' },
-  kg: { dim: 'mass', base: 1000, label: 'kg' },
-  oz: { dim: 'mass', base: 28.349523125, label: 'oz' },
-  lb: { dim: 'mass', base: 453.59237, label: 'lb' },
-  ml: { dim: 'volume', base: 1, label: 'ml' },
-  cl: { dim: 'volume', base: 10, label: 'cl' },
-  l: { dim: 'volume', base: 1000, label: 'litre', plural: 'litres' },
-  tsp: { dim: 'volume', base: 5, label: 'tsp' },
-  tbsp: { dim: 'volume', base: 15, label: 'tbsp' },
-  floz: { dim: 'volume', base: 28.4130625, label: 'fl oz' },
-  pint: { dim: 'volume', base: 568.26125, label: 'pint', plural: 'pints' },
+/** Kitchen measures the core doesn't have, each so many of its g or ml, with how they're written. */
+const KITCHEN: Record<string, { unit: 'g' | 'ml'; amount: number; label: string; said: string[] }> = {
+  oz: { unit: 'g', amount: 28.349523125, label: 'oz', said: ['ounce', 'ounces'] },
+  lb: { unit: 'g', amount: 453.59237, label: 'lb', said: ['pound', 'pounds', 'lbs'] },
+  tsp: { unit: 'ml', amount: 5, label: 'tsp', said: ['teaspoon', 'teaspoons', 'tsps'] },
+  tbsp: { unit: 'ml', amount: 15, label: 'tbsp', said: ['tablespoon', 'tablespoons', 'tbsps', 'tbs', 'tbl'] },
+  floz: { unit: 'ml', amount: 28.4130625, label: 'fl oz', said: ['fluidounce', 'fluidounces'] },
 };
+const SAID = new Map(Object.entries(KITCHEN).flatMap(([k, m]) => m.said.map((w) => [w, k] as const)));
 
-const ALIASES: Record<string, string> = {
-  gram: 'g', grams: 'g', gramme: 'g', grammes: 'g', gr: 'g',
-  kilo: 'kg', kilos: 'kg', kilogram: 'kg', kilograms: 'kg', kgs: 'kg',
-  ounce: 'oz', ounces: 'oz', pound: 'lb', pounds: 'lb', lbs: 'lb',
-  millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml', mls: 'ml',
-  centilitre: 'cl', centilitres: 'cl', centiliter: 'cl', centiliters: 'cl',
-  litre: 'l', litres: 'l', liter: 'l', liters: 'l', ltr: 'l',
-  teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
-  tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp', tbs: 'tbsp', tbl: 'tbsp',
-  fluidounce: 'floz', fluidounces: 'floz', pints: 'pint', pt: 'pint', pts: 'pint',
-};
+/** A measure by its key, in g or ml: a kitchen one, or a weight or volume from the core's list. Null for a count. */
+function measure(k: string): { dim: Dim; base: number; one: string; many: string } | null {
+  const m = KITCHEN[k];
+  if (m) return { dim: m.unit === 'g' ? 'mass' : 'volume', base: m.amount, one: m.label, many: m.label };
+  const u = builtInUnits.find(k);
+  if (!u || u.kind === 'count' || u.key !== k) return null;
+  return { dim: u.kind === 'weight' ? 'mass' : 'volume', base: u.factor!, one: u.one, many: u.many };
+}
 
 /** Words that mean "just count them". */
 const COUNT = new Set(['', 'each', 'x', 'whole', 'item', 'items', 'number']);
@@ -42,14 +36,16 @@ const COUNT = new Set(['', 'each', 'x', 'whole', 'item', 'items', 'number']);
 export function unitKey(raw: string, units: Units = builtInUnits): string {
   const k = raw.trim().toLowerCase().replace(/[\s.]/g, '');
   if (COUNT.has(k)) return '';
-  if (ALIASES[k]) return ALIASES[k]!;
-  if (MEASURES[k]) return k;
+  if (KITCHEN[k]) return k;
+  if (SAID.has(k)) return SAID.get(k)!;
+  const core = builtInUnits.find(k);
+  if (core && core.kind !== 'count') return core.key;
   return singularOf(units, raw.trim().toLowerCase()).replace(/\s/g, '');
 }
 
 /** A kitchen measure as the core's g or ml: 2 tbsp is 30 ml, 1 lb is 453.6 g. Null for a count. */
 export function inCore(n: number, unit: string): { amount: number; unit: 'g' | 'ml' } | null {
-  const m = MEASURES[unitKey(unit)];
+  const m = measure(unitKey(unit));
   return m ? { amount: n * m.base, unit: m.dim === 'mass' ? 'g' : 'ml' } : null;
 }
 
@@ -64,8 +60,8 @@ export function convert(n: number, from: string, to: string, names: string[] = [
   const a = unitKey(from);
   const b = unitKey(to);
   if (a === b) return n;
-  const ma = MEASURES[a];
-  const mb = MEASURES[b];
+  const ma = measure(a);
+  const mb = measure(b);
   if (ma && mb) return ma.dim === mb.dim ? (n * ma.base) / mb.base : null;
   if (ma || mb) return null;
   const counted = a === '' ? b : b === '' ? a : null;
@@ -84,8 +80,8 @@ export function nice(n: number): number {
 export function measureText(n: number, unit: string, units: Units = builtInUnits): string {
   const q = nice(n);
   const k = unitKey(unit, units);
-  const m = MEASURES[k];
-  if (m) return `${q} ${q !== 1 && m.plural ? m.plural : m.label}`;
+  const m = measure(k);
+  if (m) return `${q} ${q !== 1 ? m.many : m.one}`;
   if (!k) return String(q);
   const word = units.find(unit)?.key ?? singularOf(units, unit.trim().toLowerCase());
   return `${q} ${unitWord(units, word, q) || word}`;
@@ -103,14 +99,15 @@ export const timesText = (t: number) => `×${Math.round(t * 100) / 100}`;
 
 /** "weight" or "volume"; null for a count or a word like "slice". */
 export function measuredBy(unit: string): 'weight' | 'volume' | null {
-  const m = MEASURES[unitKey(unit)];
+  const m = measure(unitKey(unit));
   return m ? (m.dim === 'mass' ? 'weight' : 'volume') : null;
 }
 
 /** What to give an amount in, for a message: "g, kg, oz or lb". */
 export function unitsLike(unit: string): string | null {
-  const m = MEASURES[unitKey(unit)];
+  const m = measure(unitKey(unit));
   if (!m) return null;
-  const labels = Object.values(MEASURES).filter((x) => x.dim === m.dim).map((x) => x.plural ?? x.label);
+  const core = builtInUnits.all.filter((u) => u.kind === (m.dim === 'mass' ? 'weight' : 'volume')).map((u) => u.many);
+  const labels = [...core, ...Object.values(KITCHEN).filter((x) => (x.unit === 'g') === (m.dim === 'mass')).map((x) => x.label)];
   return andList(labels).replace(/ and ([^,]+)$/, ' or $1');
 }

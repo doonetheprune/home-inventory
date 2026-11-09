@@ -146,6 +146,13 @@ export const isMeasure = (units: Units, key: string | null | undefined) => !isCo
 /** Things bought loose are bought in g or ml. */
 export const isLoose = (units: Units, item: Pick<UnitItem, 'unit'>) => isMeasure(units, item.unit);
 
+/** What an item can be given in by weight or by volume, as g or ml: what it's bought loose in, or what its Weight is in. Null with neither. */
+export function measuredIn(units: Units, item: Pick<UnitItem, 'unit' | 'weight'>): 'g' | 'ml' | null {
+  const bought = units.find(item.unit);
+  if (bought && bought.kind !== 'count') return bought.kind === 'weight' ? 'g' : 'ml';
+  return item.weight ? (item.weight.unit === 'ml' ? 'ml' : 'g') : null;
+}
+
 /**
  * A word the household wants to add, tidied: a count with a singular and a plural, and
  * not one Larder already has (by either word, or a common spelling of one).

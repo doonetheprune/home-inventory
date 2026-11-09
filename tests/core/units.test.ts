@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, containsText, fromBoughtIn, givenInText, lastsText, newUnit, parseAmount, periodsPerTake,
+  amountText, asWeight, boughtInText, builtInUnits as units, canConvert, containsText, fromBoughtIn, givenInText, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake,
   stockText, toBoughtIn, unitList, UnknownUnitError, usageInBoughtIn, usageText, weightText,
 } from '../../src/core/services/units';
 
@@ -104,6 +104,10 @@ describe('the converter', () => {
     expect(asWeight(units, { amount: 4, unit: 'pints' })).toEqual({ amount: 2273.044, unit: 'ml' });
     expect(asWeight(units, { amount: 1.5, unit: 'L' })).toEqual({ amount: 1500, unit: 'ml' });
     expect(asWeight(units, { amount: 20, unit: 'tea bag' })).toBeNull();
+  });
+
+  it('says whether an item can be given by weight or by volume, from what it is bought loose in or its Weight', () => {
+    expect([cheddar, decaf, milk, drill, sleep, { ...cheddar, unit: 'l' }].map((i) => measuredIn(units, i))).toEqual(['g', 'g', 'ml', 'g', null, 'ml']);
   });
 
   it('turns a usage into what it is bought in, a little at a time', () => {

@@ -260,7 +260,7 @@ describe('recipes by ratio, and presets', () => {
     const have = (ingredient: string, amount: number, unit?: string) => core.assistant.call('get_recipe', { recipe: 'pancakes', have: [{ ingredient, amount, unit }] });
     await expect(have('eggs', 100, 'g')).rejects.toThrow('Pancakes counts the eggs, so give how many, with no unit.');
     await expect(have('flour', 2, 'eggs')).rejects.toThrow('Pancakes measures the plain flour by weight, so give it in g, kg, oz or lb.');
-    await expect(have('milk', 200, 'g')).rejects.toThrow('by volume, so give it in ml, cl, litres, tsp, tbsp, fl oz or pints.');
+    await expect(have('milk', 200, 'g')).rejects.toThrow('by volume, so give it in ml, cl, L, pints, tsp, tbsp or fl oz.');
     await expect(have('salt', 1)).rejects.toThrow("Pancakes has no ratio for salt, so the rest can't be worked out from it. It can from plain flour, eggs and milk.");
     await expect(have('bacon', 2)).rejects.toMatchObject({ status: 404 });
     await expect(core.assistant.call('get_recipe', { recipe: 'pancakes', times: 2, servings: 4 })).rejects.toThrow('Give one of preset, servings, times or have, not servings and times.');

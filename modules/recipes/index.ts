@@ -957,7 +957,7 @@ export default defineModule({
     await post.handler({ body: {
       title: 'Chicken and spinach traybake', serves: 4, source: 'Claude',
       ingredients: [
-        { name: 'chicken thighs', productId: id('Chicken thighs'), quantity: 1, amount: '8' },
+        { name: 'chicken thighs', productId: id('Chicken thighs'), quantity: 1000, amount: '8' },
         { name: 'baby spinach', productId: id('Baby spinach'), quantity: 1, amount: '1 bag' },
         { name: 'chopped tomatoes', amount: '400 g tin' },
         { name: 'mature cheddar', productId: id('Mature cheddar'), quantity: 50, amount: '50 g', optional: true },
@@ -978,7 +978,8 @@ export default defineModule({
       ingredients: [
         { name: 'plain flour', ratio: 100, ratioUnit: 'g' },
         { name: 'eggs', productId: id('Free-range eggs'), ratio: 2 },
-        { name: 'milk', productId: id('Semi-skimmed milk'), quantity: 0.25, ratio: 300, ratioUnit: 'ml' },
+        // No quantity: 300 ml of a 4 pint bottle is worked out by the core's converter.
+        { name: 'milk', productId: id('Semi-skimmed milk'), ratio: 300, ratioUnit: 'ml' },
         { name: 'butter, for frying', amount: 'a little' },
       ],
       presets: [{ name: 'Just me', times: 0.5 }, { name: 'Family', times: 2 }],

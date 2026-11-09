@@ -54,16 +54,17 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   };
 
   await product({ name: 'Baby spinach', aliases: ['spinach', 'salad'], categoryId: cats.Food, unit: 'bag', contents: { amount: 200, unit: 'g' }, shelfLifeDays: 5, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: today }]);
-  await product({ name: 'Chicken thighs', aliases: ['chicken'], categoryId: cats.Food, unit: 'kg', shelfLifeDays: 4, defaultPlaceId: fridge }, [{ quantity: 1, expiresOn: addDays(today, 1) }]);
-  await product({ name: 'Semi-skimmed milk', aliases: ['milk'], categoryId: cats.Food, unit: 'bottle', shelfLifeDays: 7, minQuantity: 1, defaultPlaceId: fridge, preferredShopIds: [shopIds.Aldi!] }, [{ quantity: 2, expiresOn: addDays(today, 2) }]);
+  await product({ name: 'Chicken thighs', aliases: ['chicken'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 4, defaultPlaceId: fridge }, [{ quantity: 1000, expiresOn: addDays(today, 1) }]);
+  await product({ name: 'Semi-skimmed milk', aliases: ['milk'], categoryId: cats.Food, unit: 'bottle', contents: { amount: 4, unit: 'pint' }, shelfLifeDays: 7, minQuantity: 1, defaultPlaceId: fridge, preferredShopIds: [shopIds.Aldi!] }, [{ quantity: 2, expiresOn: addDays(today, 2) }]);
   await product({ name: 'Baked beans', aliases: ['beans', 'beanz'], categoryId: cats.Food, unit: 'tin', shelfLifeDays: 730, minQuantity: 4, defaultPlaceId: pantry }, [{ quantity: 6 }]);
-  await product({ name: 'Frozen peas', aliases: ['peas'], categoryId: cats.Food, unit: 'kg', shelfLifeDays: 365, defaultPlaceId: cf2 }, [{ quantity: 1.6 }]);
+  // Bought loose: kept in g, said as 1.6 kg.
+  await product({ name: 'Frozen peas', aliases: ['peas'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 365, defaultPlaceId: cf2 }, [{ quantity: 1600 }]);
   await product({ name: 'Bananas', categoryId: cats.Food, unit: 'bunch', shelfLifeDays: 5, minQuantity: 1, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen });
   await product({ name: 'Free-range eggs', aliases: ['eggs'], categoryId: cats.Food, unit: 'egg', shelfLifeDays: 21, minQuantity: 6, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: kitchen }, [{ quantity: 2 }]);
   await product({ name: 'Mature cheddar', aliases: ['cheese'], categoryId: cats.Food, unit: 'g', shelfLifeDays: 30, minQuantity: 200, preferredShopIds: [shopIds.Aldi!], defaultPlaceId: fridge }, [{ quantity: 100 }]);
-  // Counted in what's used one at a time, sold by the box, and taken out by Larder as it goes.
-  await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'box', contents: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.35, defaultPlaceId: pantry }, [{ quantity: 100 }]);
-  // Bought in jars and used by weight: Larder takes 4 g out each day.
+  // Bought in boxes containing 80 tea bags, 2 tea bags a day, taken out by Larder a little at a time (100 tea bags in, low below 28).
+  await product({ name: 'Breakfast tea', aliases: ['yorkshire tea'], categoryId: cats.Food, unit: 'box', contents: { amount: 80, unit: 'tea bag' }, usage: { amount: 2, everyDays: 1, auto: true, unit: 'tea bag' }, minQuantity: 0.35, defaultPlaceId: pantry }, [{ quantity: 1.25 }]);
+  // Bought in jars containing 200 g, used by weight: Larder takes 4 g out each day.
   await product({ name: 'Decaf coffee', aliases: ['instant coffee'], categoryId: cats.Food, unit: 'jar', contents: { amount: 200, unit: 'g' }, usage: { amount: 4, everyDays: 1, auto: true, unit: 'g' }, minQuantity: 1, defaultPlaceId: pantry }, [{ quantity: 2 }]);
   await product({ name: 'Oat milk', aliases: ['oatly'], categoryId: cats.Food, unit: 'carton', minQuantity: 3, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: pantry }, [{ quantity: 1 }]);
   await product({ name: 'Fish fingers', categoryId: cats.Food, unit: 'pack', minQuantity: 1, preferredShopIds: [shopIds.Tesco!], defaultPlaceId: cf2 });
@@ -86,7 +87,7 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   const beansLoo = await product({ name: 'Head torch', aliases: ['headlamp'], categoryId: cats.Household, unit: 'each', defaultPlaceId: hallDrawer }, [{ quantity: 2 }]);
   void beansLoo;
 
-  await product({ name: 'Dog food', aliases: ['dog biscuits', 'kibble', 'harringtons'], categoryId: cats.Pets, unit: 'kg', minQuantity: 4, preferredShopIds: [shopIds['Pets at Home']!], defaultPlaceId: dogBin, notes: 'Harringtons lamb & rice, 15 kg bag.' }, [{ quantity: 2 }]);
+  await product({ name: 'Dog food', aliases: ['dog biscuits', 'kibble', 'harringtons'], categoryId: cats.Pets, unit: 'g', minQuantity: 4000, preferredShopIds: [shopIds['Pets at Home']!], defaultPlaceId: dogBin, notes: 'Harringtons lamb & rice, 15 kg bag.' }, [{ quantity: 2000 }]);
   await product({ name: 'Wormer tablets', aliases: ['worming', 'milbemax'], categoryId: cats.Medicine, unit: 'dose', defaultPlaceId: medicine, notes: 'Milbemax, large dog. Every 3 months.' }, [{ quantity: 1, expiresOn: addDays(today, 15) }]);
 
   const aa = await product({ name: 'AA batteries', aliases: ['double a', 'eneloop'], categoryId: cats.Batteries, rechargeable: true, minQuantity: 8, defaultPlaceId: hallDrawer }, [{ quantity: 10 }]);
@@ -101,8 +102,8 @@ export async function seedDemo(core: CoreApi): Promise<number> {
   await product({ name: 'Camping stove', categoryId: cats['Tools & DIY'], defaultPlaceId: g('G2-4') }, [{ quantity: 1 }]);
   const gas = await product({ name: 'Camping gas', aliases: ['gas canister', 'butane', 'campingaz'], categoryId: cats.Fuel, unit: 'canister', minQuantity: 3, preferredShopIds: [shopIds.Toolstation!], defaultPlaceId: g('G2-4') }, [{ quantity: 1 }]);
   await core.products.addVariant(gas.id, { name: 'Campingaz CV 470', shopCodes: [{ shopId: shopIds.Toolstation!, code: '76043' }] });
-  await product({ name: 'Heating oil', aliases: ['kerosene', 'oil'], categoryId: cats.Fuel, unit: 'L', minQuantity: 300, defaultPlaceId: oilTank, notes: '1,200 L tank. Order from the oil syndicate in spring.' }, [{ quantity: 620 }]);
-  await product({ name: 'Petrol', aliases: ['unleaded'], categoryId: cats.Fuel, unit: 'L', defaultPlaceId: shedFloor, notes: 'For the mower.' }, [{ quantity: 5 }]);
+  await product({ name: 'Heating oil', aliases: ['kerosene', 'oil'], categoryId: cats.Fuel, unit: 'ml', minQuantity: 300000, defaultPlaceId: oilTank, notes: '1,200 L tank. Order from the oil syndicate in spring.' }, [{ quantity: 620000 }]);
+  await product({ name: 'Petrol', aliases: ['unleaded'], categoryId: cats.Fuel, unit: 'ml', defaultPlaceId: shedFloor, notes: 'For the mower.' }, [{ quantity: 5000 }]);
 
   await product({ name: 'House insurance', aliases: ['home insurance', 'buildings', 'contents'], categoryId: cats.Renewals, shelfLifeDays: 365, defaultPlaceId: filing, notes: 'Aviva. Policy number in the filing box.' }, [{ quantity: 1, expiresOn: addDays(today, 18) }]);
   await product({ name: 'Car MOT', aliases: ['mot'], categoryId: cats.Renewals, shelfLifeDays: 365, defaultPlaceId: filing, notes: 'Skoda Octavia.' }, [{ quantity: 1, expiresOn: addDays(today, 98) }]);

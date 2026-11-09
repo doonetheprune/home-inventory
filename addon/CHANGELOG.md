@@ -2,14 +2,34 @@
 
 ## 0.10.0
 
-Say what a jar weighs, and how much you use in grams. Asked to set a 400 g jar of decaf to "four grams a day", an assistant could only say "1 jar every 100 days", because how fast something's used had to be in what it's counted in, and the weight was only on the price card.
+**Bought in, Contains, Weight.** Two chats in the Claude app showed Larder's units were too complicated. Asked to note that a box of Twinings Sleep holds 20 tea bags, the assistant counted 80 tea bags, then undid it and wrote "20 tea bags per box" in the notes. Asked to set a 400 g jar of decaf to "four grams a day", it could only say "1 jar every 100 days". An item now has three plain ideas instead of four overlapping ones, so read **Changed or gone** below.
 
-- **Weighs:** an item counted in jars, bags or bottles can say what one weighs or holds, on its Edit page ("1 jar = 400 g"). It's the item's own now, so the item page shows it and assistants know it. The price card uses the same weight, and any weight already on a price card is moved to its item when 0.10.0 first starts.
-- **We use, by weight:** once an item has a weight, **We use** can be said in g or kg (ml or L for something that holds a volume): "We use 4 g a day". Switching between jars and grams keeps what it means (a jar a day is 400 g a day). The item says "Uses 4 g a day. A 400 g jar lasts 100 days. Enough until 16 Feb", and its stock shows by weight too ("1 jar · 400 g").
-- **Taken out a little every day:** with **Take them out of stock for me**, Larder takes 4 g out each day ("0.99 jar · 396 g"). When the daily amount doesn't round cleanly to thousandths of a jar, it waits a day or two so it stays accurate.
-- **A Use is just a use** for something used by weight: it takes a whole jar (a finished one), and doesn't start a period like a sensor.
-- **Assistants:** `add_item` and `change_item` take `weighs` and a `unit` on `uses` ("4 g a day"), `get_item` says what one weighs and how long one lasts, `use_stock` and the other stock tools take grams ("used 100 g"), and `set_item_size` mentions the grams a day when the usage was in jars. They're told about weights when they connect.
-- The example household has decaf coffee in 200 g jars, 4 g a day, taken out by Larder.
+- **Bought in:** what you buy and count it in, picked from Larder's unit list: bag, box, jar, roll, each… or g or ml for things bought loose (type kg or L if you like: Larder keeps g and ml and shows "1.6 kg"). Stock, Running low below, Stock up to, deliveries and history are all in it, so a box of tea bags is counted in boxes: "4 boxes", "about ¾ jar".
+- **Contains:** what one holds, as printed on the pack, if you want to say: "Each box contains 20 tea bags", "Each jar contains 400 g", "Each bottle contains 4 pints". A count can be corrected in what it contains (**Correct the count** in tea bags: 75 tea bags is 3¾ boxes), and prices can be per tea bag.
+- **Weight:** what one weighs, in g, or holds, in ml, if you want to say, for anything ("a box of Sleep weighs 30 g"). It's filled in from Contains when that's an amount (a jar containing 400 g weighs 400 g), and it's what every sum in grams uses: usage by weight, prices per 100 g or per kg, recipes, and online shop pack sizes.
+- **We use:** in what it's bought in, in what it contains ("1 tea bag a day"), or by weight or volume once it has a Weight ("4 g a day"). With **Take them out of stock for me**, Larder takes a little out each day (a twentieth of a box, or 4 g of a jar), waiting a day or two when that doesn't round cleanly. The item says how long one lasts ("a jar lasts 100 days") and when it runs out.
+- **Units:** one long list, in Settings → **Units**: the usual count words, and g, kg, ml, cl, L and pints. Add your own count word there ("sleeve", with its plural), or from **Add a unit** in the unit picker; one can be removed once nothing uses it. There's no free-text unit any more.
+- **The scanner and Add by photo** say what it's bought in (box, bag, jar, bottle, carton, tin, pack, each, or **More…** for the whole list) and fill in what it contains from the pack ("400 g", "80 tea bags"). A multipack of 6 tins adds 6 tins.
+- **To tidy:** anything the upgrade changed or couldn't place is listed under Stock → **To tidy** with the reason, with a banner on its page: **Looks right** takes it off the list, or **Edit** to fix it.
+- **Assistants** use the same words: `add_item` and `change_item` take `bought_in`, `contains`, `weight`, and `uses` with a unit ("4 g a day"); `get_item` and `list_items` say what one contains, its Weight and why it's to tidy (`change_item` with `looks_right` takes it off); the stock tools take amounts in what one contains or by weight ("5 tea bags", "100 g"); and there are `list_units`, `add_unit` and `remove_unit`. A unit that isn't on the list is refused, and the assistant asks before adding it. They're told how it works when they connect. Home Assistant's actions take the same units.
+- The example household: breakfast tea bought in boxes containing 80 tea bags, 2 tea bags a day taken out by Larder; decaf in jars containing 200 g, 4 g a day; baby spinach in bags containing 200 g; milk in bottles containing 4 pints; frozen peas, chicken thighs and dog food bought loose by weight, and heating oil and petrol by volume.
+
+**Changed or gone**
+
+- **Counted in and Comes in became Bought in and Contains.** An item counted in tea bags that came in boxes of 20 is now bought in boxes, containing 20 tea bags.
+- **Counting again is gone:** "Count them as 40 tea bags" and **Keep the numbers, just rename**. Changing Bought in keeps the numbers as they are and says to correct the count if they were in something else; changing it to what one contains (boxes to tea bags) also clears Contains.
+- **Assistant tools:** `set_item_size` is gone (use `change_item` with `weight`). `add_item` and `change_item` take `bought_in` and `contains` instead of `unit`, `comes_in` and `recount`, and `get_item` answers `bought_in`, `contains` and `weight` instead of `unit` and `comes_in`. The shopping list they get has no packs, since it's already in what things are bought in.
+- **Home Assistant:** `unit` in sensors and action results is the plural ("boxes", "g"), and `larder.shopping_list_for` lines no longer have `packs` or `pack`.
+- **The API:** `POST /products/{id}/recount` is gone. Products have `contents`, `weight` and `needsCheck`, and `pack` is gone; `unit` must be on the unit list (`GET /api/v1/units`, with `POST` and `DELETE` to change it), and `usage.unit` can be what one contains. `ShoppingItem.packs` is always null (it stays until 1.0).
+- **When 0.10.0 first starts**, Larder converts your items, and flags any it wants you to look at:
+  - **kg becomes g, and L becomes ml.** An item counted in kg is now bought loose in g, with its stock, history, deliveries, minimum, stock-up amount and usage × 1000. The usual price, prices paid, purchase history, online shop packs and target prices, recipe amounts and the names learnt from receipts follow.
+  - **A pack is turned round.** Counted in tea bags, comes in boxes of 20, becomes bought in boxes, containing 20 tea bags, with the same numbers ÷ 20 (and the modules' numbers follow); a usage in tea bags stays "1 tea bag a day". Something counted each in packs of 5 becomes bought in packs, containing 5 pieces. These are flagged To tidy: "Now counted in boxes of 20 tea bags. If you count them one by one instead, change Bought in and correct the count."
+  - **Unit words become the list's** ("kgs", "litre", "pkt"). A word that isn't on the list stays as it is and is flagged To tidy ("4 pint bottle" isn't on the unit list. Pick what it's bought in, and what one contains.). The item works as before, but needs a unit from the list before it can be saved from Edit.
+  - **The weight of one on a price card** becomes the item's Weight.
+
+**What to check**
+
+- After updating, open Stock → **To tidy**: each item says why it's there. Mark it **Looks right**, or Edit it to pick what it's bought in and what one contains.
 
 ## 0.9.2
 

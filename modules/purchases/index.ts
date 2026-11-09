@@ -268,7 +268,8 @@ export default defineModule({
     await add('Baked beans', 4, 2.2, 'Aldi', 12, 'receipt', { source: 'Receipt', note: 'Read by Claude' });
     await add('Semi-skimmed milk', 2, 1.3, 'Aldi', 12, 'receipt', { source: 'Receipt', note: 'Read by Claude' });
     await add('Oat milk', 3, 4.5, 'Tesco', 9, 'order', { source: 'Tesco delivery', reference: 'TESCO-58213', orderedOn: day(11) });
-    await add('Dog food', 15, 52.99, 'Pets at Home', 30, 'shop');
+    // Bought loose, by weight: a 15 kg bag is 15000 g.
+    await add('Dog food', 15000, 52.99, 'Pets at Home', 30, 'shop');
     await add('Water filter cartridges', 3, 12.5, null, 40, 'order', { source: 'Amazon', reference: '204-118', orderedOn: day(42) });
   },
 });

@@ -1,5 +1,5 @@
 /** The product fields form, shared by Add by name and Edit. Units come from the household's list (docs/plans/units.md). */
-import { asWeight, canConvert, isCount, isLoose, isMeasure, type Category, type Link as LinkT, type PlaceRef, type Shop, type Units } from '@larder/core';
+import { asWeight, canConvert, isCount, isLoose, isMeasure, measuredIn, type Category, type Link as LinkT, type PlaceRef, type Shop, type Units } from '@larder/core';
 import { Stepper, Switch, PlaceSelect } from '../ui';
 import { daysFor, lastsText, num, plural, usageText, worthText } from '../format';
 import { useUnits } from '../units';
@@ -136,7 +136,8 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
   const usageAllowed = !renewal && !value.rechargeable;
   // What We use can be said in: what it's bought in, what one contains when that's a count, and g or ml once there's a Weight.
   const inside = item.contents && isCount(units, item.contents.unit) ? item.contents.unit : null;
-  const usageChoices = [{ key: '', label: bought?.key === 'each' ? 'of them' : plural(unit, 2) || unit }, ...(inside ? [{ key: inside, label: plural(inside, 2) }] : []), ...(item.weight && !loose ? [{ key: item.weight.unit, label: item.weight.unit }] : [])];
+  const by = loose ? null : measuredIn(units, item);
+  const usageChoices = [{ key: '', label: bought?.key === 'each' ? 'of them' : plural(unit, 2) || unit }, ...(inside ? [{ key: inside, label: plural(inside, 2) }] : []), ...(by ? [{ key: by, label: by }] : [])];
   if (value.usageUnit && !usageChoices.some((c) => c.key === value.usageUnit)) usageChoices.push({ key: value.usageUnit, label: units.find(value.usageUnit)?.many ?? value.usageUnit });
   const usageWorks = !usage?.unit || canConvert(units, item, usage.unit);
   const lasts = usage && usageWorks ? lastsText(item) : null;

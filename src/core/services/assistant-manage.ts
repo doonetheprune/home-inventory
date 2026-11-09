@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
 import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
-import { amountText, boughtInText, containsText, exactText, isCount, lastsText, newUnit, stockText, stockWithInside, toBoughtIn, usageText, weightText, type Units } from './units';
+import { amountText, boughtInText, containsText, exactText, isCount, isLoose, lastsText, measuredIn, newUnit, stockText, stockWithInside, toBoughtIn, usageText, weightText, type Units } from './units';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService, type createUnitService } from './catalogue';
 import type { CoreContext } from './context';
@@ -54,7 +54,7 @@ export function usageQuestion(units: Units, p: Pick<Product, 'name' | 'unit' | '
   const c = p.contents && isCount(units, p.contents.unit) ? units.find(p.contents.unit) : null;
   const bought = units.find(p.unit);
   const many = c ? c.many : bought?.key === 'each' || !bought ? 'of them' : bought.many;
-  const by = p.weight ? p.weight.unit : null;
+  const by = isLoose(units, p) ? null : measuredIn(units, p);
   return `ask how many ${many} get used a day or a week (uses${c ? `, with unit "${c.key}"` : ''})${by ? `, or how much in ${by} (unit "${by}")` : ''}, so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).`;
 }
 
