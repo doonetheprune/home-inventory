@@ -70,7 +70,7 @@ export default defineModule({
 
 Only the core knows about units. A module never keeps its own unit table, unit aliases or plural guesses: it gets the list with `await ctx.core.units.list()` and uses the helpers from `@larder/core`.
 - `toBoughtIn(units, item, amount, unit)` turns an amount into what the item is bought in: 5 tea bags of a box of 20 is 0.25, and 100 g of a 400 g jar is 0.25 (through its Weight). When it can't be done it throws a `ValidationError` saying what the item can be given in. `canConvert` asks the same without throwing, and `usageInBoughtIn` gives a usage in what it's bought in.
-- `amountText`, `stockText`, `boughtInText`, `containsText`, `weightText`, `usageText` and `unitWord` say them ("about ¾ jar", "Bought in boxes", "20 tea bags").
+- `amountText`, `stockText`, `boughtInText`, `packSizeText`, `weightText`, `usageText` and `unitWord` say them ("about ¾ jar", "4 eggs (about ⅔ box)", "Bought in boxes", "20 tea bags").
 - `parseAmount(units, "400 g")` reads a size as printed on a pack; `unitOf` finds a unit by any spelling (and throws `UnknownUnitError` for a word not on the list); `isCount`, `isLoose` and `measuredIn` say what kind it is.
 - A module with words of its own maps each onto a core unit: recipes' kitchen measures (a tbsp is 15 ml) and pricing's price labels ("per 100 g").
 

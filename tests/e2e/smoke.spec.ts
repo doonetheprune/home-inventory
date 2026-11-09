@@ -311,6 +311,28 @@ test('scales a recipe by its presets and by what you have, and keeps it as the d
   await expect(page.getByText('200 g plain flour')).toBeVisible();
 });
 
+test('counts eggs out of a box of 6 when cooking, and keeps them in boxes', async ({ page }, info) => {
+  await signIn(page);
+  const eggs = `Boxed eggs ${info.project.name}`;
+  const id = await page.evaluate(async ([name, title]) => {
+    const post = async (path: string, body: unknown) => (await (await fetch(path, { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json()) as { id: string };
+    const p = await post('api/v1/products', { name, unit: 'box', packSize: { amount: 6, unit: 'egg' } });
+    await post('api/v1/stock/add', { productId: p.id, quantity: 1 });
+    return (await post('api/v1/modules/recipes', { title, ingredients: [{ name: 'eggs', productId: p.id, ratio: 2, ratioUnit: '' }] })).id;
+  }, [eggs, `Boiled eggs ${info.project.name}`]);
+  await page.goto(`/#/m/recipes/${id}`);
+  await page.getByRole('button', { name: 'Cooked it' }).click();
+  const row = page.locator('.sheet .numfield', { hasText: eggs });
+  await expect(row).toContainText('1 box in');
+  // 2 eggs, not 0.333 of a box.
+  await expect(row.getByLabel('egg', { exact: true })).toHaveValue('2');
+  await row.getByRole('button', { name: 'More egg' }).click();
+  await expect(row.getByLabel('egg', { exact: true })).toHaveValue('3');
+  await page.getByRole('button', { name: 'Take them out' }).click();
+  await expect(page.locator('.toast')).toContainText('Took 1 ingredient out of stock');
+  await expect(page.getByText(`${eggs}: 3 eggs in (about ½ box)`)).toBeVisible();
+});
+
 /** The id of an example item, for going straight to its page. */
 async function productId(page: Page, name: string): Promise<string> {
   return page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { id: string; name: string } }>).find((s) => s.product.name === n)!.product.id, name);
@@ -367,8 +389,9 @@ test('buys tea in boxes of 20 tea bags, uses one a day, and puts the count right
   await page.getByLabel('How many there really are').fill('15');
   await page.getByLabel('Counted in').selectOption('tea bag');
   await page.getByRole('button', { name: 'Correct the count' }).click();
-  await expect(page.locator('.toast')).toContainText('Corrected · about ¾ box');
-  await expect(page.locator('.big-qty')).toHaveText(/^about ¾\s*box$/);
+  // Part of a box is said in tea bags first.
+  await expect(page.locator('.toast')).toContainText('Corrected · 15 tea bags (about ¾ box)');
+  await expect(page.locator('.big-qty')).toHaveText(/^15\s*tea bags \(about ¾ box\)$/);
 
   // Bought in tea bags instead: the pack size goes, and the numbers stay to be put right.
   await page.locator('a[aria-label="Edit"]').click();

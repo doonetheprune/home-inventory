@@ -295,7 +295,7 @@ describe('Home Assistant', () => {
     const started = await core.automation.run('use_stock', { item: 'glucose sensor' });
     expect(started.message).toBe('Glucose sensor: started 1 sensor. 2 sensors left, enough until 2026-12-09.');
     expect(started.runs_out_on).toBe('2026-12-09');
-    expect((await core.automation.run('use_stock', { item: 'tea bags', quantity: 20, unit: 'tea bags' })).message).toBe('Tea bags: used 20 tea bags (0.25 box) extra (Larder also takes out 2 tea bags a day). About ¾ box left, enough until 2026-11-28.');
+    expect((await core.automation.run('use_stock', { item: 'tea bags', quantity: 20, unit: 'tea bags' })).message).toBe('Tea bags: used 20 tea bags (0.25 box) extra (Larder also takes out 2 tea bags a day). 60 tea bags left (about ¾ box), enough until 2026-11-28.');
 
     // A box goes to the shed, then one arrives of two ordered.
     await core.automation.run('move_item', { item: 'tea bags', to: 'shed', quantity: 40, unit: 'tea bags', permanent: false });

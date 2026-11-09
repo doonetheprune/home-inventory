@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1
+
+**Part of a box is said in what's in it.** "About ⅔ box" didn't say how many eggs were left.
+
+- **When the pack size is a count** (boxes of 6 eggs, 20 tea bags, 10 fish fingers), part of a box is said in what's in it first: "4 eggs (about ⅔ box)", "77 tea bags left (about 3¾ boxes)". Whole boxes still read "2 boxes". The item page, lists, the shopping list, the scanner, assistants and Home Assistant's replies all say it this way. Stock is still kept in boxes.
+- **When the pack size is a weight or volume** (400 g jars), it's still "about ⅔ jar".
+- **Part of one is said to the nearest third as well as quarter:** 0.7 of a jar is "about ⅔ jar", not "about ¾ jar".
+- **Cooked it counts eggs in eggs:** taking 2 eggs from a box of 6 shows 2 eggs, not 0.333. Recipes show "Eggs: 4 eggs in (about ⅔ box)". Assistants' cooking proposals say both: "0.333 box (2 eggs), of 2 boxes".
+
 ## 0.10.0
 
 **Bought in, Pack size, Weight.** Two chats in the Claude app showed Larder's units were too complicated. Asked to note that a box of Twinings Sleep holds 20 tea bags, the assistant counted 80 tea bags, then undid it and wrote "20 tea bags per box" in the notes. Asked to set a 400 g jar of decaf to "four grams a day", it could only say "1 jar every 100 days". An item now has three plain ideas instead of four overlapping ones, so read **Changed or gone** below.

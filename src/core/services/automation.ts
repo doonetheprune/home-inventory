@@ -18,7 +18,7 @@ import type { Resolver } from './resolve';
 import type { createShoppingService } from './shopping';
 import type { createStockService } from './stock';
 import { loadWorld, needsBuying, placesText, summarise } from './world';
-import { amountText, canConvert, fromBoughtIn, startsOne, stockText, toBoughtIn, usageText, type Units } from './units';
+import { amountText, canConvert, fromBoughtIn, startsOne, stockText, toBoughtIn, usageText, type UnitItem, type Units } from './units';
 import { daysBetween, roundQty } from '../util';
 
 export type SensorState = number | string | boolean | null;
@@ -84,9 +84,9 @@ const Unit = z.string().max(30).optional().describe('What the quantity is in, if
 
 /** The plural of what it's bought in, as sensors and actions say it: "boxes", "g", "each". */
 const unitsOf = (units: Units, key: string) => units.find(key)?.many ?? key;
-/** Stock at the start of a sentence: "About ¾ jar left". */
-const leftText = (units: Units, p: { unit: string }, n: number) => {
-  const t = stockText(units, p, n);
+/** Stock at the start of a sentence, with what comes after the amount: "About ¾ jar left", "10 fish fingers left (about ⅔ box)". */
+const leftText = (units: Units, p: Pick<UnitItem, 'unit' | 'packSize'>, n: number, after: string) => {
+  const t = stockText(units, p, n, undefined, after);
   return `${t[0]!.toUpperCase()}${t.slice(1)}`;
 };
 
@@ -101,7 +101,7 @@ export function createAutomation(deps: {
   const sensors: Array<{ def: SensorDefinition; module: string | null; enabled: () => boolean }> = [];
   const actions: Array<{ def: ActionDefinition; module: string | null; enabled: () => boolean }> = [];
 
-  const brief = (units: Units, s: ProductSummary) => `${s.product.name}: ${stockText(units, s.product, s.inStock)} in stock${s.expected ? `, ${amountText(units, s.expected, s.product.unit)} on the way` : ''}.`;
+  const brief = (units: Units, s: ProductSummary) => `${s.product.name}: ${stockText(units, s.product, s.inStock, undefined, ' in stock')}${s.expected ? `, ${amountText(units, s.expected, s.product.unit)} on the way` : ''}.`;
   const itemInfo = (units: Units, s: ProductSummary) => ({
     item: s.product.name, id: s.product.id, in_stock: s.inStock, expected: s.expected, unit: unitsOf(units, s.product.unit), low: s.status.low,
     next_expiry: s.nextExpiry, runs_out_on: s.runsOutOn, open: s.inUse, place: s.places[0]?.path ?? null,
@@ -211,7 +211,7 @@ export function createAutomation(deps: {
         ? (await shopping.purchase({ shopId: shop?.id ?? null, items: [{ productId: p.id, quantity, placeId: place?.id, price: i.price, expiresOn: i.expires_on, variantId: variant?.id ?? null }], ...(i.note ? { evidence: { note: i.note } } : {}) }))[0]!
         : await stock.add({ productId: p.id, quantity, placeId: place?.id, expiresOn: i.expires_on, variantId: variant?.id ?? null, note: i.note });
       const paid = bought ? `, bought${shop ? ` at ${shop.name}` : ''}${i.price !== undefined ? ` for ${i.price.toFixed(2)}` : ''}` : '';
-      return { message: `${p.name}: added ${said(units, p, quantity, i.quantity, i.unit)}${variant ? ` (${variant.name})` : ''}${place ? ` to ${place.name}` : ''}${paid}. ${leftText(units, p, s.inStock)} in stock.`, ...itemInfo(units, s) };
+      return { message: `${p.name}: added ${said(units, p, quantity, i.quantity, i.unit)}${variant ? ` (${variant.name})` : ''}${place ? ` to ${place.name}` : ''}${paid}. ${leftText(units, p, s.inStock, ' in stock')}.`, ...itemInfo(units, s) };
     },
   });
   addAction({
@@ -242,7 +242,7 @@ export function createAutomation(deps: {
         : startsOne(p) ? `started ${n}${p.usage.auto ? `, and Larder takes them out from here (${uses})` : ''}`
           : i.opened ? `started a new one now (${n})` : `used ${n} extra (Larder also takes out ${uses})`;
       const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
-      return { message: `${p.name}: ${what}. ${leftText(units, p, s.inStock)} left${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
+      return { message: `${p.name}: ${what}. ${leftText(units, p, s.inStock, ' left')}${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
     },
   });
   addAction({
@@ -251,7 +251,7 @@ export function createAutomation(deps: {
     async run(i) {
       const [p, units] = await Promise.all([resolve.product(i.item), ctx.units()]);
       const s = await stock.finish(p.id);
-      return { message: `${p.name}: the open one is finished. ${leftText(units, p, s.inStock)} left${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
+      return { message: `${p.name}: the open one is finished. ${leftText(units, p, s.inStock, ' left')}${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
     },
   });
   addAction({

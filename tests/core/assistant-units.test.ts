@@ -27,8 +27,8 @@ describe('the owner\'s chats', () => {
     // A tea bag a day comes out of the box; the count can be put right in tea bags.
     core.clock.set('2026-10-29T09:00:00.000Z');
     await core.automation.checkExpiry();
-    expect(await text(core, 'list_items', {})).toBe('- Twinings Sleep: about 4 boxes (79 tea bags), uses 1 tea bag a day (taken out by Larder), enough until 2027-01-17 (in 80 days)');
-    expect(await text(core, 'correct_stock', { item: 'twinings sleep', quantity: 55, unit: 'tea bags' })).toBe('Twinings Sleep: corrected. about 2¾ boxes (55 tea bags) in stock.');
+    expect(await text(core, 'list_items', {})).toBe('- Twinings Sleep: 79 tea bags (about 4 boxes), uses 1 tea bag a day (taken out by Larder), enough until 2027-01-17 (in 80 days)');
+    expect(await text(core, 'correct_stock', { item: 'twinings sleep', quantity: 55, unit: 'tea bags' })).toBe('Twinings Sleep: corrected. 55 tea bags (about 2¾ boxes) in stock.');
     // A Weight can be given for anything, even tea bags in a box.
     expect(await text(core, 'change_item', { item: 'twinings sleep', weight: { amount: 30, unit: 'g' } })).toBe('Twinings Sleep is updated: weighs 30 g.');
     expect(await text(core, 'get_item', { item: 'twinings sleep' })).toContain('Bought in boxes. Pack size: 20 tea bags. Weight: 30 g.');

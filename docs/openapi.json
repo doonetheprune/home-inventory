@@ -1373,6 +1373,33 @@
                     "null"
                   ]
                 },
+                "packSize": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 30
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "unit"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "inStock": {
                   "type": [
                     "number",
@@ -1657,6 +1684,33 @@
                 },
                 "unit": {
                   "type": "string"
+                },
+                "packSize": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 30
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "unit"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "inStock": {
                   "type": "number"
@@ -6206,6 +6260,34 @@
                     "null"
                   ]
                 },
+                "packSize": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 30
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "unit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "inStock": {
                   "type": [
                     "number",
@@ -6263,6 +6345,7 @@
                 "amount",
                 "quantity",
                 "unit",
+                "packSize",
                 "inStock",
                 "status",
                 "optional",
@@ -6507,6 +6590,34 @@
                 "unit": {
                   "type": "string"
                 },
+                "packSize": {
+                  "default": null,
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        "unit": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 30
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "unit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "inStock": {
                   "type": "number"
                 }
@@ -6516,6 +6627,7 @@
                 "name",
                 "quantity",
                 "unit",
+                "packSize",
                 "inStock"
               ],
               "additionalProperties": false

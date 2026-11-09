@@ -122,12 +122,22 @@ describe('the converter', () => {
 });
 
 describe('saying amounts', () => {
-  it('says stock in what it is bought in, in quarters when part of one is left', () => {
+  it('says stock in what it is bought in, in quarters or thirds when part of one is left', () => {
     expect(stockText(units, sleep, 4)).toBe('4 boxes');
     expect(stockText(units, sleep, 1)).toBe('1 box');
-    expect(stockText(units, sleep, 3.75)).toBe('about 3¾ boxes');
-    expect(stockText(units, sleep, 3.95)).toBe('about 4 boxes');
+    // A count for its pack size: part of one is said in what's in it first.
+    expect(stockText(units, sleep, 3.75)).toBe('75 tea bags (about 3¾ boxes)');
+    expect(stockText(units, sleep, 3.95)).toBe('79 tea bags (about 4 boxes)');
+    expect(stockText(units, sleep, 3.75, undefined, ' left')).toBe('75 tea bags left (about 3¾ boxes)');
+    expect(stockText(units, sleep, 0.01)).toBe('about ¼ box');
+    const eggs = { name: 'Eggs', unit: 'box', packSize: { amount: 6, unit: 'egg' } };
+    expect(stockText(units, eggs, 0.667)).toBe('4 eggs (about ⅔ box)');
+    expect(stockText(units, eggs, 0.167)).toBe('1 egg (about ¼ box)');
+    expect(stockText(units, eggs, 0.4)).toBe('about 2 eggs (⅓ box)');
+    // A pack size in g or ml isn't: decaf in 400 g jars.
     expect(stockText(units, decaf, 0.75)).toBe('about ¾ jar');
+    expect(stockText(units, decaf, 0.7)).toBe('about ⅔ jar');
+    expect(stockText(units, decaf, 0.75, undefined, ' left')).toBe('about ¾ jar left');
     expect(stockText(units, decaf, 0.04)).toBe('about ¼ jar');
     expect(stockText(units, cheddar, 350)).toBe('350 g');
     expect(stockText(units, cheddar, 1600)).toBe('1.6 kg');

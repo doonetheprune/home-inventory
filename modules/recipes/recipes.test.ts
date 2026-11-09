@@ -125,7 +125,7 @@ describe('recipes module', () => {
     expect((await core.assistant.call('list_recipes', { query: 'cheddar' })).text).toContain('- Cheese on toast: everything in');
     expect((await core.assistant.call('get_recipe', { recipe: 'toast' })).text).toContain('- 60 g mature cheddar: in the house');
     const proposed = await core.assistant.call('propose_cooking', { recipe: 'cheese on toast' });
-    expect(proposed.text).toContain('- Mature cheddar: 60 g (of 300 g)');
+    expect(proposed.text).toContain('- Mature cheddar: 60 g, of 300 g');
     const id = /Proposal id: (\S+)\./.exec(proposed.text)![1]!;
     const done = await core.assistant.call('confirm_cooking', { proposal: id, changes: [{ item: 'mature cheddar', quantity: 120 }] });
     expect(done.text).toBe('Done. Mature cheddar: 180 g left (running low).');
@@ -299,9 +299,9 @@ describe('recipes by ratio, and presets', () => {
     const { core, ids } = await pancakes();
     await core.assistant.call('save_recipe_preset', { recipe: 'pancakes', name: 'Family', times: 2, default: true });
     const p = await core.assistant.call('propose_cooking', { recipe: 'pancakes' });
-    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs (of 6 eggs)\n- Milk: 600 ml (of 2 L)\nNot taken: plain flour, salt.');
+    expect(p.text).toContain('Cooking Pancakes (the "Family" preset, ×2) would take out of stock:\n- Free-range eggs: 6 eggs, of 6 eggs\n- Milk: 600 ml, of 2 L\nNot taken: plain flour, salt.');
     const fewer = await core.assistant.call('propose_cooking', { recipe: 'pancakes', have: [{ ingredient: 'eggs', amount: 2 }] });
-    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs (of 6 eggs)\n- Milk: 200 ml (of 2 L)');
+    expect(fewer.text).toContain('Cooking Pancakes from 2 eggs (×0.67) would take out of stock:\n- Free-range eggs: 2 eggs, of 6 eggs\n- Milk: 200 ml, of 2 L');
     await core.assistant.call('confirm_cooking', { proposal: /Proposal id: (\S+)\./.exec(fewer.text)![1]! });
     expect((await core.products.summary(ids.eggs)).inStock).toBe(4);
     expect((await core.products.summary(ids.milk)).inStock).toBe(1800);
@@ -358,7 +358,7 @@ describe('recipes by ratio, and presets', () => {
       ingredients: [{ name: 'milk', item: 'whole milk', ratio: 500, ratio_unit: 'ml' }, { name: 'oat milk', item: 'oat milk', ratio: 100, ratio_unit: 'ml' }, { name: 'eggs', item: 'eggs', ratio: 3 }],
     });
     const p = await core.assistant.call('propose_cooking', { recipe: 'custard' });
-    expect(p.text).toContain('- Whole milk: 0.22 bottle (of 2 bottles)\n- Free-range eggs: 0.5 box (of 2 boxes)\nNot taken: oat milk.\n'
+    expect(p.text).toContain('- Whole milk: 0.22 bottle, of 2 bottles\n- Free-range eggs: 0.5 box (3 eggs), of 2 boxes\nNot taken: oat milk.\n'
       + '- oat milk: Larder doesn\'t know what one carton of Oat milk holds, so it can\'t work in ml. Give how many cartons. Or give it a Weight first.');
     const v = (await core.assistant.call('get_recipe', { recipe: 'custard' })).data as unknown as RecipeView;
     expect(v.ingredients.map((i) => [i.name, i.need, i.why])).toEqual([

@@ -104,7 +104,7 @@ export function ProductPage() {
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
             <div className="btnrow">
-              {startNext && <button type="button" className="btn small" disabled={busy || p.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: Math.min(p.product.usage!.amount, p.inStock), open: true }), (r) => `Started a new one · ${stockText(r)} left`)}><Icon name="undo" size="sm" />Came off early: start the next one now</button>}
+              {startNext && <button type="button" className="btn small" disabled={busy || p.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: Math.min(p.product.usage!.amount, p.inStock), open: true }), (r) => `Started a new one · ${stockText(r, ' left')}`)}><Icon name="undo" size="sm" />Came off early: start the next one now</button>}
               {p.inUse && !startNext && (!p.product.usage || (p.product.usage.everyDays >= 2 && !p.product.usage.unit)) && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.usage ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.usage ? 'Finished early' : 'Finished the open one'}</button>}
               {p.product.rechargeable && (p.flat ?? 0) > 0 && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.charge({ productId: p.product.id, quantity: p.flat ?? 0 }), 'All charged')}><Icon name="zap" size="sm" />Charged {num(p.flat ?? 0)}</button>}
               {!renewal && (
@@ -225,7 +225,7 @@ function UsageLine({ p }: { p: ProductDetail }) {
 /** Whether a plain Use starts one (the core's rule: something used a little at a time is a whole one used). */
 const startsOne = (p: ProductDetail) => coreStartsOne(p.product);
 
-/** Stock, big: "4" boxes, "about ¾" jar, "350" g. */
+/** Stock, big: "4" boxes, "about ¾" jar, "15" tea bags (about ¾ box), "350" g. */
 function StockQty({ s }: { s: ProductDetail }) {
   const shown = stockText(s);
   const [, lead = shown, word = ''] = /^((?:about )?[\d.,¼½¾⅓⅔]+)\s*(.*)$/.exec(shown) ?? [];
@@ -268,7 +268,7 @@ function ToTidy({ p }: { p: ProductDetail }) {
 function usedText(p: ProductDetail, r: ProductSummary, n: number, open: boolean): string {
   const u = p.product.usage;
   const what = p.product.rechargeable ? 'Marked flat' : !u || (u.unit && !u.auto) ? (open ? 'Opened' : 'Used') : startsOne(p) ? 'Started' : open ? 'Started a new one:' : 'Used an extra';
-  return `${what} ${num(n)} · ${stockText(r)} left${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`;
+  return `${what} ${num(n)} · ${stockText(r, ' left')}${r.runsOutOn ? `, enough until ${dayText(r.runsOutOn, r.daysToRunOut)}` : ''}`;
 }
 
 function EntryRow({ p, e }: { p: ProductDetail; e: StockEntryView }) {
