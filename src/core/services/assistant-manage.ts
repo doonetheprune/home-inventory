@@ -382,7 +382,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       pack_size: PackSizeInput.nullable().optional(),
       weight: WeightInput.nullable().optional(),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Every other name people use (replaces the old list)'),
-      minimum: z.number().min(0).nullable().optional().describe('Running low below this many, in what it\'s bought in (0.5 for half a box); null to never count as low'),
+      minimum: z.number().min(0).nullable().optional().describe('Running low below this many, in what it\'s bought in (0.5 for half a box). For things bought loose that\'s g or ml (1000 for 1 kg), or kg or L when this change also sets bought_in to kg or L; null to never count as low'),
       stock_up_to: z.number().min(0).nullable().optional().describe('When buying more, top up to this many, in what it\'s bought in (e.g. minimum 4, stock up to 12); null to buy just back to the minimum'),
       shelf_life_days: z.number().int().positive().nullable().optional().describe('How long it keeps, or how often a renewal renews; null for none'),
       uses: UsesInput.nullable().optional(),

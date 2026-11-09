@@ -1,5 +1,5 @@
 /**
- * Assistant tools and Bought in, Contains, Weight and We use (docs/plans/units.md),
+ * Assistant tools and Bought in, Pack size, Weight and We use (docs/plans/units.md),
  * replaying the two chats in the Claude app that showed the old model was too complicated.
  */
 import { describe, expect, it } from 'vitest';
@@ -41,14 +41,14 @@ describe('the owner\'s chats', () => {
     expect(await text(core, 'change_item', { item: 'decaf coffee', pack_size: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' }, takes_out_automatically: true })).toBe(
       'Decaf coffee is updated: pack size 400 g, uses 4 g a day, taken out of stock by Larder (a jar lasts 100 days), enough until 2027-02-06.');
     const item = await core.assistant.call('get_item', { item: 'decaf coffee' });
-    // The Weight comes from Contains, so it isn't said twice.
+    // The Weight comes from the pack size, so it isn't said twice.
     expect(item.text).toContain('Bought in jars. Pack size: 400 g.\n');
     expect(item.text).toContain('Uses 4 g a day, taken out of stock by Larder a little at a time: a jar lasts 100 days.');
     expect(item.data).toMatchObject({ pack_size: { amount: 400, unit: 'g' }, weight: { amount: 400, unit: 'g' }, uses: { amount: 4, every_days: 1, unit: 'g' } });
     core.clock.set('2026-10-29T09:00:00.000Z');
     await core.automation.checkExpiry();
     expect(await text(core, 'get_item', { item: 'decaf coffee' })).toContain('In stock: about 1 jar (396 g).');
-    // A Weight alongside Contains 400 g is refused: it's worked out from it.
+    // A Weight alongside a pack size of 400 g is refused: it's worked out from it.
     await expect(core.assistant.call('change_item', { item: 'decaf coffee', weight: { amount: 200, unit: 'g' } })).rejects.toThrow('Decaf coffee has a pack size of 400 g, so its Weight is 400 g, worked out from that. Change the pack size instead.');
   });
 });
@@ -76,16 +76,20 @@ describe('units for assistants', () => {
     await core.assistant.call('add_item', { name: 'Kitchen roll', bought_in: 'pack' });
     await core.automation.run('add_stock', { item: 'kitchen roll', quantity: 2 });
     expect(await text(core, 'change_item', { item: 'kitchen roll', bought_in: 'rolls' })).toBe('Kitchen roll is updated: bought in rolls (2 packs is now 2 rolls: correct the count if that\'s wrong).');
-    // Counted one by one instead of in boxes: Contains goes, and the usage is in what it's bought in.
+    // Counted one by one instead of in boxes: the pack size goes, and the usage is in what it's bought in.
     await core.assistant.call('add_item', { name: 'Sleep tea', bought_in: 'box', pack_size: { amount: 20, unit: 'tea bag' }, uses: { amount: 1, every_days: 1, unit: 'tea bag' } });
     await core.automation.run('add_stock', { item: 'sleep tea', quantity: 4 });
     expect(await text(core, 'change_item', { item: 'sleep tea', bought_in: 'tea bag' })).toBe('Sleep tea is updated: bought in tea bags (4 boxes is now 4 tea bags: correct the count if that\'s wrong), no pack size now.');
     expect((await core.assistant.call('get_item', { item: 'sleep tea' })).data).toMatchObject({ bought_in: 'tea bag', pack_size: null, uses: { amount: 1, unit: 'tea bag' } });
-    // Bought loose: no Contains or Weight, and kg is kept as g.
-    expect(await text(core, 'add_item', { name: 'Cheddar', bought_in: 'kg', minimum: 0.2 })).toBe('Added Cheddar. It has no stock yet: use add_stock to say how many.');
+    // Bought loose: no pack size or Weight, and kg is kept as g.
+    expect(await text(core, 'add_item', { name: 'Cheddar', bought_in: 'kg', minimum: 0.2 })).toBe('Added Cheddar. Running low below 200 g. It has no stock yet: use add_stock to say how many.');
     expect((await core.assistant.call('get_item', { item: 'cheddar' })).text).toContain('Bought loose, by weight (g).');
     expect((await core.assistant.call('get_item', { item: 'cheddar' })).text).toContain('Running low below 200 g: it is low now.');
     await expect(core.assistant.call('change_item', { item: 'cheddar', weight: { amount: 1, unit: 'kg' } })).rejects.toThrow('Cheddar is bought loose, in g, so it has no Weight');
+    // A real model gave minimum 1000 (meaning grams) with bought_in "kg": the reply says what that came to, so it shows.
+    expect(await text(core, 'add_item', { name: 'Dog food', bought_in: 'kg', minimum: 1000, stock_up_to: 3 })).toBe('Added Dog food. Running low below 1000 kg. Stock up to 3 kg. It has no stock yet: use add_stock to say how many.');
+    expect(await text(core, 'change_item', { item: 'dog food', minimum: 1000 })).toBe('Dog food is updated: low below 1 kg.');
+    expect(await text(core, 'add_item', { name: 'Rice', bought_in: 'g', minimum: 1000 })).toBe('Added Rice. Running low below 1 kg. It has no stock yet: use add_stock to say how many.');
   });
 
   it('show what Larder flagged to tidy, and take it off when it looks right', async () => {

@@ -40,7 +40,7 @@ export async function category(core: CoreApi, name: string) {
 
 /**
  * Saves an item the way 0.9.2 did: what it was counted in, with `pack` for what it came in, and no
- * Contains, Weight or needsCheck. Starting Larder again on the same storage runs the upgrade on it.
+ * pack size, Weight or needsCheck. Starting Larder again on the same storage runs the upgrade on it.
  */
 export async function saveAs092(storage: Storage, p: Product, old: Record<string, unknown>): Promise<void> {
   const { packSize: _c, weight: _w, needsCheck: _n, ...rest } = p;

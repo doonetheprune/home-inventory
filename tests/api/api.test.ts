@@ -193,7 +193,7 @@ describe('API', () => {
     const wrong = await call<Any>('POST', '/api/v1/stock/use', { productId: tea.id, quantity: 1, unit: 'kg' });
     expect([wrong.status, wrong.body.message]).toEqual([400, "Larder doesn't know what one box of Sleep tea weighs, so it can't work in kg. Give how many boxes or tea bags. Or give it a Weight first."]);
     expect((await call<Any>('POST', `/api/v1/products/${tea.id}/recount`, { unit: 'tea bag', holds: 20 })).status).toBe(404);
-    // A Weight in kg is kept in g; one alongside a Contains amount is refused.
+    // A Weight in kg is kept in g; one alongside a pack size in g is refused.
     const jar = (await call<Any>('POST', '/api/v1/products', { name: 'Decaf coffee', unit: 'jar', packSize: { amount: 0.4, unit: 'kg' } })).body;
     expect(jar.weight).toEqual({ amount: 400, unit: 'g' });
     expect((await call<Any>('PATCH', `/api/v1/products/${jar.id}`, { weight: { amount: 200, unit: 'g' } })).status).toBe(400);

@@ -8,7 +8,7 @@ import { createMemoryStorage } from '../../src/adapters/storage-memory';
 import { makeCore, category } from '../helpers';
 
 const at = '2026-10-20T09:00:00.000Z';
-/** A record as 0.9.2 saved it: a pack, no Contains, Weight or needsCheck. */
+/** A record as 0.9.2 saved it: a pack, no pack size, Weight or needsCheck. */
 const old = (p: Product, extra: Record<string, unknown>) => {
   const { packSize: _c, weight: _w, needsCheck: _n, ...rest } = p;
   return { ...rest, pack: null, ...extra } as unknown as Product;

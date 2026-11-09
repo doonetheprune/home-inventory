@@ -92,7 +92,7 @@ describe('We use', () => {
     expect(decaf.usage).toEqual({ amount: 4, everyDays: 1, auto: true, unit: 'g' });
     await expect(core.products.update(decaf.id, { usage: { amount: 10, everyDays: 1, unit: 'ml' } })).rejects.toThrow('a volume can\'t be worked out from a weight');
     await expect(core.products.update(decaf.id, { usage: { amount: 1, everyDays: 1, unit: 'sleeve' } })).rejects.toThrow('Larder doesn\'t have the unit "sleeve".');
-    // A Contains count it's used in can't be taken away without saying how fast it's used instead.
+    // A pack size in a count it's used in can't be taken away without saying how fast it's used instead.
     await expect(core.products.update(sleep.id, { packSize: null })).rejects.toThrow("How fast it's used can't be in tea bags.");
   });
 });

@@ -260,8 +260,8 @@ export function createAssistant(deps: {
       category: z.string().max(60).optional().describe('One of the household\'s categories, e.g. Food, Household, Pets, Tools & DIY, Batteries, Renewals'),
       bought_in: BoughtInInput.optional().describe('What it\'s bought in and counted in, a unit from Larder\'s list (list_units): box, jar, roll, bag, tin, bottle… (default: each, counted one by one). For things bought loose, g or ml (kg and L are fine: they\'re kept as g and ml)'),
       aliases: z.array(z.string().max(60)).max(10).optional().describe('Other names people use'),
-      minimum: z.number().min(0).optional().describe('Running low below this many, in what it\'s bought in'),
-      stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many, in what it\'s bought in'),
+      minimum: z.number().min(0).optional().describe('Running low below this many, in what it\'s bought in. For things bought loose that\'s kg or L when bought_in is kg or L (1 for 1 kg), otherwise g or ml (1000 for 1 kg)'),
+      stock_up_to: z.number().min(0).optional().describe('When buying more, top up to this many, in what it\'s bought in (kg or L when bought_in is kg or L, as for minimum)'),
       shelf_life_days: z.number().int().positive().optional().describe('How long it keeps, or for a renewal how often it renews'),
       pack_size: PackSizeInput.optional(),
       weight: WeightInput.optional(),
@@ -317,7 +317,9 @@ export function createAssistant(deps: {
       // Bought in boxes of tea bags: say both can be given.
       const inWhat = inside ? `, in ${bought?.key === 'each' ? 'ones' : (bought?.many ?? p.unit)} or in ${inside.many} (unit: "${inside.key}")` : '';
       const ask = (i.pack_size || i.weight) && !p.usage && !p.wish && !p.rechargeable ? ` No usage is set: ${usageQuestion(units, p)}` : '';
-      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${shopNote} ${i.wish_list ? 'It has no stock yet.' : `It has no stock yet: use add_stock to say how many${inWhat}.`}${ask}`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
+      // The numbers as Larder reads them, so one in the wrong unit shows at once (minimum 1000 with bought_in "kg" is 1000 kg).
+      const levels = [p.minQuantity !== null && `Running low below ${exactText(units, p, p.minQuantity)}.`, p.stockUpTo !== null && `Stock up to ${exactText(units, p, p.stockUpTo)}.`].filter(Boolean).map((s) => ` ${s}`).join('');
+      return { text: `Added ${p.name}${i.wish_list ? ' to the wish list' : ''}${photo}.${levels}${shopNote} ${i.wish_list ? 'It has no stock yet.' : `It has no stock yet: use add_stock to say how many${inWhat}.`}${ask}`, data: { id: p.id, name: p.name, photo: !!photoFileId } };
     },
   });
 

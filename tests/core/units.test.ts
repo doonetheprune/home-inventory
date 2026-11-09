@@ -62,13 +62,13 @@ describe('the converter', () => {
     expect(toBoughtIn(units, loo, 100, 'sheets')).toBe(0.5);
   });
 
-  it('3. goes through Weight for g, kg, ml, L and pints, never through Contains', () => {
+  it('3. goes through Weight for g, kg, ml, L and pints, never through the pack size', () => {
     expect(toBoughtIn(units, decaf, 100, 'g')).toBe(0.25);
     expect(toBoughtIn(units, decaf, 0.2, 'kg')).toBe(0.5);
     expect(toBoughtIn(units, milk, 1, 'pint')).toBeCloseTo(0.25);
     expect(toBoughtIn(units, milk, 568.261, 'ml')).toBeCloseTo(0.25);
     expect(fromBoughtIn(units, decaf, 0.75, 'g')).toBe(300);
-    // Contains says 400 g, but without a Weight Larder can't work in grams.
+    // The pack size says 400 g, but without a Weight Larder can't work in grams.
     expect(() => toBoughtIn(units, { ...decaf, weight: null }, 100, 'g')).toThrow("Larder doesn't know what one jar of Decaf coffee weighs, so it can't work in g. Give how many jars. Or give it a Weight first.");
     // Weight can be given for anything, even tea bags in a box.
     expect(toBoughtIn(units, { ...sleep, weight: { amount: 30, unit: 'g' } }, 15, 'g')).toBe(0.5);
