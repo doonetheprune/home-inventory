@@ -65,6 +65,19 @@ export function Scan() {
   const reader = usePhotoReader();
   const readerRef = useRef(reader);
   readerRef.current = reader;
+  /**
+   * Add by photo (`ai` in the address): barcodes in view don't scan by themselves, so one can't open
+   * its card while the pack's being lined up for the photo. Take photo still reads a barcode in the
+   * photo. The Scan tab (no `ai`) scans them as usual.
+   */
+  const askedForPhotos = params.has('ai');
+  const photosOnly = askedForPhotos && mode === 'add' && !!reader;
+  const photosOnlyOn = (on: boolean) => {
+    const next = new URLSearchParams(params);
+    if (on) next.set('ai', '1');
+    else next.delete('ai');
+    setParams(next, { replace: true });
+  };
   const moving = mode === 'move' || mode === 'putaway';
   /**
    * While a card is open the camera holds still, so a second read (or a misread
@@ -124,7 +137,7 @@ export function Scan() {
     if (hold.current) return;
     if (code === settled.current.code && Date.now() < settled.current.until) return;
     void identify(code, 'camera');
-  });
+  }, photosOnly);
 
   useEffect(() => {
     const code = params.get('code');
@@ -222,14 +235,11 @@ export function Scan() {
 
   // Add by photo (from Home) arrives with the camera wanted.
   useEffect(() => {
-    if (params.get('ai')) {
+    if (askedForPhotos) {
       setMode('add');
       setCamera(true);
-      const next = new URLSearchParams(params);
-      next.delete('ai');
-      setParams(next, { replace: true });
     }
-  }, [params, setParams]);
+  }, [askedForPhotos]);
 
   // Space or a volume button is Take photo, like a camera's shutter, when nothing's open.
   useEffect(() => {
@@ -246,13 +256,14 @@ export function Scan() {
   }, [reader, mode, state, holding]);
 
   // What the camera's doing, on the chip at the top of it.
+  const modeChip: [string, string] = photosOnly ? ['camera', 'Add by photo'] : MODE_CHIP[mode];
   const readingPhoto = looking === 'photo' || (!!aiDraft?.working && !!aiDraft.photo);
   const [chipIcon, chipText]: [string, string] = readingPhoto ? ['sparkle', 'Reading the photo…']
     : aiDraft?.working ? ['sparkle', 'Working it out…']
     : looking && camera ? ['clock', 'Looking it up…']
     : holding && camera ? ['clock', 'Paused: finish this one first']
-    : [MODE_CHIP[mode][0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : MODE_CHIP[mode][1]];
-  // Take photo, while the camera's on or starting (the AI reads it): barcodes still scan by themselves.
+    : [modeChip[0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : modeChip[1]];
+  // Take photo, while the camera's on or starting (the AI reads it): barcodes still scan by themselves, except in Add by photo.
   const shutter = !!reader && mode === 'add' && camera && state !== 'error';
   const by = reader?.by ?? null;
 
@@ -265,7 +276,7 @@ export function Scan() {
           <div className="viewfinder" aria-label="Camera">
             <video ref={video} playsInline muted hidden={state !== 'on'} />
             {state === 'on' && taken?.shot && takenUrl && <img className="vf-still" src={takenUrl} alt="The photo you took" />}
-            {state === 'on' && <><div className="frame-corners" />{!holding && <div className="line" />}</>}
+            {state === 'on' && <><div className="frame-corners" />{!holding && !photosOnly && <div className="line" />}</>}
             <div className="vf-top">
               <span className="vf-chip"><Icon name={chipIcon} size="sm" />{chipText}</span>
               {camera && <button type="button" className="vf-chip" onClick={() => setCamera(false)}>Stop camera</button>}
@@ -286,8 +297,11 @@ export function Scan() {
                 </button>
               )}
               <span className="small muted">
-                {shutter ? `Barcodes scan by themselves. No barcode? Take a photo of the front of the pack and ${by ?? 'the AI'} names it. ` : `No barcode? ${by ?? 'The AI'} can name it from a photo of the pack. `}
+                {shutter && photosOnly ? 'Barcodes in view wait for Take photo, so you can line up the pack. A barcode in the photo is still read. '
+                  : shutter ? `Barcodes scan by themselves. No barcode? Take a photo of the front of the pack and ${by ?? 'the AI'} names it. `
+                  : `No barcode? ${by ?? 'The AI'} can name it from a photo of the pack. `}
                 <button type="button" className="link small" onClick={() => upload.current?.click()}>{shutter ? 'Or upload a photo' : 'Upload a photo'}</button>
+                {shutter && <>{' · '}<button type="button" className="link small" onClick={() => photosOnlyOn(!photosOnly)}>{photosOnly ? 'Scan barcodes by themselves' : 'Stop scanning barcodes'}</button></>}
               </span>
               <input ref={upload} type="file" accept="image/*" hidden data-testid="scan-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readWithAi(f); }} />
             </div>
@@ -534,13 +548,21 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const bySaid = useQuery({ queryKey: ['search', said], queryFn: () => api.search(said), enabled: said.length > 2 });
   const stockIn = (r: typeof data) => r?.sections.find((s) => s.id === 'stock')?.results.map((x) => x.product!).filter(Boolean) ?? [];
   const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-  /** An item that plainly is this: called, or also called, what the AI or the barcode database says it is. */
-  const plainly = (c: ProductSummary) => [c.product.name, ...c.product.aliases].some((x) => [reading?.name, reading?.kind, external?.name].some((y) => !!y && same(x, y)));
+  /**
+   * An item that plainly is this: called, or also called, what the AI or the barcode database names it, or
+   * called just the kind of thing it is (an item "Ready-to-roll icing", kept for any). The kind is only
+   * matched with an item's own name: the AI gives items their kind as another name, so pink icing would
+   * otherwise "plainly" be the Blue ready-to-roll icing it read before.
+   */
+  const plainly = (c: ProductSummary) => [c.product.name, ...c.product.aliases].some((x) => [reading?.name, external?.name].some((y) => !!y && same(x, y)))
+    || (!!reading?.kind && same(c.product.name, reading.kind));
   // Search finds near matches ("tea lights" for tea bags): others are offered only when their own name shares a word
-  // with what this is, other than a unit's ("bags").
+  // with what this is, other than a unit's ("bags"). When the AI says what kind of thing it is, that's its words (and
+  // what's typed in Name): the rest of its name is a colour, flavour or brand, so Pink icing doesn't offer Pink Stuff.
   const words = (t: string) => t.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2).map((w) => w.replace(/s$/, ''));
   const unitWords = new Set(units.all.flatMap((u) => [u.key, u.one, u.many]).filter((w) => !w.includes(' ')).flatMap(words));
-  const wanted = new Set([name, reading?.name, reading?.kind, external?.name].flatMap((t) => (t ? words(t) : [])).filter((w) => !unitWords.has(w)));
+  const what = reading?.kind ? [reading.kind, own.name] : [name, reading?.name, external?.name];
+  const wanted = new Set(what.flatMap((t) => (t ? words(t) : [])).filter((w) => !unitWords.has(w)));
   const related = (c: ProductSummary) => plainly(c) || words(c.product.name).some((w) => wanted.has(w));
   // Turn about, so the best match for what it is isn't pushed out by near matches for the name; plain ones first.
   const byName = stockIn(data);
@@ -659,11 +681,17 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
             <b>{into.product.name}</b>
             <span className="small muted">You have {stockText(into)}{code || brand ? ' · adds this as a brand' : ''}</span>
           </div>
-          <p className="small muted" style={{ margin: 0 }}>
-            Not it?{' '}
-            {others.map((c) => <Fragment key={c.product.id}><button type="button" className="link small" onClick={() => setPicked(c)}>{c.product.name}</button>{' · '}</Fragment>)}
-            <button type="button" className="link small" onClick={() => setPicked('new')}>It’s something new</button>
-          </p>
+          {/* A button, not a link at the end of a line: Skip (beside Add) leaves the scan, so this is how to say it's another thing. */}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <span className="small muted">Not it?</span>
+            <button type="button" className="btn small" onClick={() => setPicked('new')}>It’s something new</button>
+            {others.length > 0 && (
+              <span className="small muted">
+                or{' '}
+                {others.map((c, i) => <Fragment key={c.product.id}>{i ? ' · ' : ''}<button type="button" className="link small" onClick={() => setPicked(c)}>{c.product.name}</button></Fragment>)}
+              </span>
+            )}
+          </div>
         </>
       ) : (
         <>

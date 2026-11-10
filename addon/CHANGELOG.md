@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.1
+
+**Add by photo takes photos, and doesn't push you onto something you have.** Two things the owner hit adding packs by photo.
+
+- **Barcodes wait for the photo in Add by photo:** lining up a pack, its barcode used to open a card before the photo was taken. Now the camera says "Add by photo", barcodes in view are left alone (and the phone doesn't buzz), and Take photo still reads a barcode in the photo, so one Larder knows is still found. **Scan barcodes by themselves** under it switches back, and **Stop scanning barcodes** does the opposite on the Scan tab. The Scan tab scans barcodes as before.
+- **Pink icing isn't your Blue icing:** the AI gives a new item the kind of thing it is as another name ("Ready-to-roll icing" for Blue ready-to-roll icing), so the next pack of that kind, in any colour or flavour, was "Looks like one you have". Now the kind only counts when it's an item's own name (an item called "Ready-to-roll icing", kept for any). Items that have it as another name are offered as a link under the name ("Already have it? Blue ready-to-roll icing").
+- **Near matches are for what it is, not its colour or brand:** when the AI says what kind of thing it is, other items are offered only when they share a word with that, so Pink icing no longer offers Pink Stuff cleaning paste.
+- **It's something new is a button**, beside "Not it?", rather than a link at the end of a line. Skip still leaves the scan.
+
 ## 0.11.0
 
 **The scanner card for something new.** It used to wait for the AI, then show a list of "Is it a brand of something you already have?" options.
