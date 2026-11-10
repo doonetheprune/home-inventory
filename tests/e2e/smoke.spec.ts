@@ -798,6 +798,27 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await expect(card.locator('.match-box')).toContainText(`One you have${kind}`);
   await card.getByRole('button', { name: 'Skip' }).click();
 
+  // An item with the kind only among its other names (the AI gave it them) isn't picked: pink icing isn't the blue.
+  // It's a link to pick, and an item sharing only the colour (Pink Stuff) isn't offered at all.
+  const n = Date.now() % 100000;
+  const make = (body: Record<string, unknown>) => page.evaluate(async (b) => fetch('api/v1/products', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify(b) }), body);
+  const blue = `Blue ready-to-roll icing ${n}`;
+  await make({ name: blue, unit: 'pack', aliases: [`Ready-to-roll icing ${n}`, 'sugarpaste'] });
+  await make({ name: `Pink Stuff cleaning paste ${n}`, unit: 'tub' });
+  await pretendAi(page, { name: `Pink ready-to-roll icing ${n}`, kind: `Ready-to-roll icing ${n}`, brand: 'Tesco Pink Icing 250 g', boughtIn: 'pack', aliases: [`Ready-to-roll icing ${n}`] });
+  // Looked for by its name too, which finds Pink Stuff.
+  const byName = page.waitForResponse((r) => new URL(r.url()).pathname.endsWith('/api/v1/search') && new URL(r.url()).searchParams.get('q') === `Pink ready-to-roll icing ${n}`);
+  await page.getByTestId('scan-upload').setInputFiles({ name: 'icing.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64') });
+  // Add waits until what the AI said has been looked for among the household's items.
+  await expect(card.getByRole('button', { name: 'Add 1 pack', exact: true })).toBeEnabled();
+  expect((await (await byName).json() as { sections: Array<{ results: Array<{ title: string }> }> }).sections.flatMap((x) => x.results.map((r) => r.title))).toContain(`Pink Stuff cleaning paste ${n}`);
+  await page.waitForTimeout(300);
+  await expect(card.locator('.match-box')).toHaveCount(0);
+  await expect(card.getByLabel('Name')).toHaveValue(`Pink ready-to-roll icing ${n}`);
+  await expect(card.getByRole('button', { name: blue })).toBeVisible();
+  await expect(card.getByRole('button', { name: `Pink Stuff cleaning paste ${n}` })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Skip' }).click();
+
   // An uploaded photo the AI can't make out says so.
   await pretendAi(page, { readable: false, name: 'Blurry thing' });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -921,6 +942,44 @@ test('shared links wait in Pending, to go on the wish list or into Larder', asyn
   await expect(named(got)).toHaveCount(0);
   await page.goto('/#/wishlist');
   await expect(named(wish)).toHaveCount(1);
+});
+
+test('Add by photo leaves barcodes in view alone until the photo is taken, and can scan them again', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = globalThis as unknown as { __frames: string[]; BarcodeDetector: unknown };
+    w.__frames = [];
+    w.BarcodeDetector = class {
+      static async getSupportedFormats() { return ['ean_13', 'qr_code']; }
+      async detect() {
+        const code = w.__frames.shift();
+        return code ? [{ rawValue: code }] : [];
+      }
+    };
+  });
+  const see = (...codes: string[]) => page.evaluate((c) => { (globalThis as unknown as { __frames: string[] }).__frames.push(...c); }, codes);
+  await signIn(page);
+  await pretendAi(page, { name: 'Toilet roll' });
+  await page.goto('/');
+  await page.getByRole('link', { name: /Add by photo/ }).first().click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+  await expect(page.locator('.vf-chip', { hasText: 'Add by photo' })).toBeVisible();
+  await expect(page.getByText('Barcodes in view wait for Take photo')).toBeVisible();
+
+  // Lining up the pack, its barcode is in view: no card, and the photo can still be taken.
+  await see('5029053038889', '5029053038889', '5029053038889');
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Take photo' })).toBeEnabled();
+
+  // Barcodes scan by themselves again when asked, and on the Scan tab.
+  await page.getByRole('button', { name: 'Scan barcodes by themselves' }).click();
+  await expect(page.locator('.vf-chip', { hasText: 'Adding to stock' })).toBeVisible();
+  await see('5029053038889', '5029053038889');
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Stop scanning barcodes' }).click();
+  await expect(page.locator('.vf-chip', { hasText: 'Add by photo' })).toBeVisible();
 });
 
 test('the camera needs a clear read, and holds still while a card is open', async ({ page }) => {

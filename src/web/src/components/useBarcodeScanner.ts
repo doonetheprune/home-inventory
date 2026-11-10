@@ -29,13 +29,19 @@ export function cameraProblem(): string | null {
   return null;
 }
 
-export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, active: boolean, onCode: (code: string) => void) {
+/**
+ * The camera, reading codes as they come into view. While `paused` (Add by photo, lining up the
+ * photo), codes in view are left alone: the camera stays on, but nothing is read and the phone doesn't buzz.
+ */
+export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, active: boolean, onCode: (code: string) => void, paused = false) {
   const [state, setState] = useState<CameraState>('off');
   const [error, setError] = useState<string | null>(null);
   const last = useRef<{ code: string; at: number }>({ code: '', at: 0 });
   const seen = useRef<{ code: string; at: number; times: number }>({ code: '', at: 0, times: 0 });
   const handler = useRef(onCode);
   handler.current = onCode;
+  const pause = useRef(paused);
+  pause.current = paused;
 
   useEffect(() => {
     if (!active) {
@@ -56,6 +62,10 @@ export function useBarcodeScanner(video: RefObject<HTMLVideoElement | null>, act
     setError(null);
 
     const emit = (code: string) => {
+      if (pause.current) {
+        seen.current = { code: '', at: 0, times: 0 };
+        return;
+      }
       const now = Date.now();
       const s = seen.current;
       seen.current = code === s.code && now - s.at < CONFIRM_WITHIN_MS ? { code, at: now, times: s.times + 1 } : { code, at: now, times: 1 };
