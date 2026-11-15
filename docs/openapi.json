@@ -3253,7 +3253,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 200
             }
           },
           "shopCodes": {
@@ -8258,7 +8258,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 200
             }
           },
           "shopCodes": {
@@ -12630,7 +12630,7 @@
                     "items": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 64
+                      "maxLength": 200
                     }
                   },
                   "shopCodes": {
@@ -12735,7 +12735,7 @@
                     "items": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 64
+                      "maxLength": 200
                     }
                   },
                   "shopCodes": {
@@ -14119,7 +14119,7 @@
                   "barcode": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 64
+                    "maxLength": 200
                   },
                   "productId": {
                     "type": "string",

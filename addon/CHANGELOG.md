@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.2
+
+**A barcode for something added by photo, and pack sizes that keep their unit.** Two things the owner hit using the scanner.
+
+- **Read it with AI waits for the front of the pack:** on the card of a barcode nothing knows, it used to send whatever the camera saw at that moment, which was the barcode, so the AI never got the photo you wanted. You'd skip, take a photo of the front, and the barcode was lost. Now it says **Now the front of the pack**, keeps the barcode, and waits for **Take photo** (or an upload). **Back** returns to the barcode's card.
+- **Scan its barcode** on the card of something named from a photo: the camera reads the barcode, or a QR code, on the pack (or type it under the camera, or use a USB scanner), and Larder remembers it for the item, so the next scan knows it. That works when the card says it's one you have, too. A shelf label isn't taken for it, and a barcode Larder already knows opens that item's card instead. **Remove** takes it off again before you add it.
+- **Link an NFC tag** on any card for something new: hold the tag to the back of the phone (Android Chrome), or scan it with the Home Assistant app and press **Use it**. The tag is linked when the item's added, so scanning it later opens the item.
+- **Pack size keeps its unit:** on the scanner's card, picking a unit (biscuits instead of g) and then clearing the amount to type it again put the unit back to g. Now the unit stays what you picked.
+- **QR codes are kept as well as barcodes:** a brand's barcodes can now be up to 200 characters, the same as an NFC tag's id, so the web address in a QR code fits.
+
 ## 0.11.1
 
 **Add by photo takes photos, and doesn't push you onto something you have.** Two things the owner hit adding packs by photo.

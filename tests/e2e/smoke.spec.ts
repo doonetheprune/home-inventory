@@ -757,14 +757,21 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   test.skip(info.project.name === 'phone', 'Once is enough');
   await signIn(page);
   const name = `Smoked paprika ${info.project.name}`;
-  await pretendAi(page, { name, brand: 'Schwartz Smoked Paprika 46 g', boughtIn: 'jar', packSize: { amount: 46, unit: 'g' } });
+  const read = await pretendAi(page, { name, brand: 'Schwartz Smoked Paprika 46 g', boughtIn: 'jar', packSize: { amount: 46, unit: 'g' } });
   await page.goto('/#/scan');
   await page.getByRole('button', { name: 'Start camera' }).click();
   await expect(page.locator('.viewfinder video')).toBeVisible();
   const code = `LOCAL-AI-${info.project.name}`;
   await page.getByLabel('Barcode or code').fill(code);
   await page.getByLabel('Barcode or code').press('Enter');
+  // The camera's still on the barcode, so the photo waits for the front of the pack, keeping the barcode. Back is its card again.
   await page.getByRole('button', { name: 'Read it with AI' }).click();
+  await expect(page.getByRole('heading', { name: 'Now the front of the pack' })).toBeVisible();
+  await expect(page.locator('.vf-chip', { hasText: 'Now the front of the pack' })).toBeVisible();
+  expect(read).toHaveLength(0);
+  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Read it with AI' }).click();
+  await page.getByRole('button', { name: 'Take photo' }).click();
   const card = page.locator('.sheet-card');
   await expect(card.getByLabel('Name')).toHaveValue(name);
   await expect(card.getByText(code)).toBeVisible();
@@ -827,6 +834,115 @@ test('a barcode nothing knows can be read with AI, and is remembered', async ({ 
   await expect(card.locator('.slot.guess')).toContainText('Name');
   await card.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+});
+
+/** A pretend barcode reader: each frame it "sees" the next code queued with the returned `see`, if any. */
+async function pretendBarcodes(page: Page) {
+  await page.addInitScript(() => {
+    const w = globalThis as unknown as { __frames: string[]; BarcodeDetector: unknown };
+    w.__frames = [];
+    w.BarcodeDetector = class {
+      static async getSupportedFormats() { return ['ean_13', 'qr_code']; }
+      async detect() {
+        const code = w.__frames.shift();
+        return code ? [{ rawValue: code }] : [];
+      }
+    };
+  });
+  return (...codes: string[]) => page.evaluate((c) => { (globalThis as unknown as { __frames: string[] }).__frames.push(...c); }, codes);
+}
+
+const onePixel = { name: 'pack.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64') };
+
+test('a photo’s card scans its barcode or QR code, and links an NFC tag, as it’s added', async ({ page }, info) => {
+  const see = await pretendBarcodes(page);
+  await signIn(page);
+  const name = `Wood glue ${info.project.name}`;
+  await pretendAi(page, { name: 'PVA glue', brand: 'Evo-Stik Wood Glue 250 ml', boughtIn: 'bottle', packSize: { amount: 250, unit: 'ml' } });
+  await page.goto('/#/scan');
+  await page.getByTestId('scan-upload').setInputFiles(onePixel);
+  const card = page.locator('.sheet-card');
+  await expect(card.getByLabel('Name')).toHaveValue('PVA glue');
+  await card.getByLabel('Name').fill(name);
+
+  // No barcode in the photo: Scan its barcode asks the camera for one. The card's small meanwhile, and Cancel keeps what was typed.
+  await card.getByRole('button', { name: 'Scan its barcode' }).click();
+  await expect(card.getByText('Scan its barcode.')).toBeVisible();
+  await expect(card.getByLabel('Name')).toHaveCount(0);
+  await card.getByRole('button', { name: 'Cancel' }).click();
+  await expect(card.getByLabel('Name')).toHaveValue(name);
+  await card.getByRole('button', { name: 'Scan its barcode' }).click();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+  await expect(page.locator('.vf-chip', { hasText: 'Scan its barcode or QR code' })).toBeVisible();
+  // A photo now would start another card, so there's no Take photo until it's back.
+  await expect(page.getByRole('button', { name: 'Take photo' })).toHaveCount(0);
+  // A shelf label isn't it; the QR code on the bottle is.
+  await see('G2-4', 'G2-4');
+  await expect(page.locator('.toast')).toContainText("That's the label for G2-4. Scan the barcode or QR code on the pack.");
+  const qr = `https://qr.example.co.uk/glue/${info.project.name}/${Date.now()}`;
+  await see(qr, qr);
+  await expect(card).toContainText(`Larder will remember barcode ${qr} for it.`);
+  await expect(card.getByLabel('Name')).toHaveValue(name);
+  await expect(card.getByRole('button', { name: 'Scan its barcode' })).toHaveCount(0);
+  await expect(page.getByText('Paused: finish this one first')).toBeVisible();
+
+  // An NFC tag, scanned with the Home Assistant app, is linked to it when it's added.
+  await card.getByRole('button', { name: 'Link an NFC tag' }).click();
+  const tag = `04:GL:${info.project.name}:${Date.now()}`;
+  await page.evaluate(async (tagId) => fetch('api/v1/nfc/scanned', { method: 'POST', headers: { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId, device: 'Pixel' }) }), tag);
+  await card.locator('.item', { hasText: tag }).getByRole('button', { name: 'Use it' }).click();
+  await expect(card).toContainText(`NFC tag ${tag} will be linked to it.`);
+  await card.getByRole('button', { name: 'Add 1 bottle', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 bottle · ${name}. Its NFC tag is linked. Ready for the next scan.`);
+
+  // Both open it from now on.
+  const identify = (code: string) => page.evaluate(async (c) => (await fetch(`api/v1/identify?code=${encodeURIComponent(c)}`)).json(), code);
+  expect(await identify(qr)).toMatchObject({ kind: 'product', product: { product: { name } } });
+  expect(await identify(tag)).toMatchObject({ kind: 'product', product: { product: { name } } });
+
+  // A barcode Larder already knows (typed this time) is that item, whatever the photo looked like; a scanned one can be taken off.
+  await pretendAi(page, { name: 'Loo roll', boughtIn: 'pack' });
+  await page.getByTestId('scan-upload').setInputFiles(onePixel);
+  await card.getByRole('button', { name: 'Scan its barcode' }).click();
+  const other = `PACK-${info.project.name}-${Date.now()}`;
+  await see(other, other);
+  await expect(card).toContainText(`Larder will remember barcode ${other} for it.`);
+  await card.getByRole('button', { name: 'Remove' }).click();
+  await card.getByRole('button', { name: 'Scan its barcode' }).click();
+  await page.getByLabel('Barcode or code').fill('5029053038889');
+  await page.getByLabel('Barcode or code').press('Enter');
+  await expect(page.locator('.toast')).toContainText("Larder knows that barcode: it's Toilet roll.");
+  await expect(page.getByRole('heading', { name: 'Toilet roll' })).toBeVisible();
+  await expect(page.locator('.sheet-card .pill', { hasText: 'In Larder' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+});
+
+test('a new item’s pack size keeps the unit picked while the amount is typed again', async ({ page }, info) => {
+  await signIn(page);
+  const name = `Dishwasher tablets ${info.project.name}`;
+  await pretendAi(page, { name, boughtIn: 'box' });
+  await page.goto('/#/scan');
+  await page.getByTestId('scan-upload').setInputFiles(onePixel);
+  const card = page.locator('.sheet-card');
+  await expect(card.getByLabel('Name')).toHaveValue(name);
+  const amount = card.getByLabel('Pack size', { exact: true });
+  const unit = card.getByRole('button', { name: 'Pack size in' });
+  await expect(unit).toHaveText('Pick a unit');
+  // Typed first, it's in g, as before; then it's tablets.
+  await amount.fill('3');
+  await expect(unit).toHaveText('g');
+  await pickUnit(page, 'Pack size in', 'tablet');
+  await expect(unit).toHaveText('tablet');
+  // The wrong number, cleared and typed again: still tablets.
+  await amount.fill('');
+  await expect(unit).toHaveText('tablet');
+  await amount.fill('30');
+  await expect(unit).toHaveText('tablet');
+  await card.getByRole('button', { name: 'Add 1 box', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText(`Added 1 box · ${name}`);
+  const added = await page.evaluate(async (n) => ((await (await fetch('api/v1/products')).json()) as Array<{ product: { name: string; packSize: unknown } }>).find((s) => s.product.name === n)!.product.packSize, name);
+  expect(added).toEqual({ amount: 30, unit: 'tablet' });
 });
 
 test('settings set the order the AIs are asked in, and switch one off without losing its key', async ({ page }, info) => {

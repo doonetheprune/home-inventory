@@ -209,6 +209,15 @@ describe('lookup', () => {
     const r2 = await core.lookup.identify('4088600214568');
     expect(r2.kind === 'product' && r2.product.product.id).toBe(product.product.id);
 
+    // A QR code on the pack (a web address, longer than any barcode) is kept and known the same way, without asking the providers.
+    const qr = 'https://qr.example.co.uk/p/0123456789abcdef0123456789abcdef0123456789abcdef?src=pack&lang=en-GB';
+    expect(await core.lookup.identify(qr)).toMatchObject({ kind: 'unknown', providersTried: [] });
+    const drill = await core.lookup.remember({ barcode: qr, create: { name: 'Cordless drill' } });
+    expect(drill.variant.barcodes).toEqual([qr]);
+    const r3 = await core.lookup.identify(qr);
+    expect(r3.kind === 'product' && r3.product.product.id).toBe(drill.product.product.id);
+    expect(calls).toHaveLength(2);
+
     await core.modules.setEnabled('fake-lookup', false);
     expect(await core.lookup.identify('9999999999998')).toMatchObject({ kind: 'unknown', providersTried: [], providersFailed: [] });
     expect((await core.lookup.identify('9999999999999')).kind).toBe('unknown');

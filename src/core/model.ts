@@ -176,7 +176,8 @@ export const Variant = z.object({
   id: Id,
   productId: Id,
   name: z.string().min(1).max(160),
-  barcodes: z.array(z.string().min(1).max(64)).default([]),
+  /** Barcodes, and the text of QR codes on the pack (often a web address, so up to 200 characters, like an NFC tag's id). */
+  barcodes: z.array(z.string().min(1).max(200)).default([]),
   /** Shop item numbers, e.g. a Toolstation code, for reordering and matching order emails. */
   shopCodes: z.array(ShopCode).default([]),
   /** Where the lookup found its picture (kept for reference; Larder shows its own copy). */

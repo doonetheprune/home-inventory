@@ -206,7 +206,8 @@ export type Purchase = z.input<typeof Purchase>;
 
 export const Remember = z
   .object({
-    barcode: z.string().min(1).max(64),
+    /** A barcode, or a QR code's text. */
+    barcode: z.string().min(1).max(200),
     /** Add the barcode to this existing product… */
     productId: Id.optional(),
     /** …or create a new product. */
