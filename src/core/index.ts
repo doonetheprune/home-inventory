@@ -21,7 +21,7 @@ export { addDays, andList, daysBetween, localDate, newId, publicWebAddress, roun
 export { photoType } from './photos';
 export {
   BUILT_IN_UNITS, UnknownUnitError, amountText, asWeight, boughtInText, builtInUnits, canConvert, packSizeText, daysFor, durationText, everyText, exactText, fromBoughtIn, givenInText,
-  isCount, isLoose, isMeasure, lastsText, measuredIn, newUnit, parseAmount, periodsPerTake, pluralOf, singularGuess, singularOf, startsOne, stockText, stockWithInside, toBoughtIn, unitKeyOf, unitList, unitOf, unitWord,
+  isCount, isLoose, isMeasure, lastsText, measuredIn, newUnit, openLeftText, parseAmount, periodsPerTake, pluralOf, singularGuess, singularOf, startsOne, stockText, stockWithInside, toBoughtIn, unitKeyOf, unitList, unitOf, unitWord,
   usageInBoughtIn, usageText, weightText, worthText,
   type HouseholdUnit, type NumberText, type UnitItem, type UnitUsage, type Units,
 } from './services/units';

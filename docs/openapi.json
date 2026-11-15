@@ -3066,6 +3066,19 @@
               }
             ]
           },
+          "openLeft": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -8104,6 +8117,19 @@
               }
             ]
           },
+          "openLeft": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -8248,6 +8274,7 @@
           "shelfLifeDays",
           "usage",
           "inUseSince",
+          "openLeft",
           "minQuantity",
           "stockUpTo",
           "preferredShopIds",
@@ -12103,6 +12130,19 @@
                       }
                     ]
                   },
+                  "openLeft": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "minQuantity": {
                     "default": null,
                     "anyOf": [
@@ -12434,6 +12474,18 @@
                       {
                         "type": "string",
                         "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "openLeft": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
                       },
                       {
                         "type": "null"
@@ -14602,6 +14654,19 @@
                           {
                             "type": "string",
                             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "openLeft": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                           },
                           {
                             "type": "null"

@@ -192,6 +192,10 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       // With no usage any more, nothing is in use (it isn't "open" either).
       if (!next.usage && cur.usage) next.inUseSince = null;
     }
+    // How much is left in the open one: only while one's open.
+    const open = !!next.inUseSince && !next.usage;
+    if (patch.openLeft !== undefined && patch.openLeft !== null && !open) throw new ValidationError(`None of ${next.name} is open, so there's nothing to say how much is left in. Mark one open first (Use, then Opened, still using it).`);
+    if (!open) next.openLeft = null;
     await assertRefs(next);
     // A record an older version saved keeps what this version doesn't know (a module's change at start-up can come before upgradeStored).
     const older = Object.fromEntries(Object.entries(cur).filter(([k]) => !KNOWN.has(k)));
@@ -266,6 +270,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       const now = ctx.now();
       const product = tidy(checkUnits(units, Product.parse({ ...data, id: newId(), createdAt: now, updatedAt: now }), data, null));
       if (product.usage?.auto && !product.inUseSince) product.inUseSince = ctx.today();
+      if (!product.inUseSince || product.usage) product.openLeft = null;
       if (product.rechargeable && product.unit === 'each') product.unit = 'battery';
       await ctx.storage.products.put(product);
       ctx.publish('product.created', { id: product.id, name: product.name });

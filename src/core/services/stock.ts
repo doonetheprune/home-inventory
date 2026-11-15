@@ -167,7 +167,7 @@ export function createStockService(ctx: CoreContext) {
    * finished, or never started): then it starts one, and Larder carries on from there.
    */
   function started(product: Product, open?: boolean): Partial<Product> | undefined {
-    return open || startsOne(product) ? { inUseSince: ctx.today() } : undefined;
+    return open || startsOne(product) ? { inUseSince: ctx.today(), openLeft: null } : undefined;
   }
 
   const isRenewal = (world: World, product: Product) => !!product.categoryId && world.categoryById.get(product.categoryId)?.name === 'Renewals';
@@ -314,7 +314,7 @@ export function createStockService(ctx: CoreContext) {
     async finish(productId: string): Promise<ProductSummary> {
       const t = await begin(productId);
       if (!t.before.inUse) throw new ValidationError(`There's no ${t.product.name.toLowerCase()} open${t.product.usage ? ' or in use' : ''}.`);
-      return commit(t, t.original, [movement(t.product, 'finish', 0)], 'finish', { inUseSince: null });
+      return commit(t, t.original, [movement(t.product, 'finish', 0)], 'finish', { inUseSince: null, openLeft: null });
     },
 
     /** Rechargeables: turn flat batteries back into charged ones. */

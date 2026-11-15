@@ -352,12 +352,48 @@ describe('opened, not finished', () => {
     const coffee = await core.products.create({ name: 'Ground coffee', unit: 'bag', minQuantity: 1 });
     await core.stock.add({ productId: coffee.id, quantity: 1 });
     const opened = await core.automation.run('use_stock', { item: 'ground coffee', opened: true });
-    expect(opened.message).toBe('Ground coffee: opened 1 bag. 0 bags left, running low.');
+    // The last one, open: never "0 bags left" on its own, which assistants took for none.
+    expect(opened.message).toBe("Ground coffee: opened 1 bag. It's the last one, open: none unopened left, running low.");
     expect(opened.open).toBe(true);
-    expect((await core.assistant.call('get_item', { item: 'ground coffee' })).text).toContain('One open since 2026-10-28 (today), not counted in stock: it is the last one.');
-    expect((await core.assistant.call('search', { query: 'coffee' })).text).toContain('one open since 2026-10-28');
+    const item = (await core.assistant.call('get_item', { item: 'ground coffee' })).text;
+    expect(item).toContain('In stock: 1 open, the last one (none unopened).');
+    expect(item).toContain("One open since 2026-10-28 (today), how much is left in it not said (correct_stock open_left). It isn't counted in stock, and it is the last one: they still have it.");
+    expect((await core.assistant.call('search', { query: 'coffee' })).text).toContain('Ground coffee: 1 open, the last one (none unopened), opened 2026-10-28, running low');
     const done = await core.assistant.call('finish_item', { item: 'ground coffee' });
     expect(done.text).toBe('Ground coffee: the open one is finished. 0 bags left, running low.');
+  });
+});
+
+describe('how much is left in the open one', () => {
+  it('is said by assistants and kept until it is finished or another is opened', async () => {
+    const core = await makeCore();
+    const cupboard = await core.places.create({ name: 'Cupboard' });
+    const glycerine = await core.products.create({ name: 'Glycerine', unit: 'jar', defaultPlaceId: cupboard.id });
+    await core.stock.add({ productId: glycerine.id, quantity: 1 });
+    // Not open yet: there's nothing to say how much is left in.
+    await expect(core.products.update(glycerine.id, { openLeft: 0.5 })).rejects.toThrow("None of Glycerine is open, so there's nothing to say how much is left in.");
+    await expect(core.assistant.call('correct_stock', { item: 'glycerine', open_left: 0.5 })).rejects.toThrow('None of Glycerine is open. To say one was opened, use use_stock with opened: true.');
+    await core.assistant.call('use_stock', { item: 'glycerine', opened: true });
+
+    // "About half full": in what it's bought in. Lists lead with the open one, kept where it lives.
+    expect(await (await core.assistant.call('correct_stock', { item: 'glycerine', open_left: 0.5 })).text).toBe('Glycerine: about ½ jar left in the open one. 0 jars unopened in stock.');
+    expect((await core.assistant.call('list_items', { status: 'open' })).text).toContain('- Glycerine: 1 open, the last one (none unopened), about ½ jar left, kept in Cupboard, opened 2026-10-28');
+    expect((await core.assistant.call('get_item', { item: 'glycerine' })).text).toContain("One open since 2026-10-28 (today), about ½ jar left in it. It isn't counted in stock, and it is the last one: they still have it.");
+    await expect(core.assistant.call('correct_stock', { item: 'glycerine', open_left: 2 })).rejects.toThrow("That's more than one jar holds.");
+
+    // In what's in its pack: 7 tea bags of a box of 20. A new box opened starts again; finishing clears it.
+    const tea = await core.products.create({ name: 'Twinings Sleep', unit: 'box', packSize: { amount: 20, unit: 'tea bag' } });
+    await core.stock.add({ productId: tea.id, quantity: 3 });
+    await core.stock.use({ productId: tea.id, quantity: 1, open: true });
+    expect((await core.assistant.call('correct_stock', { item: 'twinings sleep', open_left: 7, unit: 'tea bags' })).text).toBe('Twinings Sleep: 7 tea bags left in the open one. 2 boxes unopened in stock.');
+    expect((await core.assistant.call('search', { query: 'twinings' })).text).toContain('Twinings Sleep: 2 boxes unopened, and 1 open (7 tea bags left)');
+    expect((await core.stock.use({ productId: tea.id, quantity: 1, open: true })).product.openLeft).toBeNull();
+    await core.assistant.call('correct_stock', { item: 'twinings sleep', open_left: 0.1 });
+    expect((await core.assistant.call('get_item', { item: 'twinings sleep' })).text).toContain('2 tea bags left in it');
+    // Empty: it's finished.
+    expect((await core.assistant.call('correct_stock', { item: 'twinings sleep', open_left: 0 })).text).toBe('Twinings Sleep: the open one is finished. 1 box in stock.');
+    const done = await core.products.summary(tea.id);
+    expect([done.inUse, done.product.openLeft]).toEqual([false, null]);
   });
 });
 

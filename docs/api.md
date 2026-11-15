@@ -21,7 +21,8 @@ Everything the web app does goes through the REST API, so integrations can do it
 | `GET /units` | The unit list: Larder's own and the household's, each `{ key, one, many, kind: "count" \| "weight" \| "volume", factor, builtIn }`. `POST /units` `{ one: "sleeve", many: "sleeves" }` adds a count word; `DELETE /units/{key}` removes one the household added that no item uses |
 | `POST /stock/add` | `{ productId, quantity, unit?, placeId?, expiresOn? }`. `quantity` is in what it's bought in, or in `unit`: what's in its pack (5 `tea bag` of a box of 20 adds 0.25 box), or a weight or volume through its Weight (100 `g` of a 400 g jar) |
 | `POST /stock/use` | `{ productId, quantity, unit?, placeId?, open? }` (soonest-expiring first; rechargeables go flat). `open` sets `inUseSince` to today (one open, or a new one started now); with a usage Larder doesn't take out, every use does (except one by weight, where a use is just a use). With one Larder takes out, a plain use is an extra and leaves `inUseSince` alone, unless none is started (`inUseSince` null), when it starts one |
-| `POST /products/{id}/finished` | The open one is finished (or the one in use stopped): `inUseSince` is cleared |
+| `POST /products/{id}/finished` | The open one is finished (or the one in use stopped): `inUseSince` and `openLeft` are cleared |
+| `PATCH /products/{id}` `{ openLeft }` | How much is left in the open one, in what it's bought in (0.5: about half a jar). Only while one is open (no usage); cleared when it's finished or another is opened |
 | `POST /stock/move` | `{ productId, toPlaceId, mode: "temporary" \| "permanent", quantity? }` |
 | `POST /stock/return` | `{ productId }` puts out-of-place stock back |
 | `POST /stock/expect` | `{ productId, quantity, unit?, source: "Tesco delivery", eta?, price? }` ordered, not arrived. `price` is the line's, kept with the purchase when it arrives |

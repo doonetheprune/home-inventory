@@ -134,6 +134,11 @@ export const Product = z.object({
    * Without: the day one was opened (Use with `open`), until Finished.
    */
   inUseSince: IsoDate.nullable().default(null),
+  /**
+   * How much is left in the open one (no usage), in what it's bought in: 0.5 is about half a jar. Null when
+   * nobody's said; cleared when it's finished or another is opened. The open one isn't counted in stock.
+   */
+  openLeft: z.number().min(0).max(1).nullable().default(null),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */

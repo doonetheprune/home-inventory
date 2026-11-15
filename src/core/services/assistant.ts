@@ -14,7 +14,7 @@ import { ConflictError, LarderError, ValidationError } from '../errors';
 import type { ProductDetail, ProductSummary } from '../model';
 import { addBrowseTools } from './assistant-browse';
 import { addManageTools, BoughtInInput, PackSizeInput, finders, TakesOutInput, UsesInput, usageFields, usageQuestion, WeightInput } from './assistant-manage';
-import { amountText, boughtInText, packSizeText, daysFor, exactText, isCount, lastsText, stockWithInside, UnknownUnitError, usageText, weightText, worthText, type Units } from './units';
+import { amountText, boughtInText, packSizeText, daysFor, exactText, isCount, lastsText, openLeftText, stockWithInside, UnknownUnitError, usageText, weightText, worthText, type Units } from './units';
 import { placesText } from './world';
 import type { Automation } from './automation';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService, type createUnitService } from './catalogue';
@@ -74,6 +74,7 @@ export const ASSISTANT_INSTRUCTIONS = [
   'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
   'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock is counted in boxes, so never switch it to counting tea bags.',
   'Part of one is kept too: say it in what\'s in its pack with unit. 8 cubes left of a box of 24 is correct_stock quantity 8, unit "cube" (add_stock if there are none), and Larder says "8 cubes (about ⅓ box)".',
+  'Stock counts unopened ones: one that\'s open is still there. "1 open, the last one (none unopened)" means they have it, open, with how much is left when Larder knows; never say they have none. correct_stock open_left says how much is left in it.',
   'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
   'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
   'How fast it\'s used (uses: 1 tea bag a day, 4 g a day) tells Larder when it runs out; with takes_out_automatically, Larder takes that much out of stock by itself.',
@@ -93,17 +94,39 @@ function when(ctx: CoreContext, date: string | null): string {
   return `${date} (${rel})`;
 }
 
+/** One open (no usage): it isn't counted in stock, but it's there. */
+const isOpen = (s: ProductSummary) => s.inUse && !s.product.usage && !!s.product.inUseSince;
+
+/**
+ * What they have, open one first when it's all there is, so "0 jars" isn't read as none:
+ * "1 open, the last one (none unopened), about ½ jar left", "2 bags unopened, and 1 open (about ½ bag (250 g) left)".
+ */
+function haveText(units: Units, s: ProductSummary): string {
+  const p = s.product;
+  if (!isOpen(s)) return stockWithInside(units, p, s.inStock);
+  const left = p.openLeft !== null ? openLeftText(units, p, p.openLeft) : null;
+  if (s.inStock > 0) return `${stockWithInside(units, p, s.inStock)} unopened, and 1 open${left ? ` (${left} left)` : ''}`;
+  return `1 open, the last one (none unopened)${left ? `, ${left} left` : ''}`;
+}
+
+/** Where it's kept; with only the open one, "kept in" rather than "none in", since the open one is likely there. */
+function whereText(units: Units, s: ProductSummary): string {
+  const kept = s.stockByPlace ?? [];
+  if (isOpen(s) && s.inStock <= 0 && kept.length) return `kept in ${andList(kept.map((x) => x.path))}`;
+  return placesText(units, s);
+}
+
 function summaryLine(ctx: CoreContext, units: Units, s: ProductSummary): string {
   const p = s.product;
   if (p.wish) return `${p.name}: on the wish list (none yet)${p.notes ? `. ${p.notes.slice(0, 120)}` : ''}`;
-  const parts = [`${p.name}: ${stockWithInside(units, p, s.inStock)}`];
+  const parts = [`${p.name}: ${haveText(units, s)}`];
   if (s.charged !== null) parts.push(`${s.charged} charged, ${s.flat ?? 0} flat`);
   if (s.expected) parts.push(`${exactText(units, p, s.expected)} on the way`);
   if (s.pending) parts.push(`${exactText(units, p, s.pending)} in a pending order`);
-  const where = placesText(units, s);
+  const where = whereText(units, s);
   if (where) parts.push(where);
   if (s.nowIn.length) parts.push(`now in ${s.nowIn.map((x) => x.path).join(' and ')}`);
-  if (s.inUse && !p.usage && p.inUseSince) parts.push(`one open since ${p.inUseSince}`);
+  if (isOpen(s)) parts.push(`opened ${p.inUseSince}`);
   if (p.usage) parts.push(`uses ${usageText(units, p)}${p.usage.auto ? ' (taken out by Larder)' : ''}`);
   if (s.status.low) parts.push('running low');
   if (s.runsOutOn) parts.push(`enough until ${when(ctx, s.runsOutOn)}`);
@@ -130,11 +153,11 @@ function detailText(ctx: CoreContext, units: Units, d: ProductDetail): string {
   const lines = [`${p.name}${d.category ? ` (${d.category.name})` : ''}`];
   if (p.needsCheck) lines.push(`To tidy: ${p.needsCheck}`);
   if (p.wish) lines.push('On the wish list: the house has none yet.');
-  else lines.push(`In stock: ${stockWithInside(units, p, d.inStock)}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${exactly(d.expected)} on the way` : ''}.`);
+  else lines.push(`In stock: ${haveText(units, d)}${d.charged !== null ? ` (${d.charged} charged, ${d.flat ?? 0} flat)` : ''}${d.expected ? `, ${exactly(d.expected)} on the way` : ''}.`);
   // "Bought in boxes. Pack size: 20 tea bags. Weight: 30 g." The Weight only when it was given, not worked out from the pack size.
   const fromPackSize = !!p.packSize && !isCount(units, p.packSize.unit);
   lines.push([`${boughtInText(units, p)}.`, packSizeText(units, p) ? `${packSizeText(units, p)}.` : '', p.weight && !fromPackSize ? `Weight: ${weightText(p.weight)}.` : ''].filter(Boolean).join(' '));
-  const where = placesText(units, d);
+  const where = whereText(units, d);
   if (where) lines.push(`${where[0]!.toUpperCase()}${where.slice(1)}.`);
   const here = d.entries.filter((e) => e.status === 'in_stock');
   if (here.length) {
@@ -151,7 +174,10 @@ function detailText(ctx: CoreContext, units: Units, d: ProductDetail): string {
   if (p.stockUpTo) lines.push(`Stock up to ${exactly(p.stockUpTo)} when buying more.`);
   if (p.shelfLifeDays) lines.push(`${d.category?.name === 'Renewals' ? 'Renews every' : 'Keeps for'} ${p.shelfLifeDays} days.`);
   if (p.usage) lines.push(usageLine(ctx, units, d));
-  else if (d.inUse && p.inUseSince) lines.push(`One open since ${when(ctx, p.inUseSince)}, not counted in stock${d.inStock + d.expected + d.pending <= 0 ? ': it is the last one' : ''}.`);
+  else if (d.inUse && p.inUseSince) {
+    const left = p.openLeft !== null ? `${openLeftText(units, p, p.openLeft)} left in it` : 'how much is left in it not said (correct_stock open_left)';
+    lines.push(`One open since ${when(ctx, p.inUseSince)}, ${left}. It isn't counted in stock${d.inStock + d.expected + d.pending <= 0 ? ', and it is the last one: they still have it' : ''}.`);
+  }
   if (d.shops.length) lines.push(`${p.preferredShopIds.length ? 'Buy from' : 'Any shop; these sell it'}: ${andList(d.shops.map((s) => s.name))}.`);
   if (p.aliases.length) lines.push(`Also called: ${p.aliases.join(', ')}.`);
   if (d.variants.length) lines.push(`Brands: ${d.variants.map((v) => `${v.name}${v.barcodes.length ? ` (barcode ${v.barcodes.join(', ')})` : ''}${v.shopCodes.length ? ` (shop code ${v.shopCodes.map((c) => `${c.code}${d.shops.find((s) => s.id === c.shopId) ? ` at ${d.shops.find((s) => s.id === c.shopId)!.name}` : ''}`).join(', ')})` : ''}`).join('; ')}.`);

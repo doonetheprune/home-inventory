@@ -167,6 +167,25 @@ const CASES: Case[] = [
     check: async (core) => expect(await item(core, /oxo/i), { unit: 'box', pack: [24, 'cube'], inStock: 0.333 }),
   },
   {
+    id: 'open-left',
+    about: 'how much is left in the last one, which is open (the owner\'s glycerine)',
+    setup: async (core) => {
+      await add(core, { name: 'Glycerine', unit: 'jar' }, 1);
+      const p = (await item(core, /glycerine/i))!;
+      await core.stock.use({ productId: p.product.id, quantity: 1, open: true });
+    },
+    says: ['The glycerine jar is about half full.'],
+    right: [['correct_stock', { item: 'glycerine', open_left: 0.5 }]],
+    async check(core) {
+      const s = await item(core, /glycerine/i);
+      if (!s) return ['the item is missing'];
+      const wrong = expect(s, { unit: 'jar', inStock: 0 });
+      if (!s.inUse) wrong.push('the open one was finished');
+      if (!near((s.product as Product & { openLeft?: number | null }).openLeft ?? -1, 0.5)) wrong.push(`open one has ${(s.product as Product & { openLeft?: number | null }).openLeft ?? 'nothing'} left, not 0.5`);
+      return wrong;
+    },
+  },
+  {
     id: 'sleeves',
     about: 'a unit Larder doesn\'t have, added once asked',
     says: ['Add paper cups to Larder. They come in sleeves of 50.', 'Yes, add it.'],

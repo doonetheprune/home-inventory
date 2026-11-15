@@ -240,11 +240,13 @@ export function canConvert(units: Units, item: UnitItem, unit: string | null | u
 function perBoughtIn(units: Units, item: UnitItem, unit: string | null | undefined): number {
   // 1. In what it's bought in: as it is. An old item's unit that isn't on the list still works as itself.
   if (unit === undefined || unit === null || !unit.trim() || tidy(unit) === tidy(item.unit)) return 1;
+  // 2. In what's in its pack, when its pack size is a count: divided by the pack size. An old pack size's word that
+  // isn't on the list ("18 waffles", kept by the 0.10.0 upgrade until it's tidied) works as itself too.
+  const c = item.packSize ?? null;
+  if (c && !units.find(c.unit) && [c.unit, pluralOf(c.unit, 2)].some((w) => tidy(w) === tidy(unit))) return 1 / c.amount;
   const u = unitOf(units, unit);
   const bought = units.find(item.unit);
   if (u.key === bought?.key) return 1;
-  // 2. In what's in its pack, when its pack size is a count: divided by the pack size.
-  const c = item.packSize ?? null;
   if (u.kind === 'count') {
     if (c && units.find(c.unit)?.key === u.key && isCount(units, c.unit)) return 1 / c.amount;
     throw new ValidationError(`${boughtInSentence(units, item)} ${givenInText(units, item)}`);
@@ -413,6 +415,17 @@ export function stockWithInside(units: Units, item: UnitItem, n: number): string
   if (isLoose(units, item) || Math.abs(n - Math.round(n)) < 0.001 || countInside(units, item, n, plain)) return stockText(units, item, n);
   const inside = insideUnit(units, item);
   return inside ? `${stockText(units, item, n)} (${amountText(units, roundQty(fromBoughtIn(units, item, n, inside)), inside)})` : amountText(units, n, item.unit);
+}
+
+/**
+ * How much is left in an open one, from `left` of what it's bought in: "7 tea bags", "about ½ jar",
+ * "about ½ jar (200 g)", or "a little" when it's nearly gone.
+ */
+export function openLeftText(units: Units, item: UnitItem, left: number): string {
+  const counted = countInside(units, item, left, plain);
+  if (counted) return counted;
+  if (left < 0.2) return 'a little';
+  return insideUnit(units, item) ? stockWithInside(units, item, left) : stockText(units, item, left);
 }
 
 /** "Bought in boxes", "Bought one at a time", "Bought loose, by weight (g)". */

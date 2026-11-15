@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { ConflictError, LarderError, NotFoundError, ValidationError } from '../errors';
 import { IsoDate, type Category, type Movement, type Place, type Product, type Shop } from '../model';
-import { amountText, boughtInText, packSizeText, exactText, isCount, isLoose, lastsText, measuredIn, newUnit, stockText, stockWithInside, toBoughtIn, usageText, weightText, type Units } from './units';
+import { amountText, boughtInText, packSizeText, exactText, isCount, isLoose, lastsText, measuredIn, newUnit, openLeftText, stockText, stockWithInside, toBoughtIn, unitWord, usageText, weightText, type Units } from './units';
 import type { AssistantTool } from './assistant';
 import { SHOP_PRESETS, type createCategoryService, type createPlaceService, type createShopService, type createUnitService } from './catalogue';
 import type { CoreContext } from './context';
@@ -511,7 +511,7 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
 
   addTool({
     name: 'correct_stock', title: 'Correct stock', destructive: true,
-    description: 'Fix what Larder has for an item when it\'s wrong: how many there really are, or an expiry date, or remove a batch that isn\'t there. How many can be said in what\'s in its pack, to put Larder\'s daily count right ("3 boxes left and 5 used from the box" is 55 tea bags). If it has more than one batch, say which by its place or expiry date (get_item lists them).',
+    description: 'Fix what Larder has for an item when it\'s wrong: how many there really are, or an expiry date, or remove a batch that isn\'t there. How many can be said in what\'s in its pack, to put Larder\'s daily count right ("3 boxes left and 5 used from the box" is 55 tea bags). If it has more than one batch, say which by its place or expiry date (get_item lists them). For the one that\'s open (not counted in stock), open_left says how much is left in it ("the glycerine is about half full" is open_left 0.5).',
     input: z.object({
       item: Item,
       place: z.string().max(200).optional().describe('Which batch: the place it\'s in'),
@@ -520,11 +520,25 @@ export function addManageTools(addTool: AddTool, deps: ManageDeps): void {
       unit: z.string().max(30).optional().describe('What quantity is in, if not what it\'s bought in: what\'s in its pack ("tea bag", for boxes of 20 tea bags), or g, kg, ml, L or pints once it has a weight'),
       new_expiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullable().optional().describe('Its real expiry date (YYYY-MM-DD); null for none'),
       remove: z.boolean().optional().describe('True to remove the batch altogether'),
+      open_left: z.number().min(0).optional().describe('How much is left in the one that\'s open, in what it\'s bought in (0.5: half a jar) or in unit (200 g, 7 tea bags). 0: it\'s finished. On its own, without quantity, new_expiry or remove'),
     }),
     async run(i) {
-      if (i.quantity === undefined && i.new_expiry === undefined && !i.remove) throw new ValidationError('Say what to correct: quantity, new_expiry or remove.');
+      if (i.quantity === undefined && i.new_expiry === undefined && !i.remove && i.open_left === undefined) throw new ValidationError('Say what to correct: quantity, new_expiry, remove or open_left.');
       const p = await resolve.product(i.item);
       const [d, units] = await Promise.all([products.get(p.id), ctx.units()]);
+      if (i.open_left !== undefined) {
+        if (i.quantity !== undefined || i.new_expiry !== undefined || i.remove) throw new ValidationError('Correct the open one on its own: open_left without quantity, new_expiry or remove.');
+        if (!d.inUse || p.usage || !p.inUseSince) throw new ValidationError(`None of ${p.name} is open. To say one was opened, use use_stock with opened: true.`);
+        const left = Math.round(toBoughtIn(units, p, i.open_left, i.unit) * 1000) / 1000;
+        const one = unitWord(units, p.unit, 1) || 'one';
+        if (left > 1.001) throw new ValidationError(`That's more than one ${one} holds. Give how much is left in the open one: at most 1 ${one}.`);
+        if (left <= 0) {
+          const s = await stock.finish(p.id);
+          return { text: `${p.name}: the open one is finished. ${stockWithInside(units, p, s.inStock)} in stock.`, data: { id: p.id, name: p.name, in_stock: s.inStock, open_left: null } };
+        }
+        const next = await products.update(p.id, { openLeft: Math.min(1, left) });
+        return { text: `${p.name}: ${openLeftText(units, next, next.openLeft!)} left in the open one. ${stockWithInside(units, p, d.inStock)} unopened in stock.`, data: { id: p.id, name: p.name, in_stock: d.inStock, open_left: next.openLeft } };
+      }
       const describe = (e: (typeof d.entries)[number]) => `${exactText(units, p, e.quantity)} in ${(e.currentPlace ?? e.place)?.path ?? 'no place'}${e.expiresOn ? `, expires ${e.expiresOn}` : ''}`;
       const batches = d.entries.filter((e) => e.status === 'in_stock');
       if (!batches.length) throw new LarderError(`${p.name} has no stock to correct. Use add_stock to add some.`, 404, 'not_found');
