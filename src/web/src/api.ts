@@ -4,7 +4,7 @@
  */
 import type {
   Category, Dashboard, IdentifyResult, PlaceContents, PlaceNodeT, PlaceRef, PlaceToSort, Place, Product, ProductCreate, ProductDetail, ProductSummary,
-  SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Unit, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase,
+  SearchSectionResult, Shop, ShoppingList, ShoppingSummary, Unit, Variant, Delivery, Movement, HouseholdSettings, ModuleInfo, Purchase, ClearedBatch,
 } from '@larder/core';
 import { ApiError } from './apiError';
 import { openCopy } from './offline/current';
@@ -160,6 +160,10 @@ export const api = {
     cancelOrders: (b: { source?: string; entryIds?: string[]; productId?: string }) => post<{ removed: number; products: ProductSummary[] }>('/stock/orders/cancel', b),
     updateEntry: (id: string, b: { quantity?: number; expiresOn?: string | null; placeId?: string | null; currentPlaceId?: string | null }) => patch<ProductSummary>(`/stock/entries/${id}`, b),
     removeEntry: (id: string) => del<ProductSummary>(`/stock/entries/${id}`),
+    /** An item's stock past its date is gone: used up, or thrown away. */
+    pastDate: (b: { productId: string; how: 'used' | 'thrown' }) => post<ProductSummary>('/stock/past-date', b),
+    putBack: (id: string) => post<ProductSummary>(`/stock/cleared/${id}/put-back`, {}),
+    forgetCleared: () => del<ClearedBatch[]>('/stock/cleared'),
   },
   shopping: {
     summary: () => get<ShoppingSummary>('/shopping'),

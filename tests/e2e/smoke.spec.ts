@@ -87,6 +87,70 @@ test('adds an unknown barcode in one go, remembers it, and leaves the tidying fo
   await expect(page.locator('.item-name').filter({ hasText: name })).toBeVisible();
 });
 
+test('food past its date is cleared from Home by hand, or by Larder, and can be put back', async ({ page }, info) => {
+  await signIn(page);
+  const n = `${info.project.name} ${Date.now() % 100000}`;
+  const today = await page.evaluate(async () => ((await (await fetch('api/v1/home')).json()) as { today: string }).today);
+  const ago = (days: number) => {
+    const d = new Date(`${today}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  };
+  const make = (name: string, quantity: number, expiresOn: string) => page.evaluate(async ([name, quantity, expiresOn]) => {
+    const headers = { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' };
+    const p = (await (await fetch('api/v1/products', { method: 'POST', headers, body: JSON.stringify({ name, shelfLifeDays: 4 }) })).json()) as { id: string };
+    await fetch('api/v1/stock/add', { method: 'POST', headers, body: JSON.stringify({ productId: p.id, quantity, expiresOn }) });
+    return p.id;
+  }, [name, quantity, expiresOn] as const);
+  const sausages = `Sausages ${n}`;
+  const pie = `Fish pie ${n}`;
+  await make(sausages, 6, ago(1));
+  await make(pie, 1, ago(1));
+  await page.goto('/');
+
+  // Past its date and still in Larder: Gone? Used up or Thrown away, one press each.
+  const row = (name: string) => page.locator('.past-date', { hasText: name });
+  await expect(row(sausages)).toContainText('Expired yesterday');
+  await row(sausages).getByRole('button', { name: 'Used up' }).click();
+  await expect(page.locator('.toast')).toContainText(`${sausages}: used up`);
+  await expect(row(sausages)).toHaveCount(0);
+  await row(pie).getByRole('button', { name: 'Thrown away' }).click();
+  await expect(page.locator('.toast')).toContainText(`${pie}: thrown away`);
+  await expect(row(pie)).toHaveCount(0);
+
+  // Fresh food a few days past its date that nobody said was gone: Larder clears it and says so.
+  const chicken = `Chicken breasts ${n}`;
+  const milk = `Milk ${n}`;
+  await make(chicken, 2, ago(5));
+  await make(milk, 1, ago(4));
+  await page.evaluate(async () => fetch('api/v1/automation/check-expiry', { method: 'POST', headers: { 'X-Larder-Client': 'web' } }));
+  await page.reload();
+  const cleared = page.locator('.cleared');
+  await expect(cleared).toContainText('Cleared by Larder.');
+  await expect(cleared.locator('.row', { hasText: milk })).toBeVisible();
+  // The chicken went in the freezer: put back, it's in Use soon again, to sort out.
+  await cleared.locator('.row', { hasText: chicken }).getByRole('button', { name: 'Put back' }).click();
+  await expect(page.locator('.toast')).toContainText(`${chicken} put back`);
+  await expect(cleared.locator('.row', { hasText: chicken })).toHaveCount(0);
+  await expect(row(chicken)).toContainText('Expired 5 days ago');
+  await cleared.getByRole('button', { name: 'OK' }).click();
+  await expect(cleared).toHaveCount(0);
+  await row(chicken).getByRole('button', { name: 'Thrown away' }).click();
+  await expect(row(chicken)).toHaveCount(0);
+
+  // It can be switched off, or wait longer.
+  await page.goto('/#/settings');
+  const setting = page.getByLabel('Clear fresh food past its date');
+  await expect(setting).toHaveValue('2');
+  await setting.selectOption({ label: 'Never' });
+  await page.getByRole('button', { name: 'Save' }).first().click();
+  await expect(page.locator('.toast')).toContainText('Saved');
+  expect(await page.evaluate(async () => ((await (await fetch('api/v1/settings')).json()) as { clearPastDateDays: number | null }).clearPastDateDays)).toBeNull();
+  await setting.selectOption({ label: '2 days after' });
+  await page.getByRole('button', { name: 'Save' }).first().click();
+  await expect(page.locator('.toast')).toContainText('Saved');
+});
+
 test('shopping: tick, done, gone from the list', async ({ page }) => {
   await signIn(page);
   await page.goto('/#/shop');

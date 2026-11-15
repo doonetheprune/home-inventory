@@ -109,6 +109,18 @@ describe('units for assistants', () => {
       'Whole milk is updated: bought in bottles, pack size 4 pints, off the To tidy list. No usage is set: ask how many bottles get used a day or a week (uses), or how much in ml (unit "ml"), so Larder can say when they run out, and whether Larder should take them out of stock by itself (takes_out_automatically).');
   });
 
+  it('keep part of a box, said in what is in it (the owner\'s 8 Oxo cubes)', async () => {
+    const core = await makeCore();
+    await core.assistant.call('add_item', { name: 'Oxo beef stock cubes', bought_in: 'box', pack_size: { amount: 24, unit: 'cube' } });
+    // None in stock: 8 cubes are added as part of a box.
+    expect(await text(core, 'add_stock', { item: 'oxo', quantity: 8, unit: 'cubes' })).toContain('Oxo beef stock cubes: added 8 cubes');
+    expect(await text(core, 'get_item', { item: 'oxo' })).toContain('In stock: 8 cubes (about ⅓ box).');
+    // A new box comes, the 8 are used, and the count is put right in cubes: not whole boxes either.
+    await core.automation.run('add_stock', { item: 'oxo', quantity: 1 });
+    await core.assistant.call('use_stock', { item: 'oxo', quantity: 8, unit: 'cube' });
+    expect(await text(core, 'correct_stock', { item: 'oxo', quantity: 29, unit: 'cubes' })).toBe('Oxo beef stock cubes: corrected. 29 cubes (about 1¼ boxes) in stock.');
+  });
+
   it('buy whole ones of what it is bought in, with no pack wording', async () => {
     const core = await makeCore();
     await core.shops.create({ name: 'Aldi' });
@@ -120,10 +132,12 @@ describe('units for assistants', () => {
     expect(await text(core, 'get_item', { item: 'tea bags' })).toContain('Running low below 0.5 box (40 tea bags): it is low now.');
   });
 
-  it('are explained in the instructions in four short sentences, with the tea bags that went wrong', () => {
+  it('are explained in the instructions in five short sentences, with the tea bags that went wrong and part of a box', () => {
     for (const sentence of [
       'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
-      'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock stays in boxes, so never switch it to counting tea bags.',
+      'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock is counted in boxes, so never switch it to counting tea bags.',
+      // "Stock stays in boxes" alone read as "Larder doesn't keep part of a box" (the owner's 8 Oxo cubes).
+      'Part of one is kept too: say it in what\'s in its pack with unit. 8 cubes left of a box of 24 is correct_stock quantity 8, unit "cube" (add_stock if there are none), and Larder says "8 cubes (about ⅓ box)".',
       'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
       'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
     ]) expect(ASSISTANT_INSTRUCTIONS).toContain(sentence);

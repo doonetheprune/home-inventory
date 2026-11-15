@@ -72,7 +72,8 @@ export const ASSISTANT_INSTRUCTIONS = [
   'If a name could mean more than one item, the tool says which ones: ask the person, or use the exact name. Never guess.',
   'Items have a usual place; "out of place" means it is somewhere else for now.',
   'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
-  'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock stays in boxes, so never switch it to counting tea bags.',
+  'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock is counted in boxes, so never switch it to counting tea bags.',
+  'Part of one is kept too: say it in what\'s in its pack with unit. 8 cubes left of a box of 24 is correct_stock quantity 8, unit "cube" (add_stock if there are none), and Larder says "8 cubes (about ⅓ box)".',
   'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
   'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
   'How fast it\'s used (uses: 1 tea bag a day, 4 g a day) tells Larder when it runs out; with takes_out_automatically, Larder takes that much out of stock by itself.',
@@ -323,7 +324,7 @@ export function createAssistant(deps: {
     },
   });
 
-  fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). Expiry is worked out from its shelf life unless given.');
+  fromAction('add_stock', 'add_stock', 'Add stock', 'Add some of an item to stock (after shopping, or when found). quantity is in what it\'s bought in, or set unit for what\'s in its pack or a weight: part of one is fine (8 cubes of a box of 24). Expiry is worked out from its shelf life unless given.');
   fromAction('use_stock', 'use_stock', 'Use stock', 'Take some of an item out of stock because it was used up, eaten or thrown away. Uses the soonest-expiring first. When one was opened and is still being used (the butter in the fridge), set opened: true; it shows as open until finish_item. For something Larder takes out of stock by itself (a tea bag a day, a sensor every 14 days), a use is an extra one (unless none has been started: then it starts one); set opened: true to say a new one was started now (a sensor that came off early). For something with a usage Larder doesn\'t take out, each use starts one today. quantity is in what it\'s bought in (a whole box or jar), or set unit for what\'s in its pack or a weight ("5 tea bags", "100 g").');
   fromAction('finish_item', 'finish_item', 'Finished the open one', 'The open one of an item is finished (the butter\'s gone, the jar of coffee is empty), or the one in use is stopped (Larder stops taking them out until one is started). Use use_stock with opened: true when one is opened or started.');
   fromAction('move_item', 'move_item', 'Move an item', 'Something moved to another place: for now (out of place, e.g. the drill taken to the kitchen) or for good (permanent: its usual place changes). To put it back, move it to its usual place.');

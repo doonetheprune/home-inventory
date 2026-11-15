@@ -126,7 +126,7 @@ export function PlacePage() {
  */
 function Spots({ place, spots, focus }: { place: Place; spots: Spot[]; focus: boolean }) {
   const places = usePlaces();
-  const { run, busy } = useAction();
+  const { run } = useAction();
   const [name, setName] = useState('');
   /** What was typed; null while the offered code is used. */
   const [typedCode, setTypedCode] = useState<string | null>(null);
@@ -141,11 +141,20 @@ function Spots({ place, spots, focus }: { place: Place; spots: Spot[]; focus: bo
     const n = name.trim();
     const c = code.trim() || null;
     if (!n) return;
-    const created = await run(() => api.places.create({ name: n, parentId: place.id, code: c }), `${n} added${c ? ` as ${c}` : ''}`);
-    if (!created) return;
-    if (created.code) setGiven((g) => [...g, created.code!]);
+    const typed = typedCode;
+    // Cleared straight away, with the next code offered, so the next spot can be typed while this one
+    // saves: clearing it once the lists had refreshed lost what was typed meanwhile. Back if it fails.
     setName('');
     setTypedCode(null);
+    if (c) setGiven((g) => [...g, c]);
+    const created = await run(() => api.places.create({ name: n, parentId: place.id, code: c }), `${n} added${c ? ` as ${c}` : ''}`);
+    if (!created) {
+      setName((now) => now || n);
+      setTypedCode((now) => now ?? typed);
+      if (c) setGiven((g) => g.filter((x) => x !== c));
+      return;
+    }
+    if (created.code && created.code !== c) setGiven((g) => [...g, created.code!]);
     input.current?.focus();
   };
 
@@ -166,7 +175,8 @@ function Spots({ place, spots, focus }: { place: Place; spots: Spot[]; focus: bo
         <form className="item spot-form" onSubmit={(e) => { e.preventDefault(); void add(); }}>
           <input ref={input} className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder={spots.length ? 'Another spot' : 'A spot inside: Top shelf, Drawer 1…'} aria-label="New spot's name" autoFocus={focus} enterKeyHint="next" />
           <input className="input mono spot-code" value={code} onChange={(e) => setTypedCode(e.target.value.toUpperCase())} placeholder="Code" aria-label="New spot's code" maxLength={20} />
-          <button className="btn primary" disabled={busy || !name.trim()}>Add</button>
+          {/* Not held while one saves: Enter goes through this button, and the next spot can be added meanwhile. */}
+          <button className="btn primary" disabled={!name.trim()}>Add</button>
         </form>
       </div>
       {!spots.length && (

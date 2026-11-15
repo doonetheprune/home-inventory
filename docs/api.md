@@ -26,6 +26,8 @@ Everything the web app does goes through the REST API, so integrations can do it
 | `POST /stock/return` | `{ productId }` puts out-of-place stock back |
 | `POST /stock/expect` | `{ productId, quantity, unit?, source: "Tesco delivery", eta?, price? }` ordered, not arrived. `price` is the line's, kept with the purchase when it arrives |
 | `POST /stock/arrive` | `{ source }` or `{ productId, quantity }` the delivery arrived |
+| `POST /stock/past-date` | `{ productId, how: "used" \| "thrown" }` its batches past their date are gone (Home's **Used up** and **Thrown away**). `used` is a use; `thrown` takes them out |
+| `GET /stock/cleared` | Fresh food Larder cleared because it was past its date, in the last week (also `cleared` in `GET /home`). `POST /stock/cleared/{id}/put-back` puts one back as it was; `DELETE /stock/cleared` takes the list off Home |
 | `GET /shopping` | Count per shop and the suggested shop |
 | `GET /shopping/{shopId}` | That shop's list, grouped by category |
 | `POST /shopping/purchase` | `{ shopId, items: [{ productId, quantity, price?, placeId?, expiresOn?, variantId? }], evidence? }` bought: adds to stock. `evidence` (a receipt's photo id, source, order number, bought on…) goes to the purchase history |

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Delivery, Id, ProductSummary, Purchase, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse,
+  ClearedBatch, Delivery, Id, ProductSummary, Purchase, ShoppingList, ShoppingSummary, StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockPastDate, StockReturn, StockUse,
   type CoreApi,
 } from '@larder/core';
 import type { ZodApp } from '../app';
@@ -42,6 +42,27 @@ export function registerStockRoutes(app: ZodApp, { core }: { core: CoreApi }) {
   app.post('/products/:id/renew', { schema: { tags, summary: 'Renewals: restart the clock from today', params: IdParams, response: res } }, (r) => core.stock.renew(r.params.id));
   app.patch('/stock/entries/:id', { schema: { tags, summary: 'Edit one batch (amount, expiry, place)', params: IdParams, body: StockEntryPatch, response: res } }, (r) => core.stock.updateEntry(r.params.id, r.body));
   app.delete('/stock/entries/:id', { schema: { tags, summary: 'Remove one batch', params: IdParams, response: res } }, (r) => core.stock.removeEntry(r.params.id));
+  app.post('/stock/past-date', {
+    schema: {
+      tags, summary: 'An item\'s stock past its date is gone: used up, or thrown away', body: StockPastDate, response: res,
+      description: 'Only the batches whose date was before today. `used` counts as using them (as Use does); `thrown` takes them out.',
+    },
+  }, (r) => core.stock.clearPastDate(r.body));
+  app.get('/stock/cleared', {
+    schema: {
+      tags, summary: 'Fresh food Larder cleared because it was past its date, in the last week', response: { 200: z.array(ClearedBatch) },
+      description: 'Fresh food (it keeps 2 weeks or less) still in stock a few days after its date is taken out by the hourly check (household setting `clearPastDateDays`). Home lists it, to put back what\'s still there.',
+    },
+  }, () => core.stock.cleared());
+  app.post('/stock/cleared/:id/put-back', {
+    schema: { tags, summary: 'A batch Larder cleared is still there: put it back as it was (Larder leaves it alone after)', params: IdParams, response: res },
+  }, (r) => core.stock.putBack(r.params.id));
+  app.delete('/stock/cleared', {
+    schema: { tags, summary: 'What Larder cleared has been seen: take it off Home', response: { 200: z.array(ClearedBatch) } },
+  }, async () => {
+    await core.stock.forgetCleared();
+    return core.stock.cleared();
+  });
 
   const shopTags = ['Shopping'];
   app.get('/shopping', { schema: { tags: shopTags, summary: 'How much is on each shop’s list, and which shop to go to', response: { 200: ShoppingSummary } } }, () => core.shopping.summary());

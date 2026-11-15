@@ -441,6 +441,23 @@ export const Delivery = z.object({
 });
 export type Delivery = z.infer<typeof Delivery>;
 
+/**
+ * Fresh food Larder took out of stock by itself, a few days past its date (nobody said it was used).
+ * Kept for a week on Home, so a batch that's still there can be put back.
+ */
+export const ClearedBatch = z.object({
+  /** The batch (stock entry) that was cleared. */
+  id: Id,
+  productId: Id,
+  name: z.string(),
+  quantity: z.number(),
+  /** What the item is bought in, for saying the quantity. */
+  unit: z.string(),
+  expiresOn: IsoDate,
+  clearedAt: IsoDateTime,
+});
+export type ClearedBatch = z.infer<typeof ClearedBatch>;
+
 export const Dashboard = z.object({
   today: IsoDate,
   counts: z.object({ products: z.number(), low: z.number(), expiringSoon: z.number(), outOfPlace: z.number(), expected: z.number(), wish: z.number() }),
@@ -451,6 +468,8 @@ export const Dashboard = z.object({
   /** Orders waiting to be confirmed or removed (e.g. a filled online basket). */
   pendingOrders: z.array(Delivery).default([]),
   shopping: ShoppingSummary,
+  /** Fresh food Larder cleared because it was past its date, newest first, until put back or seen. */
+  cleared: z.array(ClearedBatch).default([]),
 });
 export type Dashboard = z.infer<typeof Dashboard>;
 

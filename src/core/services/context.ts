@@ -10,6 +10,11 @@ export const HouseholdSettings = z.object({
   householdName: z.string().max(80).default('Our house'),
   /** Days before expiry to warn, unless a category says otherwise. */
   expiryWarningDays: z.number().int().min(0).max(365).default(7),
+  /**
+   * Fresh food (it keeps 2 weeks or less) still in stock this many days after its date is taken
+   * out by Larder, since it's been eaten or thrown away. Null: never.
+   */
+  clearPastDateDays: z.number().int().min(1).max(30).nullable().default(2),
   currency: z.string().length(3).default('GBP'),
   timeZone: z.string().max(60).default('Europe/London'),
 });

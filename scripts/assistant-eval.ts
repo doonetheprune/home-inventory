@@ -151,6 +151,22 @@ const CASES: Case[] = [
     check: async (core) => expect(await item(core, /sleep/i), { unit: 'box', pack: [20, 'tea bag'], inStock: 3.85 }),
   },
   {
+    id: 'part-box',
+    about: 'part of a box is kept, said in what\'s in it (the owner\'s Oxo cubes)',
+    setup: (core) => add(core, { name: 'Oxo beef stock cubes', unit: 'box', packSize: { amount: 24, unit: 'cube' }, aliases: ['Oxo cubes'] }, 1),
+    says: ['I\'ve only got 8 Oxo cubes left.'],
+    right: [['correct_stock', { item: 'oxo cubes', quantity: 8, unit: 'cube' }]],
+    check: async (core) => expect(await item(core, /oxo/i), { unit: 'box', pack: [24, 'cube'], inStock: 0.333 }),
+  },
+  {
+    id: 'part-box-new',
+    about: 'part of a box added when there were none',
+    setup: (core) => add(core, { name: 'Oxo beef stock cubes', unit: 'box', packSize: { amount: 24, unit: 'cube' }, aliases: ['Oxo cubes'] }, 0),
+    says: ['I\'ve got 8 Oxo cubes in the cupboard.'],
+    right: [['add_stock', { item: 'oxo cubes', quantity: 8, unit: 'cube' }]],
+    check: async (core) => expect(await item(core, /oxo/i), { unit: 'box', pack: [24, 'cube'], inStock: 0.333 }),
+  },
+  {
     id: 'sleeves',
     about: 'a unit Larder doesn\'t have, added once asked',
     says: ['Add paper cups to Larder. They come in sleeves of 50.', 'Yes, add it.'],

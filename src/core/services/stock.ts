@@ -5,17 +5,24 @@
  * (merging identical batches, dropping empty ones), then writes the
  * difference in a single atomic `applyStockChanges` call.
  */
-import type { Movement, Product, ProductSummary, StockEntry } from '../model';
+import type { ClearedBatch, Movement, Product, ProductSummary, StockEntry } from '../model';
 import { StockEntry as StockEntrySchema } from '../model';
 import * as In from '../inputs';
-import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockReturn, StockUse } from '../inputs';
+import type { StockAdd, StockArrive, StockCharge, StockEntryPatch, StockExpect, StockMove, StockOrders, StockPastDate, StockReturn, StockUse } from '../inputs';
 import { NotFoundError, ValidationError } from '../errors';
-import { addDays, localDate, newId, roundQty } from '../util';
+import { addDays, daysBetween, localDate, newId, roundQty } from '../util';
 import { amountText, periodsPerTake, startsOne, toBoughtIn, usageInBoughtIn } from './units';
 import type { CoreContext } from './context';
 import { loadWorld, summarise, type World } from './world';
 
 const EPS = 1e-9;
+/** Fresh food keeps this many days or fewer: past its date for a few days, it's been eaten or thrown away. */
+export const FRESH_DAYS = 14;
+/** How long Home lists what Larder cleared, to put back what's still there. */
+const CLEARED_DAYS = 7;
+/** Batches Larder cleared (`clearedPastDate`), and ones put back that it leaves alone (`pastDateKept`), in `settings`. */
+interface Cleared { entry: StockEntry; name: string; unit: string; clearedAt: string }
+interface Kept { productId: string; expiresOn: string }
 
 function entryKey(e: StockEntry): string {
   return [e.status, e.placeId, e.currentPlaceId, e.expiresOn, e.variantId, e.charge, e.expected?.source, e.expected?.reference, e.expected?.eta, e.expected?.unitPrice ?? ''].join('|');
@@ -164,6 +171,13 @@ export function createStockService(ctx: CoreContext) {
   }
 
   const isRenewal = (world: World, product: Product) => !!product.categoryId && world.categoryById.get(product.categoryId)?.name === 'Renewals';
+  /** In stock and past its date (its date was before today). */
+  const pastDate = (today: string, e: StockEntry) => e.status === 'in_stock' && e.quantity > 0 && !!e.expiresOn && e.expiresOn < today;
+  /** What Larder cleared in the last CLEARED_DAYS days, newest first. */
+  async function recentCleared(): Promise<Cleared[]> {
+    const since = addDays(ctx.today(), -CLEARED_DAYS);
+    return ((await ctx.storage.settings.get<Cleared[]>('clearedPastDate')) ?? []).filter((c) => c.clearedAt.slice(0, 10) >= since);
+  }
 
   /** Pending entries chosen by source (a whole order), entry ids, or one item's (optionally from one source). */
   async function pendingEntries(raw: StockOrders): Promise<StockEntry[]> {
@@ -598,6 +612,84 @@ export function createStockService(ctx: CoreContext) {
       return { taken, products: changes.length ? await commitAll(changes) : [] };
     },
 
+    /**
+     * An item's stock that's past its date is gone: used up (a use, as if Use was pressed) or thrown
+     * away (taken out). Only the batches past their date; the rest stays.
+     */
+    async clearPastDate(raw: StockPastDate): Promise<ProductSummary> {
+      const input = In.StockPastDate.parse(raw);
+      const t = await begin(input.productId);
+      const gone = t.original.filter((e) => pastDate(t.world.today, e));
+      if (!gone.length) throw new ValidationError(`${t.product.name} has nothing past its date.`);
+      const kind = input.how === 'used' ? 'use' : 'remove';
+      const note = input.how === 'used' ? 'Used up, past its date' : 'Thrown away, past its date';
+      return commit(t, t.original.filter((e) => !gone.includes(e)), gone.map((e) => movement(t.product, kind, -e.quantity, { entryId: e.id, fromPlaceId: where(e), note })), kind);
+    },
+
+    /**
+     * Fresh food (it keeps FRESH_DAYS or fewer, by its shelf life or from when it was added to its
+     * date) still in stock `afterDays` past its date is taken out: nobody said, but it's been eaten or
+     * thrown away. Never renewals, rechargeables or wish list items, nor a batch that was put back.
+     * What's cleared is listed on Home for a week, to put back. The hourly expiry check calls this.
+     */
+    async clearFresh(afterDays: number): Promise<{ cleared: number }> {
+      const world = await loadWorld(ctx);
+      const { timeZone } = await ctx.household();
+      const kept = (await ctx.storage.settings.get<Kept[]>('pastDateKept')) ?? [];
+      const changes: Change[] = [];
+      const cleared: Cleared[] = [];
+      for (const product of world.products) {
+        if (product.wish || product.rechargeable || isRenewal(world, product)) continue;
+        const t = txn(world, product.id);
+        const gone = t.original.filter((e) => {
+          if (!pastDate(world.today, e) || daysBetween(e.expiresOn!, world.today) < afterDays) return false;
+          if (kept.some((k) => k.productId === product.id && k.expiresOn === e.expiresOn)) return false;
+          const fresh = product.shelfLifeDays !== null ? product.shelfLifeDays <= FRESH_DAYS : daysBetween(localDate(new Date(e.addedAt), timeZone), e.expiresOn!) <= FRESH_DAYS;
+          return fresh;
+        });
+        if (!gone.length) continue;
+        changes.push({ t, next: t.original.filter((e) => !gone.includes(e)), kind: 'remove', movements: gone.map((e) => movement(product, 'remove', -e.quantity, { entryId: e.id, fromPlaceId: where(e), note: 'Past its date: cleared by Larder' })) });
+        cleared.push(...gone.map((entry) => ({ entry, name: product.name, unit: product.unit, clearedAt: ctx.now() })));
+      }
+      if (changes.length) {
+        await commitAll(changes);
+        await ctx.storage.settings.set('clearedPastDate', [...cleared, ...(await recentCleared())]);
+      }
+      // A batch put back is left alone while it's there.
+      const left = kept.filter((k) => (world.entriesByProduct.get(k.productId) ?? []).some((e) => e.status === 'in_stock' && e.expiresOn === k.expiresOn));
+      if (left.length !== kept.length) await ctx.storage.settings.set('pastDateKept', left);
+      return { cleared: cleared.length };
+    },
+
+    /** What Larder cleared in the last week (clearFresh), newest first, for Home. */
+    async cleared(): Promise<ClearedBatch[]> {
+      return (await recentCleared()).map((c) => ({ id: c.entry.id, productId: c.entry.productId, name: c.name, quantity: c.entry.quantity, unit: c.unit, expiresOn: c.entry.expiresOn!, clearedAt: c.clearedAt }));
+    },
+
+    /** A batch Larder cleared is still there: it's back as it was, and left alone from now on. */
+    async putBack(entryId: string): Promise<ProductSummary> {
+      const list = await recentCleared();
+      const c = list.find((x) => x.entry.id === entryId);
+      if (!c) throw new NotFoundError('Cleared batch', entryId);
+      const rest = list.filter((x) => x !== c);
+      if (!(await ctx.storage.products.get(c.entry.productId))) {
+        await ctx.storage.settings.set('clearedPastDate', rest);
+        throw new NotFoundError('Product', c.entry.productId);
+      }
+      const t = await begin(c.entry.productId);
+      await ctx.storage.settings.set('pastDateKept', [...((await ctx.storage.settings.get<Kept[]>('pastDateKept')) ?? []), { productId: c.entry.productId, expiresOn: c.entry.expiresOn! }]);
+      await ctx.storage.settings.set('clearedPastDate', rest);
+      const where0 = c.entry.placeId && (await ctx.storage.places.get(c.entry.placeId)) ? c.entry.placeId : null;
+      const now = c.entry.currentPlaceId && (await ctx.storage.places.get(c.entry.currentPlaceId)) ? c.entry.currentPlaceId : null;
+      const entry = { ...c.entry, placeId: where0, currentPlaceId: now };
+      return commit(t, [...t.original, entry], [movement(t.product, 'adjust', entry.quantity, { entryId: entry.id, toPlaceId: where(entry), note: 'Put back: it was still there' })], 'adjust');
+    },
+
+    /** Home's list of what Larder cleared has been seen. */
+    async forgetCleared(): Promise<void> {
+      await ctx.storage.settings.set('clearedPastDate', []);
+    },
+
     /** Deliveries on the way (confirmed), by source. */
     deliveries: () => grouped('expected'),
 
@@ -606,7 +698,7 @@ export function createStockService(ctx: CoreContext) {
   };
 
   // Every change goes through the queue (they don't call each other, so none waits on itself).
-  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'takeDue'] as const;
+  const writes = ['add', 'addMany', 'use', 'useMany', 'finish', 'charge', 'move', 'returnHome', 'updateEntry', 'removeEntry', 'expect', 'confirmOrders', 'cancelOrders', 'arrive', 'renew', 'takeDue', 'clearPastDate', 'clearFresh', 'putBack', 'forgetCleared'] as const;
   for (const name of writes) {
     const run = service[name] as (...args: unknown[]) => Promise<unknown>;
     (service as Record<string, unknown>)[name] = (...args: unknown[]) => ctx.exclusive(() => run(...args));

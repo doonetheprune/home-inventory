@@ -60,7 +60,7 @@ export default defineModule({
 | `product.created` / `product.updated` / `product.deleted` | `{ id, name }` |
 | `place.changed`, `shop.changed`, `category.changed` | `{ id }` |
 | `shopping.purchased` | `{ shopId, items: [{ productId, quantity, price? }], evidence }`: `evidence` is how it was bought (`PurchaseEvidence`: receipt photo, source, order number, ordered on, bought on, note) or null |
-| `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly) |
+| `stock.expiring` / `stock.expired` | `{ productId, name, expiresOn, daysToExpiry, category, place }`, once per batch when it enters its warning window and on the day it expires (checked hourly). Fresh food Larder clears a few days past its date (household setting `clearPastDateDays`) fires `stock.changed` like any other change |
 | `product.recounted` | `{ productId, name, from, to, factor }`: the item's numbers were rescaled by the upgrade to 0.10.0's units, once, at start-up (`from` kg, `to` g, `factor` 1000; or `from` tea bag, `to` box, `factor` 0.05 for a pack turned round into bought in boxes of 20 tea bags). Core has rescaled its stock, history, minimum, stock-up amount and usage, and its Weight; multiply your own quantities by `factor` and divide your prices by it, as pricing, purchases, online shopping, recipes and the AI module's learnt receipt names do. It's sent after every module has started, so listen from `setup` |
 | `nfc.scanned` | `{ tagId, device, kind, id, name, path }` |
 | `settings.changed` | what changed |

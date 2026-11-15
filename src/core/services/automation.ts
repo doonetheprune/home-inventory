@@ -468,19 +468,23 @@ export function createAutomation(deps: {
     },
 
     /**
-     * Takes out of stock what Larder takes out by itself (see stock.takeDue), then
+     * Takes out of stock what Larder takes out by itself (see stock.takeDue) and fresh food
+     * well past its date (stock.clearFresh, unless the household switched it off), then
      * publishes `stock.expiring` once when an item enters its warning window and
      * `stock.expired` once on the day it expires. Safe to call as often as you
      * like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number; taken: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; taken: number; cleared: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number; taken: number }> {
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; taken: number; cleared: number }> {
       const { taken } = await stock.takeDue();
+      // Fresh food well past its date has gone, though nobody said (household setting).
+      const { clearPastDateDays } = await ctx.household();
+      const { cleared } = clearPastDateDays === null ? { cleared: 0 } : await stock.clearFresh(clearPastDateDays);
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
       const next: Notified = {};
       let expiring = 0;
@@ -505,7 +509,7 @@ export function createAutomation(deps: {
         next[p.id] = prev;
       }
       await ctx.storage.settings.set('expiryNotified', next);
-      return { expiring, expired, taken };
+      return { expiring, expired, taken, cleared };
     },
   };
 }

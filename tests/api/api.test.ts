@@ -182,7 +182,7 @@ describe('API', () => {
 
     // Larder takes them out from now on; the current one started 14 days ago, so the next is due.
     await call('PATCH', `/api/v1/products/${sensor.id}`, { usage: { amount: 1, everyDays: 14, auto: true }, inUseSince: plus(-14) });
-    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, taken: 1 });
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toEqual({ expiring: 0, expired: 0, taken: 1, cleared: 0 });
     expect((await call<Any>('GET', `/api/v1/products/${sensor.id}`)).body).toMatchObject({ inStock: 1, inUseUntil: plus(14), product: { inUseSince: today } });
 
     // Bought in boxes of 20 tea bags: amounts can be in either; counting again is gone.
@@ -197,6 +197,42 @@ describe('API', () => {
     const jar = (await call<Any>('POST', '/api/v1/products', { name: 'Decaf coffee', unit: 'jar', packSize: { amount: 0.4, unit: 'kg' } })).body;
     expect(jar.weight).toEqual({ amount: 400, unit: 'g' });
     expect((await call<Any>('PATCH', `/api/v1/products/${jar.id}`, { weight: { amount: 200, unit: 'g' } })).status).toBe(400);
+  });
+
+  it('clears stock past its date: from Home by hand, and fresh food by Larder, which can be put back', async () => {
+    const { call } = await makeApp({ auth: 'none' });
+    const today = (await call<Any>('GET', '/api/v1/home')).body.today as string;
+    const plus = (days: number) => {
+      const d = new Date(`${today}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    expect((await call<Any>('GET', '/api/v1/settings')).body.clearPastDateDays).toBe(2);
+    const sausages = (await call<Any>('POST', '/api/v1/products', { name: 'Sausages', shelfLifeDays: 4 })).body;
+    await call('POST', '/api/v1/stock/add', { productId: sausages.id, quantity: 6, expiresOn: plus(-1) });
+    await call('POST', '/api/v1/stock/add', { productId: sausages.id, quantity: 6 });
+    const thrown = await call<Any>('POST', '/api/v1/stock/past-date', { productId: sausages.id, how: 'thrown' });
+    expect([thrown.status, thrown.body.inStock]).toEqual([200, 6]);
+    const none = await call<Any>('POST', '/api/v1/stock/past-date', { productId: sausages.id, how: 'used' });
+    expect([none.status, none.body.message]).toEqual([400, 'Sausages has nothing past its date.']);
+
+    const chicken = (await call<Any>('POST', '/api/v1/products', { name: 'Chicken breasts', shelfLifeDays: 4 })).body;
+    await call('POST', '/api/v1/stock/add', { productId: chicken.id, quantity: 2, expiresOn: plus(-5) });
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toMatchObject({ cleared: 1 });
+    const cleared = (await call<Any>('GET', '/api/v1/home')).body.cleared as Any[];
+    expect(cleared).toEqual([expect.objectContaining({ productId: chicken.id, name: 'Chicken breasts', quantity: 2, unit: 'each', expiresOn: plus(-5) })]);
+    expect((await call<Any[]>('GET', '/api/v1/stock/cleared')).body).toEqual(cleared);
+    const back = await call<Any>('POST', `/api/v1/stock/cleared/${cleared[0]!.id}/put-back`);
+    expect([back.status, back.body.inStock, back.body.nextExpiry]).toEqual([200, 2, plus(-5)]);
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toMatchObject({ cleared: 0 });
+    expect((await call<Any>('POST', `/api/v1/stock/cleared/${cleared[0]!.id}/put-back`)).status).toBe(404);
+
+    // Switched off, nothing's cleared; what was is taken off Home once seen.
+    await call('PATCH', '/api/v1/settings', { clearPastDateDays: null });
+    const milk = (await call<Any>('POST', '/api/v1/products', { name: 'Milk', shelfLifeDays: 5 })).body;
+    await call('POST', '/api/v1/stock/add', { productId: milk.id, quantity: 1, expiresOn: plus(-9) });
+    expect((await call<Any>('POST', '/api/v1/automation/check-expiry')).body).toMatchObject({ cleared: 0 });
+    expect((await call<Any[]>('DELETE', '/api/v1/stock/cleared')).body).toEqual([]);
   });
 
   it('keeps the unit list, with the household\'s own words', async () => {

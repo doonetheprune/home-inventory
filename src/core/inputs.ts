@@ -105,6 +105,13 @@ export const StockUse = z.object({
 });
 export type StockUse = z.input<typeof StockUse>;
 
+/** An item's stock that's past its date, gone: eaten or used (`used`), or thrown away (`thrown`). */
+export const StockPastDate = z.object({
+  productId: Id,
+  how: z.enum(['used', 'thrown']),
+});
+export type StockPastDate = z.input<typeof StockPastDate>;
+
 export const StockMove = z.object({
   productId: Id,
   toPlaceId: Id,
