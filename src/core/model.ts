@@ -152,6 +152,8 @@ export const Product = z.object({
   wish: z.boolean().default(false),
   /** Rechargeable batteries and similar: stock is split into charged and flat. */
   rechargeable: z.boolean().default(false),
+  /** It has no barcode to scan (fresh fruit, home-made, a tool), so it isn't listed as missing one. */
+  noBarcode: z.boolean().default(false),
   /** Put on the shopping list by hand even though it isn't low. Cleared when bought. */
   onShoppingList: z.boolean().default(false),
   /** Where new stock goes by default. */

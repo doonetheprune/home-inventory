@@ -208,6 +208,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     async list(filter: ProductFilter = {}): Promise<ProductSummary[]> {
       const world = await loadWorld(ctx);
       const status = filter.status ?? 'all';
+      // Items with a barcode on any of their brands, for those without one.
+      const coded = status === 'no_barcode' ? new Set((await ctx.storage.variants.list()).filter((v) => v.barcodes.length).map((v) => v.productId)) : null;
       return world.products
         .map((p) => summarise(world, p))
         .filter((s) => {
@@ -225,6 +227,10 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
             case 'in_stock': return !s.product.wish && s.inStock > 0;
             // Added in a hurry (scanned and gone): stock with no place, or no type yet; or an upgrade wants it looked at.
             case 'to_tidy': return !!s.product.needsCheck || (!s.product.wish && (!s.product.categoryId || (world.entriesByProduct.get(s.product.id) ?? []).some((e) => e.status === 'in_stock' && !e.placeId)));
+            // Things in the house Larder can't scan yet: no barcode on any brand. Not things bought loose, renewals,
+            // or ones said to have none; and only what's here (in stock or open), so its barcode can be scanned.
+            case 'no_barcode': return !s.product.wish && !s.product.noBarcode && !coded!.has(s.product.id) && (s.inStock > 0 || s.inUse)
+              && !isLoose(world.units, s.product) && s.category?.name !== 'Renewals';
             default: return !s.product.wish;
           }
         })

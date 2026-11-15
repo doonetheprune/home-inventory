@@ -433,3 +433,32 @@ describe('lookup photos', () => {
     expect(searched).toEqual([]);
   });
 });
+
+describe('missing barcodes', () => {
+  it('lists things in the house with no barcode, until one is scanned or it is said to have none', async () => {
+    const core = await makeCore();
+    const renewals = await category(core, 'Renewals');
+    const glycerine = await core.products.create({ name: 'Glycerine', unit: 'jar' });
+    const bananas = await core.products.create({ name: 'Bananas', unit: 'bunch' });
+    const rice = await core.products.create({ name: 'Rice', unit: 'g' });
+    const insurance = await core.products.create({ name: 'Car insurance', categoryId: renewals.id });
+    const beans = await core.products.create({ name: 'Baked beans', unit: 'tin' });
+    await core.products.create({ name: 'Ketchup', unit: 'bottle' });
+    for (const p of [glycerine, bananas, beans, insurance]) await core.stock.add({ productId: p.id, quantity: 1 });
+    await core.stock.add({ productId: rice.id, quantity: 500 });
+    await core.lookup.remember({ barcode: '5000157024671', productId: beans.id });
+    const names = async () => (await core.products.list({ status: 'no_barcode' })).map((s) => s.product.name);
+    // Not beans (it has one), rice (bought loose), insurance (a renewal) or ketchup (none in the house to scan).
+    expect(await names()).toEqual(['Bananas', 'Glycerine']);
+    // The last one, open: still here to scan.
+    await core.stock.use({ productId: glycerine.id, quantity: 1, open: true });
+    expect(await names()).toEqual(['Bananas', 'Glycerine']);
+    // Bananas have none; Glycerine's is scanned onto its brand.
+    await core.products.update(bananas.id, { noBarcode: true });
+    const brand = await core.products.addVariant(glycerine.id, { name: 'Sugarflair' });
+    expect(await names()).toEqual(['Glycerine']);
+    await core.products.updateVariant(brand.id, { barcodes: ['5060000000001'] });
+    expect(await names()).toEqual([]);
+    expect((await core.assistant.call('list_items', { status: 'no_barcode' })).text).toBe('No items like that.');
+  });
+});

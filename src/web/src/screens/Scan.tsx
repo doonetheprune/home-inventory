@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isLoose, parseAmount, type IdentifyResult, type LookupResult, type Place, type ProductSummary, type UnitAmount } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
@@ -13,6 +13,7 @@ import { UnitPicker } from '../components/UnitPicker';
 import { notBoughtIn } from '../components/ProductForm';
 import { TagWaiter } from '../components/NfcTags';
 import { useUnits } from '../units';
+import { NO_BARCODE } from './NoBarcode';
 
 /** What new things are most often bought in, as chips on the card; More… has the rest of the list. */
 const CHIPS = ['box', 'bag', 'jar', 'bottle', 'carton', 'tin', 'pack', 'each'];
@@ -88,6 +89,18 @@ export function Scan() {
    * photo. The Scan tab (no `ai`) scans them as usual.
    */
   const askedForPhotos = params.has('ai');
+  /**
+   * Scanning for one item (`for` in the address, from No barcode or the item's page): the next code scanned,
+   * typed or from a USB scanner is its barcode. It's saved to the item, then it's back to `back`.
+   */
+  const forId = params.get('for');
+  const back = params.get('back') ?? NO_BARCODE;
+  const forItem = useQuery({ queryKey: ['products', 'for', forId], queryFn: () => api.products.get(forId!), enabled: !!forId }).data ?? null;
+  const forRef = useRef(forItem);
+  forRef.current = forItem;
+  const forIdRef = useRef(forId);
+  forIdRef.current = forId;
+  const navigate = useNavigate();
   const photosOnly = askedForPhotos && mode === 'add' && !!reader;
   const photosOnlyOn = (on: boolean) => {
     const next = new URLSearchParams(params);
@@ -110,11 +123,16 @@ export function Scan() {
   /** The code just dealt with: the camera leaves it alone for a moment, though it may still be in view. */
   const settled = useRef<{ code: string; until: number }>({ code: '', until: 0 });
   const attachRef = useRef<(code: string) => Promise<void>>(async () => {});
+  const scanForRef = useRef<(code: string) => Promise<void>>(async () => {});
 
   const identify = useCallback(async (code: string, from: 'camera' | 'hand' = 'hand') => {
     // The new item's card asked for its barcode: this is it (scanned, typed or from a USB scanner).
     if (codeWantedRef.current) {
       await attachRef.current(code);
+      return;
+    }
+    if (forIdRef.current) {
+      await scanForRef.current(code);
       return;
     }
     // Another code typed while a barcode was waiting for its photo: that one's been left.
@@ -319,6 +337,51 @@ export function Scan() {
   const readRef = useRef(readWithAi);
   readRef.current = readWithAi;
 
+  /**
+   * The code scanned for the item (`for`). A shelf label, or another item's barcode, isn't it. Otherwise it's
+   * saved: onto its brand when it has just one, with no barcode yet (Sugarflair, from a photo), or as a new brand.
+   */
+  scanForRef.current = async (code: string) => {
+    const d = forRef.current;
+    if (!d) return;
+    const name = d.product.name;
+    if (code.length > 200) {
+      settled.current = { code, until: Date.now() + 3000 };
+      toast({ text: 'That QR code holds too much for Larder to keep. Scan the barcode instead.', error: true });
+      return;
+    }
+    setLooking('code');
+    try {
+      const r = await api.identify(code);
+      if (r.kind === 'place' || (r.kind === 'product' && r.product.product.id !== d.product.id)) {
+        settled.current = { code, until: Date.now() + 3000 };
+        const what = r.kind === 'place' ? `the label for ${r.place.code ?? r.place.name}` : `${r.product.product.name}'s barcode`;
+        toast({ text: `That's ${what}. Scan the barcode or QR code on the ${name.toLowerCase()}.`, error: true });
+        return;
+      }
+      if (r.kind === 'product') {
+        toast(`That's already ${name}'s barcode.`);
+        navigate(back);
+        return;
+      }
+      const only = d.variants.length === 1 && !d.variants[0]!.barcodes.length ? d.variants[0]! : null;
+      const saved = await run(
+        async () => { if (only) await api.products.updateVariant(only.id, { barcodes: [code] }); else await api.remember({ barcode: code, productId: d.product.id }); return true; },
+        `Barcode saved for ${name}. Next time it scans straight in.`,
+      );
+      if (saved) navigate(back);
+    } catch (err) {
+      toast({ text: err instanceof ApiError ? err.message : 'That code could not be looked up.', error: true });
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  // Scanning for an item wants the camera.
+  useEffect(() => {
+    if (forId) setCamera(true);
+  }, [forId]);
+
   // Add by photo (from Home) arrives with the camera wanted.
   useEffect(() => {
     if (askedForPhotos) {
@@ -329,7 +392,7 @@ export function Scan() {
 
   // Space or a volume button is Take photo, like a camera's shutter, when nothing's open.
   // Not while a card's waiting for its barcode: a photo then would start another card.
-  const photos = (mode === 'add' || !!photoFor) && !codeWanted;
+  const photos = (mode === 'add' || !!photoFor) && !codeWanted && !forId;
   useEffect(() => {
     if (!reader || !photos || state !== 'on' || holding) return;
     const onKey = (e: KeyboardEvent) => {
@@ -346,7 +409,8 @@ export function Scan() {
   // What the camera's doing, on the chip at the top of it.
   const modeChip: [string, string] = photosOnly ? ['camera', 'Add by photo'] : MODE_CHIP[mode];
   const readingPhoto = looking === 'photo' || (!!aiDraft?.working && !!aiDraft.photo);
-  const [chipIcon, chipText]: [string, string] = codeWanted ? ['scan', 'Scan its barcode or QR code']
+  const [chipIcon, chipText]: [string, string] = forId ? (looking ? ['clock', 'Looking it up…'] : ['scan', forItem ? `Scanning for ${forItem.product.name}` : 'Scanning for an item'])
+    : codeWanted ? ['scan', 'Scan its barcode or QR code']
     : photoFor ? ['camera', 'Now the front of the pack']
     : readingPhoto ? ['sparkle', 'Reading the photo…']
     : aiDraft?.working ? ['sparkle', 'Working it out…']
@@ -359,10 +423,10 @@ export function Scan() {
 
   return (
     <>
-      <Header title="Scan" back="/" />
+      <Header title="Scan" back={forId ? back : '/'} />
       <div className={`content ${desktop ? 'scan-grid' : ''}`}>
         <div className="section">
-          <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />
+          {!forId && <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />}
           <div className="viewfinder" aria-label="Camera">
             <video ref={video} playsInline muted hidden={state !== 'on'} />
             {state === 'on' && taken?.shot && takenUrl && !codeWanted && <img className="vf-still" src={takenUrl} alt="The photo you took" />}
@@ -405,7 +469,7 @@ export function Scan() {
         </div>
 
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
-        <div className={`section ${looking || result || pending || aiDraft || photoFor ? 'scan-result' : ''}`}>
+        <div className={`section ${looking || result || pending || aiDraft || photoFor || forId ? 'scan-result' : ''}`}>
           {looking === 'code' && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
           {looking === 'photo' && (
             <div className="sheet-card">
@@ -443,7 +507,16 @@ export function Scan() {
           )}
           {!looking && result && !aiDraft && <ResultCard r={result} mode={mode} target={target} onClearTarget={() => setTarget(null)} onDone={done} onIdentified={(r) => setResult(r)} pending={pending} setPending={setPending}
             onReadWithAi={reader ? (keep) => photoOf(keep, result) : undefined} />}
-          {!looking && !result && !pending && !aiDraft && !photoFor && (
+          {forId && !looking && (
+            <div className="sheet-card">
+              <div className="match">
+                {forItem ? <ProductTile s={forItem} size="lg" /> : <span className="tile lg"><Icon name="scan" size="lg" /></span>}
+                <div className="item-main"><h3>{forItem ? forItem.product.name : 'Loading…'}</h3><span className="small muted">Scan its barcode or QR code, or type it above. Larder remembers it, so the next scan knows it.</span></div>
+              </div>
+              <div className="btnrow"><Link className="btn" to={back}>Cancel</Link></div>
+            </div>
+          )}
+          {!forId && !looking && !result && !pending && !aiDraft && !photoFor && (
             <div className="card empty">
               <b>Ready</b>
               <span className="muted small">

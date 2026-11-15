@@ -3141,6 +3141,10 @@
             "default": false,
             "type": "boolean"
           },
+          "noBarcode": {
+            "default": false,
+            "type": "boolean"
+          },
           "onShoppingList": {
             "default": false,
             "type": "boolean"
@@ -8192,6 +8196,10 @@
             "default": false,
             "type": "boolean"
           },
+          "noBarcode": {
+            "default": false,
+            "type": "boolean"
+          },
           "onShoppingList": {
             "default": false,
             "type": "boolean"
@@ -8283,6 +8291,7 @@
           "links",
           "wish",
           "rechargeable",
+          "noBarcode",
           "onShoppingList",
           "defaultPlaceId",
           "keptInPlaceIds",
@@ -11918,7 +11927,8 @@
                 "expected",
                 "wish",
                 "in_stock",
-                "to_tidy"
+                "to_tidy",
+                "no_barcode"
               ]
             },
             "in": "query",
@@ -12202,6 +12212,10 @@
                     "type": "boolean"
                   },
                   "rechargeable": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "noBarcode": {
                     "default": false,
                     "type": "boolean"
                   },
@@ -12544,6 +12558,9 @@
                     "type": "boolean"
                   },
                   "rechargeable": {
+                    "type": "boolean"
+                  },
+                  "noBarcode": {
                     "type": "boolean"
                   },
                   "onShoppingList": {
@@ -14732,6 +14749,10 @@
                         "type": "boolean"
                       },
                       "rechargeable": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "noBarcode": {
                         "default": false,
                         "type": "boolean"
                       },

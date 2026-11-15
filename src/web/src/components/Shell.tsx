@@ -15,9 +15,15 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** USB and Bluetooth barcode scanners type fast and press Enter. Catch that anywhere. */
+/**
+ * USB and Bluetooth barcode scanners type fast and press Enter. Catch that anywhere. On Scan, what it's
+ * scanning for (an item's barcode, `for`) stays in the address with the code.
+ */
 function useScannerWedge() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const here = useRef(location);
+  here.current = location;
   useEffect(() => {
     let buf = '';
     let last = 0;
@@ -30,7 +36,9 @@ function useScannerWedge() {
       if (e.key === 'Enter') {
         if (buf.length >= 6) {
           e.preventDefault();
-          navigate(`/scan?code=${encodeURIComponent(buf)}`);
+          const next = new URLSearchParams(here.current.pathname === '/scan' ? here.current.search : '');
+          next.set('code', buf);
+          navigate(`/scan?${next}`);
         }
         buf = '';
       } else if (e.key.length === 1) buf += e.key;

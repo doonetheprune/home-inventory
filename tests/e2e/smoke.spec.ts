@@ -991,6 +991,50 @@ test('a photo’s card scans its barcode or QR code, and links an NFC tag, as it
   await expect(page.getByText('Ready', { exact: true })).toBeVisible();
 });
 
+test('things you have with no barcode are listed to scan one after another, or to say they have none', async ({ page }, info) => {
+  const see = await pretendBarcodes(page);
+  await signIn(page);
+  const n = `${info.project.name} ${Date.now() % 100000}`;
+  const make = (name: string, unit: string, brand?: string) => page.evaluate(async ([name, unit, brand]) => {
+    const headers = { 'X-Larder-Client': 'web', 'Content-Type': 'application/json' };
+    const p = (await (await fetch('api/v1/products', { method: 'POST', headers, body: JSON.stringify({ name, unit }) })).json()) as { id: string };
+    await fetch('api/v1/stock/add', { method: 'POST', headers, body: JSON.stringify({ productId: p.id, quantity: 1 }) });
+    if (brand) await fetch(`api/v1/products/${p.id}/variants`, { method: 'POST', headers, body: JSON.stringify({ name: brand }) });
+  }, [name, unit, brand ?? ''] as const);
+  const glycerine = `Glycerine ${n}`;
+  const bananas = `Bananas ${n}`;
+  await make(glycerine, 'jar', 'Sugarflair');
+  await make(bananas, 'bunch');
+
+  // On Stock, like To sort on Places.
+  await page.goto('/#/stock');
+  const link = page.locator('.tosort-link', { hasText: 'No barcode' });
+  await expect(link).toContainText("Larder can't scan yet");
+  await link.click();
+  await expect(page.getByRole('heading', { name: 'No barcode' })).toBeVisible();
+  const row = (name: string) => page.locator('.list .item', { hasText: name });
+
+  // Bananas have none: off the list.
+  await row(bananas).getByRole('button', { name: "Hasn't got one" }).click();
+  await expect(page.locator('.toast')).toContainText(`${bananas} has no barcode`);
+  await expect(row(bananas)).toHaveCount(0);
+
+  // The glycerine's is scanned: another item's barcode isn't it; its own goes on its brand, then it's back to the list.
+  await row(glycerine).getByRole('link', { name: `Scan ${glycerine}'s barcode` }).click();
+  await expect(page.locator('.vf-chip', { hasText: `Scanning for ${glycerine}` })).toBeVisible();
+  await expect(page.locator('.viewfinder video')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Take photo' })).toHaveCount(0);
+  await see('5029053038889', '5029053038889');
+  await expect(page.locator('.toast')).toContainText("That's Toilet roll's barcode.");
+  const code = `GLY-${n.replace(/\W/g, '')}`;
+  await see(code, code);
+  await expect(page.locator('.toast')).toContainText(`Barcode saved for ${glycerine}. Next time it scans straight in.`);
+  await expect(page.getByRole('heading', { name: 'No barcode' })).toBeVisible();
+  await expect(row(glycerine)).toHaveCount(0);
+  expect(await page.evaluate(async (c) => (await fetch(`api/v1/identify?code=${encodeURIComponent(c)}`)).json(), code))
+    .toMatchObject({ kind: 'product', product: { product: { name: glycerine } }, variant: { name: 'Sugarflair' } });
+});
+
 test('a new item’s pack size keeps the unit picked while the amount is typed again', async ({ page }, info) => {
   await signIn(page);
   const name = `Dishwasher tablets ${info.project.name}`;

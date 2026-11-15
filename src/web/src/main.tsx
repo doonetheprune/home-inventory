@@ -25,6 +25,7 @@ import { Shopping } from './screens/Shopping';
 import { Places } from './screens/Places';
 import { PlacePage } from './screens/Place';
 import { ToSort } from './screens/ToSort';
+import { NoBarcode } from './screens/NoBarcode';
 import { GridWizard } from './screens/GridWizard';
 import { Shops } from './screens/Shops';
 import { WishList } from './screens/WishList';
@@ -73,6 +74,7 @@ function App() {
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="stock" element={<Stock />} />
+          <Route path="stock/no-barcode" element={<NoBarcode />} />
           <Route path="products/:id" element={<ProductPage />} />
           <Route path="products/:id/edit" element={<ProductEdit />} />
           <Route path="add" element={<AddItem />} />

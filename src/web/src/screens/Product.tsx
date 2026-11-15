@@ -363,6 +363,9 @@ function Variants({ p }: { p: ProductDetail }) {
         </div>
       )}
       {!p.variants.length && !adding && <p className="muted small">No brands yet. Scan a barcode to add one, or add it here.</p>}
+      {!p.variants.some((v) => v.barcodes.length) && !p.product.noBarcode && p.inStock + (p.inUse ? 1 : 0) > 0 && (
+        <Link className="btn small" style={{ justifySelf: 'start' }} to={`/scan?for=${p.product.id}&back=${encodeURIComponent(`/products/${p.product.id}`)}`}><Icon name="scan" size="sm" />Scan its barcode</Link>
+      )}
       {adding && (
         <div className="card pad">
           <label className="field"><span>Brand or pack</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Andrex 9 rolls" /></label>

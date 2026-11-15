@@ -35,6 +35,8 @@ export interface ProductFormValue {
   links: string;
   wish: boolean;
   rechargeable: boolean;
+  /** It has no barcode (loose, home-made, a tool): not listed under No barcode. */
+  noBarcode: boolean;
 }
 
 /** What a Weight can be given in: the list's weights and volumes. */
@@ -43,7 +45,7 @@ const weightUnits = (units: Units) => units.all.filter((u) => u.kind !== 'count'
 export const notBoughtIn = (units: Units) => units.all.filter((u) => u.kind !== 'count' && u.factor !== 1).map((u) => u.key);
 
 export function emptyForm(name = ''): ProductFormValue {
-  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, packAmount: null, packUnit: '', weightAmount: null, weightUnit: 'g', usageAmount: null, usageUnit: '', usageEvery: 1, usagePer: 'day', takeOut: false, inUseSince: '', minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false };
+  return { name, aliases: '', categoryId: null, unit: 'each', shelfLifeDays: null, packAmount: null, packUnit: '', weightAmount: null, weightUnit: 'g', usageAmount: null, usageUnit: '', usageEvery: 1, usagePer: 'day', takeOut: false, inUseSince: '', minQuantity: null, stockUpTo: null, preferredShopIds: [], defaultPlaceId: null, notes: '', links: '', wish: false, rechargeable: false, noBarcode: false };
 }
 
 /** The pack size, or null (nothing typed yet, or none for things bought loose). */
@@ -89,6 +91,7 @@ export function toPayload(v: ProductFormValue, units: Units) {
     links,
     wish: v.wish,
     rechargeable: v.rechargeable,
+    noBarcode: v.noBarcode,
     // Saved from here, it's been looked at: off the To tidy list.
     needsCheck: null,
   };
@@ -261,6 +264,7 @@ export function ProductForm({ value, onChange, categories, shops, places, showNa
 
       <div className="list">
         <div className="toggle"><span><b>Wish list</b><br /><span className="small muted">Want it, don't have it yet</span></span><Switch checked={value.wish} onChange={(v) => set('wish', v)} label="Wish list" /></div>
+        <div className="toggle"><span><b>Has no barcode</b><br /><span className="small muted">Loose, home-made or a tool: not listed under No barcode</span></span><Switch checked={value.noBarcode} onChange={(v) => set('noBarcode', v)} label="Has no barcode" /></div>
         {(cat?.name === 'Batteries' || value.rechargeable) && (
           <div className="toggle"><span><b>Rechargeable</b><br /><span className="small muted">Count charged and flat separately</span></span><Switch checked={value.rechargeable} onChange={(v) => set('rechargeable', v)} label="Rechargeable" /></div>
         )}
