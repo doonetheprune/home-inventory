@@ -155,7 +155,7 @@ describe('units for assistants', () => {
       // "Stock stays in boxes" alone read as "Larder doesn't keep part of a box" (the owner's 8 Oxo cubes).
       'Part of one is kept too: say it in what\'s in its pack with unit. 8 cubes left of a box of 24 is correct_stock quantity 8, unit "cube" (add_stock if there are none), and Larder says "8 cubes (about ⅓ box)".',
       // "0 jars" with the last one open was read as none.
-      'Stock counts unopened ones: one that\'s open is still there. "1 open, the last one (none unopened)" means they have it, open, with how much is left when Larder knows; never say they have none. correct_stock open_left says how much is left in it.',
+      'Stock counts unopened ones: one that\'s open is still there. "1 open, the last one (none unopened)" means they have it, open, with how much is left when Larder knows; never say they have none. Larder keeps how much is left in it: correct_stock open_left (0.5 for half). Opening one is use_stock opened: true; down to 0 but on the last one, open, is correct_stock open_left alone, which marks it open.',
       'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
       'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
     ]) expect(ASSISTANT_INSTRUCTIONS).toContain(sentence);

@@ -104,6 +104,13 @@ export function ProductPage() {
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
             {isOpen(p) && <OpenLeft p={p} />}
+            {/* Down to 0, but on the last one, open (used without saying it was opened): say so, then how much is left. */}
+            {!isOpen(p) && p.inStock <= 0 && !p.product.usage && !p.product.rechargeable && !p.product.wish && !renewal && (
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                <span className="small muted">None unopened. Still using the last one?</span>
+                <button type="button" className="chip" disabled={busy} onClick={() => run(() => api.products.update(p.product.id, { inUseSince: localToday() }), `${p.product.name}: the last one is open`)}>The last one's open</button>
+              </div>
+            )}
             <div className="btnrow">
               {startNext && <button type="button" className="btn small" disabled={busy || p.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: Math.min(p.product.usage!.amount, p.inStock), open: true }), (r) => `Started a new one · ${stockText(r, ' left')}`)}><Icon name="undo" size="sm" />Came off early: start the next one now</button>}
               {p.inUse && !startNext && (!p.product.usage || (p.product.usage.everyDays >= 2 && !p.product.usage.unit)) && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.usage ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.usage ? 'Finished early' : 'Finished the open one'}</button>}
@@ -227,6 +234,12 @@ function UsageLine({ p }: { p: ProductDetail }) {
 const startsOne = (p: ProductDetail) => coreStartsOne(p.product);
 
 /** Stock, big: "4" boxes, "about ¾" jar, "15" tea bags (about ¾ box), "350" g. */
+/** Today on this phone, as YYYY-MM-DD. */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** How much is left in the open one, roughly: a press saves it, and assistants and the item say it. */
 const LEFT: Array<[number, string]> = [[0.75, '¾'], [0.5, '½'], [0.25, '¼'], [0.1, 'Nearly empty']];
 function OpenLeft({ p }: { p: ProductDetail }) {

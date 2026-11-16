@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.3
+
+**"I'm down to 0, on my last one, it's open."** Said to an assistant, it got stuck: Larder had none in stock and nothing marked open (it had been used without saying it was opened), so opening one had nothing to open, and saying how much was left had no open one to say it of. The assistant took that as Larder not keeping open ones.
+
+- **Assistants:** saying how much is left in the last one (`correct_stock` `open_left`) now marks it open when Larder has none in stock, in one go: "Glycerine: about ½ jar left in the open one. It was marked open now: it's the last one." What assistants are told says Larder keeps how much is left, and which to use when.
+- **In the app:** an item with none unopened and nothing open has **The last one's open** under its count. Press it and it's **1 open**, with **How much is left in it?** below.
+
 ## 0.11.2
 
 **A barcode for something added by photo, food past its date cleared, and part of a box for assistants.** Things the owner hit using Larder.

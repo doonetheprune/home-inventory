@@ -74,7 +74,7 @@ export const ASSISTANT_INSTRUCTIONS = [
   'Every item is bought in a unit from Larder\'s list (box, jar, roll, each…, or g or ml for things bought loose), and its stock is always counted in that.',
   'Its pack size is what one holds, as printed on the pack. A box of 20 tea bags is bought_in "box" with pack_size 20 "tea bag": stock is counted in boxes, so never switch it to counting tea bags.',
   'Part of one is kept too: say it in what\'s in its pack with unit. 8 cubes left of a box of 24 is correct_stock quantity 8, unit "cube" (add_stock if there are none), and Larder says "8 cubes (about ⅓ box)".',
-  'Stock counts unopened ones: one that\'s open is still there. "1 open, the last one (none unopened)" means they have it, open, with how much is left when Larder knows; never say they have none. correct_stock open_left says how much is left in it.',
+  'Stock counts unopened ones: one that\'s open is still there. "1 open, the last one (none unopened)" means they have it, open, with how much is left when Larder knows; never say they have none. Larder keeps how much is left in it: correct_stock open_left (0.5 for half). Opening one is use_stock opened: true; down to 0 but on the last one, open, is correct_stock open_left alone, which marks it open.',
   'To work in grams (4 g a day, 500 g in a recipe, a price per kg), Larder needs to know what one weighs. That comes from the pack size when it\'s in g or ml; otherwise give weight.',
   'Units must be on the list (list_units); if one isn\'t, ask whether to add it (add_unit).',
   'How fast it\'s used (uses: 1 tea bag a day, 4 g a day) tells Larder when it runs out; with takes_out_automatically, Larder takes that much out of stock by itself.',

@@ -372,7 +372,8 @@ describe('how much is left in the open one', () => {
     await core.stock.add({ productId: glycerine.id, quantity: 1 });
     // Not open yet: there's nothing to say how much is left in.
     await expect(core.products.update(glycerine.id, { openLeft: 0.5 })).rejects.toThrow("None of Glycerine is open, so there's nothing to say how much is left in.");
-    await expect(core.assistant.call('correct_stock', { item: 'glycerine', open_left: 0.5 })).rejects.toThrow('None of Glycerine is open. To say one was opened, use use_stock with opened: true.');
+    // With one unopened, opening it takes it out of the count: that's use_stock.
+    await expect(core.assistant.call('correct_stock', { item: 'glycerine', open_left: 0.5 })).rejects.toThrow('None of Glycerine is open, and Larder has 1 jar unopened. If they\'ve opened one, use use_stock with opened: true first');
     await core.assistant.call('use_stock', { item: 'glycerine', opened: true });
 
     // "About half full": in what it's bought in. Lists lead with the open one, kept where it lives.
@@ -394,6 +395,25 @@ describe('how much is left in the open one', () => {
     expect((await core.assistant.call('correct_stock', { item: 'twinings sleep', open_left: 0 })).text).toBe('Twinings Sleep: the open one is finished. 1 box in stock.');
     const done = await core.products.summary(tea.id);
     expect([done.inUse, done.product.openLeft]).toEqual([false, null]);
+  });
+
+  it('marks the last one open when they are down to 0 and say how much is left in it (the owner\'s "I\'m on my last one, it\'s open")', async () => {
+    const core = await makeCore();
+    const pasta = await core.products.create({ name: 'Fusilli pasta', unit: 'bag', packSize: { amount: 500, unit: 'g' } });
+    await core.stock.add({ productId: pasta.id, quantity: 1 });
+    // Used without saying it was opened: Larder has none, and nothing open.
+    await core.stock.use({ productId: pasta.id, quantity: 1 });
+    expect((await core.assistant.call('correct_stock', { item: 'fusilli', open_left: 200, unit: 'g' })).text)
+      .toBe("Fusilli pasta: about ⅓ bag (200 g) left in the open one. It was marked open now: it's the last one, none unopened.");
+    const s = await core.products.summary(pasta.id);
+    expect([s.inUse, s.inStock, s.product.openLeft, s.product.inUseSince]).toEqual([true, 0, 0.4, '2026-10-28']);
+    expect((await core.assistant.call('search', { query: 'fusilli' })).text).toContain('Fusilli pasta: 1 open, the last one (none unopened), about ⅓ bag (200 g) left');
+    // Nothing open and none left: nothing to finish.
+    await core.stock.finish(pasta.id);
+    expect((await core.assistant.call('correct_stock', { item: 'fusilli', open_left: 0 })).text).toBe('Fusilli pasta: none open, and none in stock.');
+    // Something used at a set rate works out what's left itself.
+    const tea = await core.products.create({ name: 'Sleep tea', unit: 'box', packSize: { amount: 20, unit: 'tea bag' }, usage: { amount: 1, everyDays: 1, auto: true, unit: 'tea bag' } });
+    await expect(core.assistant.call('correct_stock', { item: 'sleep tea', open_left: 0.5 })).rejects.toThrow('Sleep tea is used at a set rate, so Larder works out what\'s left itself.');
   });
 });
 

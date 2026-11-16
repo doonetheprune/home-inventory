@@ -186,6 +186,22 @@ const CASES: Case[] = [
     },
   },
   {
+    id: 'last-open',
+    about: 'down to 0, but on the last one, open, with how much is left (the owner\'s words)',
+    setup: (core) => add(core, { name: 'Glycerine', unit: 'jar' }, 0),
+    says: ['I\'m down to 0 on glycerine, I\'m on my last one that\'s open. There\'s about half left.'],
+    right: [['correct_stock', { item: 'glycerine', open_left: 0.5 }]],
+    async check(core) {
+      const s = await item(core, /glycerine/i);
+      if (!s) return ['the item is missing'];
+      const wrong = expect(s, { unit: 'jar', inStock: 0 });
+      if (!s.inUse) wrong.push('the last one isn\'t marked open');
+      const left = (s.product as Product & { openLeft?: number | null }).openLeft;
+      if (!near(left ?? -1, 0.5)) wrong.push(`open one has ${left ?? 'nothing'} left, not 0.5`);
+      return wrong;
+    },
+  },
+  {
     id: 'sleeves',
     about: 'a unit Larder doesn\'t have, added once asked',
     says: ['Add paper cups to Larder. They come in sleeves of 50.', 'Yes, add it.'],

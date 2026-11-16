@@ -554,6 +554,13 @@ test('marks one open, and keeps what was paid', async ({ page }, info) => {
   await expect(page.getByText(/One open since .*, the last one, with about ½ left in it\./)).toBeVisible();
   await page.getByRole('button', { name: 'Finished the open one' }).click();
   await expect(left).toHaveCount(0);
+  // Down to 0 but still using the last one (used without saying it was opened): it can be said, then how much is left.
+  await expect(page.locator('.pill', { hasText: /^Out$/ })).toBeVisible();
+  await page.getByRole('button', { name: "The last one's open" }).click();
+  await expect(page.locator('.toast')).toContainText(`${name}: the last one is open`);
+  await expect(page.locator('.big-qty')).toHaveText(/^1\s*open$/);
+  await expect(left).toBeVisible();
+  await page.getByRole('button', { name: 'Finished the open one' }).click();
   await expect(page.locator('.pill', { hasText: /^Out$/ })).toBeVisible();
 
   // Purchases: what was spent, and every purchase.
