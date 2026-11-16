@@ -136,6 +136,10 @@ a.item:hover, button.item:hover { background: var(--surface-2); }
 .item-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-meta { font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-side { display: grid; justify-items: end; gap: 4px; flex: none; text-align: right; }
+/* Something past its date on Home: its row, then Gone? Used up / Thrown away under it. */
+.past-date { border-top: 1px solid var(--line); }
+.past-date > .item { border-top: 0; }
+.past-date-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; padding: 0 14px 12px; }
 .qty { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; }
 .tile { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); color: var(--accent); display: grid; place-items: center; flex: none; overflow: hidden; }
 .tile img { width: 100%; height: 100%; object-fit: cover; }

@@ -209,6 +209,15 @@ describe('lookup', () => {
     const r2 = await core.lookup.identify('4088600214568');
     expect(r2.kind === 'product' && r2.product.product.id).toBe(product.product.id);
 
+    // A QR code on the pack (a web address, longer than any barcode) is kept and known the same way, without asking the providers.
+    const qr = 'https://qr.example.co.uk/p/0123456789abcdef0123456789abcdef0123456789abcdef?src=pack&lang=en-GB';
+    expect(await core.lookup.identify(qr)).toMatchObject({ kind: 'unknown', providersTried: [] });
+    const drill = await core.lookup.remember({ barcode: qr, create: { name: 'Cordless drill' } });
+    expect(drill.variant.barcodes).toEqual([qr]);
+    const r3 = await core.lookup.identify(qr);
+    expect(r3.kind === 'product' && r3.product.product.id).toBe(drill.product.product.id);
+    expect(calls).toHaveLength(2);
+
     await core.modules.setEnabled('fake-lookup', false);
     expect(await core.lookup.identify('9999999999998')).toMatchObject({ kind: 'unknown', providersTried: [], providersFailed: [] });
     expect((await core.lookup.identify('9999999999999')).kind).toBe('unknown');
@@ -422,5 +431,34 @@ describe('lookup photos', () => {
     const [variant] = (await core.products.get(item.product.id)).variants;
     expect(variant).toMatchObject({ name: 'Item 5000157024671', barcodes: ['5000157024671'], photoFileId: item.product.photoFileIds[0], source: 'fake' });
     expect(searched).toEqual([]);
+  });
+});
+
+describe('missing barcodes', () => {
+  it('lists things in the house with no barcode, until one is scanned or it is said to have none', async () => {
+    const core = await makeCore();
+    const renewals = await category(core, 'Renewals');
+    const glycerine = await core.products.create({ name: 'Glycerine', unit: 'jar' });
+    const bananas = await core.products.create({ name: 'Bananas', unit: 'bunch' });
+    const rice = await core.products.create({ name: 'Rice', unit: 'g' });
+    const insurance = await core.products.create({ name: 'Car insurance', categoryId: renewals.id });
+    const beans = await core.products.create({ name: 'Baked beans', unit: 'tin' });
+    await core.products.create({ name: 'Ketchup', unit: 'bottle' });
+    for (const p of [glycerine, bananas, beans, insurance]) await core.stock.add({ productId: p.id, quantity: 1 });
+    await core.stock.add({ productId: rice.id, quantity: 500 });
+    await core.lookup.remember({ barcode: '5000157024671', productId: beans.id });
+    const names = async () => (await core.products.list({ status: 'no_barcode' })).map((s) => s.product.name);
+    // Not beans (it has one), rice (bought loose), insurance (a renewal) or ketchup (none in the house to scan).
+    expect(await names()).toEqual(['Bananas', 'Glycerine']);
+    // The last one, open: still here to scan.
+    await core.stock.use({ productId: glycerine.id, quantity: 1, open: true });
+    expect(await names()).toEqual(['Bananas', 'Glycerine']);
+    // Bananas have none; Glycerine's is scanned onto its brand.
+    await core.products.update(bananas.id, { noBarcode: true });
+    const brand = await core.products.addVariant(glycerine.id, { name: 'Sugarflair' });
+    expect(await names()).toEqual(['Glycerine']);
+    await core.products.updateVariant(brand.id, { barcodes: ['5060000000001'] });
+    expect(await names()).toEqual([]);
+    expect((await core.assistant.call('list_items', { status: 'no_barcode' })).text).toBe('No items like that.');
   });
 });

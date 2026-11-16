@@ -4,7 +4,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import type { ShoppingItem, ShoppingList } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
-import { num, qty, stockText } from '../format';
+import { isOpen, num, qty, stockText } from '../format';
 import { useEnabledWebModules } from '../modules';
 import { Empty, ErrorBox, Header, Loading, ProductTile, Stepper, useAction, useDebounced, useIsDesktop } from '../ui';
 
@@ -20,7 +20,7 @@ const load = (key: string): Ticks => {
 function reason(i: ShoppingItem): string {
   const s = i.summary;
   if (i.reason === 'manual') return 'Added by hand';
-  const parts = [s.inStock + s.expected <= 0 ? 'None left' : stockText(s, ' left')];
+  const parts = [s.inStock + s.expected <= 0 ? (isOpen(s) ? 'Last one open' : 'None left') : stockText(s, ' left')];
   if (s.product.minQuantity !== null) parts.push(`low below ${num(s.product.minQuantity)}`);
   if (s.product.stockUpTo != null) parts.push(`stock up to ${num(s.product.stockUpTo)}`);
   if (s.expected) parts.push(`${num(s.expected)} on the way`);

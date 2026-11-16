@@ -3066,6 +3066,19 @@
               }
             ]
           },
+          "openLeft": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -3125,6 +3138,10 @@
             "type": "boolean"
           },
           "rechargeable": {
+            "default": false,
+            "type": "boolean"
+          },
+          "noBarcode": {
             "default": false,
             "type": "boolean"
           },
@@ -3253,7 +3270,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 200
             }
           },
           "shopCodes": {
@@ -4560,6 +4577,51 @@
           },
           "shopping": {
             "$ref": "#/components/schemas/ShoppingSummaryInput"
+          },
+          "cleared": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "productId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "expiresOn": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "clearedAt": {
+                  "type": "string",
+                  "minLength": 10
+                }
+              },
+              "required": [
+                "id",
+                "productId",
+                "name",
+                "quantity",
+                "unit",
+                "expiresOn",
+                "clearedAt"
+              ]
+            }
           }
         },
         "required": [
@@ -4825,6 +4887,19 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 365
+          },
+          "clearPastDateDays": {
+            "default": 2,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "currency": {
             "default": "GBP",
@@ -8046,6 +8121,19 @@
               }
             ]
           },
+          "openLeft": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "minQuantity": {
             "default": null,
             "anyOf": [
@@ -8105,6 +8193,10 @@
             "type": "boolean"
           },
           "rechargeable": {
+            "default": false,
+            "type": "boolean"
+          },
+          "noBarcode": {
             "default": false,
             "type": "boolean"
           },
@@ -8190,6 +8282,7 @@
           "shelfLifeDays",
           "usage",
           "inUseSince",
+          "openLeft",
           "minQuantity",
           "stockUpTo",
           "preferredShopIds",
@@ -8198,6 +8291,7 @@
           "links",
           "wish",
           "rechargeable",
+          "noBarcode",
           "onShoppingList",
           "defaultPlaceId",
           "keptInPlaceIds",
@@ -8258,7 +8352,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 200
             }
           },
           "shopCodes": {
@@ -9633,6 +9727,52 @@
           },
           "shopping": {
             "$ref": "#/components/schemas/ShoppingSummary"
+          },
+          "cleared": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "productId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "expiresOn": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "clearedAt": {
+                  "type": "string",
+                  "minLength": 10
+                }
+              },
+              "required": [
+                "id",
+                "productId",
+                "name",
+                "quantity",
+                "unit",
+                "expiresOn",
+                "clearedAt"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -9643,7 +9783,8 @@
           "outOfPlace",
           "deliveries",
           "pendingOrders",
-          "shopping"
+          "shopping",
+          "cleared"
         ],
         "additionalProperties": false
       },
@@ -9910,6 +10051,19 @@
             "minimum": 0,
             "maximum": 365
           },
+          "clearPastDateDays": {
+            "default": 2,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "currency": {
             "default": "GBP",
             "type": "string",
@@ -9925,6 +10079,7 @@
         "required": [
           "householdName",
           "expiryWarningDays",
+          "clearPastDateDays",
           "currency",
           "timeZone"
         ],
@@ -11772,7 +11927,8 @@
                 "expected",
                 "wish",
                 "in_stock",
-                "to_tidy"
+                "to_tidy",
+                "no_barcode"
               ]
             },
             "in": "query",
@@ -11984,6 +12140,19 @@
                       }
                     ]
                   },
+                  "openLeft": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "minQuantity": {
                     "default": null,
                     "anyOf": [
@@ -12043,6 +12212,10 @@
                     "type": "boolean"
                   },
                   "rechargeable": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "noBarcode": {
                     "default": false,
                     "type": "boolean"
                   },
@@ -12321,6 +12494,18 @@
                       }
                     ]
                   },
+                  "openLeft": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "minQuantity": {
                     "anyOf": [
                       {
@@ -12373,6 +12558,9 @@
                     "type": "boolean"
                   },
                   "rechargeable": {
+                    "type": "boolean"
+                  },
+                  "noBarcode": {
                     "type": "boolean"
                   },
                   "onShoppingList": {
@@ -12630,7 +12818,7 @@
                     "items": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 64
+                      "maxLength": 200
                     }
                   },
                   "shopCodes": {
@@ -12735,7 +12923,7 @@
                     "items": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 64
+                      "maxLength": 200
                     }
                   },
                   "shopCodes": {
@@ -13718,6 +13906,210 @@
         }
       }
     },
+    "/api/v1/stock/past-date": {
+      "post": {
+        "summary": "An item's stock past its date is gone: used up, or thrown away",
+        "tags": [
+          "Stock"
+        ],
+        "description": "Only the batches whose date was before today. `used` counts as using them (as Use does); `thrown` takes them out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "how": {
+                    "type": "string",
+                    "enum": [
+                      "used",
+                      "thrown"
+                    ]
+                  }
+                },
+                "required": [
+                  "productId",
+                  "how"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/cleared": {
+      "get": {
+        "summary": "Fresh food Larder cleared because it was past its date, in the last week",
+        "tags": [
+          "Stock"
+        ],
+        "description": "Fresh food (it keeps 2 weeks or less) still in stock a few days after its date is taken out by the hourly check (household setting `clearPastDateDays`). Home lists it, to put back what's still there.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "productId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "unit": {
+                        "type": "string"
+                      },
+                      "expiresOn": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      "clearedAt": {
+                        "type": "string",
+                        "minLength": 10
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "productId",
+                      "name",
+                      "quantity",
+                      "unit",
+                      "expiresOn",
+                      "clearedAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "What Larder cleared has been seen: take it off Home",
+        "tags": [
+          "Stock"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "productId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "number"
+                      },
+                      "unit": {
+                        "type": "string"
+                      },
+                      "expiresOn": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      "clearedAt": {
+                        "type": "string",
+                        "minLength": 10
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "productId",
+                      "name",
+                      "quantity",
+                      "unit",
+                      "expiresOn",
+                      "clearedAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock/cleared/{id}/put-back": {
+      "post": {
+        "summary": "A batch Larder cleared is still there: put it back as it was (Larder leaves it alone after)",
+        "tags": [
+          "Stock"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/shopping": {
       "get": {
         "summary": "How much is on each shop’s list, and which shop to go to",
@@ -14119,7 +14511,7 @@
                   "barcode": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 64
+                    "maxLength": 200
                   },
                   "productId": {
                     "type": "string",
@@ -14285,6 +14677,19 @@
                           }
                         ]
                       },
+                      "openLeft": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "minQuantity": {
                         "default": null,
                         "anyOf": [
@@ -14344,6 +14749,10 @@
                         "type": "boolean"
                       },
                       "rechargeable": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "noBarcode": {
                         "default": false,
                         "type": "boolean"
                       },
@@ -14586,6 +14995,19 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 365
+                  },
+                  "clearPastDateDays": {
+                    "default": 2,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 30
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "currency": {
                     "default": "GBP",
@@ -14937,7 +15359,7 @@
     },
     "/api/v1/automation/check-expiry": {
       "post": {
-        "summary": "Take out of stock what Larder takes out by itself, then publish stock.expiring / stock.expired events for anything newly due (the server also does this hourly)",
+        "summary": "Take out of stock what Larder takes out by itself and fresh food well past its date, then publish stock.expiring / stock.expired events for anything newly due (the server also does this hourly)",
         "tags": [
           "Automation"
         ],
@@ -14957,12 +15379,16 @@
                     },
                     "taken": {
                       "type": "number"
+                    },
+                    "cleared": {
+                      "type": "number"
                     }
                   },
                   "required": [
                     "expiring",
                     "expired",
-                    "taken"
+                    "taken",
+                    "cleared"
                   ],
                   "additionalProperties": false
                 }

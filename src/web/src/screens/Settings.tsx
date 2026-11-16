@@ -42,10 +42,12 @@ function Household({ admin }: { admin: boolean }) {
   const { run, busy } = useAction();
   const [name, setName] = useState('');
   const [warn, setWarn] = useState(7);
+  const [clear, setClear] = useState<number | null>(2);
   useEffect(() => {
     if (data) {
       setName(data.householdName);
       setWarn(data.expiryWarningDays);
+      setClear(data.clearPastDateDays);
     }
   }, [data]);
   return (
@@ -54,8 +56,14 @@ function Household({ admin }: { admin: boolean }) {
       <div className="list">
         <label className="numfield"><span><b>Name</b></span><input className="input" value={name} onChange={(e) => setName(e.target.value)} disabled={!admin} style={{ maxWidth: '60%', textAlign: 'right', padding: '8px 10px' }} /></label>
         <div className="numfield"><span><b>Warn before expiry</b><small>Days ahead, unless a category says otherwise</small></span><Stepper value={warn} onChange={setWarn} min={0} max={365} label="days" /></div>
+        <label className="numfield"><span><b>Clear fresh food past its date</b><small>Food that keeps 2 weeks or less, still in Larder this long after its date, is taken out: it's been eaten or thrown away. Home says what was cleared, to put back what's still there</small></span>
+          <select className="input" style={{ width: 'auto' }} value={clear ?? ''} disabled={!admin} onChange={(e) => setClear(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Never</option>
+            {[1, 2, 3, 5, 7].map((n) => <option key={n} value={n}>{n === 7 ? 'A week after' : `${n} day${n === 1 ? '' : 's'} after`}</option>)}
+          </select>
+        </label>
       </div>
-      {admin && <button type="button" className="btn" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => run(() => api.settings.update({ householdName: name.trim() || 'Our house', expiryWarningDays: warn }), 'Saved')}>Save</button>}
+      {admin && <button type="button" className="btn" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => run(() => api.settings.update({ householdName: name.trim() || 'Our house', expiryWarningDays: warn, clearPastDateDays: clear }), 'Saved')}>Save</button>}
     </div>
   );
 }

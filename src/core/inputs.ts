@@ -66,7 +66,7 @@ export const VariantCreate = Variant.omit({ id: true, productId: true, createdAt
 export const VariantPatch = patchOf(VariantCreate);
 
 export const ProductFilter = z.object({
-  status: z.enum(['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_tidy']).default('all'),
+  status: z.enum(['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_tidy', 'no_barcode']).default('all'),
   categoryId: Id.optional(),
   placeId: Id.optional(),
 });
@@ -104,6 +104,13 @@ export const StockUse = z.object({
   unit: z.string().max(30).optional(),
 });
 export type StockUse = z.input<typeof StockUse>;
+
+/** An item's stock that's past its date, gone: eaten or used (`used`), or thrown away (`thrown`). */
+export const StockPastDate = z.object({
+  productId: Id,
+  how: z.enum(['used', 'thrown']),
+});
+export type StockPastDate = z.input<typeof StockPastDate>;
 
 export const StockMove = z.object({
   productId: Id,
@@ -206,7 +213,8 @@ export type Purchase = z.input<typeof Purchase>;
 
 export const Remember = z
   .object({
-    barcode: z.string().min(1).max(64),
+    /** A barcode, or a QR code's text. */
+    barcode: z.string().min(1).max(200),
     /** Add the barcode to this existing product… */
     productId: Id.optional(),
     /** …or create a new product. */

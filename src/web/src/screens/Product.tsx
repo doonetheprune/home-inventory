@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { isCount, isLoose, roundQty, startsOne as coreStartsOne, toBoughtIn, weightText, type ProductDetail, type ProductSummary, type StockEntryView } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
-import { ago, dayText, daysFor, expiryText, lastsText, longDate, num, plural, qty, shortDate, stockText, usageText, worthText } from '../format';
+import { ago, dayText, daysFor, expiryText, isOpen, lastsText, longDate, num, openLeftText, plural, qty, shortDate, stockText, usageText, worthText } from '../format';
 import { useUnits } from '../units';
 import { useEnabledWebModules } from '../modules';
 import { ErrorBox, Header, Loading, PlaceSelect, PlaceText, ProductTile, Seg, Sheet, StatusPills, Stepper, Switch, useAction, useIsDesktop, usePlaces, useShops } from '../ui';
@@ -97,12 +97,13 @@ export function ProductPage() {
             )}
             <div className="small muted">
               {p.product.usage ? <><UsageLine p={p} />{' '}</> : null}
-              {p.inUse && !p.product.usage && p.product.inUseSince ? <>One open since {shortDate(p.product.inUseSince)}{p.inStock + p.expected + p.pending <= 0 ? ', the last one' : ''}. </> : null}
+              {isOpen(p) ? <>One open since {shortDate(p.product.inUseSince!)}{p.inStock + p.expected + p.pending <= 0 ? ', the last one' : ''}{p.product.openLeft !== null ? <>, with <b style={{ color: 'var(--ink)' }}>{openLeftText(p.product, p.product.openLeft)} left</b> in it</> : ''}. </> : null}
               {min > 0 ? <>Low below {qty(min, unit)}{worth !== null ? ` (${worthText(worth)})` : ''}. </> : null}
               {p.expected + p.pending > 0 ? <>With {qty(p.expected + p.pending, unit)} {p.pending ? (p.expected ? `on order (${num(p.pending)} not confirmed)` : 'in a pending order') : 'on the way'} you'll have {num(p.inStock + p.expected + p.pending)}, so it's {p.status.low ? 'still low' : <b style={{ color: 'var(--ink)' }}>not on the shopping list</b>}.</> : null}
               {p.nextExpiry ? <> {renewal ? 'Renews' : 'Next to expire'}: {longDate(p.nextExpiry)}.</> : null}
               {p.product.wish ? <> On the wish list.</> : null}
             </div>
+            {isOpen(p) && <OpenLeft p={p} />}
             <div className="btnrow">
               {startNext && <button type="button" className="btn small" disabled={busy || p.inStock <= 0} onClick={() => run(() => api.stock.use({ productId: p.product.id, quantity: Math.min(p.product.usage!.amount, p.inStock), open: true }), (r) => `Started a new one · ${stockText(r, ' left')}`)}><Icon name="undo" size="sm" />Came off early: start the next one now</button>}
               {p.inUse && !startNext && (!p.product.usage || (p.product.usage.everyDays >= 2 && !p.product.usage.unit)) && <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.finished(p.product.id), p.product.usage ? 'Finished: none in use now' : 'Finished: none open now')}><Icon name="check" size="sm" />{p.product.usage ? 'Finished early' : 'Finished the open one'}</button>}
@@ -226,6 +227,22 @@ function UsageLine({ p }: { p: ProductDetail }) {
 const startsOne = (p: ProductDetail) => coreStartsOne(p.product);
 
 /** Stock, big: "4" boxes, "about ¾" jar, "15" tea bags (about ¾ box), "350" g. */
+/** How much is left in the open one, roughly: a press saves it, and assistants and the item say it. */
+const LEFT: Array<[number, string]> = [[0.75, '¾'], [0.5, '½'], [0.25, '¼'], [0.1, 'Nearly empty']];
+function OpenLeft({ p }: { p: ProductDetail }) {
+  const { run, busy } = useAction();
+  const left = p.product.openLeft;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }} role="group" aria-label="How much is left in the open one">
+      <span className="small muted">How much is left in it?</span>
+      {LEFT.map(([v, label]) => (
+        <button key={v} type="button" className={`chip ${left === v ? 'on' : ''}`} aria-pressed={left === v} disabled={busy}
+          onClick={() => run(() => api.products.update(p.product.id, { openLeft: v }), `${p.product.name}: ${openLeftText(p.product, v)} left in the open one`)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
 function StockQty({ s }: { s: ProductDetail }) {
   const shown = stockText(s);
   const [, lead = shown, word = ''] = /^((?:about )?[\d.,¼½¾⅓⅔]+)\s*(.*)$/.exec(shown) ?? [];
@@ -346,6 +363,9 @@ function Variants({ p }: { p: ProductDetail }) {
         </div>
       )}
       {!p.variants.length && !adding && <p className="muted small">No brands yet. Scan a barcode to add one, or add it here.</p>}
+      {!p.variants.some((v) => v.barcodes.length) && !p.product.noBarcode && p.inStock + (p.inUse ? 1 : 0) > 0 && (
+        <Link className="btn small" style={{ justifySelf: 'start' }} to={`/scan?for=${p.product.id}&back=${encodeURIComponent(`/products/${p.product.id}`)}`}><Icon name="scan" size="sm" />Scan its barcode</Link>
+      )}
       {adding && (
         <div className="card pad">
           <label className="field"><span>Brand or pack</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Andrex 9 rolls" /></label>

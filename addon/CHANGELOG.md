@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.2
+
+**A barcode for something added by photo, food past its date cleared, and part of a box for assistants.** Things the owner hit using Larder.
+
+- **Food past its date is cleared:** Larder only knew something was gone when Use was pressed, so chicken eaten days ago still said "expired 5 days ago". Now anything past its date on Home has **Gone? Used up / Thrown away** under it, one press each. And Larder clears fresh food (it keeps 2 weeks or less) by itself 2 days after its date, since it's been eaten or thrown away: Home says what it cleared (**Cleared by Larder**), with **Put back** for anything that's still there, like chicken that went in the freezer. Tins, jars and anything that keeps longer are never cleared by themselves, nor are renewals. Change how long it waits, or switch it off, in Settings → Household → **Clear fresh food past its date**.
+- **No barcode:** Stock has a **No barcode** card, like To sort on Places, listing things you have that Larder has no barcode for (added by name or by photo, say). **Scan** opens the scanner for that item: scan its barcode or QR code (or type it, or use a USB scanner) and it's saved, then you're back at the list for the next. **Hasn't got one** takes loose fruit, home-made things and tools off the list (**Has no barcode** on the item changes it back). An item's page has **Scan its barcode** too.
+- **The last one open isn't "none":** an item whose last one is open showed "0 jars", and assistants told you there was none. Now the app shows **1 open** (or "2 jars + 1 open"), shopping lists say "Last one open", and assistants are told it's the last one, open. **How much is left in it?** on the item (¾, ½, ¼, Nearly empty) saves roughly what's left, and assistants can say it too ("the glycerine's about half full"). It's cleared when it's finished or another is opened.
+- **Assistants could fail to list anything:** an item the 0.10.0 upgrade left with a pack size in a word that isn't on the unit list (Birds Eye Potato Waffles, boxes of 18 "waffle") stopped assistants listing and searching once part of a box was open. It's said in that word now, until it's tidied (it's on Stock → To tidy).
+- **Assistants keep part of a box:** told "I've got 8 Oxo cubes left", an assistant said Larder doesn't keep part packs. It does (8 cubes of a box of 24 is ⅓ box, said "8 cubes (about ⅓ box)"); what assistants are told now says so, with that example.
+
+- **Read it with AI waits for the front of the pack:** on the card of a barcode nothing knows, it used to send whatever the camera saw at that moment, which was the barcode, so the AI never got the photo you wanted. You'd skip, take a photo of the front, and the barcode was lost. Now it says **Now the front of the pack**, keeps the barcode, and waits for **Take photo** (or an upload). **Back** returns to the barcode's card.
+- **Scan its barcode** on the card of something named from a photo: the camera reads the barcode, or a QR code, on the pack (or type it under the camera, or use a USB scanner), and Larder remembers it for the item, so the next scan knows it. That works when the card says it's one you have, too. A shelf label isn't taken for it, and a barcode Larder already knows opens that item's card instead. **Remove** takes it off again before you add it.
+- **Link an NFC tag** on any card for something new: hold the tag to the back of the phone (Android Chrome), or scan it with the Home Assistant app and press **Use it**. The tag is linked when the item's added, so scanning it later opens the item.
+- **Pack size keeps its unit:** on the scanner's card, picking a unit (biscuits instead of g) and then clearing the amount to type it again put the unit back to g. Now the unit stays what you picked.
+- **Adding spots one after another keeps what you type:** after pressing Enter, the name box was cleared only once the lists had refreshed, so the start of the next spot's name could vanish. It's cleared straight away now, with the next code offered.
+- **QR codes are kept as well as barcodes:** a brand's barcodes can now be up to 200 characters, the same as an NFC tag's id, so the web address in a QR code fits.
+
 ## 0.11.1
 
 **Add by photo takes photos, and doesn't push you onto something you have.** Two things the owner hit adding packs by photo.

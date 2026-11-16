@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { Dashboard, ProductSummary } from '@larder/core';
+import type { ClearedBatch, Dashboard, ProductSummary } from '@larder/core';
 import { api } from '../api';
 import { Icon } from '../icons';
 import { dayDate, expiryText, greeting, num, qty } from '../format';
@@ -16,6 +16,26 @@ function headline(d: Dashboard): string {
   if (d.counts.low) parts.push(`${d.counts.low} running low`);
   if (!parts.length) return `${greeting()}. Everything's in hand.`;
   return `${greeting()}. ${parts.join(', and ')}.`;
+}
+
+/**
+ * Fresh food Larder took out by itself, a few days past its date. Anything that's still there
+ * (it went in the freezer) is put back; OK takes the card away.
+ */
+function Cleared({ cleared, copy }: { cleared: ClearedBatch[]; copy: boolean }) {
+  const { run, busy } = useAction();
+  return (
+    <div className="card pad stack cleared" style={{ gap: 10, marginBottom: 12 }}>
+      <span className="small"><b>Cleared by Larder.</b> <span className="muted">Fresh food past its date: it's been eaten or thrown away. Still got it? Put it back.</span></span>
+      {cleared.map((c) => (
+        <div className="row" key={c.id} style={{ justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ display: 'grid', minWidth: 0 }}><b>{c.name}</b><span className="small muted">{qty(c.quantity, c.unit)} cleared · its date was {dayDate(c.expiresOn)}</span></span>
+          {!copy && <button type="button" className="btn small" style={{ flex: 'none' }} disabled={busy} onClick={() => run(() => api.stock.putBack(c.id), `${c.name} put back`)}>Put back</button>}
+        </div>
+      ))}
+      {!copy && <button type="button" className="btn small primary" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => run(() => api.stock.forgetCleared())}>OK</button>}
+    </div>
+  );
 }
 
 /** Something has been taken somewhere else for now (the drill's in the kitchen): pick it, then where it is. */
@@ -52,7 +72,7 @@ function MovedSheet({ onClose }: { onClose: () => void }) {
 
 export function Home() {
   const { data: d, error, isLoading } = useQuery({ queryKey: ['home'], queryFn: api.home });
-  const { run } = useAction();
+  const { run, busy } = useAction();
   const [moving, setMoving] = useState(false);
   const copy = useOpenCopy();
   if (isLoading) return <Loading />;
@@ -108,12 +128,27 @@ export function Home() {
 
       <div className="section h-soon">
         <div className="label">Use soon <Link to="/stock?status=expiring">All</Link></div>
+        {d.cleared.length > 0 && <Cleared cleared={d.cleared} copy={!!copy} />}
         {d.expiringSoon.length ? (
           <div className="list">
-            {d.expiringSoon.map((s) => (
-              <ProductRow key={s.product.id} s={s} to={`/products/${s.product.id}`}
-                side={<span className={`pill ${s.status.expired ? 'p-low' : 'p-soon'}`}>{s.nextExpiry ? expiryText(s.nextExpiry, s.daysToExpiry, s.category?.name === 'Renewals') : ''}</span>} />
-            ))}
+            {d.expiringSoon.map((s) => {
+              const renewal = s.category?.name === 'Renewals';
+              const row = (
+                <ProductRow key={s.product.id} s={s} to={`/products/${s.product.id}`}
+                  side={<span className={`pill ${s.status.expired ? 'p-low' : 'p-soon'}`}>{s.nextExpiry ? expiryText(s.nextExpiry, s.daysToExpiry, renewal) : ''}</span>} />
+              );
+              // Past its date and still in Larder: most likely it's gone, and nobody said.
+              return s.status.expired && !renewal && !copy ? (
+                <div key={s.product.id} className="past-date">
+                  {row}
+                  <div className="past-date-acts">
+                    <span className="small muted">Gone?</span>
+                    <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.pastDate({ productId: s.product.id, how: 'used' }), `${s.product.name}: used up`)}>Used up</button>
+                    <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.stock.pastDate({ productId: s.product.id, how: 'thrown' }), `${s.product.name}: thrown away`)}>Thrown away</button>
+                  </div>
+                </div>
+              ) : row;
+            })}
           </div>
         ) : <p className="muted small">Nothing's about to go off.</p>}
       </div>

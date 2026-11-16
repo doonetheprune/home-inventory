@@ -192,6 +192,10 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       // With no usage any more, nothing is in use (it isn't "open" either).
       if (!next.usage && cur.usage) next.inUseSince = null;
     }
+    // How much is left in the open one: only while one's open.
+    const open = !!next.inUseSince && !next.usage;
+    if (patch.openLeft !== undefined && patch.openLeft !== null && !open) throw new ValidationError(`None of ${next.name} is open, so there's nothing to say how much is left in. Mark one open first (Use, then Opened, still using it).`);
+    if (!open) next.openLeft = null;
     await assertRefs(next);
     // A record an older version saved keeps what this version doesn't know (a module's change at start-up can come before upgradeStored).
     const older = Object.fromEntries(Object.entries(cur).filter(([k]) => !KNOWN.has(k)));
@@ -204,6 +208,8 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
     async list(filter: ProductFilter = {}): Promise<ProductSummary[]> {
       const world = await loadWorld(ctx);
       const status = filter.status ?? 'all';
+      // Items with a barcode on any of their brands, for those without one.
+      const coded = status === 'no_barcode' ? new Set((await ctx.storage.variants.list()).filter((v) => v.barcodes.length).map((v) => v.productId)) : null;
       return world.products
         .map((p) => summarise(world, p))
         .filter((s) => {
@@ -221,6 +227,10 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
             case 'in_stock': return !s.product.wish && s.inStock > 0;
             // Added in a hurry (scanned and gone): stock with no place, or no type yet; or an upgrade wants it looked at.
             case 'to_tidy': return !!s.product.needsCheck || (!s.product.wish && (!s.product.categoryId || (world.entriesByProduct.get(s.product.id) ?? []).some((e) => e.status === 'in_stock' && !e.placeId)));
+            // Things in the house Larder can't scan yet: no barcode on any brand. Not things bought loose, renewals,
+            // or ones said to have none; and only what's here (in stock or open), so its barcode can be scanned.
+            case 'no_barcode': return !s.product.wish && !s.product.noBarcode && !coded!.has(s.product.id) && (s.inStock > 0 || s.inUse)
+              && !isLoose(world.units, s.product) && s.category?.name !== 'Renewals';
             default: return !s.product.wish;
           }
         })
@@ -266,6 +276,7 @@ export function createProductService(ctx: CoreContext, validateFields: (fields: 
       const now = ctx.now();
       const product = tidy(checkUnits(units, Product.parse({ ...data, id: newId(), createdAt: now, updatedAt: now }), data, null));
       if (product.usage?.auto && !product.inUseSince) product.inUseSince = ctx.today();
+      if (!product.inUseSince || product.usage) product.openLeft = null;
       if (product.rechargeable && product.unit === 'each') product.unit = 'battery';
       await ctx.storage.products.put(product);
       ctx.publish('product.created', { id: product.id, name: product.name });

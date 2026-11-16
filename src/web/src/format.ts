@@ -3,7 +3,7 @@
  * core's unit helpers (src/core/services/units.ts), with the household's list: the app has no unit
  * table or plural guess of its own.
  */
-import { amountText, builtInUnits, daysFor as coreDaysFor, lastsText as coreLastsText, stockText as coreStockText, unitWord, usageText as coreUsageText, type ProductSummary, type UnitItem, type Units } from '@larder/core';
+import { amountText, builtInUnits, daysFor as coreDaysFor, lastsText as coreLastsText, openLeftText as coreOpenLeftText, stockText as coreStockText, unitWord, usageText as coreUsageText, type ProductSummary, type UnitItem, type Units } from '@larder/core';
 
 /** The household's unit list as it last loaded (units.ts keeps it current); the built-in list until then. */
 let units: Units = builtInUnits;
@@ -36,8 +36,16 @@ export const qty = (n: number, unit: string): string => amountText(currentUnits(
  */
 export function stockText(s: ProductSummary, after = ''): string {
   if (s.product.rechargeable && s.charged !== null && s.flat !== null) return `${s.flat ? `${num(s.charged)} charged · ${num(s.flat)} flat` : `${qty(s.charged, s.product.unit)}`}${after}`;
+  // One open isn't counted in stock, but it's there: "1 open", "2 jars + 1 open", never "0 jars".
+  if (isOpen(s)) return s.inStock > 0 ? `${coreStockText(currentUnits(), s.product, s.inStock, num, after)} + 1 open` : '1 open';
   return coreStockText(currentUnits(), s.product, s.inStock, num, after);
 }
+
+/** One is open (Use, Opened, still using it): not counted in stock, until it's finished. */
+export const isOpen = (s: ProductSummary): boolean => s.inUse && !s.product.usage && !!s.product.inUseSince;
+
+/** How much is left in the open one: "about ½ jar", "7 tea bags", "a little". */
+export const openLeftText = (item: UnitItem, left: number): string => coreOpenLeftText(currentUnits(), item, left);
 
 /** "1 tea bag a day", "2 rolls a week", "4 g a day", "1 every 14 days". */
 export const usageText = (item: UnitItem): string => coreUsageText(currentUnits(), item, num);

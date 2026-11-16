@@ -90,6 +90,13 @@ const leftText = (units: Units, p: Pick<UnitItem, 'unit' | 'packSize'>, n: numbe
   return `${t[0]!.toUpperCase()}${t.slice(1)}`;
 };
 
+/** What's left, with the open one (not counted in stock) said, so "0 bags left" isn't taken for none. */
+const leftWithOpen = (units: Units, s: ProductSummary) => {
+  const p = s.product;
+  if (!s.inUse || p.usage || !p.inUseSince) return leftText(units, p, s.inStock, ' left');
+  return s.inStock > 0 ? `${leftText(units, p, s.inStock, ' unopened left')}, and 1 open` : "It's the last one, open: none unopened left";
+};
+
 export function createAutomation(deps: {
   ctx: CoreContext;
   products: ReturnType<typeof createProductService>;
@@ -242,7 +249,7 @@ export function createAutomation(deps: {
         : startsOne(p) ? `started ${n}${p.usage.auto ? `, and Larder takes them out from here (${uses})` : ''}`
           : i.opened ? `started a new one now (${n})` : `used ${n} extra (Larder also takes out ${uses})`;
       const until = s.runsOutOn ? `, enough until ${s.runsOutOn}` : '';
-      return { message: `${p.name}: ${what}. ${leftText(units, p, s.inStock, ' left')}${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
+      return { message: `${p.name}: ${what}. ${leftWithOpen(units, s)}${until}${s.status.low ? ', running low' : ''}.`, ...itemInfo(units, s) };
     },
   });
   addAction({
@@ -468,19 +475,23 @@ export function createAutomation(deps: {
     },
 
     /**
-     * Takes out of stock what Larder takes out by itself (see stock.takeDue), then
+     * Takes out of stock what Larder takes out by itself (see stock.takeDue) and fresh food
+     * well past its date (stock.clearFresh, unless the household switched it off), then
      * publishes `stock.expiring` once when an item enters its warning window and
      * `stock.expired` once on the day it expires. Safe to call as often as you
      * like; the server calls it hourly.
      */
-    checkExpiry(): Promise<{ expiring: number; expired: number; taken: number }> {
+    checkExpiry(): Promise<{ expiring: number; expired: number; taken: number; cleared: number }> {
       const run = checking.then(() => this.checkExpiryNow(), () => this.checkExpiryNow());
       checking = run.catch(() => undefined);
       return run;
     },
 
-    async checkExpiryNow(): Promise<{ expiring: number; expired: number; taken: number }> {
+    async checkExpiryNow(): Promise<{ expiring: number; expired: number; taken: number; cleared: number }> {
       const { taken } = await stock.takeDue();
+      // Fresh food well past its date has gone, though nobody said (household setting).
+      const { clearPastDateDays } = await ctx.household();
+      const { cleared } = clearPastDateDays === null ? { cleared: 0 } : await stock.clearFresh(clearPastDateDays);
       const notified = (await ctx.storage.settings.get<Notified>('expiryNotified')) ?? {};
       const next: Notified = {};
       let expiring = 0;
@@ -505,7 +516,7 @@ export function createAutomation(deps: {
         next[p.id] = prev;
       }
       await ctx.storage.settings.set('expiryNotified', next);
-      return { expiring, expired, taken };
+      return { expiring, expired, taken, cleared };
     },
   };
 }

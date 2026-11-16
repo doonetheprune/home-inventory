@@ -11,9 +11,9 @@ import type { Movement, Place, Product, Storage, StockEntry, Variant } from '@la
 const now = '2026-10-28T12:00:00.000Z';
 
 const product = (id: string, extra: Partial<Product> = {}): Product => ({
-  id, name: `Product ${id}`, aliases: [], categoryId: null, unit: 'each', packSize: null, weight: null, needsCheck: null, shelfLifeDays: null, usage: null, inUseSince: null, minQuantity: null, stockUpTo: null, preferredShopIds: [],
+  id, name: `Product ${id}`, aliases: [], categoryId: null, unit: 'each', packSize: null, weight: null, needsCheck: null, shelfLifeDays: null, usage: null, inUseSince: null, openLeft: null, minQuantity: null, stockUpTo: null, preferredShopIds: [],
   notes: '', photoFileIds: [], links: [], wish: false, rechargeable: false, onShoppingList: false, defaultPlaceId: null, keptInPlaceIds: [], nfcTags: [],
-  haDeviceIds: [], fields: {}, createdAt: now, updatedAt: now, ...extra,
+  haDeviceIds: [], noBarcode: false, fields: {}, createdAt: now, updatedAt: now, ...extra,
 });
 const place = (id: string, extra: Partial<Place> = {}): Place => ({
   id, name: `Place ${id}`, parentId: null, code: null, notes: '', photoFileId: null, nfcTags: [], sortOrder: 0, createdAt: now, updatedAt: now, ...extra,

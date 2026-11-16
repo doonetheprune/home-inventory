@@ -3,7 +3,7 @@
  * Assistant app (its tag_scanned event reaches Larder through the
  * integration), or directly in Android Chrome, which can read tags itself.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { ago } from '../format';
@@ -25,16 +25,22 @@ function tagIdFrom(e: NdefReadingEvent): string {
   return e.serialNumber;
 }
 
-export function NfcTags({ tags, productId, placeId }: { tags: string[]; productId?: string; placeId?: string }) {
-  const [linking, setLinking] = useState(false);
+/**
+ * Waiting for a tag to link: held to this phone (Android Chrome reads tags itself), or scanned with the
+ * Home Assistant app, when it appears here within a few seconds. `use` is the button beside a scanned tag.
+ */
+export function TagWaiter({ onTag, busy = false, use = 'Link' }: { onTag: (tagId: string) => void; busy?: boolean; use?: string }) {
   const [reading, setReading] = useState<AbortController | null>(null);
-  const { run, busy } = useAction();
   const toast = useToast();
-  const recent = useQuery({ queryKey: ['nfc', 'recent'], queryFn: api.nfc.recent, enabled: linking, refetchInterval: linking ? 10_000 : false });
+  const recent = useQuery({ queryKey: ['nfc', 'recent'], queryFn: api.nfc.recent, refetchInterval: 10_000 });
   const waiting = (recent.data ?? []).filter((r) => r.kind === 'unknown');
   const canRead = typeof window !== 'undefined' && 'NDEFReader' in window;
-
-  const link = (tagId: string) => run(() => api.nfc.link({ tagId, productId, placeId }), 'Tag linked').then((r) => r && setLinking(false));
+  const picked = useRef(onTag);
+  picked.current = onTag;
+  // Stop listening for a tag once this has gone (cancelled, or the card's done).
+  const current = useRef(reading);
+  current.current = reading;
+  useEffect(() => () => current.current?.abort(), []);
 
   async function readHere() {
     const Reader = (window as unknown as { NDEFReader: new () => NdefReader }).NDEFReader;
@@ -46,7 +52,7 @@ export function NfcTags({ tags, productId, placeId }: { tags: string[]; productI
       reader.onreading = (e) => {
         controller.abort();
         setReading(null);
-        void link(tagIdFrom(e));
+        picked.current(tagIdFrom(e));
       };
     } catch {
       setReading(null);
@@ -55,8 +61,33 @@ export function NfcTags({ tags, productId, placeId }: { tags: string[]; productI
   }
 
   return (
+    <>
+      <p className="small">{canRead ? 'Hold the tag to the back of this phone, or scan' : 'Scan'} it with the Home Assistant app on your phone. It appears here within a few seconds.</p>
+      {canRead && (
+        <button type="button" className="btn" disabled={!!reading} onClick={() => void readHere()}>
+          <Icon name="nfc" size="sm" />{reading ? 'Hold the tag to the back of the phone…' : 'Read it with this phone'}
+        </button>
+      )}
+      {waiting.map((r) => (
+        <div className="item" key={r.tagId} style={{ padding: 0 }}>
+          <span className="item-main"><span className="item-name mono" style={{ fontSize: 13 }}>{r.tagId}</span><span className="item-meta">Scanned {ago(r.at)}{r.device ? ` on ${r.device}` : ''}</span></span>
+          <button type="button" className="btn small primary" disabled={busy} onClick={() => onTag(r.tagId)}>{use}</button>
+        </div>
+      ))}
+      {!waiting.length && <p className="muted small">Waiting for a new tag…</p>}
+    </>
+  );
+}
+
+export function NfcTags({ tags, productId, placeId }: { tags: string[]; productId?: string; placeId?: string }) {
+  const [linking, setLinking] = useState(false);
+  const { run, busy } = useAction();
+
+  const link = (tagId: string) => run(() => api.nfc.link({ tagId, productId, placeId }), 'Tag linked').then((r) => r && setLinking(false));
+
+  return (
     <div className="section">
-      <div className="label">NFC tags{tags.length ? ` · ${tags.length}` : ''} <button type="button" className="link" onClick={() => { setLinking(!linking); reading?.abort(); setReading(null); }}>{linking ? 'Cancel' : 'Link a tag'}</button></div>
+      <div className="label">NFC tags{tags.length ? ` · ${tags.length}` : ''} <button type="button" className="link" onClick={() => setLinking(!linking)}>{linking ? 'Cancel' : 'Link a tag'}</button></div>
       {tags.length > 0 && (
         <div className="list">
           {tags.map((t) => (
@@ -69,23 +100,7 @@ export function NfcTags({ tags, productId, placeId }: { tags: string[]; productI
         </div>
       )}
       {!tags.length && !linking && <p className="muted small">Stick a tag on it and scanning the tag opens it, or tells Home Assistant.</p>}
-      {linking && (
-        <div className="card pad stack">
-          <p className="small">Scan the tag with the Home Assistant app on your phone. It appears here within a few seconds.</p>
-          {canRead && (
-            <button type="button" className="btn" disabled={!!reading} onClick={() => void readHere()}>
-              <Icon name="nfc" size="sm" />{reading ? 'Hold the tag to the back of the phone…' : 'Read it with this phone'}
-            </button>
-          )}
-          {waiting.map((r) => (
-            <div className="item" key={r.tagId} style={{ padding: 0 }}>
-              <span className="item-main"><span className="item-name mono" style={{ fontSize: 13 }}>{r.tagId}</span><span className="item-meta">Scanned {ago(r.at)}{r.device ? ` on ${r.device}` : ''}</span></span>
-              <button type="button" className="btn small primary" disabled={busy} onClick={() => void link(r.tagId)}>Link</button>
-            </div>
-          ))}
-          {!waiting.length && <p className="muted small">Waiting for a new tag…</p>}
-        </div>
-      )}
+      {linking && <div className="card pad stack"><TagWaiter onTag={(t) => void link(t)} busy={busy} /></div>}
     </div>
   );
 }

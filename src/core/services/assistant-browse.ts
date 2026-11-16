@@ -30,7 +30,7 @@ export interface BrowseDeps {
   line: (units: Units, s: ProductSummary) => string;
 }
 
-const STATUSES = ['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_sort', 'to_tidy', 'open'] as const;
+const STATUSES = ['all', 'low', 'expiring', 'out_of_place', 'expected', 'wish', 'in_stock', 'to_sort', 'to_tidy', 'open', 'no_barcode'] as const;
 
 export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
   const { products, shopping, places, lookup, resolve, line } = deps;
@@ -38,9 +38,9 @@ export function addBrowseTools(addTool: AddTool, deps: BrowseDeps): void {
 
   addTool({
     name: 'list_items', title: 'List items', readOnly: true,
-    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, or flagged for the owner to look at, with why; open: opened and not finished, or in use), by category, by place, or a mix.',
+    description: 'List items the way the app\'s Stock pages do: by status (low, expiring, out_of_place, expected, wish list, in_stock, to_sort: stock with no place yet, to_tidy: no place or no type, or flagged for the owner to look at, with why; open: opened and not finished, or in use; no_barcode: things in the house Larder has no barcode for yet), by category, by place, or a mix.',
     input: z.object({
-      status: z.enum(STATUSES).default('all').describe('Which items: all (owned), low, expiring, out_of_place, expected, wish, in_stock, to_sort, to_tidy or open'),
+      status: z.enum(STATUSES).default('all').describe('Which items: all (owned), low, expiring, out_of_place, expected, wish, in_stock, to_sort, to_tidy, open or no_barcode'),
       category: z.string().max(60).optional().describe('Only this category, e.g. "Food"'),
       place: z.string().max(200).optional().describe('Only items with stock in this place (name or code)'),
       limit: z.number().int().min(1).max(200).default(50).describe('Most to list (default 50)'),

@@ -385,3 +385,102 @@ describe('places an item is kept in', () => {
     expect(item.data?.places).toEqual([{ place: 'Garage', quantity: 2 }, { place: 'Kitchen', quantity: 1 }, { place: 'Shed', quantity: 0 }]);
   });
 });
+
+describe('stock past its date', () => {
+  let core: TestCore;
+  let fridge: string;
+  beforeEach(async () => {
+    core = await makeCore();
+    fridge = (await core.places.create({ name: 'Fridge' })).id;
+  });
+  const inStock = async (id: string) => (await core.products.summary(id)).inStock;
+  const notes = async (id: string) => (await core.products.get(id)).history.map((h) => [h.kind, h.quantity, h.note]);
+
+  it('is used up or thrown away from Home: only the batches past their date', async () => {
+    const chicken = await core.products.create({ name: 'Chicken breasts', shelfLifeDays: 4, defaultPlaceId: fridge });
+    await core.stock.add({ productId: chicken.id, quantity: 2 });
+    core.clock.set('2026-10-30T09:00:00.000Z');
+    await core.stock.add({ productId: chicken.id, quantity: 3 });
+    // Its date (1 November) is still today: nothing's past it yet.
+    core.clock.set('2026-11-01T18:00:00.000Z');
+    await expect(core.stock.clearPastDate({ productId: chicken.id, how: 'used' })).rejects.toThrow('Chicken breasts has nothing past its date.');
+    core.clock.set('2026-11-02T09:00:00.000Z');
+    expect((await core.stock.clearPastDate({ productId: chicken.id, how: 'used' })).inStock).toBe(3);
+    expect((await notes(chicken.id))[0]).toEqual(['use', -2, 'Used up, past its date']);
+
+    const milk = await core.products.create({ name: 'Milk', shelfLifeDays: 5 });
+    await core.stock.add({ productId: milk.id, quantity: 1 });
+    core.clock.set('2026-11-09T09:00:00.000Z');
+    expect((await core.stock.clearPastDate({ productId: milk.id, how: 'thrown' })).inStock).toBe(0);
+    expect((await notes(milk.id))[0]).toEqual(['remove', -1, 'Thrown away, past its date']);
+  });
+
+  it('is cleared by Larder when it is fresh food a couple of days past its date, and can be put back', async () => {
+    const renewals = await category(core, 'Renewals');
+    const chicken = await core.products.create({ name: 'Chicken breasts', shelfLifeDays: 4, defaultPlaceId: fridge });
+    const beans = await core.products.create({ name: 'Baked beans', unit: 'tin', shelfLifeDays: 730 });
+    const quiche = await core.products.create({ name: 'Quiche' });
+    const honey = await core.products.create({ name: 'Honey', unit: 'jar' });
+    const insurance = await core.products.create({ name: 'Car insurance', categoryId: renewals.id });
+    await core.stock.add({ productId: chicken.id, quantity: 2 });
+    // A tin past its best-before is often still in the cupboard; so is honey with a date typed that's 2 months off.
+    await core.stock.add({ productId: beans.id, quantity: 4, expiresOn: '2026-10-29' });
+    await core.stock.add({ productId: honey.id, quantity: 1, expiresOn: '2026-12-28' });
+    // No shelf life, but its date was 3 days after it was added: fresh.
+    await core.stock.add({ productId: quiche.id, quantity: 1, expiresOn: '2026-10-31' });
+    await core.stock.add({ productId: insurance.id, quantity: 1, expiresOn: '2026-10-30' });
+
+    // The chicken's date is 1 November: a day past it, it might still be eaten.
+    core.clock.set('2026-11-02T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).cleared).toBe(1);
+    expect(await inStock(quiche.id)).toBe(0);
+    expect(await inStock(chicken.id)).toBe(2);
+    core.clock.set('2026-11-03T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).cleared).toBe(1);
+    expect(await inStock(chicken.id)).toBe(0);
+    expect((await notes(chicken.id))[0]).toEqual(['remove', -2, 'Past its date: cleared by Larder']);
+    expect(await inStock(beans.id)).toBe(4);
+    expect(await inStock(insurance.id)).toBe(1);
+    core.clock.set('2027-03-01T09:00:00.000Z');
+    await core.automation.checkExpiry();
+    expect(await inStock(honey.id)).toBe(1);
+    core.clock.set('2026-11-03T10:00:00.000Z');
+
+    // Home says what was cleared, newest first.
+    const cleared = (await core.home.dashboard()).cleared;
+    expect(cleared.map((c) => [c.name, c.quantity, c.expiresOn])).toEqual([['Chicken breasts', 2, '2026-11-01'], ['Quiche', 1, '2026-10-31']]);
+
+    // The chicken went in the freezer: it's put back as it was, and left alone after.
+    const back = await core.stock.putBack(cleared[0]!.id);
+    expect(back.inStock).toBe(2);
+    expect(back.places[0]?.path).toBe('Fridge');
+    expect(back.nextExpiry).toBe('2026-11-01');
+    expect((await notes(chicken.id))[0]).toEqual(['adjust', 2, 'Put back: it was still there']);
+    expect((await core.automation.checkExpiry()).cleared).toBe(0);
+    expect(await inStock(chicken.id)).toBe(2);
+    expect((await core.home.dashboard()).cleared.map((c) => c.name)).toEqual(['Quiche']);
+    await expect(core.stock.putBack(cleared[0]!.id)).rejects.toThrow();
+
+    // Seen: the list is empty. And a week on, it's gone from Home anyway.
+    await core.stock.forgetCleared();
+    expect((await core.home.dashboard()).cleared).toEqual([]);
+  });
+
+  it('is left alone when the household switches clearing off, and waits as many days as it says', async () => {
+    const milk = await core.products.create({ name: 'Milk', shelfLifeDays: 5 });
+    await core.stock.add({ productId: milk.id, quantity: 1 });
+    await core.settings.update({ clearPastDateDays: null });
+    core.clock.set('2026-11-20T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).cleared).toBe(0);
+    expect(await inStock(milk.id)).toBe(1);
+
+    await core.settings.update({ clearPastDateDays: 7 });
+    core.clock.set('2026-11-08T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).cleared).toBe(0);
+    core.clock.set('2026-11-09T09:00:00.000Z');
+    expect((await core.automation.checkExpiry()).cleared).toBe(1);
+    // Cleared a week ago and more: not on Home any more.
+    core.clock.set('2026-11-17T09:00:00.000Z');
+    expect((await core.home.dashboard()).cleared).toEqual([]);
+  });
+});

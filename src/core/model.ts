@@ -134,6 +134,11 @@ export const Product = z.object({
    * Without: the day one was opened (Use with `open`), until Finished.
    */
   inUseSince: IsoDate.nullable().default(null),
+  /**
+   * How much is left in the open one (no usage), in what it's bought in: 0.5 is about half a jar. Null when
+   * nobody's said; cleared when it's finished or another is opened. The open one isn't counted in stock.
+   */
+  openLeft: z.number().min(0).max(1).nullable().default(null),
   /** Below this (counting expected stock) the product is low. */
   minQuantity: z.number().min(0).nullable().default(null),
   /** When buying more, top up to this (counting expected stock) rather than just back to the minimum. Null: the minimum. */
@@ -147,6 +152,8 @@ export const Product = z.object({
   wish: z.boolean().default(false),
   /** Rechargeable batteries and similar: stock is split into charged and flat. */
   rechargeable: z.boolean().default(false),
+  /** It has no barcode to scan (fresh fruit, home-made, a tool), so it isn't listed as missing one. */
+  noBarcode: z.boolean().default(false),
   /** Put on the shopping list by hand even though it isn't low. Cleared when bought. */
   onShoppingList: z.boolean().default(false),
   /** Where new stock goes by default. */
@@ -176,7 +183,8 @@ export const Variant = z.object({
   id: Id,
   productId: Id,
   name: z.string().min(1).max(160),
-  barcodes: z.array(z.string().min(1).max(64)).default([]),
+  /** Barcodes, and the text of QR codes on the pack (often a web address, so up to 200 characters, like an NFC tag's id). */
+  barcodes: z.array(z.string().min(1).max(200)).default([]),
   /** Shop item numbers, e.g. a Toolstation code, for reordering and matching order emails. */
   shopCodes: z.array(ShopCode).default([]),
   /** Where the lookup found its picture (kept for reference; Larder shows its own copy). */
@@ -440,6 +448,23 @@ export const Delivery = z.object({
 });
 export type Delivery = z.infer<typeof Delivery>;
 
+/**
+ * Fresh food Larder took out of stock by itself, a few days past its date (nobody said it was used).
+ * Kept for a week on Home, so a batch that's still there can be put back.
+ */
+export const ClearedBatch = z.object({
+  /** The batch (stock entry) that was cleared. */
+  id: Id,
+  productId: Id,
+  name: z.string(),
+  quantity: z.number(),
+  /** What the item is bought in, for saying the quantity. */
+  unit: z.string(),
+  expiresOn: IsoDate,
+  clearedAt: IsoDateTime,
+});
+export type ClearedBatch = z.infer<typeof ClearedBatch>;
+
 export const Dashboard = z.object({
   today: IsoDate,
   counts: z.object({ products: z.number(), low: z.number(), expiringSoon: z.number(), outOfPlace: z.number(), expected: z.number(), wish: z.number() }),
@@ -450,6 +475,8 @@ export const Dashboard = z.object({
   /** Orders waiting to be confirmed or removed (e.g. a filled online basket). */
   pendingOrders: z.array(Delivery).default([]),
   shopping: ShoppingSummary,
+  /** Fresh food Larder cleared because it was past its date, newest first, until put back or seen. */
+  cleared: z.array(ClearedBatch).default([]),
 });
 export type Dashboard = z.infer<typeof Dashboard>;
 

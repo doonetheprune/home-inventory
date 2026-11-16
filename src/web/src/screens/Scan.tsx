@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isLoose, parseAmount, type IdentifyResult, type LookupResult, type Place, type ProductSummary, type UnitAmount } from '@larder/core';
 import { api, ApiError } from '../api';
 import { Icon } from '../icons';
@@ -11,7 +11,9 @@ import { usePhotoReader, type PhotoReading } from '../components/photoReader';
 import { Header, PlaceSelect, ProductTile, Seg, Stepper, useAction, useCategories, useDebounced, useIsDesktop, usePlaces, useToast } from '../ui';
 import { UnitPicker } from '../components/UnitPicker';
 import { notBoughtIn } from '../components/ProductForm';
+import { TagWaiter } from '../components/NfcTags';
 import { useUnits } from '../units';
+import { NO_BARCODE } from './NoBarcode';
 
 /** What new things are most often bought in, as chips on the card; More… has the rest of the list. */
 const CHIPS = ['box', 'bag', 'jar', 'bottle', 'carton', 'tin', 'pack', 'each'];
@@ -25,10 +27,16 @@ const MODE_CHIP: Record<Mode, [string, string]> = {
 /** A barcode just scanned that nothing knew, kept while the AI reads the pack. */
 interface Kept { code: string; external: LookupResult | null; suggestions: ProductSummary[] }
 /**
+ * A barcode nothing knew, waiting for a photo of the front of its pack (Read it with AI on its card).
+ * The camera's still on the barcode when that's pressed, so the photo waits for Take photo. `back` is its card.
+ */
+interface PhotoFor { keep: Kept; back: IdentifyResult }
+/**
  * Something new the AI is working out (`working`) or has worked out, from a barcode found online or a
  * photo. Its card is up meanwhile, with what's known so far. `id` tells an old answer from this one's.
+ * `codeAdded`: its barcode (or QR code) was scanned from the card, after the photo.
  */
-interface AiDraft { id: number; photo: Blob | null; reading: PhotoReading | null; working: boolean; code: string | null; external: LookupResult | null; suggestions: ProductSummary[] }
+interface AiDraft { id: number; photo: Blob | null; reading: PhotoReading | null; working: boolean; code: string | null; codeAdded?: boolean; external: LookupResult | null; suggestions: ProductSummary[] }
 /** What's being looked up: a barcode, or a photo (checking it for a barcode Larder knows). */
 type Looking = false | 'code' | 'photo';
 
@@ -50,6 +58,16 @@ export function Scan() {
   const drafts = useRef(0);
   const draftRef = useRef(aiDraft);
   draftRef.current = aiDraft;
+  /** A barcode nothing knew, waiting for Take photo of the front of its pack. */
+  const [photoFor, setPhotoFor] = useState<PhotoFor | null>(null);
+  const photoForRef = useRef(photoFor);
+  photoForRef.current = photoFor;
+  /** The new item's card wants its barcode: the next code scanned or typed is its, not looked up as another. */
+  const [codeWanted, setCodeWanted] = useState(false);
+  const codeWantedRef = useRef(codeWanted);
+  codeWantedRef.current = codeWanted;
+  /** That code's being checked (a place label, or one Larder already knows, isn't this one's). */
+  const [checkingCode, setCheckingCode] = useState(false);
   /**
    * The photo the AI is reading (or has read). One taken with the camera stays
    * still in the viewfinder until its card is done, so it's clear the photo was taken.
@@ -71,6 +89,18 @@ export function Scan() {
    * photo. The Scan tab (no `ai`) scans them as usual.
    */
   const askedForPhotos = params.has('ai');
+  /**
+   * Scanning for one item (`for` in the address, from No barcode or the item's page): the next code scanned,
+   * typed or from a USB scanner is its barcode. It's saved to the item, then it's back to `back`.
+   */
+  const forId = params.get('for');
+  const back = params.get('back') ?? NO_BARCODE;
+  const forItem = useQuery({ queryKey: ['products', 'for', forId], queryFn: () => api.products.get(forId!), enabled: !!forId }).data ?? null;
+  const forRef = useRef(forItem);
+  forRef.current = forItem;
+  const forIdRef = useRef(forId);
+  forIdRef.current = forId;
+  const navigate = useNavigate();
   const photosOnly = askedForPhotos && mode === 'add' && !!reader;
   const photosOnlyOn = (on: boolean) => {
     const next = new URLSearchParams(params);
@@ -82,15 +112,31 @@ export function Scan() {
   /**
    * While a card is open the camera holds still, so a second read (or a misread
    * as the phone moves) can't replace what's being entered. Moving is the
-   * exception: after the item, it's waiting for the shelf's label.
+   * exception: after the item, it's waiting for the shelf's label; so is a new
+   * item's card waiting for its barcode.
    */
-  const holding = !!looking || !!aiDraft || (!!result && !(pending && moving));
+  const holding = !!looking || (!!aiDraft && !codeWanted) || (!!result && !(pending && moving));
   const hold = useRef(holding);
   hold.current = holding;
+  /** Barcodes in view wait for Take photo: in Add by photo, and while the front of a pack is lined up for its barcode. */
+  const codesWait = (photosOnly || !!photoFor) && !codeWanted;
   /** The code just dealt with: the camera leaves it alone for a moment, though it may still be in view. */
   const settled = useRef<{ code: string; until: number }>({ code: '', until: 0 });
+  const attachRef = useRef<(code: string) => Promise<void>>(async () => {});
+  const scanForRef = useRef<(code: string) => Promise<void>>(async () => {});
 
   const identify = useCallback(async (code: string, from: 'camera' | 'hand' = 'hand') => {
+    // The new item's card asked for its barcode: this is it (scanned, typed or from a USB scanner).
+    if (codeWantedRef.current) {
+      await attachRef.current(code);
+      return;
+    }
+    if (forIdRef.current) {
+      await scanForRef.current(code);
+      return;
+    }
+    // Another code typed while a barcode was waiting for its photo: that one's been left.
+    setPhotoFor(null);
     setLooking('code');
     try {
       const r = await api.identify(code);
@@ -137,7 +183,7 @@ export function Scan() {
     if (hold.current) return;
     if (code === settled.current.code && Date.now() < settled.current.until) return;
     void identify(code, 'camera');
-  }, photosOnly);
+  }, codesWait);
 
   useEffect(() => {
     const code = params.get('code');
@@ -171,20 +217,74 @@ export function Scan() {
     setResult(null);
     setAiDraft(null);
     setTaken(null);
+    setPhotoFor(null);
+  };
+
+  // A card that's gone isn't waiting for its barcode any more.
+  useEffect(() => {
+    if (!aiDraft) setCodeWanted(false);
+  }, [aiDraft]);
+
+  /**
+   * The barcode or QR code scanned (or typed) for the new item's card. A shelf's label isn't one, and
+   * one Larder already knows means it's that item: its card takes over, as a barcode in a photo does.
+   */
+  attachRef.current = async (code: string) => {
+    const draft = draftRef.current;
+    if (!draft) return;
+    if (code.length > 200) {
+      settled.current = { code, until: Date.now() + 3000 };
+      toast({ text: 'That QR code holds too much for Larder to keep. Scan the barcode instead, or link an NFC tag.', error: true });
+      return;
+    }
+    setCheckingCode(true);
+    try {
+      const r = await api.identify(code).catch(() => null);
+      if (draftRef.current?.id !== draft.id || !codeWantedRef.current) return;
+      if (r?.kind === 'place') {
+        settled.current = { code, until: Date.now() + 3000 };
+        toast({ text: `That's the label for ${r.place.code ?? r.place.name}. Scan the barcode or QR code on the pack.`, error: true });
+        return;
+      }
+      setCodeWanted(false);
+      if (r?.kind === 'product') {
+        setAiDraft(null);
+        setTaken(null);
+        setResult(r);
+        toast(`Larder knows that barcode: it's ${r.product.product.name}.`);
+        return;
+      }
+      setAiDraft((d) => (d?.id === draft.id ? { ...d, code, codeAdded: true } : d));
+    } finally {
+      setCheckingCode(false);
+    }
   };
 
   /**
-   * Take photo (or Read it with AI on a new barcode's card): a photo (what the
-   * camera sees now, or one uploaded) goes to the AI for its name and details. A
-   * barcode in the photo, read here, says first whether it's already in Larder.
-   * `keep` is a barcode just scanned that nothing knew.
+   * Read it with AI on the card of a barcode nothing knows. The camera's on the barcode, so the photo
+   * waits for Take photo (or an upload): the front of the pack, with the barcode kept for it.
    */
-  async function readWithAi(given?: Blob, keep?: Kept) {
+  const photoOf = (keep: Kept, back: IdentifyResult) => {
+    settled.current = { code: keep.code, until: Date.now() + 3000 };
+    setResult(null);
+    setAiDraft(null);
+    setPhotoFor({ keep, back });
+    setCamera(true);
+  };
+
+  /**
+   * Take photo (or an upload): a photo (what the camera sees now, or one uploaded) goes to the AI for
+   * its name and details. A barcode in the photo, read here, says first whether it's already in Larder.
+   * While a barcode nothing knew is waiting for its photo (Read it with AI), it's kept for this one.
+   */
+  async function readWithAi(given?: Blob) {
     if (!reader || shooting.current) return;
+    const waiting = photoForRef.current;
+    const keep = waiting?.keep;
     const el = given ? null : video.current;
     if (!given && (state !== 'on' || !el)) {
       setCamera(true);
-      toast('Starting the camera: point it at the front of the pack, then press Read it with AI again.');
+      toast('Starting the camera: point it at the front of the pack, then press Take photo.');
       return;
     }
     shooting.current = true;
@@ -193,6 +293,7 @@ export function Scan() {
       const photo = given ?? (await grabFrame(el!));
       if (!given) navigator.vibrate?.(40);
       setTaken({ photo, shot: !given });
+      setPhotoFor(null);
       const reading = reader.read(photo);
       reading.catch(() => undefined);
       const barcode = keep?.code ?? (await readBarcode(photo));
@@ -214,16 +315,19 @@ export function Scan() {
         setAiDraft((d) => (d?.id === id ? { ...d, photo: r.photo ?? photo, reading: r, working: false } : d));
       } catch (err) {
         if (draftRef.current?.id !== id) return;
-        // What a barcode database said is still worth adding; with nothing else, the card goes.
+        // What a barcode database said is still worth adding; with nothing else, the card goes
+        // (a barcode nothing knew waits for another photo).
         if (external) setAiDraft((d) => (d?.id === id ? { ...d, working: false } : d));
         else {
           setAiDraft(null);
           setTaken(null);
+          if (waiting) setPhotoFor(waiting);
         }
         toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
       }
     } catch (err) {
       setTaken(null);
+      if (waiting) setPhotoFor(waiting);
       toast({ text: err instanceof ApiError ? err.message : "The photo couldn't be read. Try again.", error: true });
     } finally {
       shooting.current = false;
@@ -232,6 +336,51 @@ export function Scan() {
   }
   const readRef = useRef(readWithAi);
   readRef.current = readWithAi;
+
+  /**
+   * The code scanned for the item (`for`). A shelf label, or another item's barcode, isn't it. Otherwise it's
+   * saved: onto its brand when it has just one, with no barcode yet (Sugarflair, from a photo), or as a new brand.
+   */
+  scanForRef.current = async (code: string) => {
+    const d = forRef.current;
+    if (!d) return;
+    const name = d.product.name;
+    if (code.length > 200) {
+      settled.current = { code, until: Date.now() + 3000 };
+      toast({ text: 'That QR code holds too much for Larder to keep. Scan the barcode instead.', error: true });
+      return;
+    }
+    setLooking('code');
+    try {
+      const r = await api.identify(code);
+      if (r.kind === 'place' || (r.kind === 'product' && r.product.product.id !== d.product.id)) {
+        settled.current = { code, until: Date.now() + 3000 };
+        const what = r.kind === 'place' ? `the label for ${r.place.code ?? r.place.name}` : `${r.product.product.name}'s barcode`;
+        toast({ text: `That's ${what}. Scan the barcode or QR code on the ${name.toLowerCase()}.`, error: true });
+        return;
+      }
+      if (r.kind === 'product') {
+        toast(`That's already ${name}'s barcode.`);
+        navigate(back);
+        return;
+      }
+      const only = d.variants.length === 1 && !d.variants[0]!.barcodes.length ? d.variants[0]! : null;
+      const saved = await run(
+        async () => { if (only) await api.products.updateVariant(only.id, { barcodes: [code] }); else await api.remember({ barcode: code, productId: d.product.id }); return true; },
+        `Barcode saved for ${name}. Next time it scans straight in.`,
+      );
+      if (saved) navigate(back);
+    } catch (err) {
+      toast({ text: err instanceof ApiError ? err.message : 'That code could not be looked up.', error: true });
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  // Scanning for an item wants the camera.
+  useEffect(() => {
+    if (forId) setCamera(true);
+  }, [forId]);
 
   // Add by photo (from Home) arrives with the camera wanted.
   useEffect(() => {
@@ -242,8 +391,10 @@ export function Scan() {
   }, [askedForPhotos]);
 
   // Space or a volume button is Take photo, like a camera's shutter, when nothing's open.
+  // Not while a card's waiting for its barcode: a photo then would start another card.
+  const photos = (mode === 'add' || !!photoFor) && !codeWanted && !forId;
   useEffect(() => {
-    if (!reader || mode !== 'add' || state !== 'on' || holding) return;
+    if (!reader || !photos || state !== 'on' || holding) return;
     const onKey = (e: KeyboardEvent) => {
       if (![' ', 'AudioVolumeDown', 'AudioVolumeUp', 'VolumeDown', 'VolumeUp', 'Camera'].includes(e.key)) return;
       const t = e.target as HTMLElement | null;
@@ -253,30 +404,33 @@ export function Scan() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [reader, mode, state, holding]);
+  }, [reader, photos, state, holding]);
 
   // What the camera's doing, on the chip at the top of it.
   const modeChip: [string, string] = photosOnly ? ['camera', 'Add by photo'] : MODE_CHIP[mode];
   const readingPhoto = looking === 'photo' || (!!aiDraft?.working && !!aiDraft.photo);
-  const [chipIcon, chipText]: [string, string] = readingPhoto ? ['sparkle', 'Reading the photo…']
+  const [chipIcon, chipText]: [string, string] = forId ? (looking ? ['clock', 'Looking it up…'] : ['scan', forItem ? `Scanning for ${forItem.product.name}` : 'Scanning for an item'])
+    : codeWanted ? ['scan', 'Scan its barcode or QR code']
+    : photoFor ? ['camera', 'Now the front of the pack']
+    : readingPhoto ? ['sparkle', 'Reading the photo…']
     : aiDraft?.working ? ['sparkle', 'Working it out…']
     : looking && camera ? ['clock', 'Looking it up…']
     : holding && camera ? ['clock', 'Paused: finish this one first']
     : [modeChip[0], pending ? `Now scan where ${pending.product.name.toLowerCase()} goes` : target && mode === 'add' ? `Adding to ${target.label}` : target && mode === 'putaway' ? `Putting away in ${target.label}` : modeChip[1]];
   // Take photo, while the camera's on or starting (the AI reads it): barcodes still scan by themselves, except in Add by photo.
-  const shutter = !!reader && mode === 'add' && camera && state !== 'error';
+  const shutter = !!reader && photos && camera && state !== 'error';
   const by = reader?.by ?? null;
 
   return (
     <>
-      <Header title="Scan" back="/" />
+      <Header title="Scan" back={forId ? back : '/'} />
       <div className={`content ${desktop ? 'scan-grid' : ''}`}>
         <div className="section">
-          <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />
+          {!forId && <Seg label="What a scan does" value={mode} onChange={(m) => { setMode(m); setPending(null); }} options={MODES} />}
           <div className="viewfinder" aria-label="Camera">
             <video ref={video} playsInline muted hidden={state !== 'on'} />
-            {state === 'on' && taken?.shot && takenUrl && <img className="vf-still" src={takenUrl} alt="The photo you took" />}
-            {state === 'on' && <><div className="frame-corners" />{!holding && !photosOnly && <div className="line" />}</>}
+            {state === 'on' && taken?.shot && takenUrl && !codeWanted && <img className="vf-still" src={takenUrl} alt="The photo you took" />}
+            {state === 'on' && <><div className="frame-corners" />{!holding && !codesWait && <div className="line" />}</>}
             <div className="vf-top">
               <span className="vf-chip"><Icon name={chipIcon} size="sm" />{chipText}</span>
               {camera && <button type="button" className="vf-chip" onClick={() => setCamera(false)}>Stop camera</button>}
@@ -289,7 +443,7 @@ export function Scan() {
               </div>
             )}
           </div>
-          {reader && mode === 'add' && (
+          {reader && photos && (
             <div className="stack" style={{ gap: 8 }}>
               {shutter && (
                 <button type="button" className="btn primary block" disabled={state !== 'on' || holding} onClick={() => void readWithAi()}>
@@ -297,11 +451,12 @@ export function Scan() {
                 </button>
               )}
               <span className="small muted">
-                {shutter && photosOnly ? 'Barcodes in view wait for Take photo, so you can line up the pack. A barcode in the photo is still read. '
+                {photoFor ? `${by ?? 'The AI'} names it from the photo, and Larder remembers the barcode for it. `
+                  : shutter && photosOnly ? 'Barcodes in view wait for Take photo, so you can line up the pack. A barcode in the photo is still read. '
                   : shutter ? `Barcodes scan by themselves. No barcode? Take a photo of the front of the pack and ${by ?? 'the AI'} names it. `
                   : `No barcode? ${by ?? 'The AI'} can name it from a photo of the pack. `}
                 <button type="button" className="link small" onClick={() => upload.current?.click()}>{shutter ? 'Or upload a photo' : 'Upload a photo'}</button>
-                {shutter && <>{' · '}<button type="button" className="link small" onClick={() => photosOnlyOn(!photosOnly)}>{photosOnly ? 'Scan barcodes by themselves' : 'Stop scanning barcodes'}</button></>}
+                {shutter && !photoFor && <>{' · '}<button type="button" className="link small" onClick={() => photosOnlyOn(!photosOnly)}>{photosOnly ? 'Scan barcodes by themselves' : 'Stop scanning barcodes'}</button></>}
               </span>
               <input ref={upload} type="file" accept="image/*" hidden data-testid="scan-upload" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readWithAi(f); }} />
             </div>
@@ -314,7 +469,7 @@ export function Scan() {
         </div>
 
         {/* On a phone the result sits at the bottom of the screen, so Add is in reach without scrolling past the camera. */}
-        <div className={`section ${looking || result || pending || aiDraft ? 'scan-result' : ''}`}>
+        <div className={`section ${looking || result || pending || aiDraft || photoFor || forId ? 'scan-result' : ''}`}>
           {looking === 'code' && <div className="sheet-card"><div className="row"><div className="spinner" /><span className="muted">Looking it up…</span></div></div>}
           {looking === 'photo' && (
             <div className="sheet-card">
@@ -329,7 +484,20 @@ export function Scan() {
           )}
           {!looking && aiDraft && (
             <NewItemCard key={aiDraft.id} code={aiDraft.code} external={aiDraft.external} suggestions={aiDraft.suggestions} reading={aiDraft.reading} working={aiDraft.working} by={by}
-              photo={aiDraft.photo ?? undefined} mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }} />
+              photo={aiDraft.photo ?? undefined} mode={mode} target={target} onDone={done} onIdentified={(r) => { setAiDraft(null); setResult(r); }}
+              onScanCode={aiDraft.code ? undefined : () => { setCodeWanted(true); setCamera(true); }}
+              scanningCode={codeWanted} checkingCode={checkingCode} onStopScanning={() => setCodeWanted(false)}
+              onRemoveCode={aiDraft.codeAdded ? () => setAiDraft((d) => (d ? { ...d, code: null, codeAdded: false } : d)) : undefined} />
+          )}
+          {!looking && photoFor && (
+            <div className="sheet-card">
+              <div className="match">
+                <span className="tile lg"><Icon name="camera" size="lg" /></span>
+                <div className="item-main"><h3>Now the front of the pack</h3><div className="src"><code>{photoFor.keep.code}</code></div></div>
+              </div>
+              <p className="small muted">Point the camera at the front of the pack, where its name is, then press Take photo (or upload a photo). The barcode is kept for it.</p>
+              <div className="btnrow"><button type="button" className="btn" onClick={() => { setPhotoFor(null); setResult(photoFor.back); }}>Back</button></div>
+            </div>
           )}
           {!looking && pending && !result && (
             <div className="sheet-card">
@@ -338,8 +506,17 @@ export function Scan() {
             </div>
           )}
           {!looking && result && !aiDraft && <ResultCard r={result} mode={mode} target={target} onClearTarget={() => setTarget(null)} onDone={done} onIdentified={(r) => setResult(r)} pending={pending} setPending={setPending}
-            onReadWithAi={reader ? (keep) => void readWithAi(undefined, keep) : undefined} />}
-          {!looking && !result && !pending && !aiDraft && (
+            onReadWithAi={reader ? (keep) => photoOf(keep, result) : undefined} />}
+          {forId && !looking && (
+            <div className="sheet-card">
+              <div className="match">
+                {forItem ? <ProductTile s={forItem} size="lg" /> : <span className="tile lg"><Icon name="scan" size="lg" /></span>}
+                <div className="item-main"><h3>{forItem ? forItem.product.name : 'Loading…'}</h3><span className="small muted">Scan its barcode or QR code, or type it above. Larder remembers it, so the next scan knows it.</span></div>
+              </div>
+              <div className="btnrow"><Link className="btn" to={back}>Cancel</Link></div>
+            </div>
+          )}
+          {!forId && !looking && !result && !pending && !aiDraft && !photoFor && (
             <div className="card empty">
               <b>Ready</b>
               <span className="muted small">
@@ -491,8 +668,11 @@ function usePhotoUrl(photo: Blob | null | undefined): string | null {
 
 /** The boxes a new item's card fills in. */
 type Box = 'name' | 'boughtIn' | 'packSize' | 'categoryId';
-/** What's been typed or picked in them on the card. */
-interface Own { name?: string; boughtIn?: string; packSize?: UnitAmount | null; categoryId?: string | null }
+/**
+ * What's been typed or picked in them on the card. The pack size's amount and unit are kept apart, so
+ * clearing the amount to type it again keeps the unit picked (20 biscuits, not 20 g).
+ */
+interface Own { name?: string; boughtIn?: string; packAmount?: number | null; packUnit?: string; categoryId?: string | null }
 /** A spinner while the AI works on a box, or that it guessed. */
 type Mark = 'working' | 'guess' | null;
 
@@ -514,14 +694,20 @@ function BoxLabel({ text, mark }: { text: string; mark: Mark }) {
  * filling in; a box changed meanwhile keeps what was typed. When it plainly is
  * an item the household has, that's what the card offers.
  */
-function NewItemCard({ code, external, suggestions, tried = [], failed = [], reading = null, working = false, by = null, photo, mode, target, onDone, onIdentified, onReadWithAi }: {
+function NewItemCard({ code, external, suggestions, tried = [], failed = [], reading = null, working = false, by = null, photo, mode, target, onDone, onIdentified, onReadWithAi,
+  onScanCode, scanningCode = false, checkingCode = false, onStopScanning, onRemoveCode }: {
   code: string | null; external: LookupResult | null; suggestions: ProductSummary[]; tried?: string[]; failed?: string[];
   reading?: PhotoReading | null; working?: boolean; by?: string | null; photo?: Blob; mode: Mode; target: { id: string; label: string } | null;
   onDone: () => void; onIdentified: (r: IdentifyResult) => void; onReadWithAi?: () => void;
+  /** No barcode yet (a photo): Scan its barcode asks the scanner for one, `scanningCode` while it waits. */
+  onScanCode?: () => void; scanningCode?: boolean; checkingCode?: boolean; onStopScanning?: () => void;
+  /** The barcode was scanned from this card, so it can be taken off again. */
+  onRemoveCode?: () => void;
 }) {
   const places = usePlaces();
   const categories = useCategories();
   const { run, busy } = useAction();
+  const toast = useToast();
   const photoUrl = usePhotoUrl(photo);
   const units = useUnits();
   // The pack size as the barcode database printed it ("400 g", "20 tea bags").
@@ -532,9 +718,17 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const set = <K extends keyof Own>(k: K, v: Own[K]) => setOwn((o) => ({ ...o, [k]: v }));
   const name = own.name ?? reading?.name ?? external?.name ?? '';
   const boughtIn = own.boughtIn ?? reading?.boughtIn ?? 'each';
-  const packSize = 'packSize' in own ? (own.packSize ?? null) : (reading?.packSize ?? printedPack);
+  const readPack = reading?.packSize ?? printedPack;
+  const packAmount = 'packAmount' in own ? (own.packAmount ?? null) : (readPack?.amount ?? null);
+  // An amount typed before any unit is picked is in g.
+  const packUnit = own.packUnit ?? readPack?.unit ?? (packAmount ? 'g' : null);
+  const packSize: UnitAmount | null = packAmount && packUnit ? { amount: packAmount, unit: packUnit } : null;
   const categoryId = 'categoryId' in own ? (own.categoryId ?? null) : (reading?.categoryId ?? null);
-  const mark = (b: Box): Mark => (b in own ? null : working ? 'working' : !reading ? null : b === 'name' ? (reading.readable ? null : 'guess') : reading.guessed.includes(b) ? 'guess' : null);
+  const changed = (b: Box) => (b === 'packSize' ? 'packAmount' in own || 'packUnit' in own : b in own);
+  const mark = (b: Box): Mark => (changed(b) ? null : working ? 'working' : !reading ? null : b === 'name' ? (reading.readable ? null : 'guess') : reading.guessed.includes(b) ? 'guess' : null);
+  /** An NFC tag to link to it once it's saved, and whether the card's waiting for one. */
+  const [tag, setTag] = useState<string | null>(null);
+  const [tagging, setTagging] = useState(false);
   // A multipack of separate things is that many added: a 4-pack of tins is 4 tins.
   const [n, setN] = useState(printed && printed.count > 1 ? printed.count : 1);
   const [placeId, setPlaceId] = useState<string | null>(target?.id ?? null);
@@ -587,6 +781,17 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const ai = reading?.by ?? by ?? 'the AI';
   const where = external ? PROVIDER_NAMES[external.provider] ?? external.provider : 'a barcode database';
 
+  /** A tag read for it, unless it's another item's or a place's already. */
+  async function pickTag(tagId: string) {
+    const r = await api.identify(tagId).catch(() => null);
+    if (r?.kind === 'product' || r?.kind === 'place') {
+      toast({ text: `That tag is already linked to ${r.kind === 'product' ? r.product.product.name : r.place.name}. Unlink it there first, or use another tag.`, error: true });
+      return;
+    }
+    setTag(tagId);
+    setTagging(false);
+  }
+
   /** A shop's own brand Larder doesn't have: add the shop, so this goes on its list. */
   async function addShop(shop: NonNullable<PhotoReading['shop']>) {
     const made = await run(() => (shop.preset ? api.shops.addPreset(shop.name) : api.shops.create({ name: shop.name, sells: categoryId ? [categoryId] : [] })), `${shop.name} added to your shops`);
@@ -626,9 +831,11 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
         if (!item.product.photoFileIds.length) await api.products.update(productId, { photoFileIds: [id] });
         if (variantId && !item.variants.find((v) => v.id === variantId)?.photoFileId) await api.products.updateVariant(variantId, { photoFileId: id });
       }
+      // The item's saved by now, so a tag that can't be linked is said, not a failure to add it again.
+      const untagged = tag ? await api.nfc.link({ tagId: tag, productId }).then(() => null, (err: unknown) => (err instanceof ApiError ? err.message : 'Something went wrong.')) : null;
       const after = adding ? await api.stock.add({ productId, quantity: n, placeId }) : null;
-      return { identified, after, productId };
-    }, (x) => (adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}. Ready for the next scan.` : 'Saved. Next time this barcode is instant.'));
+      return { identified, after, productId, untagged };
+    }, (x) => `${adding && x.after ? `Added ${qty(n, x.after.product.unit)} · ${x.after.product.name}.` : code ? 'Saved. Next time this barcode is instant.' : 'Saved.'}${x.untagged ? ` The NFC tag wasn't linked: ${x.untagged}` : tag ? ' Its NFC tag is linked.' : ''}${adding && x.after ? ' Ready for the next scan.' : ''}`);
     if (!res) return;
     if (adding || !res.identified) onDone();
     else onIdentified(res.identified);
@@ -637,15 +844,31 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
   const ready = !busy && !settling && (!!into || !!name.trim());
   const tile = photoUrl ?? external?.imageUrl ?? null;
   const box = (b: Box) => `field slot${mark(b) === 'guess' ? ' guess' : ''}`;
+  const header = (
+    <div className="match">
+      <span className="tile lg">{tile ? <img src={tile} alt="" /> : <Icon name={external ? 'scan' : 'info'} size="lg" />}</span>
+      <div className="item-main">
+        <h3>{brand || (external ? [external.brand, external.name].filter(Boolean).join(' ') : reading ? reading.name : 'New to Larder')}</h3>
+        <div className="src">{external?.quantityText && <span>{external.quantityText}</span>}{code && <code>{code}</code>}</div>
+      </div>
+    </div>
+  );
+  // Waiting for its barcode: small, so the camera's in view. What's on the card is kept for when it's back.
+  if (scanningCode) {
+    return (
+      <div className="sheet-card">
+        {header}
+        <p className="small" style={{ margin: 0 }}>
+          {checkingCode ? <span className="row" style={{ gap: 8 }}><span className="spinner sm" />Looking it up…</span>
+            : <><b>Scan its barcode.</b> <span className="muted">Point the camera at the barcode or QR code on the pack, or type it under the camera.</span></>}
+        </p>
+        <div className="btnrow"><button type="button" className="btn" onClick={onStopScanning}>Cancel</button></div>
+      </div>
+    );
+  }
   return (
     <div className="sheet-card">
-      <div className="match">
-        <span className="tile lg">{tile ? <img src={tile} alt="" /> : <Icon name={external ? 'scan' : 'info'} size="lg" />}</span>
-        <div className="item-main">
-          <h3>{brand || (external ? [external.brand, external.name].filter(Boolean).join(' ') : reading ? reading.name : 'New to Larder')}</h3>
-          <div className="src">{external?.quantityText && <span>{external.quantityText}</span>}{code && <code>{code}</code>}</div>
-        </div>
-      </div>
+      {header}
       <p className="small">
         <span className="pill p-wish">New</span>{' '}
         <span className="muted">
@@ -669,10 +892,25 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
           )}
         </span>
       </p>
-      {onReadWithAi && (
-        <button type="button" className="btn small" style={{ justifySelf: 'start' }} disabled={busy} onClick={onReadWithAi}>
-          <Icon name="sparkle" size="sm" />Read it with AI
-        </button>
+      {/* More about it: the AI reading the pack, its barcode for a photo, and a tag to stick on it. */}
+      {!tagging && (onReadWithAi || onScanCode || !tag) && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {onReadWithAi && <button type="button" className="btn small" disabled={busy} onClick={onReadWithAi}><Icon name="sparkle" size="sm" />Read it with AI</button>}
+          {onScanCode && <button type="button" className="btn small" disabled={busy} onClick={onScanCode}><Icon name="scan" size="sm" />Scan its barcode</button>}
+          {!tag && <button type="button" className="btn small" disabled={busy} onClick={() => setTagging(true)}><Icon name="nfc" size="sm" />Link an NFC tag</button>}
+        </div>
+      )}
+      {onRemoveCode && code && (
+        <p className="small muted" style={{ margin: 0 }}>Larder will remember barcode <code>{code}</code> for it. <button type="button" className="link small" onClick={onRemoveCode}>Remove</button></p>
+      )}
+      {tag && (
+        <p className="small muted" style={{ margin: 0 }}>NFC tag <code>{tag}</code> will be linked to it. <button type="button" className="link small" onClick={() => setTag(null)}>Remove</button></p>
+      )}
+      {tagging && (
+        <div className="card pad stack">
+          <div className="row" style={{ justifyContent: 'space-between' }}><b className="small">Link an NFC tag</b><button type="button" className="link small" onClick={() => setTagging(false)}>Cancel</button></div>
+          <TagWaiter onTag={(t) => void pickTag(t)} use="Use it" />
+        </div>
       )}
       {into ? (
         <>
@@ -718,9 +956,9 @@ function NewItemCard({ code, external, suggestions, tried = [], failed = [], rea
           {!isLoose(units, { unit: boughtIn }) && (
             <div className={box('packSize')}><BoxLabel text="Pack size" mark={mark('packSize')} />
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packSize?.amount ?? ''} aria-label="Pack size" placeholder="20"
-                  onChange={(e) => set('packSize', Number(e.target.value) > 0 ? { amount: Number(e.target.value), unit: packSize?.unit ?? 'g' } : null)} />
-                <UnitPicker value={packSize?.unit ?? null} onChange={(k) => set('packSize', { amount: packSize?.amount ?? 1, unit: k })} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
+                <input className="input" type="number" inputMode="decimal" min={0} step="any" style={{ width: 90 }} value={packAmount ?? ''} aria-label="Pack size" placeholder="20"
+                  onChange={(e) => set('packAmount', Number(e.target.value) > 0 ? Number(e.target.value) : null)} />
+                <UnitPicker value={packUnit} onChange={(k) => set('packUnit', k)} kinds={['count', 'weight', 'volume']} exclude={['each', boughtIn]} label="Pack size in" empty="Pick a unit" />
               </div>
               {packSize && !fits && <small style={{ color: 'var(--low)' }}>It's bought in {plural(boughtIn, 2) || boughtIn}, so the pack size can't be in them too.</small>}
             </div>

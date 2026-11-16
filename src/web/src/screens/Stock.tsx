@@ -6,6 +6,8 @@ import { api } from '../api';
 import { Icon } from '../icons';
 import { qty, stockText } from '../format';
 import { Empty, ErrorBox, Header, Loading, PlaceText, ProductTile, Seg, StatusPills, useAction, useCategories, useIsDesktop } from '../ui';
+import { useOpenCopy } from '../offline/current';
+import { NoBarcodeLink } from './NoBarcode';
 
 const STATUSES: Array<[string, string]> = [['low', 'Low'], ['expiring', 'Use soon'], ['out_of_place', 'Out of place'], ['expected', 'On the way'], ['in_stock', 'In stock'], ['to_tidy', 'To tidy']];
 
@@ -63,6 +65,7 @@ export function Stock() {
   const [groupChoice, setGroup] = useState<'cat' | 'place' | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const categories = useCategories();
+  const copy = useOpenCopy();
   const everything = useQuery({ queryKey: ['products', 'all', ''], queryFn: () => api.products.list({ status: 'all' }) });
   const { data, error, isLoading } = useQuery({ queryKey: ['products', status, categoryId], queryFn: () => api.products.list({ status, categoryId: categoryId || undefined }) });
   // Stock opens on the types of thing; a type, a filter, a search or "Everything" shows the list.
@@ -111,6 +114,8 @@ export function Stock() {
           <div className="chips" aria-label="Show only">
             {STATUSES.map(([k, t]) => <button key={k} type="button" className={`chip ${status === k ? 'on' : ''}`} aria-pressed={status === k} onClick={() => setFilter('status', status === k ? 'all' : k)}>{t}</button>)}
           </div>
+          {/* Like Places' To sort: things to scan once, here while there are any (not in an offline copy, which can't scan). */}
+          {overview && !copy && <NoBarcodeLink />}
           {overview ? (
             everything.isLoading ? <Loading /> : everything.error ? <ErrorBox error={everything.error} /> : (everything.data ?? []).length ? <TypeCards all={everything.data ?? []} /> : (
               <Empty title="Nothing in Larder yet"><Link className="btn small" to="/add"><Icon name="plus" size="sm" />Add an item</Link></Empty>
